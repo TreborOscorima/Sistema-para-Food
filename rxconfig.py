@@ -11,6 +11,8 @@ load_dotenv()
 ENV = (os.getenv("ENV") or "dev").strip().lower()
 IS_PROD = ENV in {"prod", "production"}
 API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:3003")
+# En prod Reflex corre frontend + backend en el mismo proceso/puerto (3003)
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "3003"))
 
 
 def _require_env(var_name: str, *, dev_default: str = "") -> str:

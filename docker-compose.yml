@@ -7,18 +7,17 @@ services:
     restart: unless-stopped
     ports:
       - "3003:3003"
-      - "3004:3004"
     env_file:
       - .env
     environment:
       - ENV=prod
     volumes:
-      - food_states:/app/.states
+      - food_web:/app/.web
     networks:
       - tuwayki_net
 
 volumes:
-  food_states:
+  food_web:
 
 networks:
   tuwayki_net:

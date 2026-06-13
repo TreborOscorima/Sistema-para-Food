@@ -1,42 +1,67 @@
-# ─── Stage 1: install deps ────────────────────────────────────────────────────
+# TUWAYKIFOOD (Reflex + MySQL) - Imagen para produccion
+# Build multi-stage: builder compila wheels; runtime recibe solo site-packages.
+
+# =============================================================================
+# Stage 1: builder — instala deps Python (compila wheels si es necesario)
+# =============================================================================
 FROM python:3.13-slim AS builder
 
-WORKDIR /build
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl unzip \
+    gcc \
+    default-libmysqlclient-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /build
 COPY requirements.txt .
 COPY _vendor/ _vendor/
-
+# tuwayki-core se instala desde vendor local (paquete privado sin PyPI).
 RUN pip install --no-cache-dir --prefix=/install /build/_vendor/tuwayki-core 2>/dev/null || true && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Node para Reflex build
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
 
-# ─── Stage 2: runtime ─────────────────────────────────────────────────────────
+# =============================================================================
+# Stage 2: runtime — imagen final liviana
+# =============================================================================
 FROM python:3.13-slim AS runtime
 
-WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HOME=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl nodejs npm libusb-1.0-0 \
+    curl \
+    unzip \
+    tini \
+    libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
 
-COPY . .
+WORKDIR /app
 
-RUN chmod +x scripts/docker-entrypoint.sh
+RUN groupadd --system --gid 1000 app \
+    && useradd --system --uid 1000 --gid app --no-create-home --shell /sbin/nologin app \
+    && mkdir -p /app/.web \
+    && chown -R app:app /app
 
-EXPOSE 3003 3004
+COPY --chown=app:app . .
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    ENV=prod
+COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-ENTRYPOINT ["scripts/docker-entrypoint.sh"]
+EXPOSE 3003
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
+    CMD curl -fsS http://localhost:3003/api/ping || exit 1
+
+USER app
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/docker-entrypoint.sh"]
+CMD ["reflex", "run", "--env", "prod", "--loglevel", "warning", "--backend-host", "0.0.0.0"]
