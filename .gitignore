@@ -1,0 +1,39 @@
+assets/external/
+.states
+.web
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Reflex
+.web/
+.states/
+*.db
+*.db-shm
+*.db-wal
+
+# Entorno
+.env
+.env.*
+!.env.example
+
+# Vendor (tuwayki-core se instala desde _vendor/ solo para Docker)
+_vendor/
+
+# Editores
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs temporales de dev
+reflex_run*.log
+reflex_run*.err
+*.log

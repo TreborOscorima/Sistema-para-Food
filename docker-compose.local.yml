@@ -1,0 +1,23 @@
+version: "3.9"
+
+# Uso: docker compose -f docker-compose.yml -f docker-compose.local.yml up
+services:
+  tuwayki_food:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+      - "3004:3004"
+    env_file:
+      - .env
+    environment:
+      - ENV=dev
+    volumes:
+      - .:/app
+      - food_states:/app/.states
+    networks:
+      - default
+
+volumes:
+  food_states:

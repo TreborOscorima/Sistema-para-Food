@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  tuwayki_food:
+    image: tuwayki_food:latest
+    container_name: tuwayki_food
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+      - "3004:3004"
+    env_file:
+      - .env
+    environment:
+      - ENV=prod
+    volumes:
+      - food_states:/app/.states
+    networks:
+      - tuwayki_net
+
+volumes:
+  food_states:
+
+networks:
+  tuwayki_net:
+    external: true
