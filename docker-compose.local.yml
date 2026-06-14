@@ -1,22 +1,27 @@
 version: "3.9"
+# =============================================================================
+# docker-compose.local.yml — Override para testing local (Windows/Mac/Linux)
+#
+# Uso:
+#   docker build -t tuwayki_food:latest .
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+#
+# Acceso:
+#   TUWAYKIFOOD : http://localhost:3003
+#
+# Mínimo en .env: DB_PASSWORD, MYSQL_ROOT_PASSWORD
+# =============================================================================
 
-# Uso: docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 services:
   tuwayki_food:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "3003:3003"
-    env_file:
-      - .env
     environment:
-      - ENV=dev
-    volumes:
-      - .:/app
-      - food_web:/app/.web
-    networks:
-      - default
+      PUBLIC_API_URL: "http://localhost:3003"
+      ENV: prod
+      DB_HOST: food_mysql
 
-volumes:
-  food_web:
+networks:
+  # Override: bridge local en lugar de external (sin red de producción).
+  tuwayki_net:
+    external: false
+    driver: bridge
+    name: food_local_net

@@ -1,24 +1,78 @@
 version: "3.9"
+# =============================================================================
+# docker-compose.yml — TUWAYKIFOOD stack de producción (food.tuwayki.com)
+#
+# PRIMERA VEZ:
+#   1. cp .env.example .env && editar (DB_PASSWORD, MYSQL_ROOT_PASSWORD obligatorios)
+#   2. Asegurarse que tuwayki_net exista: docker network create tuwayki_net
+#      (se crea sola si Sistema-de-Ventas ya está corriendo)
+#   3. docker build -t tuwayki_food:latest . && docker compose up -d
+#
+# En producción nginx (host) hace el proxy food.tuwayki.com → 127.0.0.1:3003.
+# Para local: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# Para test:  TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+# =============================================================================
 
 services:
+  food_mysql:
+    image: mysql:8.0
+    container_name: food_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD requerido en .env}
+      MYSQL_DATABASE: ${DB_NAME:-food_db}
+      MYSQL_USER: ${DB_USER:-food}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
+    volumes:
+      - food_mysql_data:/var/lib/mysql
+    command:
+      - --default-authentication-plugin=caching_sha2_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-name-resolve
+      - --max_connections=100
+      - --innodb_buffer_pool_size=128M
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h localhost -u root -e 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - food_internal
+
   tuwayki_food:
     image: tuwayki_food:latest
     container_name: tuwayki_food
     restart: unless-stopped
+    depends_on:
+      food_mysql:
+        condition: service_healthy
     ports:
       - "3003:3003"
     env_file:
       - .env
     environment:
-      - ENV=prod
+      ENV: prod
+      DB_HOST: food_mysql
     volumes:
       - food_web:/app/.web
     networks:
+      - food_internal
       - tuwayki_net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3003/api/ping"]
+      interval: 30s
+      timeout: 5s
+      start_period: 300s
+      retries: 5
 
 volumes:
+  food_mysql_data:
   food_web:
 
 networks:
+  food_internal:
+    driver: bridge
   tuwayki_net:
     external: true

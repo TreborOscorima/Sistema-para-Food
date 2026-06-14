@@ -1,0 +1,30 @@
+version: "3.9"
+# =============================================================================
+# docker-compose.test.yml — Override para SVR de Prueba en AWS (sin dominio)
+#
+# Uso — definir TEST_IP en .env o inline:
+#   docker build -t tuwayki_food:latest .
+#   TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+# Acceso desde el navegador:
+#   TUWAYKIFOOD : http://<TEST_IP>:3003
+#
+# Prerrequisitos en AWS:
+#   - Security Group EC2: abrir puerto TCP 3003 para tu IP (o 0.0.0.0/0 en test)
+#   - .env con DB_PASSWORD, MYSQL_ROOT_PASSWORD definidos
+#   - docker build -t tuwayki_food:latest . corrido antes
+# =============================================================================
+
+services:
+  tuwayki_food:
+    environment:
+      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3003"
+      ENV: prod
+      DB_HOST: food_mysql
+
+networks:
+  # Override: bridge local en lugar de external (no requiere tuwayki_net en el SVR de prueba).
+  tuwayki_net:
+    external: false
+    driver: bridge
+    name: food_test_net
