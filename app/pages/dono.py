@@ -222,6 +222,135 @@ def dono_login_page() -> rx.Component:
     )
 
 
+# ── Ventas de hoy (mini-dashboard) ──────────────────────────────────────────
+
+def _dono_kpi(label: str, value, icon: str, accent: str, bg: str) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.box(
+                    rx.icon(tag=icon, size=14, color=accent),
+                    width="28px",
+                    height="28px",
+                    border_radius="7px",
+                    background=bg,
+                    display="flex",
+                    align_items="center",
+                    justify_content="center",
+                    flex_shrink="0",
+                ),
+                rx.spacer(),
+            ),
+            rx.text(value, font_size="19px", font_weight="800", color="#0F172A", line_height="1"),
+            rx.text(label, font_size="10px", font_weight="600", color="#64748B",
+                    text_transform="uppercase", letter_spacing="0.06em"),
+            spacing="1",
+            align="start",
+            width="100%",
+        ),
+        background="#FFFFFF",
+        border="1px solid #E2E8F0",
+        border_radius="10px",
+        padding="12px 14px",
+        box_shadow="0 1px 3px rgba(0,0,0,0.05)",
+        flex="1",
+    )
+
+
+def _dono_ventas_row(venta) -> rx.Component:
+    return rx.hstack(
+        rx.text("#" + venta.pedido_id.to_string(), font_size="11px", color="#94A3B8", min_width="36px", flex_shrink="0"),
+        rx.text(venta.mesa_label, font_size="12px", color="#334155", flex="1",
+                text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
+        rx.badge(
+            venta.metodo_pago,
+            background="#F1F5F9",
+            color="#64748B",
+            border_radius="5px",
+            font_size="10px",
+            padding="2px 5px",
+            flex_shrink="0",
+        ),
+        rx.text(venta.total_con_propina_texto, font_size="12px", font_weight="700",
+                color="#15803D", min_width="72px", text_align="right", flex_shrink="0"),
+        width="100%",
+        align="center",
+        padding="7px 10px",
+        background="#FFFFFF",
+        border_radius="7px",
+        border="1px solid #F1F5F9",
+        gap="8px",
+        _hover={"background": "#F8FAFC"},
+    )
+
+
+def _dono_ventas_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.hstack(
+                    rx.icon(tag="trending_up", size=15, color="#EA580C"),
+                    rx.text("Ventas de hoy", font_size="15px", font_weight="700", color="#0F172A"),
+                    spacing="2",
+                    align="center",
+                ),
+                rx.spacer(),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="refresh_cw", size=12),
+                        rx.text("Actualizar", font_size="12px", font_weight="600"),
+                        spacing="1",
+                        align="center",
+                    ),
+                    on_click=[FoodState.cargar_dashboard, FoodState.cargar_historial_ventas],
+                    background="#FFF7ED",
+                    color="#EA580C",
+                    border="1px solid #FED7AA",
+                    border_radius="7px",
+                    cursor="pointer",
+                    _hover={"opacity": "0.85"},
+                ),
+                width="100%",
+                align="center",
+            ),
+            # KPIs
+            rx.hstack(
+                _dono_kpi("Ventas hoy", FoodState.dashboard_ventas_hoy_texto,
+                          "trending_up", "#15803D", "#F0FDF4"),
+                _dono_kpi("Pedidos cobrados", FoodState.dashboard_pedidos_hoy.to_string(),
+                          "receipt_text", "#1D4ED8", "#EFF6FF"),
+                _dono_kpi("Propinas hoy", FoodState.dashboard_propina_hoy_texto,
+                          "heart", "#9A3412", "#FFF7ED"),
+                spacing="3",
+                width="100%",
+            ),
+            # Últimas ventas
+            rx.cond(
+                FoodState.historial_ventas.length() > 0,
+                rx.vstack(
+                    rx.text("Últimas ventas", font_size="12px", font_weight="600", color="#64748B"),
+                    rx.foreach(FoodState.historial_ventas, _dono_ventas_row),
+                    spacing="1",
+                    width="100%",
+                ),
+                rx.center(
+                    rx.text("Sin ventas hoy.", font_size="13px", color="#94A3B8"),
+                    padding_y="16px",
+                    width="100%",
+                ),
+            ),
+            spacing="3",
+            width="100%",
+        ),
+        background="#FFFFFF",
+        border="1px solid #E2E8F0",
+        border_radius="12px",
+        padding="16px 18px",
+        width="100%",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+    )
+
+
 # ── Dashboard del dueño ──────────────────────────────────────────────────────
 
 def _dono_config_content() -> rx.Component:
@@ -244,6 +373,7 @@ def _dono_config_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
+        _dono_ventas_section(),
         rx.box(
             rx.vstack(
                 _section_header("Nombre del local", "store"),

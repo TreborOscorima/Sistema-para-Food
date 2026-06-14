@@ -530,6 +530,7 @@ class FoodState(rx.State):
     caja_cobro_mesa_id: int = 0
     caja_cobro_metodo: str = "efectivo"
     caja_cobro_propina: str = ""
+    caja_cobro_descuento: str = ""
     caja_cobro_efectivo_recibido: str = ""
 
     # Dashboard KPIs
@@ -752,8 +753,17 @@ class FoodState(rx.State):
             return 0.0
 
     @rx.var
+    def caja_cobro_descuento_decimal(self) -> float:
+        try:
+            v = float(self.caja_cobro_descuento.replace(",", ".").strip())
+            return round(max(v, 0.0), 2)
+        except (ValueError, AttributeError):
+            return 0.0
+
+    @rx.var
     def caja_cobro_total_final(self) -> float:
-        return round(self.caja_cobro_total_base + self.caja_cobro_propina_decimal, 2)
+        total = self.caja_cobro_total_base - self.caja_cobro_descuento_decimal + self.caja_cobro_propina_decimal
+        return round(max(total, 0.0), 2)
 
     @rx.var
     def caja_cobro_total_final_texto(self) -> str:
@@ -910,6 +920,11 @@ class FoodState(rx.State):
     def on_load_dono_page(self) -> None:
         self.cargar_config_impresora()
         self.cargar_mesas_config()
+        self.historial_filtro_fecha_desde = datetime.utcnow().strftime("%Y-%m-%d")
+        self.historial_filtro_fecha_hasta = ""
+        self.historial_filtro_metodo = ""
+        self.cargar_dashboard()
+        self.cargar_historial_ventas()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
@@ -2083,6 +2098,7 @@ class FoodState(rx.State):
         self.caja_cobro_mesa_id = 0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
+        self.caja_cobro_descuento = ""
         self.caja_cobro_efectivo_recibido = ""
 
     def set_caja_cobro_metodo(self, v: str) -> None:
@@ -2091,6 +2107,9 @@ class FoodState(rx.State):
 
     def set_caja_cobro_propina(self, v: str) -> None:
         self.caja_cobro_propina = v
+
+    def set_caja_cobro_descuento(self, v: str) -> None:
+        self.caja_cobro_descuento = v
 
     def set_caja_cobro_efectivo_recibido(self, v: str) -> None:
         self.caja_cobro_efectivo_recibido = v
@@ -2106,6 +2125,11 @@ class FoodState(rx.State):
             propina = Decimal(str(round(propina_raw, 2))) if propina_raw > 0 else Decimal("0.00")
         except (ValueError, AttributeError, InvalidOperation):
             propina = Decimal("0.00")
+        try:
+            desc_raw = float(self.caja_cobro_descuento.replace(",", ".").strip())
+            descuento = Decimal(str(round(max(desc_raw, 0.0), 2)))
+        except (ValueError, AttributeError, InvalidOperation):
+            descuento = Decimal("0.00")
 
         pedido_id = 0
         mesa_label = ""
@@ -2145,7 +2169,7 @@ class FoodState(rx.State):
                 mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
             ) or "Sin asignar"
             total_base = _to_decimal(pedido.total)
-            total_final = total_base + propina
+            total_final = max(total_base - descuento + propina, Decimal("0.00"))
             now = datetime.utcnow()
             if self.usuario_actual:
                 pedido.cajero_id = self.usuario_actual.id
@@ -2155,6 +2179,7 @@ class FoodState(rx.State):
             pedido.updated_at = now
             pedido.metodo_pago = metodo
             pedido.propina = propina
+            pedido.descuento = descuento
             session.add(pedido)
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
@@ -2183,8 +2208,9 @@ class FoodState(rx.State):
         except Exception as error:
             self.mensaje = f"Mesa {mesa_label} cobrada. Fallo impresion caja: {error}"
             return
+        desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
-        self.mensaje = f"Mesa {mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{propina_txt}."
+        self.mensaje = f"Mesa {mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 

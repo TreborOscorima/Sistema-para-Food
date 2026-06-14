@@ -159,6 +159,10 @@ class Pedido(TimestampedModel, table=True):
         default=Decimal("0.00"),
         sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
     )
+    descuento: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
     metodo_pago: str | None = Field(default=None, max_length=24)
     abierto_en: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
