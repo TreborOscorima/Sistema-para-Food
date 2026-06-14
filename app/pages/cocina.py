@@ -17,12 +17,12 @@ def _ticket_card(ticket: CocinaTicketView) -> rx.Component:
                         ticket.mesa_label,
                         font_size="15px",
                         font_weight="700",
-                        color="#F1F5F9",
+                        color="#0F172A",
                     ),
                     rx.text(
                         "Hora: " + ticket.hora_texto,
                         font_size="11px",
-                        color="rgba(255,255,255,0.4)",
+                        color="#64748B",
                     ),
                     spacing="0",
                 ),
@@ -42,18 +42,18 @@ def _ticket_card(ticket: CocinaTicketView) -> rx.Component:
                 rx.text(
                     "Mozo: " + ticket.mozo_nombre,
                     font_size="11px",
-                    color="rgba(255,255,255,0.35)",
+                    color="#94A3B8",
                 ),
                 rx.fragment(),
             ),
-            rx.divider(border_color="rgba(255,255,255,0.08)"),
+            rx.divider(border_color="#E2E8F0"),
             rx.vstack(
                 rx.foreach(
                     ticket.items_lines,
                     lambda line: rx.text(
                         line,
                         font_size="14px",
-                        color="#E2E8F0",
+                        color="#334155",
                         padding_y="2px",
                     ),
                 ),
@@ -61,7 +61,7 @@ def _ticket_card(ticket: CocinaTicketView) -> rx.Component:
                 spacing="1",
                 align="start",
             ),
-            rx.divider(border_color="rgba(255,255,255,0.08)"),
+            rx.divider(border_color="#E2E8F0"),
             rx.button(
                 ticket.action_label,
                 on_click=rx.cond(
@@ -72,19 +72,10 @@ def _ticket_card(ticket: CocinaTicketView) -> rx.Component:
                 width="100%",
                 background=rx.cond(
                     ticket.estado_produccion == "pendiente",
-                    "rgba(249,115,22,0.20)",
-                    "rgba(34,197,94,0.18)",
+                    "#EA580C",
+                    "#15803D",
                 ),
-                color=rx.cond(
-                    ticket.estado_produccion == "pendiente",
-                    "#F97316",
-                    "#4ADE80",
-                ),
-                border=rx.cond(
-                    ticket.estado_produccion == "pendiente",
-                    "1px solid rgba(249,115,22,0.35)",
-                    "1px solid rgba(34,197,94,0.35)",
-                ),
+                color="#FFFFFF",
                 border_radius="8px",
                 padding_y="10px",
                 font_size="13px",
@@ -107,6 +98,7 @@ def _ticket_card(ticket: CocinaTicketView) -> rx.Component:
         min_width="260px",
         max_width="300px",
         flex="0 0 auto",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
     )
 
 
@@ -117,12 +109,12 @@ def _column_nuevos() -> rx.Component:
                 "Nuevos",
                 font_size="14px",
                 font_weight="700",
-                color="#FCD34D",
+                color="#B45309",
             ),
             rx.badge(
                 FoodState.cantidad_tickets_nuevos.to_string(),
-                background="rgba(251,191,36,0.16)",
-                color="#FCD34D",
+                background="#FEF3C7",
+                color="#B45309",
                 border_radius="20px",
                 font_size="11px",
             ),
@@ -132,7 +124,7 @@ def _column_nuevos() -> rx.Component:
         rx.cond(
             FoodState.tickets_nuevos.length() == 0,
             rx.center(
-                rx.text("Sin pedidos nuevos", font_size="13px", color="rgba(255,255,255,0.3)"),
+                rx.text("Sin pedidos nuevos", font_size="13px", color="#94A3B8"),
                 padding_y="40px",
             ),
             rx.vstack(
@@ -155,12 +147,12 @@ def _column_en_preparacion() -> rx.Component:
                 "En preparacion",
                 font_size="14px",
                 font_weight="700",
-                color="#FDBA74",
+                color="#9A3412",
             ),
             rx.badge(
                 FoodState.cantidad_tickets_en_preparacion.to_string(),
-                background="rgba(249,115,22,0.18)",
-                color="#FDBA74",
+                background="#FFEDD5",
+                color="#9A3412",
                 border_radius="20px",
                 font_size="11px",
             ),
@@ -170,7 +162,7 @@ def _column_en_preparacion() -> rx.Component:
         rx.cond(
             FoodState.tickets_en_preparacion.length() == 0,
             rx.center(
-                rx.text("Sin pedidos en preparacion", font_size="13px", color="rgba(255,255,255,0.3)"),
+                rx.text("Sin pedidos en preparacion", font_size="13px", color="#94A3B8"),
                 padding_y="40px",
             ),
             rx.vstack(
@@ -193,15 +185,15 @@ def _cocina_content() -> rx.Component:
                 "Cocina",
                 font_size="22px",
                 font_weight="800",
-                color="#F1F5F9",
+                color="#0F172A",
             ),
             rx.spacer(),
             rx.button(
                 "Actualizar",
                 on_click=FoodState.cargar_cocina,
-                background="rgba(249,115,22,0.14)",
-                color="#F97316",
-                border="1px solid rgba(249,115,22,0.28)",
+                background="#FFF7ED",
+                color="#EA580C",
+                border="1px solid #FED7AA",
                 border_radius="8px",
                 font_size="13px",
                 cursor="pointer",
@@ -212,7 +204,7 @@ def _cocina_content() -> rx.Component:
         ),
         rx.hstack(
             _column_nuevos(),
-            rx.divider(orientation="vertical", border_color="rgba(255,255,255,0.08)", height="auto"),
+            rx.divider(orientation="vertical", border_color="#E2E8F0", height="auto"),
             _column_en_preparacion(),
             spacing="5",
             width="100%",

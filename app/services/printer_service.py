@@ -54,7 +54,7 @@ class SilentPrinterService:
     def __init__(
         self,
         kitchen: NetworkPrinterConfig | None = None,
-        cashier: UsbPrinterConfig | None = None,
+        cashier: UsbPrinterConfig | NetworkPrinterConfig | None = None,
     ) -> None:
         self.kitchen = kitchen
         self.cashier = cashier
@@ -73,6 +73,20 @@ class SilentPrinterService:
             in_ep=CAJA_USB_IN_EP,
             out_ep=CAJA_USB_OUT_EP,
             timeout=CAJA_USB_TIMEOUT,
+        )
+        return cls(kitchen=kitchen, cashier=cashier)
+
+    @classmethod
+    def from_db_config(cls, cfg) -> "SilentPrinterService":
+        kitchen = (
+            NetworkPrinterConfig(host=cfg.cocina_ip, port=cfg.cocina_puerto)
+            if cfg.cocina_activa and cfg.cocina_ip
+            else None
+        )
+        cashier = (
+            NetworkPrinterConfig(host=cfg.caja_ip, port=cfg.caja_puerto)
+            if cfg.caja_activa and cfg.caja_ip
+            else None
         )
         return cls(kitchen=kitchen, cashier=cashier)
 
@@ -146,7 +160,10 @@ class SilentPrinterService:
                 printer.set(align="center", bold=False, width=1, height=1)
                 printer.text("\n¡Gracias por su preferencia!\n")
 
-            self._send_to_printer(self._open_usb_printer(self.cashier), render)
+            if isinstance(self.cashier, NetworkPrinterConfig):
+                self._send_to_printer(self._open_network_printer(self.cashier), render)
+            else:
+                self._send_to_printer(self._open_usb_printer(self.cashier), render)
         except Exception as error:
             print(f"Error impresora caja: {error}")
 

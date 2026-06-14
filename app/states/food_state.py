@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 import reflex as rx
@@ -13,6 +13,7 @@ from sqlmodel import select
 
 from app.models.food import (
     Categoria,
+    ConfigImpresora,
     DetallePedido,
     EstadoMesa,
     EstadoPedido,
@@ -48,24 +49,24 @@ MESA_LABELS = {
     EstadoMesa.ESPERANDO_CUENTA.value: "Esperando cuenta",
 }
 MESA_BADGE_BACKGROUNDS = {
-    EstadoMesa.LIBRE.value: "rgba(34, 197, 94, 0.16)",
-    EstadoMesa.OCUPADA.value: "rgba(239, 68, 68, 0.16)",
-    EstadoMesa.ESPERANDO_CUENTA.value: "rgba(245, 158, 11, 0.16)",
+    EstadoMesa.LIBRE.value: "#DCFCE7",
+    EstadoMesa.OCUPADA.value: "#FEE2E2",
+    EstadoMesa.ESPERANDO_CUENTA.value: "#FEF3C7",
 }
 MESA_BADGE_TEXTS = {
-    EstadoMesa.LIBRE.value: "#4ADE80",
-    EstadoMesa.OCUPADA.value: "#FCA5A5",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#FCD34D",
+    EstadoMesa.LIBRE.value: "#15803D",
+    EstadoMesa.OCUPADA.value: "#B91C1C",
+    EstadoMesa.ESPERANDO_CUENTA.value: "#B45309",
 }
 MESA_CARD_BACKGROUNDS = {
-    EstadoMesa.LIBRE.value: "#0C1C12",
-    EstadoMesa.OCUPADA.value: "#1C0C0E",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#1C1408",
+    EstadoMesa.LIBRE.value: "#F0FDF4",
+    EstadoMesa.OCUPADA.value: "#FEF2F2",
+    EstadoMesa.ESPERANDO_CUENTA.value: "#FFFBEB",
 }
 MESA_CARD_BORDERS = {
-    EstadoMesa.LIBRE.value: "1px solid rgba(34, 197, 94, 0.28)",
-    EstadoMesa.OCUPADA.value: "1px solid rgba(239, 68, 68, 0.28)",
-    EstadoMesa.ESPERANDO_CUENTA.value: "1px solid rgba(245, 158, 11, 0.32)",
+    EstadoMesa.LIBRE.value: "1px solid #BBF7D0",
+    EstadoMesa.OCUPADA.value: "1px solid #FECACA",
+    EstadoMesa.ESPERANDO_CUENTA.value: "1px solid #FDE68A",
 }
 READY_ALERT_BORDER = "3px solid #F59E0B"
 
@@ -76,24 +77,24 @@ PRODUCTION_LABELS = {
     EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "Entregado al cliente",
 }
 PRODUCTION_BADGE_BACKGROUNDS = {
-    EstadoProduccion.PENDIENTE.value: "rgba(251, 191, 36, 0.16)",
-    EstadoProduccion.EN_PREPARACION.value: "rgba(249, 115, 22, 0.18)",
-    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "rgba(34, 197, 94, 0.16)",
-    EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "rgba(59, 130, 246, 0.16)",
+    EstadoProduccion.PENDIENTE.value: "#FEF3C7",
+    EstadoProduccion.EN_PREPARACION.value: "#FFEDD5",
+    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#DCFCE7",
+    EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "#DBEAFE",
 }
 PRODUCTION_BADGE_TEXTS = {
-    EstadoProduccion.PENDIENTE.value: "#FCD34D",
-    EstadoProduccion.EN_PREPARACION.value: "#FDBA74",
-    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#4ADE80",
-    EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "#93C5FD",
+    EstadoProduccion.PENDIENTE.value: "#B45309",
+    EstadoProduccion.EN_PREPARACION.value: "#9A3412",
+    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#15803D",
+    EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "#1D4ED8",
 }
 KITCHEN_CARD_BACKGROUNDS = {
-    EstadoProduccion.PENDIENTE.value: "#16120A",
-    EstadoProduccion.EN_PREPARACION.value: "#160E08",
+    EstadoProduccion.PENDIENTE.value: "#FFFBEB",
+    EstadoProduccion.EN_PREPARACION.value: "#FFF7ED",
 }
 KITCHEN_CARD_BORDERS = {
-    EstadoProduccion.PENDIENTE.value: "rgba(251, 191, 36, 0.40)",
-    EstadoProduccion.EN_PREPARACION.value: "rgba(249, 115, 22, 0.40)",
+    EstadoProduccion.PENDIENTE.value: "#FDE68A",
+    EstadoProduccion.EN_PREPARACION.value: "#FED7AA",
 }
 
 ROLE_HOME_ROUTES: dict[str, str] = {
@@ -109,6 +110,27 @@ ROLE_ALLOWED_ROUTES: dict[str, set[str]] = {
     "cocina": {RolUsuario.COCINA.value, RolUsuario.ADMIN.value},
     "carta": {RolUsuario.ADMIN.value},
     "reportes": {RolUsuario.ADMIN.value},
+    "usuarios": {RolUsuario.ADMIN.value},
+    "configuracion": {RolUsuario.ADMIN.value},
+}
+
+_ROL_LABELS: dict[str, str] = {
+    RolUsuario.ADMIN.value: "Admin",
+    RolUsuario.MOZO.value: "Mozo",
+    RolUsuario.CAJA.value: "Caja",
+    RolUsuario.COCINA.value: "Cocina",
+}
+_ROL_BADGE_BG: dict[str, str] = {
+    RolUsuario.ADMIN.value: "#FFEDD5",
+    RolUsuario.MOZO.value: "#DBEAFE",
+    RolUsuario.CAJA.value: "#DCFCE7",
+    RolUsuario.COCINA.value: "#FEF3C7",
+}
+_ROL_BADGE_TEXT: dict[str, str] = {
+    RolUsuario.ADMIN.value: "#9A3412",
+    RolUsuario.MOZO.value: "#1D4ED8",
+    RolUsuario.CAJA.value: "#15803D",
+    RolUsuario.COCINA.value: "#B45309",
 }
 
 # company_id leído del entorno en tiempo de importación
@@ -356,8 +378,20 @@ class VentaHistorialView(BaseModel):
     mesa_label: str
     total: float
     total_texto: str
+    propina: float
+    propina_texto: str
+    total_con_propina: float
+    total_con_propina_texto: str
+    metodo_pago: str
     mozo_nombre: str
     cajero_nombre: str
+
+
+class TopPlatoView(BaseModel):
+    nombre: str
+    cantidad: int
+    total_generado: float
+    total_texto: str
 
 
 class MostradorEntregaView(BaseModel):
@@ -374,6 +408,18 @@ class MostradorEntregadoView(BaseModel):
     hora_texto: str
     items_resumen: str
     total_texto: str
+
+
+class UsuarioAdminView(BaseModel):
+    id: int
+    nombre: str
+    rol: str
+    rol_label: str
+    pin_masked: str
+    activo: bool
+    badge_bg: str
+    badge_text: str
+    es_yo: bool
 
 
 # ─── Estado principal ─────────────────────────────────────────────────────────
@@ -420,9 +466,44 @@ class FoodState(rx.State):
     caja_polling_enabled: bool = False
     mostrador_polling_enabled: bool = False
 
+    usuarios_admin: list[UsuarioAdminView] = []
+    usuario_form_id: int = 0
+    usuario_form_nombre: str = ""
+    usuario_form_rol: str = RolUsuario.MOZO.value
+    usuario_form_pin: str = ""
+    usuario_form_pin_confirm: str = ""
+    usuario_form_activo: bool = True
+
     mozos_tab_activa: str = "salon"
     nota_producto_activo_id: int = 0
     nota_input_temporal: str = ""
+
+    # Caja — flujo de cobro con método de pago
+    caja_cobro_mesa_id: int = 0
+    caja_cobro_metodo: str = "efectivo"
+    caja_cobro_propina: str = ""
+    caja_cobro_efectivo_recibido: str = ""
+
+    # Dashboard KPIs
+    dashboard_ventas_hoy_texto: str = "S/ 0.00"
+    dashboard_pedidos_hoy: int = 0
+    dashboard_mesas_ocupadas: int = 0
+    dashboard_propina_hoy_texto: str = "S/ 0.00"
+    dashboard_top_platos: list[TopPlatoView] = []
+
+    # Historial — filtros
+    historial_filtro_fecha_desde: str = ""
+    historial_filtro_fecha_hasta: str = ""
+    historial_filtro_metodo: str = ""
+
+    # Configuración impresoras
+    config_nombre_local: str = "Mi Restaurante"
+    config_cocina_activa: bool = False
+    config_cocina_ip: str = "192.168.1.100"
+    config_cocina_puerto: str = "9100"
+    config_caja_activa: bool = False
+    config_caja_ip: str = ""
+    config_caja_puerto: str = "9100"
 
     # ─── Computed vars ────────────────────────────────────────────────────────
 
@@ -479,6 +560,34 @@ class FoodState(rx.State):
         if self.usuario_actual is None:
             return False
         return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["reportes"]
+
+    @rx.var
+    def puede_ver_configuracion(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["configuracion"]
+
+    @rx.var
+    def historial_filtro_activo(self) -> bool:
+        return bool(
+            self.historial_filtro_fecha_desde
+            or self.historial_filtro_fecha_hasta
+            or self.historial_filtro_metodo
+        )
+
+    @rx.var
+    def puede_ver_usuarios(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["usuarios"]
+
+    @rx.var
+    def roles_disponibles(self) -> list[str]:
+        return [r.value for r in RolUsuario]
+
+    @rx.var
+    def usuario_form_es_edicion(self) -> bool:
+        return self.usuario_form_id > 0
 
     @rx.var
     def mesa_seleccionada_label(self) -> str:
@@ -552,6 +661,57 @@ class FoodState(rx.State):
         total = sum(_to_decimal(item.subtotal) for item in self.mostrador_carrito)
         return _money_text(total)
 
+    @rx.var
+    def caja_cobro_activo(self) -> bool:
+        return self.caja_cobro_mesa_id > 0
+
+    @rx.var
+    def caja_cobro_mesa_nombre(self) -> str:
+        mesa = next((m for m in self.mesas if m.id == self.caja_cobro_mesa_id), None)
+        return mesa.nombre if mesa else ""
+
+    @rx.var
+    def caja_cobro_total_base(self) -> float:
+        mesa = next((m for m in self.mesas if m.id == self.caja_cobro_mesa_id), None)
+        return mesa.total_abierto if mesa else 0.0
+
+    @rx.var
+    def caja_cobro_total_base_texto(self) -> str:
+        return _money_text(self.caja_cobro_total_base)
+
+    @rx.var
+    def caja_cobro_propina_decimal(self) -> float:
+        try:
+            v = float(self.caja_cobro_propina.replace(",", ".").strip())
+            return round(v, 2) if v >= 0 else 0.0
+        except (ValueError, AttributeError):
+            return 0.0
+
+    @rx.var
+    def caja_cobro_total_final(self) -> float:
+        return round(self.caja_cobro_total_base + self.caja_cobro_propina_decimal, 2)
+
+    @rx.var
+    def caja_cobro_total_final_texto(self) -> str:
+        return _money_text(self.caja_cobro_total_final)
+
+    @rx.var
+    def caja_cobro_vuelto(self) -> float:
+        try:
+            recibido = float(self.caja_cobro_efectivo_recibido.replace(",", ".").strip())
+            vuelto = round(recibido - self.caja_cobro_total_final, 2)
+            return vuelto if vuelto >= 0 else 0.0
+        except (ValueError, AttributeError):
+            return 0.0
+
+    @rx.var
+    def caja_cobro_vuelto_texto(self) -> str:
+        return _money_text(self.caja_cobro_vuelto)
+
+    @rx.var
+    def caja_cobro_es_efectivo(self) -> bool:
+        return self.caja_cobro_metodo == "efectivo"
+
     # ─── Inicialización ───────────────────────────────────────────────────────
 
     def cargar_datos_iniciales(self) -> None:
@@ -599,6 +759,12 @@ class FoodState(rx.State):
         self.cocina_polling_enabled = False
         self.caja_polling_enabled = False
         self.mostrador_polling_enabled = False
+        self.usuarios_admin = []
+        self._limpiar_usuario_form()
+        self.caja_cobro_mesa_id = 0
+        self.caja_cobro_metodo = "efectivo"
+        self.caja_cobro_propina = ""
+        self.caja_cobro_efectivo_recibido = ""
 
     # ─── Navegación / Shell ───────────────────────────────────────────────────
 
@@ -651,7 +817,27 @@ class FoodState(rx.State):
         result = self._route_access_result("reportes")
         if result is not None:
             return result
+        self.cargar_dashboard()
         self.cargar_historial_ventas()
+        return None
+
+    def on_load_usuarios(self):
+        if self.usuario_actual is None:
+            return rx.redirect("/login", replace=True)
+        if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES["usuarios"]:
+            return [
+                rx.window_alert("No tienes permisos para este modulo."),
+                rx.redirect(self.usuario_home_route, replace=True),
+            ]
+        self.cargar_usuarios_admin()
+        self._limpiar_usuario_form()
+        return None
+
+    def on_load_configuracion(self):
+        result = self._route_access_result("configuracion")
+        if result is not None:
+            return result
+        self.cargar_config_impresora()
         return None
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
@@ -705,6 +891,256 @@ class FoodState(rx.State):
         self.usuario_actual = None
         self._clear_operational_context()
         return rx.redirect("/login", replace=True)
+
+    # ─── Gestión de usuarios del local ───────────────────────────────────────
+
+    def on_change_uf_nombre(self, value: str) -> None:
+        self.usuario_form_nombre = value
+
+    def on_change_uf_rol(self, value: str) -> None:
+        self.usuario_form_rol = value
+
+    def on_change_uf_pin(self, value: str) -> None:
+        self.usuario_form_pin = value
+
+    def on_change_uf_pin_confirm(self, value: str) -> None:
+        self.usuario_form_pin_confirm = value
+
+    def toggle_uf_activo(self) -> None:
+        self.usuario_form_activo = not self.usuario_form_activo
+
+    def _limpiar_usuario_form(self) -> None:
+        self.usuario_form_id = 0
+        self.usuario_form_nombre = ""
+        self.usuario_form_rol = RolUsuario.MOZO.value
+        self.usuario_form_pin = ""
+        self.usuario_form_pin_confirm = ""
+        self.usuario_form_activo = True
+
+    def cargar_usuarios_admin(self) -> None:
+        mi_id = self.usuario_actual.id if self.usuario_actual else 0
+        with get_session() as session:
+            rows = session.exec(
+                select(UsuarioFood)
+                .where(UsuarioFood.company_id == _COMPANY_ID)
+                .order_by(UsuarioFood.rol, UsuarioFood.nombre)
+            ).all()
+        self.usuarios_admin = [
+            UsuarioAdminView(
+                id=u.id or 0,
+                nombre=u.nombre,
+                rol=u.rol,
+                rol_label=_ROL_LABELS.get(u.rol, u.rol),
+                pin_masked="●" * len(u.pin),
+                activo=u.activo,
+                badge_bg=_ROL_BADGE_BG.get(u.rol, "rgba(100,116,139,0.16)"),
+                badge_text=_ROL_BADGE_TEXT.get(u.rol, "#94A3B8"),
+                es_yo=u.id == mi_id,
+            )
+            for u in rows
+        ]
+
+    def nuevo_usuario_form(self) -> None:
+        self._limpiar_usuario_form()
+        self.mensaje = ""
+
+    def editar_usuario(self, user_id: int) -> None:
+        with get_session() as session:
+            u = session.get(UsuarioFood, user_id)
+        if u is None or u.company_id != _COMPANY_ID:
+            self.mensaje = "Usuario no encontrado."
+            return
+        self.usuario_form_id = u.id or 0
+        self.usuario_form_nombre = u.nombre
+        self.usuario_form_rol = u.rol
+        self.usuario_form_pin = ""
+        self.usuario_form_pin_confirm = ""
+        self.usuario_form_activo = u.activo
+        self.mensaje = ""
+
+    def guardar_usuario(self) -> None:
+        nombre = self.usuario_form_nombre.strip()
+        if not nombre:
+            self.mensaje = "El nombre es obligatorio."
+            return
+        rol = self.usuario_form_rol
+        if rol not in [r.value for r in RolUsuario]:
+            self.mensaje = "Rol invalido."
+            return
+
+        nuevo_pin = _normalize_pin(self.usuario_form_pin)
+        es_edicion = self.usuario_form_id > 0
+
+        if not es_edicion:
+            if len(nuevo_pin) < 4:
+                self.mensaje = "El PIN debe tener al menos 4 digitos."
+                return
+        else:
+            if self.usuario_form_pin and len(nuevo_pin) < 4:
+                self.mensaje = "El nuevo PIN debe tener al menos 4 digitos."
+                return
+
+        if self.usuario_form_pin:
+            pin_confirm = _normalize_pin(self.usuario_form_pin_confirm)
+            if nuevo_pin != pin_confirm:
+                self.mensaje = "Los PINs no coinciden."
+                return
+
+        with get_session() as session:
+            if es_edicion:
+                u = session.get(UsuarioFood, self.usuario_form_id)
+                if u is None or u.company_id != _COMPANY_ID:
+                    self.mensaje = "Usuario no encontrado."
+                    return
+                if nuevo_pin:
+                    conflicto = session.exec(
+                        select(UsuarioFood).where(
+                            UsuarioFood.company_id == _COMPANY_ID,
+                            UsuarioFood.pin == nuevo_pin,
+                            UsuarioFood.id != self.usuario_form_id,
+                        )
+                    ).first()
+                    if conflicto:
+                        self.mensaje = f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}."
+                        return
+                    u.pin = nuevo_pin
+                u.nombre = nombre
+                u.rol = rol
+                u.activo = self.usuario_form_activo
+                u.updated_at = datetime.utcnow()
+                session.add(u)
+                session.commit()
+                self.mensaje = f"Usuario '{nombre}' actualizado."
+            else:
+                conflicto = session.exec(
+                    select(UsuarioFood).where(
+                        UsuarioFood.company_id == _COMPANY_ID,
+                        UsuarioFood.pin == nuevo_pin,
+                    )
+                ).first()
+                if conflicto:
+                    self.mensaje = f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}."
+                    return
+                u = UsuarioFood(
+                    company_id=_COMPANY_ID,
+                    nombre=nombre,
+                    pin=nuevo_pin,
+                    rol=rol,
+                    activo=True,
+                )
+                session.add(u)
+                session.commit()
+                self.mensaje = f"Usuario '{nombre}' creado."
+
+        self._limpiar_usuario_form()
+        self.cargar_usuarios_admin()
+
+    def toggle_usuario_activo(self, user_id: int) -> None:
+        mi_id = self.usuario_actual.id if self.usuario_actual else 0
+        if user_id == mi_id:
+            self.mensaje = "No puedes desactivarte a ti mismo."
+            return
+        with get_session() as session:
+            u = session.get(UsuarioFood, user_id)
+            if u is None or u.company_id != _COMPANY_ID:
+                self.mensaje = "Usuario no encontrado."
+                return
+            if u.activo and u.rol == RolUsuario.ADMIN.value:
+                admins_activos = session.exec(
+                    select(UsuarioFood).where(
+                        UsuarioFood.company_id == _COMPANY_ID,
+                        UsuarioFood.rol == RolUsuario.ADMIN.value,
+                        UsuarioFood.activo.is_(True),
+                    )
+                ).all()
+                if len(admins_activos) <= 1:
+                    self.mensaje = "No puedes desactivar al ultimo administrador."
+                    return
+            u.activo = not u.activo
+            u.updated_at = datetime.utcnow()
+            session.add(u)
+            session.commit()
+            accion = "activado" if u.activo else "desactivado"
+            self.mensaje = f"Usuario '{u.nombre}' {accion}."
+        self.cargar_usuarios_admin()
+
+    def cancelar_usuario_form(self) -> None:
+        self._limpiar_usuario_form()
+        self.mensaje = ""
+
+    # ─── Configuración impresoras ─────────────────────────────────────────────
+
+    def cargar_config_impresora(self) -> None:
+        with get_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+            ).first()
+            if cfg:
+                self.config_nombre_local = cfg.nombre_local
+                self.config_cocina_activa = cfg.cocina_activa
+                self.config_cocina_ip = cfg.cocina_ip
+                self.config_cocina_puerto = str(cfg.cocina_puerto)
+                self.config_caja_activa = cfg.caja_activa
+                self.config_caja_ip = cfg.caja_ip or ""
+                self.config_caja_puerto = str(cfg.caja_puerto)
+
+    def guardar_config_impresora(self) -> None:
+        with get_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+            ).first()
+            if cfg is None:
+                cfg = ConfigImpresora(company_id=_COMPANY_ID)
+            cfg.nombre_local = self.config_nombre_local.strip() or "Mi Restaurante"
+            cfg.cocina_activa = self.config_cocina_activa
+            cfg.cocina_ip = self.config_cocina_ip.strip()
+            try:
+                cfg.cocina_puerto = int(self.config_cocina_puerto.strip())
+            except (ValueError, AttributeError):
+                cfg.cocina_puerto = 9100
+            cfg.caja_activa = self.config_caja_activa
+            cfg.caja_ip = self.config_caja_ip.strip()
+            try:
+                cfg.caja_puerto = int(self.config_caja_puerto.strip())
+            except (ValueError, AttributeError):
+                cfg.caja_puerto = 9100
+            cfg.updated_at = datetime.utcnow()
+            session.add(cfg)
+            session.commit()
+        self.mensaje = "Configuracion de impresoras guardada."
+
+    def set_config_nombre_local(self, v: str) -> None:
+        self.config_nombre_local = v
+
+    def set_config_cocina_ip(self, v: str) -> None:
+        self.config_cocina_ip = v
+
+    def set_config_cocina_puerto(self, v: str) -> None:
+        self.config_cocina_puerto = v
+
+    def set_config_caja_ip(self, v: str) -> None:
+        self.config_caja_ip = v
+
+    def set_config_caja_puerto(self, v: str) -> None:
+        self.config_caja_puerto = v
+
+    def toggle_config_cocina_activa(self) -> None:
+        self.config_cocina_activa = not self.config_cocina_activa
+
+    def toggle_config_caja_activa(self) -> None:
+        self.config_caja_activa = not self.config_caja_activa
+
+    def _get_printer_service(self) -> "SilentPrinterService":
+        try:
+            with get_session() as session:
+                cfg = session.exec(
+                    select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+                ).first()
+                if cfg is not None:
+                    return SilentPrinterService.from_db_config(cfg)
+        except Exception:
+            pass
+        return SilentPrinterService.from_env()
 
     # ─── Polling ──────────────────────────────────────────────────────────────
 
@@ -1192,7 +1628,7 @@ class FoodState(rx.State):
         self.cargar_mesas()
         self.cargar_cocina()
         try:
-            SilentPrinterService.from_env().print_kitchen_ticket(
+            self._get_printer_service().print_kitchen_ticket(
                 mesa_label=mesa_label, pedido_id=pedido_id, items=ticket_lines,
             )
         except Exception as error:
@@ -1338,6 +1774,125 @@ class FoodState(rx.State):
         self.cargar_cocina()
         self.mensaje = "Item entregado a la mesa."
 
+    # ─── Caja — Flujo de cobro con método de pago ────────────────────────────
+
+    def abrir_cobro_mesa(self, mesa_id: int) -> None:
+        mesa = next((m for m in self.mesas if m.id == mesa_id), None)
+        if mesa is None or mesa.estado == EstadoMesa.LIBRE.value or mesa.total_abierto <= 0:
+            self.mensaje = "Esa mesa no tiene consumo pendiente."
+            return
+        self.caja_cobro_mesa_id = mesa_id
+        self.caja_cobro_metodo = "efectivo"
+        self.caja_cobro_propina = ""
+        self.caja_cobro_efectivo_recibido = ""
+        self.mensaje = ""
+
+    def cancelar_cobro(self) -> None:
+        self.caja_cobro_mesa_id = 0
+        self.caja_cobro_metodo = "efectivo"
+        self.caja_cobro_propina = ""
+        self.caja_cobro_efectivo_recibido = ""
+
+    def set_caja_cobro_metodo(self, v: str) -> None:
+        self.caja_cobro_metodo = v
+        self.caja_cobro_efectivo_recibido = ""
+
+    def set_caja_cobro_propina(self, v: str) -> None:
+        self.caja_cobro_propina = v
+
+    def set_caja_cobro_efectivo_recibido(self, v: str) -> None:
+        self.caja_cobro_efectivo_recibido = v
+
+    def confirmar_cobro(self) -> None:
+        objetivo = self.caja_cobro_mesa_id
+        if objetivo == 0:
+            self.mensaje = "No hay mesa seleccionada para cobrar."
+            return
+        metodo = self.caja_cobro_metodo or "efectivo"
+        try:
+            propina_raw = float(self.caja_cobro_propina.replace(",", ".").strip())
+            propina = Decimal(str(round(propina_raw, 2))) if propina_raw > 0 else Decimal("0.00")
+        except (ValueError, AttributeError, InvalidOperation):
+            propina = Decimal("0.00")
+
+        pedido_id = 0
+        mesa_label = ""
+        attended_by = ""
+        total_base = Decimal("0.00")
+        ticket_lines: list[TicketLine] = []
+        with get_session() as session:
+            mesa = session.get(Mesa, objetivo)
+            if mesa is None:
+                self.mensaje = "La mesa indicada ya no existe."
+                return
+            pedido = _get_open_order(session, mesa.id or 0)
+            if pedido is None:
+                self.mensaje = "No hay pedido abierto para esa mesa."
+                return
+            if _get_unsent_details(session, pedido.id or 0):
+                self.mensaje = "Todavia hay items pendientes de enviar a cocina."
+                return
+            if _get_not_delivered_details(session, pedido.id or 0):
+                self.mensaje = "Todavia hay items en cocina o listos por entregar."
+                return
+            detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
+            ticket_lines = [
+                TicketLine(
+                    name=(productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"),
+                    quantity=d.cantidad,
+                    unit_price=float(_to_decimal(d.precio_unitario)),
+                    subtotal=float(_to_decimal(d.subtotal)),
+                    note=d.notas or "",
+                )
+                for d in detalles
+            ]
+            mozo = usuarios.get(pedido.mozo_id)
+            attended_by = _actor_name(
+                mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
+            ) or "Sin asignar"
+            total_base = _to_decimal(pedido.total)
+            total_final = total_base + propina
+            now = datetime.utcnow()
+            if self.usuario_actual:
+                pedido.cajero_id = self.usuario_actual.id
+            pedido.pagado = True
+            pedido.estado = EstadoPedido.COBRADO.value
+            pedido.cerrado_en = now
+            pedido.updated_at = now
+            pedido.metodo_pago = metodo
+            pedido.propina = propina
+            session.add(pedido)
+            mesa.estado = EstadoMesa.LIBRE.value
+            mesa.updated_at = now
+            session.add(mesa)
+            session.commit()
+            pedido_id = pedido.id or 0
+            mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
+
+        if self.mesa_seleccionada_id == objetivo:
+            self.mesa_seleccionada_id = 0
+            self.carrito = []
+            self.historial_pedido = []
+        self.cancelar_cobro()
+        self.cargar_mesas()
+        self.cargar_historial_ventas()
+        total_final = total_base + propina
+        try:
+            self._get_printer_service().print_cashier_ticket(
+                order_reference=mesa_label,
+                pedido_id=pedido_id,
+                items=ticket_lines,
+                total=float(total_final),
+                attended_by=attended_by,
+            )
+        except Exception as error:
+            self.mensaje = f"Mesa {mesa_label} cobrada. Fallo impresion caja: {error}"
+            return
+        propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
+        self.mensaje = f"Mesa {mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{propina_txt}."
+
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 
     def cobrar_mesa(self, mesa_id: int) -> None:
@@ -1404,7 +1959,7 @@ class FoodState(rx.State):
         self.cargar_mesas()
         self.cargar_historial_ventas()
         try:
-            SilentPrinterService.from_env().print_cashier_ticket(
+            self._get_printer_service().print_cashier_ticket(
                 order_reference=mesa_label,
                 pedido_id=pedido_id,
                 items=ticket_lines,
@@ -1552,7 +2107,7 @@ class FoodState(rx.State):
         self.cargar_cocina()
         self.cargar_historial_ventas()
         try:
-            svc = SilentPrinterService.from_env()
+            svc = self._get_printer_service()
             svc.print_kitchen_ticket(mesa_label=ticket_label, pedido_id=pedido_id, items=ticket_lines)
             svc.print_cashier_ticket(order_reference=f"Cliente: {cliente_nombre}", pedido_id=pedido_id, items=ticket_lines, total=total, attended_by=attended_by)
         except Exception as error:
@@ -1668,29 +2223,136 @@ class FoodState(rx.State):
         self.cargar_historial_ventas()
         self.mensaje = "Pedido de mostrador entregado al cliente."
 
+    # ─── Dashboard KPIs ───────────────────────────────────────────────────────
+
+    def cargar_dashboard(self) -> None:
+        hoy = datetime.utcnow().date()
+        inicio_hoy = datetime(hoy.year, hoy.month, hoy.day)
+        fin_hoy = inicio_hoy + timedelta(days=1)
+        with get_session() as session:
+            pedidos_hoy = session.exec(
+                select(Pedido).where(
+                    Pedido.company_id == _COMPANY_ID,
+                    Pedido.pagado.is_(True),
+                    Pedido.cerrado_en >= inicio_hoy,
+                    Pedido.cerrado_en < fin_hoy,
+                )
+            ).all()
+            ventas = sum(
+                _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
+                for p in pedidos_hoy
+            )
+            propina_total = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_hoy)
+            mesas_no_libres = session.exec(
+                select(Mesa).where(
+                    Mesa.company_id == _COMPANY_ID,
+                    Mesa.estado != EstadoMesa.LIBRE.value,
+                    Mesa.activa.is_(True),
+                )
+            ).all()
+            pedido_ids_hoy = {p.id for p in pedidos_hoy}
+            top_data: dict[int, dict] = {}
+            if pedido_ids_hoy:
+                detalles = session.exec(
+                    select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids_hoy))
+                ).all()
+                productos = {
+                    p.id: p
+                    for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()
+                }
+                for d in detalles:
+                    pid = d.producto_id
+                    if pid not in top_data:
+                        prod = productos.get(pid)
+                        top_data[pid] = {
+                            "nombre": prod.nombre if prod else f"Producto {pid}",
+                            "cantidad": 0,
+                            "total": Decimal("0.00"),
+                        }
+                    top_data[pid]["cantidad"] += d.cantidad
+                    top_data[pid]["total"] += _to_decimal(d.subtotal)
+            top_sorted = sorted(top_data.values(), key=lambda x: x["cantidad"], reverse=True)[:5]
+        self.dashboard_ventas_hoy_texto = _money_text(ventas)
+        self.dashboard_pedidos_hoy = len(pedidos_hoy)
+        self.dashboard_mesas_ocupadas = len(mesas_no_libres)
+        self.dashboard_propina_hoy_texto = _money_text(propina_total)
+        self.dashboard_top_platos = [
+            TopPlatoView(
+                nombre=p["nombre"],
+                cantidad=p["cantidad"],
+                total_generado=float(p["total"]),
+                total_texto=_money_text(p["total"]),
+            )
+            for p in top_sorted
+        ]
+
     # ─── Historial de ventas ──────────────────────────────────────────────────
 
     def cargar_historial_ventas(self) -> None:
         with get_session() as session:
-            pedidos = session.exec(
-                select(Pedido).where(
+            query = (
+                select(Pedido)
+                .where(
                     Pedido.company_id == _COMPANY_ID,
                     Pedido.pagado.is_(True),
-                ).order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
-            ).all()
+                )
+            )
+            if self.historial_filtro_fecha_desde:
+                try:
+                    desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
+                    query = query.where(Pedido.cerrado_en >= desde)
+                except ValueError:
+                    pass
+            if self.historial_filtro_fecha_hasta:
+                try:
+                    hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
+                    hasta = hasta.replace(hour=23, minute=59, second=59)
+                    query = query.where(Pedido.cerrado_en <= hasta)
+                except ValueError:
+                    pass
+            if self.historial_filtro_metodo:
+                query = query.where(Pedido.metodo_pago == self.historial_filtro_metodo)
+            query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
+            pedidos = session.exec(query).all()
             mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == _COMPANY_ID)).all()}
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
-            self.historial_ventas = [
-                VentaHistorialView(
+            historial: list[VentaHistorialView] = []
+            for p in pedidos:
+                total_base = _to_decimal(p.total)
+                propina = _to_decimal(getattr(p, "propina", Decimal("0.00")))
+                total_con_propina = total_base + propina
+                historial.append(VentaHistorialView(
                     pedido_id=p.id or 0,
                     mesa_label=_pedido_sales_label(p, mesas),
-                    total=float(_to_decimal(p.total)),
-                    total_texto=_money_text(p.total),
+                    total=float(total_base),
+                    total_texto=_money_text(total_base),
+                    propina=float(propina),
+                    propina_texto=_money_text(propina) if propina > 0 else "",
+                    total_con_propina=float(total_con_propina),
+                    total_con_propina_texto=_money_text(total_con_propina),
+                    metodo_pago=getattr(p, "metodo_pago", None) or "—",
                     mozo_nombre=_actor_name(usuarios[p.mozo_id].nombre if p.mozo_id in usuarios else "Sin asignar"),
                     cajero_nombre=_actor_name(usuarios[p.cajero_id].nombre if p.cajero_id in usuarios else "Sin asignar"),
-                )
-                for p in pedidos
-            ]
+                ))
+            self.historial_ventas = historial
+
+    def set_historial_filtro_fecha_desde(self, v: str) -> None:
+        self.historial_filtro_fecha_desde = v
+
+    def set_historial_filtro_fecha_hasta(self, v: str) -> None:
+        self.historial_filtro_fecha_hasta = v
+
+    def set_historial_filtro_metodo(self, v: str) -> None:
+        self.historial_filtro_metodo = v
+
+    def aplicar_filtros_historial(self) -> None:
+        self.cargar_historial_ventas()
+
+    def limpiar_filtros_historial(self) -> None:
+        self.historial_filtro_fecha_desde = ""
+        self.historial_filtro_fecha_hasta = ""
+        self.historial_filtro_metodo = ""
+        self.cargar_historial_ventas()
 
     # ─── Admin Carta — Categorías ─────────────────────────────────────────────
 

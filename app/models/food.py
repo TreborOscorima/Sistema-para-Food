@@ -1,7 +1,5 @@
 """Modelos SQLModel de TUWAYKIFOOD (multi-tenant, MySQL)."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -156,11 +154,35 @@ class Pedido(TimestampedModel, table=True):
         default=Decimal("0.00"),
         sa_column=Column(Numeric(10, 2), nullable=False),
     )
+    propina: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    metodo_pago: str | None = Field(default=None, max_length=24)
     abierto_en: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
 
     mesa: Mesa | None = Relationship(back_populates="pedidos")
     detalles: list["DetallePedido"] = Relationship(back_populates="pedido")
+
+
+class ConfigImpresora(TimestampedModel, table=True):
+    """Configuracion de impresoras por empresa (una fila por company)."""
+
+    __tablename__ = "food_config_impresora"
+    __table_args__ = (
+        UniqueConstraint("company_id", name="uq_food_config_impresora_company"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre_local: str = Field(default="Mi Restaurante", max_length=120, nullable=False)
+    cocina_activa: bool = Field(default=False, nullable=False)
+    cocina_ip: str = Field(default="192.168.1.100", max_length=64, nullable=False)
+    cocina_puerto: int = Field(default=9100, nullable=False)
+    caja_activa: bool = Field(default=False, nullable=False)
+    caja_ip: str = Field(default="", max_length=64, nullable=False)
+    caja_puerto: int = Field(default=9100, nullable=False)
 
 
 class DetallePedido(TimestampedModel, table=True):

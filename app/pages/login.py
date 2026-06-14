@@ -9,11 +9,11 @@ from app.states.food_state import FoodState
 
 def _pin_dot(filled: bool) -> rx.Component:
     return rx.box(
-        width="14px",
-        height="14px",
+        width="13px",
+        height="13px",
         border_radius="50%",
-        background=rx.cond(filled, "#F97316", "rgba(255,255,255,0.15)"),
-        border=rx.cond(filled, "2px solid #F97316", "2px solid rgba(255,255,255,0.25)"),
+        background=rx.cond(filled, "#EA580C", "#E2E8F0"),
+        border=rx.cond(filled, "2px solid #EA580C", "2px solid #CBD5E1"),
         transition="all 0.15s ease",
     )
 
@@ -35,30 +35,33 @@ def _pin_display() -> rx.Component:
 
 def _keypad_button(label: str, on_click=None, variant: str = "normal") -> rx.Component:
     if variant == "backspace":
-        bg = "rgba(239,68,68,0.12)"
-        hover_bg = "rgba(239,68,68,0.22)"
-        color = "#FCA5A5"
+        bg = "#FEF2F2"
+        hover_bg = "#FEE2E2"
+        color = "#B91C1C"
+        border = "1px solid #FECACA"
     elif variant == "confirm":
-        bg = "rgba(249,115,22,0.18)"
-        hover_bg = "rgba(249,115,22,0.30)"
-        color = "#F97316"
+        bg = "#FFF7ED"
+        hover_bg = "#FFEDD5"
+        color = "#EA580C"
+        border = "1px solid #FED7AA"
     else:
-        bg = "rgba(255,255,255,0.06)"
-        hover_bg = "rgba(255,255,255,0.12)"
-        color = "#F1F5F9"
+        bg = "#F8FAFC"
+        hover_bg = "#F1F5F9"
+        color = "#0F172A"
+        border = "1px solid #E2E8F0"
     return rx.button(
         label,
         on_click=on_click,
-        width="72px",
-        height="72px",
+        width="70px",
+        height="70px",
         border_radius="12px",
         background=bg,
         color=color,
-        font_size="22px",
+        font_size="20px",
         font_weight="600",
-        border="1px solid rgba(255,255,255,0.08)",
+        border=border,
         cursor="pointer",
-        _hover={"background": hover_bg, "transform": "scale(1.05)"},
+        _hover={"background": hover_bg, "transform": "scale(1.03)"},
         transition="all 0.12s ease",
     )
 
@@ -98,32 +101,44 @@ def _keypad() -> rx.Component:
 def login_page() -> rx.Component:
     return rx.center(
         rx.vstack(
-            rx.vstack(
-                rx.text(
-                    "TUWAYKIFOOD",
-                    font_size="26px",
-                    font_weight="800",
-                    color="#F97316",
-                    letter_spacing="0.06em",
-                    text_align="center",
+            rx.hstack(
+                rx.box(
+                    rx.icon(tag="utensils", size=18, color="#FFFFFF"),
+                    width="40px",
+                    height="40px",
+                    border_radius="10px",
+                    style={"background": "linear-gradient(135deg, #EA580C 0%, #C2410C 100%)"},
+                    display="flex",
+                    align_items="center",
+                    justify_content="center",
+                    box_shadow="0 2px 8px rgba(234,88,12,0.25)",
                 ),
-                rx.text(
-                    "POS Sistema para Restaurantes",
-                    font_size="13px",
-                    color="rgba(255,255,255,0.4)",
-                    text_align="center",
+                rx.vstack(
+                    rx.text(
+                        "TUWAYKIFOOD",
+                        font_size="22px",
+                        font_weight="800",
+                        color="#0F172A",
+                        letter_spacing="0.06em",
+                    ),
+                    rx.text(
+                        "POS Sistema para Restaurantes",
+                        font_size="12px",
+                        color="#64748B",
+                    ),
+                    spacing="0",
+                    align="start",
                 ),
-                spacing="1",
+                spacing="3",
                 align="center",
-                padding_bottom="8px",
             ),
             rx.box(
                 rx.vstack(
                     rx.text(
                         "Ingresa tu PIN",
-                        font_size="15px",
+                        font_size="14px",
                         font_weight="600",
-                        color="#F1F5F9",
+                        color="#0F172A",
                         text_align="center",
                     ),
                     _pin_display(),
@@ -132,29 +147,29 @@ def login_page() -> rx.Component:
                         rx.text(
                             FoodState.login_pin_input.length().to_string() + " digito(s) ingresado(s)",
                             font_size="11px",
-                            color="rgba(255,255,255,0.3)",
+                            color="#64748B",
                             text_align="center",
                         ),
                         rx.text(
                             "4 a 6 digitos",
                             font_size="11px",
-                            color="rgba(255,255,255,0.2)",
+                            color="#94A3B8",
                             text_align="center",
                         ),
                     ),
                     _keypad(),
                     spacing="4",
                     align="center",
-                    padding="32px 28px",
+                    padding="28px 24px",
                 ),
-                background="#0F172A",
-                border="1px solid rgba(249,115,22,0.20)",
-                border_radius="20px",
-                box_shadow="0 24px 64px rgba(0,0,0,0.60)",
+                background="#FFFFFF",
+                border="1px solid #E2E8F0",
+                border_radius="16px",
+                box_shadow="0 4px 24px rgba(0,0,0,0.08)",
             ),
             spacing="6",
             align="center",
         ),
         min_height="100vh",
-        background="linear-gradient(135deg, #080E18 0%, #0C1624 100%)",
+        background="#F8FAFC",
     )

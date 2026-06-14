@@ -7,55 +7,56 @@ import reflex as rx
 from app.states.food_state import FoodState
 
 
-PAGE_BACKGROUND = "linear-gradient(180deg, #060A10 0%, #0B1220 100%)"
+# ── Paleta light (misma escala que Sistema de Ventas, acento naranja para food) ─
+PAGE_BACKGROUND = "#F8FAFC"
 
-SURFACE_BASE = "#0F1826"
-SURFACE_ELEVATED = "#111B2E"
-SURFACE_SOFT = "#162030"
-SURFACE_MUTED = "#0D1520"
-SURFACE_GHOST = "#131F36"
-SURFACE_HOVER = "#1A2540"
-SURFACE_INTERACTIVE = "#1E2B42"
+SURFACE_BASE = "#FFFFFF"
+SURFACE_ELEVATED = "#FFFFFF"
+SURFACE_SOFT = "#F8FAFC"
+SURFACE_MUTED = "#F1F5F9"
+SURFACE_GHOST = "#F8FAFC"
+SURFACE_HOVER = "#F1F5F9"
+SURFACE_INTERACTIVE = "#FFF7ED"
 
-BORDER_COLOR = "#1E2B40"
-BORDER_STRONG = "#2A3958"
-BORDER_ACCENT = "#623410"
+BORDER_COLOR = "#E2E8F0"
+BORDER_STRONG = "#CBD5E1"
+BORDER_ACCENT = "#FED7AA"
 
-TEXT_PRIMARY = "#F8FAFC"
-TEXT_SECONDARY = "#CBD5E1"
+TEXT_PRIMARY = "#0F172A"
+TEXT_SECONDARY = "#334155"
 TEXT_MUTED = "#64748B"
 
-ACCENT = "#F97316"
-ACCENT_HOVER = "#EA580C"
-ACCENT_BG = "#3D1A06"
-ACCENT_TEXT = "#FDBA74"
-ACCENT_SOFT = ACCENT_BG
+ACCENT = "#EA580C"
+ACCENT_HOVER = "#C2410C"
+ACCENT_BG = "#FFF7ED"
+ACCENT_TEXT = "#9A3412"
+ACCENT_SOFT = "#FFF7ED"
 
-SUCCESS_BG = "#0A2818"
-SUCCESS_TEXT = "#4ADE80"
-SUCCESS_BORDER = "#155229"
+SUCCESS_BG = "#F0FDF4"
+SUCCESS_TEXT = "#15803D"
+SUCCESS_BORDER = "#BBF7D0"
 
-DANGER_BG = "#2A0A0A"
-DANGER_TEXT = "#FCA5A5"
-DANGER_BORDER = "#521515"
+DANGER_BG = "#FEF2F2"
+DANGER_TEXT = "#B91C1C"
+DANGER_BORDER = "#FECACA"
 
-WARNING_BG = "#2A1A04"
-WARNING_TEXT = "#FCD34D"
-WARNING_BORDER = "#52360A"
+WARNING_BG = "#FFFBEB"
+WARNING_TEXT = "#B45309"
+WARNING_BORDER = "#FDE68A"
 
-INFO_BG = "#0A1522"
-INFO_TEXT = "#93C5FD"
-INFO_BORDER = "#1A3550"
+INFO_BG = "#EFF6FF"
+INFO_TEXT = "#1D4ED8"
+INFO_BORDER = "#BFDBFE"
 
-GLOW = "0 22px 60px rgba(2, 6, 23, 0.60)"
-SOFT_GLOW = "0 14px 36px rgba(2, 6, 23, 0.40)"
-ACCENT_GLOW = "0 12px 28px rgba(249, 115, 22, 0.22)"
+GLOW = "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)"
+SOFT_GLOW = "0 1px 2px rgba(0,0,0,0.05)"
+ACCENT_GLOW = "0 1px 3px rgba(234,88,12,0.12)"
 
 
 def surface_card(*children, **props) -> rx.Component:
     bg = props.pop("background", SURFACE_BASE)
     border = props.pop("border", f"1px solid {BORDER_COLOR}")
-    border_radius = props.pop("border_radius", "28px")
+    border_radius = props.pop("border_radius", "12px")
     box_shadow = props.pop("box_shadow", GLOW)
     width = props.pop("width", "100%")
     incoming_style = props.pop("style", {})
@@ -72,7 +73,7 @@ def surface_card(*children, **props) -> rx.Component:
 def section_card(*children, **props) -> rx.Component:
     bg = props.pop("background", SURFACE_SOFT)
     border = props.pop("border", f"1px solid {BORDER_COLOR}")
-    border_radius = props.pop("border_radius", "24px")
+    border_radius = props.pop("border_radius", "10px")
     box_shadow = props.pop("box_shadow", SOFT_GLOW)
     width = props.pop("width", "100%")
     incoming_style = props.pop("style", {})
@@ -96,9 +97,9 @@ def action_button(label: str, on_click, icon_tag: str = "arrow_right") -> rx.Com
         ),
         on_click=on_click,
         background=ACCENT,
-        color=TEXT_PRIMARY,
-        border_radius="18px",
-        height="44px",
+        color="#FFFFFF",
+        border_radius="8px",
+        height="40px",
         padding_x="1rem",
         _hover={"background": ACCENT_HOVER},
     )
@@ -108,17 +109,16 @@ def status_banner(message) -> rx.Component:
     return section_card(
         rx.hstack(
             rx.box(
-                width="10px",
-                height="10px",
+                width="8px",
+                height="8px",
                 border_radius="999px",
                 style={"background": ACCENT},
-                box_shadow=f"0 0 0 8px {ACCENT_BG}",
             ),
-            rx.text(message, color=TEXT_SECONDARY, font_weight="600"),
-            spacing="4",
+            rx.text(message, color=TEXT_SECONDARY, font_weight="600", font_size="0.9rem"),
+            spacing="3",
             align="center",
         ),
-        padding="1rem 1.2rem",
+        padding="0.75rem 1rem",
     )
 
 
@@ -128,45 +128,45 @@ def kpi_card(title: str, value, description: str = "", accent_color: str = ACCEN
             rx.text(
                 title,
                 color=TEXT_MUTED,
-                font_size="0.78rem",
-                font_weight="800",
-                letter_spacing="0.12em",
+                font_size="0.75rem",
+                font_weight="700",
+                letter_spacing="0.08em",
                 text_transform="uppercase",
             ),
             rx.text(
                 value,
                 color=TEXT_PRIMARY,
                 font_weight="800",
-                font_size="2rem",
-                line_height="1.05",
+                font_size="1.75rem",
+                line_height="1.1",
             ),
             rx.cond(
                 description != "",
-                rx.text(description, color=TEXT_MUTED, font_size="0.9rem"),
+                rx.text(description, color=TEXT_MUTED, font_size="0.85rem"),
                 rx.fragment(),
             ),
             align="start",
             spacing="2",
             width="100%",
         ),
-        padding="1.2rem 1.3rem",
+        padding="1.1rem 1.2rem",
         border=f"1px solid {accent_color}",
-        background="linear-gradient(160deg, #131F33 0%, #0F1826 100%)",
     )
 
 
 def _brand(compact: bool = False) -> rx.Component:
     return rx.hstack(
         rx.box(
-            rx.icon(tag="utensils", size=20, color=TEXT_PRIMARY),
-            width="42px",
-            height="42px",
-            border_radius="18px",
-            style={"background": "linear-gradient(135deg, #C85A08 0%, #A04806 100%)"},
+            rx.icon(tag="utensils", size=18, color="#FFFFFF"),
+            width="38px",
+            height="38px",
+            border_radius="10px",
+            style={"background": "linear-gradient(135deg, #EA580C 0%, #C2410C 100%)"},
             display="flex",
             align_items="center",
             justify_content="center",
             box_shadow=ACCENT_GLOW,
+            flex_shrink="0",
         ),
         rx.cond(
             compact,
@@ -176,13 +176,13 @@ def _brand(compact: bool = False) -> rx.Component:
                     "TUWAYKIFOOD",
                     color=TEXT_PRIMARY,
                     font_weight="800",
-                    letter_spacing="0.12em",
+                    letter_spacing="0.08em",
                     font_size="0.78rem",
                     text_transform="uppercase",
                 ),
-                rx.text("Sistema para restaurantes", color=TEXT_MUTED, font_size="0.86rem"),
+                rx.text("Sistema para restaurantes", color=TEXT_MUTED, font_size="0.78rem"),
                 align="start",
-                spacing="1",
+                spacing="0",
             ),
         ),
         spacing="3",
@@ -193,32 +193,42 @@ def _brand(compact: bool = False) -> rx.Component:
 def _user_summary() -> rx.Component:
     return rx.hstack(
         rx.box(
-            rx.icon(tag="user_round", size=18, color=TEXT_PRIMARY),
-            width="42px",
-            height="42px",
-            border_radius="16px",
-            style={"background": SURFACE_INTERACTIVE},
+            rx.icon(tag="user_round", size=16, color="#FFFFFF"),
+            width="36px",
+            height="36px",
+            border_radius="full",
+            style={"background": "linear-gradient(135deg, #EA580C 0%, #C2410C 100%)"},
             display="flex",
             align_items="center",
             justify_content="center",
-            border=f"1px solid {BORDER_STRONG}",
+            flex_shrink="0",
         ),
         rx.vstack(
             rx.text(
                 FoodState.usuario_nombre,
                 color=TEXT_PRIMARY,
-                font_weight="800",
-                font_size="0.92rem",
-                max_width="190px",
+                font_weight="700",
+                font_size="0.875rem",
+                max_width="180px",
                 text_overflow="ellipsis",
                 overflow="hidden",
                 white_space="nowrap",
             ),
-            rx.text(FoodState.usuario_rol, color=TEXT_MUTED, font_weight="600", font_size="0.82rem"),
+            rx.text(
+                FoodState.usuario_rol,
+                color=ACCENT,
+                font_weight="500",
+                font_size="0.72rem",
+                background=ACCENT_BG,
+                padding_x="0.4rem",
+                padding_y="0.1rem",
+                border_radius="full",
+                display="inline-block",
+            ),
             align="start",
-            spacing="1",
+            spacing="0",
         ),
-        spacing="3",
+        spacing="2",
         align="center",
     )
 
@@ -228,19 +238,19 @@ def user_session_badge() -> rx.Component:
         _user_summary(),
         rx.button(
             rx.hstack(
-                rx.icon(tag="log_out", size=16),
-                rx.text("Salir", font_weight="700"),
-                spacing="2",
+                rx.icon(tag="log_out", size=15),
+                rx.text("Salir", font_weight="600", font_size="0.84rem"),
+                spacing="1",
                 align="center",
             ),
             on_click=FoodState.logout,
             background=DANGER_BG,
             color=DANGER_TEXT,
             border=f"1px solid {DANGER_BORDER}",
-            border_radius="16px",
-            height="42px",
-            padding_x="0.95rem",
-            _hover={"background": "#3D1010"},
+            border_radius="8px",
+            height="36px",
+            padding_x="0.75rem",
+            _hover={"background": "#FEE2E2"},
         ),
         spacing="3",
         align="center",
@@ -254,6 +264,8 @@ _NAV_DESCRIPTIONS = {
     "Cocina": "KDS / Produccion",
     "Carta": "Carta y precios",
     "Reportes": "Ventas del dia",
+    "Usuarios": "Personal y PINs",
+    "Configuracion": "Impresoras y local",
 }
 
 
@@ -262,24 +274,25 @@ def _desktop_nav_item(label: str, href: str, icon_tag: str, active: bool) -> rx.
     return rx.link(
         rx.box(
             rx.hstack(
-                rx.box(
-                    rx.icon(tag=icon_tag, size=18, color=TEXT_PRIMARY),
-                    width="40px",
-                    height="40px",
-                    border_radius="14px",
-                    style={"background": rx.cond(active, SURFACE_INTERACTIVE, SURFACE_GHOST)},
-                    display="flex",
-                    align_items="center",
-                    justify_content="center",
+                rx.icon(
+                    tag=icon_tag,
+                    size=17,
+                    color=rx.cond(active, "#FFFFFF", TEXT_MUTED),
+                    flex_shrink="0",
                 ),
                 rx.cond(
                     FoodState.sidebar_collapsed,
                     rx.fragment(),
                     rx.vstack(
-                        rx.text(label, color=TEXT_PRIMARY, font_weight="700"),
-                        rx.text(description, color=TEXT_MUTED, font_size="0.74rem"),
+                        rx.text(
+                            label,
+                            color=rx.cond(active, "#FFFFFF", TEXT_SECONDARY),
+                            font_weight="600",
+                            font_size="0.875rem",
+                        ),
+                        rx.text(description, color=rx.cond(active, "rgba(255,255,255,0.70)", TEXT_MUTED), font_size="0.72rem"),
                         align="start",
-                        spacing="1",
+                        spacing="0",
                     ),
                 ),
                 width="100%",
@@ -287,17 +300,15 @@ def _desktop_nav_item(label: str, href: str, icon_tag: str, active: bool) -> rx.
                 spacing="3",
             ),
             width="100%",
-            padding=rx.cond(FoodState.sidebar_collapsed, "0.6rem", "0.7rem 0.8rem"),
-            border_radius="20px",
+            padding=rx.cond(FoodState.sidebar_collapsed, "0.6rem", "0.6rem 0.75rem"),
+            border_radius="10px",
             style={
-                "background": rx.cond(
-                    active,
-                    "linear-gradient(135deg, #4A2208 0%, #2A1408 100%)",
-                    "transparent",
-                )
+                "background": rx.cond(active, ACCENT, "transparent"),
+                "box_shadow": rx.cond(active, "0 1px 3px rgba(234,88,12,0.25)", "none"),
             },
-            border=rx.cond(active, f"1px solid {BORDER_ACCENT}", "1px solid transparent"),
-            _hover={"background": SURFACE_GHOST},
+            _hover={
+                "background": rx.cond(active, ACCENT_HOVER, SURFACE_MUTED),
+            },
         ),
         href=href,
         width="100%",
@@ -309,18 +320,26 @@ def _mobile_nav_item(label: str, href: str, icon_tag: str, active: bool) -> rx.C
     return rx.link(
         rx.box(
             rx.hstack(
-                rx.icon(tag=icon_tag, size=18, color=TEXT_PRIMARY),
-                rx.text(label, color=TEXT_PRIMARY, font_weight="700"),
+                rx.icon(
+                    tag=icon_tag,
+                    size=17,
+                    color=rx.cond(active, "#FFFFFF", TEXT_SECONDARY),
+                ),
+                rx.text(
+                    label,
+                    color=rx.cond(active, "#FFFFFF", TEXT_SECONDARY),
+                    font_weight="600",
+                    font_size="0.9rem",
+                ),
                 width="100%",
                 spacing="3",
                 align="center",
             ),
             width="100%",
-            padding="0.85rem 1rem",
-            min_height="48px",
-            border_radius="18px",
-            style={"background": rx.cond(active, ACCENT_BG, SURFACE_MUTED)},
-            border=rx.cond(active, f"1px solid {BORDER_ACCENT}", f"1px solid {BORDER_COLOR}"),
+            padding="0.75rem 0.9rem",
+            min_height="46px",
+            border_radius="10px",
+            style={"background": rx.cond(active, ACCENT, SURFACE_MUTED)},
         ),
         href=href,
         width="100%",
@@ -361,8 +380,18 @@ def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
             nav_item("Reportes", "/reportes", "receipt_text", active == "reportes"),
             rx.fragment(),
         ),
+        rx.cond(
+            FoodState.puede_ver_usuarios,
+            nav_item("Usuarios", "/usuarios", "users", active == "usuarios"),
+            rx.fragment(),
+        ),
+        rx.cond(
+            FoodState.puede_ver_configuracion,
+            nav_item("Configuracion", "/configuracion", "settings", active == "configuracion"),
+            rx.fragment(),
+        ),
         width="100%",
-        spacing="3",
+        spacing="1",
         align="stretch",
     )
 
@@ -372,59 +401,74 @@ def _desktop_sidebar(active: str) -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.cond(FoodState.sidebar_collapsed, _brand(compact=True), _brand(compact=False)),
-                rx.icon_button(
-                    rx.icon(tag="menu", size=18),
-                    on_click=FoodState.toggle_sidebar,
-                    background=SURFACE_GHOST,
-                    color=TEXT_PRIMARY,
-                    border=f"1px solid {BORDER_COLOR}",
-                    border_radius="16px",
-                    _hover={"background": SURFACE_HOVER},
+                rx.cond(
+                    FoodState.sidebar_collapsed,
+                    rx.fragment(),
+                    rx.icon_button(
+                        rx.icon(tag="panel_left_close", size=16),
+                        on_click=FoodState.toggle_sidebar,
+                        background="transparent",
+                        color=TEXT_MUTED,
+                        border="none",
+                        border_radius="8px",
+                        _hover={"background": SURFACE_MUTED, "color": TEXT_SECONDARY},
+                    ),
                 ),
                 width="100%",
                 justify="between",
                 align="center",
+                padding_x="0.25rem",
+                padding_y="0.5rem",
+                min_height="56px",
             ),
-            rx.box(height="1px", width="100%", background=BORDER_COLOR),
-            _nav_stack(active, mobile=False),
+            rx.box(
+                height="1px",
+                width="100%",
+                background="linear-gradient(to right, transparent, #E2E8F0, transparent)",
+            ),
+            rx.box(
+                _nav_stack(active, mobile=False),
+                width="100%",
+                padding_top="0.5rem",
+            ),
             rx.spacer(),
             rx.cond(
                 FoodState.sidebar_collapsed,
                 rx.fragment(),
                 rx.box(
                     rx.vstack(
-                        rx.text("Operacion en LAN", color=TEXT_PRIMARY, font_weight="700"),
+                        rx.text("Operacion en LAN", color=TEXT_SECONDARY, font_weight="600", font_size="0.8rem"),
                         rx.text(
                             "Optimizado para tablets, caja y cocina.",
                             color=TEXT_MUTED,
-                            font_size="0.84rem",
+                            font_size="0.74rem",
                         ),
                         align="start",
-                        spacing="2",
+                        spacing="1",
                     ),
                     width="100%",
-                    padding="1rem",
-                    border_radius="20px",
+                    padding="0.65rem 0.75rem",
+                    border_radius="10px",
                     style={"background": SURFACE_MUTED},
                     border=f"1px solid {BORDER_COLOR}",
                 ),
             ),
             height="100%",
             width="100%",
-            spacing="5",
+            spacing="0",
+            gap="0.5rem",
             align="start",
         ),
-        width=rx.cond(FoodState.sidebar_collapsed, "96px", "280px"),
-        min_width=rx.cond(FoodState.sidebar_collapsed, "96px", "280px"),
-        height="calc(100vh - 2rem)",
+        width=rx.cond(FoodState.sidebar_collapsed, "72px", "256px"),
+        min_width=rx.cond(FoodState.sidebar_collapsed, "72px", "256px"),
+        height="100vh",
         position="sticky",
-        top="1rem",
-        padding="1rem",
-        background=SURFACE_ELEVATED,
-        border=f"1px solid {BORDER_COLOR}",
-        border_radius="30px",
-        box_shadow=GLOW,
+        top="0",
+        padding="0.75rem",
+        background="linear-gradient(to bottom, #F8FAFC, rgba(255,255,255,0.97))",
+        border_right=f"1px solid {BORDER_COLOR}",
         display=rx.breakpoints(initial="none", lg="block"),
+        flex_shrink="0",
     )
 
 
@@ -433,11 +477,11 @@ def _mobile_nav_drawer(active: str) -> rx.Component:
         rx.drawer.root(
             rx.drawer.trigger(
                 rx.icon_button(
-                    rx.icon(tag="menu", size=18),
-                    background=SURFACE_GHOST,
-                    color=TEXT_PRIMARY,
+                    rx.icon(tag="menu", size=17),
+                    background=SURFACE_MUTED,
+                    color=TEXT_SECONDARY,
                     border=f"1px solid {BORDER_COLOR}",
-                    border_radius="16px",
+                    border_radius="8px",
                     _hover={"background": SURFACE_HOVER},
                 )
             ),
@@ -450,11 +494,11 @@ def _mobile_nav_drawer(active: str) -> rx.Component:
                                 _brand(compact=False),
                                 rx.drawer.close(
                                     rx.icon_button(
-                                        rx.icon(tag="x", size=18),
-                                        background=SURFACE_GHOST,
-                                        color=TEXT_PRIMARY,
+                                        rx.icon(tag="x", size=17),
+                                        background=SURFACE_MUTED,
+                                        color=TEXT_SECONDARY,
                                         border=f"1px solid {BORDER_COLOR}",
-                                        border_radius="16px",
+                                        border_radius="8px",
                                     )
                                 ),
                                 width="100%",
@@ -467,12 +511,12 @@ def _mobile_nav_drawer(active: str) -> rx.Component:
                             user_session_badge(),
                             width="100%",
                             align="start",
-                            spacing="5",
+                            spacing="4",
                         ),
-                        width="320px",
+                        width="300px",
                         max_width="88vw",
                         height="100%",
-                        padding="1.1rem",
+                        padding="1rem",
                         background=SURFACE_ELEVATED,
                         border_right=f"1px solid {BORDER_STRONG}",
                     ),
@@ -495,19 +539,19 @@ def _page_header(active: str, title: str, subtitle: str, action=None) -> rx.Comp
                         rx.text(
                             "TUWAYKIFOOD",
                             color=ACCENT,
-                            font_size="0.75rem",
+                            font_size="0.70rem",
                             font_weight="800",
-                            letter_spacing="0.16em",
+                            letter_spacing="0.12em",
                             text_transform="uppercase",
                         ),
                         rx.heading(
                             title,
-                            size=rx.breakpoints(initial="5", md="7"),
+                            size=rx.breakpoints(initial="5", md="6"),
                             color=TEXT_PRIMARY,
                             line_height="1.1",
                         ),
                         align="start",
-                        spacing="1",
+                        spacing="0",
                     ),
                     spacing="3",
                     align="center",
@@ -534,7 +578,7 @@ def _page_header(active: str, title: str, subtitle: str, action=None) -> rx.Comp
                 gap="0.75rem",
             ),
             rx.box(
-                rx.text(subtitle, color=TEXT_MUTED, font_size="0.9rem", max_width="760px"),
+                rx.text(subtitle, color=TEXT_MUTED, font_size="0.85rem", max_width="720px"),
                 display=rx.breakpoints(initial="none", md="block"),
                 width="100%",
             ),
@@ -542,7 +586,7 @@ def _page_header(active: str, title: str, subtitle: str, action=None) -> rx.Comp
             spacing="2",
             align="start",
         ),
-        padding=rx.breakpoints(initial="0.95rem 1rem", md="1.35rem"),
+        padding=rx.breakpoints(initial="0.85rem 1rem", md="1.1rem 1.25rem"),
         background=SURFACE_ELEVATED,
     )
 
@@ -562,15 +606,15 @@ def app_shell(
                     content,
                     width="100%",
                     align="start",
-                    spacing="6",
+                    spacing="5",
                 ),
                 width="100%",
                 min_height="100vh",
-                padding=rx.breakpoints(initial="1rem", md="1.25rem", xl="1.5rem"),
+                padding=rx.breakpoints(initial="1rem", md="1.5rem", xl="2rem"),
             ),
             width="100%",
             align="start",
-            gap="1rem",
+            gap="0",
         ),
         min_height="100vh",
         width="100%",
