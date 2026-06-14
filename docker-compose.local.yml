@@ -13,8 +13,14 @@ version: "3.9"
 # =============================================================================
 
 services:
+  food_mysql:
+    environment:
+      MYSQL_USER: food
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+
   tuwayki_food:
     environment:
       PUBLIC_API_URL: "http://localhost:3003"
       ENV: prod
       DB_HOST: food_mysql
+      DB_USER: food

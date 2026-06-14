@@ -56,10 +56,10 @@ COPY --chown=app:app . .
 COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-EXPOSE 3003
+EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
-    CMD curl -fsS http://localhost:3003/api/ping || exit 1
+    CMD curl -fsS http://localhost:3000/api/ping || exit 1
 
 USER app
 
