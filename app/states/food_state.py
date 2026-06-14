@@ -342,6 +342,15 @@ class MesaView(BaseModel):
     items_listos_count: int
 
 
+class MesaAdminView(BaseModel):
+    id: int
+    numero: int
+    nombre: str
+    capacidad: int
+    activa: bool
+    estado: str
+
+
 class UsuarioSesion(BaseModel):
     id: int
     nombre: str
@@ -545,6 +554,16 @@ class FoodState(rx.State):
     config_slug: str = "mi-restaurante"
     config_menu_qr_base64: str = ""
     config_menu_url: str = ""
+    config_admin_email: str = ""
+    config_admin_password_nueva: str = ""
+    config_admin_password_confirm: str = ""
+
+    # CRUD mesas (admin)
+    mesas_config: list[MesaAdminView] = []
+    mesa_config_form_id: int = 0
+    mesa_config_form_numero: str = ""
+    mesa_config_form_nombre: str = ""
+    mesa_config_form_capacidad: str = "4"
 
     # ─── Computed vars ────────────────────────────────────────────────────────
 
@@ -879,7 +898,12 @@ class FoodState(rx.State):
         if result is not None:
             return result
         self.cargar_config_impresora()
+        self.cargar_mesas_config()
         return None
+
+    def on_load_dono_page(self) -> None:
+        self.cargar_config_impresora()
+        self.cargar_mesas_config()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
@@ -1125,6 +1149,7 @@ class FoodState(rx.State):
                 self.config_caja_ip = cfg.caja_ip or ""
                 self.config_caja_puerto = str(cfg.caja_puerto)
                 self.config_slug = cfg.slug or "mi-restaurante"
+                self.config_admin_email = cfg.admin_email or ""
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
@@ -1183,6 +1208,162 @@ class FoodState(rx.State):
 
     def set_config_slug(self, v: str) -> None:
         self.config_slug = v
+
+    def set_config_admin_email(self, v: str) -> None:
+        self.config_admin_email = v
+
+    def set_config_admin_password_nueva(self, v: str) -> None:
+        self.config_admin_password_nueva = v
+
+    def set_config_admin_password_confirm(self, v: str) -> None:
+        self.config_admin_password_confirm = v
+
+    def guardar_admin_cuenta(self) -> None:
+        import hashlib
+        email = self.config_admin_email.strip().lower()
+        if not email or "@" not in email:
+            self.mensaje = "Ingresa un email valido."
+            return
+        nueva = self.config_admin_password_nueva.strip()
+        confirm = self.config_admin_password_confirm.strip()
+        if nueva and nueva != confirm:
+            self.mensaje = "Las contraseñas no coinciden."
+            return
+        with get_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+            ).first()
+            if cfg is None:
+                cfg = ConfigImpresora(company_id=_COMPANY_ID)
+            cfg.admin_email = email
+            if nueva:
+                cfg.admin_password_hash = hashlib.sha256(nueva.encode()).hexdigest()
+            session.add(cfg)
+            session.commit()
+        self.config_admin_email = email
+        self.config_admin_password_nueva = ""
+        self.config_admin_password_confirm = ""
+        self.mensaje = "Cuenta del dueño guardada."
+
+    # ─── CRUD Mesas (admin config) ────────────────────────────────────────────
+
+    def cargar_mesas_config(self) -> None:
+        with get_session() as session:
+            mesas = session.exec(
+                select(Mesa)
+                .where(Mesa.company_id == _COMPANY_ID)
+                .order_by(Mesa.numero)
+            ).all()
+            self.mesas_config = [
+                MesaAdminView(
+                    id=m.id or 0,
+                    numero=m.numero,
+                    nombre=m.nombre or "",
+                    capacidad=m.capacidad,
+                    activa=m.activa,
+                    estado=m.estado,
+                )
+                for m in mesas
+            ]
+
+    def _reset_mesa_config_form(self) -> None:
+        self.mesa_config_form_id = 0
+        self.mesa_config_form_numero = ""
+        self.mesa_config_form_nombre = ""
+        self.mesa_config_form_capacidad = "4"
+
+    def cancelar_mesa_config_form(self) -> None:
+        self._reset_mesa_config_form()
+
+    def editar_mesa_config(self, mesa_id: int) -> None:
+        with get_session() as session:
+            m = session.get(Mesa, mesa_id)
+        if m is None or m.company_id != _COMPANY_ID:
+            return
+        self.mesa_config_form_id = m.id or 0
+        self.mesa_config_form_numero = str(m.numero)
+        self.mesa_config_form_nombre = m.nombre or ""
+        self.mesa_config_form_capacidad = str(m.capacidad)
+
+    def guardar_mesa_config(self) -> None:
+        try:
+            numero = int(self.mesa_config_form_numero.strip())
+        except (ValueError, AttributeError):
+            self.mensaje = "El numero de mesa debe ser un entero."
+            return
+        try:
+            capacidad = max(1, int(self.mesa_config_form_capacidad.strip() or "4"))
+        except ValueError:
+            capacidad = 4
+        nombre = self.mesa_config_form_nombre.strip()
+        with get_session() as session:
+            es_edicion = self.mesa_config_form_id > 0
+            if es_edicion:
+                m = session.get(Mesa, self.mesa_config_form_id)
+                if m is None or m.company_id != _COMPANY_ID:
+                    self.mensaje = "Mesa no encontrada."
+                    return
+            else:
+                conflicto = session.exec(
+                    select(Mesa).where(
+                        Mesa.company_id == _COMPANY_ID,
+                        Mesa.numero == numero,
+                    )
+                ).first()
+                if conflicto:
+                    self.mensaje = f"Ya existe la mesa #{numero}."
+                    return
+                m = Mesa(company_id=_COMPANY_ID, numero=numero)
+            m.numero = numero
+            m.nombre = nombre
+            m.capacidad = capacidad
+            m.updated_at = datetime.utcnow()
+            session.add(m)
+            session.commit()
+        accion = "actualizada" if self.mesa_config_form_id > 0 else "creada"
+        self.mensaje = f"Mesa #{numero} {accion}."
+        self._reset_mesa_config_form()
+        self.cargar_mesas_config()
+
+    def toggle_mesa_activa_config(self, mesa_id: int) -> None:
+        with get_session() as session:
+            m = session.get(Mesa, mesa_id)
+            if m is None or m.company_id != _COMPANY_ID:
+                return
+            m.activa = not m.activa
+            m.updated_at = datetime.utcnow()
+            session.add(m)
+            session.commit()
+        self.cargar_mesas_config()
+
+    def eliminar_mesa_config(self, mesa_id: int) -> None:
+        with get_session() as session:
+            m = session.get(Mesa, mesa_id)
+            if m is None or m.company_id != _COMPANY_ID:
+                self.mensaje = "Mesa no encontrada."
+                return
+            pedido_abierto = session.exec(
+                select(Pedido).where(
+                    Pedido.mesa_id == mesa_id,
+                    Pedido.estado.in_(list(OPEN_ORDER_STATES)),
+                )
+            ).first()
+            if pedido_abierto:
+                self.mensaje = f"La mesa #{m.numero} tiene un pedido activo — no se puede eliminar."
+                return
+            session.delete(m)
+            session.commit()
+        self.mensaje = f"Mesa #{m.numero} eliminada."
+        self.cargar_mesas_config()
+
+    def set_mesa_config_form_numero(self, v: str) -> None:
+        self.mesa_config_form_numero = v
+
+    def set_mesa_config_form_nombre(self, v: str) -> None:
+        self.mesa_config_form_nombre = v
+
+    def set_mesa_config_form_capacidad(self, v: str) -> None:
+        self.mesa_config_form_capacidad = v
 
     def _get_printer_service(self) -> "SilentPrinterService":
         try:
@@ -2680,3 +2861,61 @@ class MenuPublicoState(rx.State):
             self.categorias_menu = result
 
         self.cargando = False
+
+
+class AdminLocalState(rx.State):
+    """Estado para login de dueño del local vía email+contraseña (independiente del PIN)."""
+
+    autenticado: bool = False
+    email_input: str = ""
+    password_input: str = ""
+    error_msg: str = ""
+
+    def set_email_input(self, v: str) -> None:
+        self.email_input = v
+
+    def set_password_input(self, v: str) -> None:
+        self.password_input = v
+
+    def on_load_dono_login(self):
+        self.error_msg = ""
+        if self.autenticado:
+            return rx.redirect("/dono")
+        return None
+
+    def on_load_dono(self):
+        if not self.autenticado:
+            return rx.redirect("/dono/login")
+        return None
+
+    def login_admin_local(self) -> None:
+        import hashlib
+        email = self.email_input.strip().lower()
+        password = self.password_input.strip()
+        self.error_msg = ""
+        if not email or not password:
+            self.error_msg = "Ingresa email y contraseña."
+            return
+        with get_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(
+                    ConfigImpresora.company_id == _COMPANY_ID,
+                    ConfigImpresora.admin_email == email,
+                )
+            ).first()
+        if cfg is None or not cfg.admin_password_hash:
+            self.error_msg = "Credenciales incorrectas."
+            return
+        hashed = hashlib.sha256(password.encode()).hexdigest()
+        if hashed != cfg.admin_password_hash:
+            self.error_msg = "Credenciales incorrectas."
+            return
+        self.autenticado = True
+        self.password_input = ""
+        return rx.redirect("/dono")
+
+    def logout_admin_local(self) -> None:
+        self.autenticado = False
+        self.email_input = ""
+        self.password_input = ""
+        return rx.redirect("/dono/login")

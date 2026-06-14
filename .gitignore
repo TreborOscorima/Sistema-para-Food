@@ -37,3 +37,7 @@ Thumbs.db
 reflex_run*.log
 reflex_run*.err
 *.log
+dev.err
+
+# Reflex runtime lock
+reflex.lock/

@@ -1,11 +1,11 @@
-"""Pagina de configuracion — impresoras ESC/POS."""
+"""Pagina de configuracion — impresoras ESC/POS, mesas y cuenta del dueño."""
 
 from __future__ import annotations
 
 import reflex as rx
 
 from app.components.shared import app_shell
-from app.states.food_state import FoodState
+from app.states.food_state import FoodState, MesaAdminView
 
 
 def _toggle_btn(activo: bool, on_click) -> rx.Component:
@@ -222,6 +222,284 @@ def _qr_section() -> rx.Component:
     )
 
 
+def _mesa_row(mesa: MesaAdminView) -> rx.Component:
+    return rx.hstack(
+        rx.text(
+            f"#{mesa.numero}",
+            font_size="13px",
+            font_weight="700",
+            color="#0F172A",
+            min_width="36px",
+        ),
+        rx.text(
+            mesa.nombre,
+            font_size="12px",
+            color="#64748B",
+            flex="1",
+        ),
+        rx.text(
+            f"{mesa.capacidad} pers.",
+            font_size="11px",
+            color="#94A3B8",
+            min_width="54px",
+        ),
+        rx.cond(
+            mesa.activa,
+            rx.badge("Activa", background="#DCFCE7", color="#15803D", border_radius="5px", font_size="10px"),
+            rx.badge("Inactiva", background="#FEE2E2", color="#B91C1C", border_radius="5px", font_size="10px"),
+        ),
+        rx.button(
+            "Editar",
+            on_click=FoodState.editar_mesa_config(mesa.id),
+            background="#FFF7ED",
+            color="#EA580C",
+            border="1px solid #FED7AA",
+            border_radius="6px",
+            font_size="10px",
+            cursor="pointer",
+            padding_x="7px",
+            padding_y="3px",
+            _hover={"opacity": "0.85"},
+        ),
+        rx.button(
+            rx.cond(mesa.activa, "Desactivar", "Activar"),
+            on_click=FoodState.toggle_mesa_activa_config(mesa.id),
+            background=rx.cond(mesa.activa, "#FEF2F2", "#F0FDF4"),
+            color=rx.cond(mesa.activa, "#B91C1C", "#15803D"),
+            border=rx.cond(mesa.activa, "1px solid #FECACA", "1px solid #BBF7D0"),
+            border_radius="6px",
+            font_size="10px",
+            cursor="pointer",
+            padding_x="7px",
+            padding_y="3px",
+            _hover={"opacity": "0.85"},
+        ),
+        rx.button(
+            rx.icon(tag="trash_2", size=12, color="#B91C1C"),
+            on_click=FoodState.eliminar_mesa_config(mesa.id),
+            background="#FEF2F2",
+            border="1px solid #FECACA",
+            border_radius="6px",
+            cursor="pointer",
+            padding_x="7px",
+            padding_y="3px",
+            _hover={"opacity": "0.85"},
+        ),
+        width="100%",
+        align="center",
+        padding="8px 10px",
+        background="#FFFFFF",
+        border_radius="8px",
+        border="1px solid #E2E8F0",
+        gap="8px",
+        flex_wrap="wrap",
+    )
+
+
+def _mesas_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            _section_header("Gestion de Mesas", "layout_grid"),
+            # Formulario alta/edicion
+            rx.vstack(
+                rx.text(
+                    rx.cond(FoodState.mesa_config_form_id > 0, "Editar Mesa", "Nueva Mesa"),
+                    font_size="12px",
+                    font_weight="700",
+                    color="#EA580C",
+                ),
+                rx.hstack(
+                    rx.input(
+                        placeholder="N° *",
+                        value=FoodState.mesa_config_form_numero,
+                        on_change=FoodState.set_mesa_config_form_numero,
+                        type="number",
+                        min="1",
+                        width="70px",
+                        background="#FFFFFF",
+                        border="1px solid #E2E8F0",
+                        color="#0F172A",
+                        border_radius="8px",
+                        padding_x="10px",
+                        padding_y="8px",
+                        font_size="13px",
+                    ),
+                    rx.input(
+                        placeholder="Nombre (ej: Terraza 1)",
+                        value=FoodState.mesa_config_form_nombre,
+                        on_change=FoodState.set_mesa_config_form_nombre,
+                        flex="1",
+                        background="#FFFFFF",
+                        border="1px solid #E2E8F0",
+                        color="#0F172A",
+                        border_radius="8px",
+                        padding_x="10px",
+                        padding_y="8px",
+                        font_size="13px",
+                    ),
+                    rx.input(
+                        placeholder="Cap.",
+                        value=FoodState.mesa_config_form_capacidad,
+                        on_change=FoodState.set_mesa_config_form_capacidad,
+                        type="number",
+                        min="1",
+                        width="62px",
+                        background="#FFFFFF",
+                        border="1px solid #E2E8F0",
+                        color="#0F172A",
+                        border_radius="8px",
+                        padding_x="10px",
+                        padding_y="8px",
+                        font_size="13px",
+                    ),
+                    spacing="2",
+                    width="100%",
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Cancelar",
+                        on_click=FoodState.cancelar_mesa_config_form,
+                        background="#F1F5F9",
+                        color="#64748B",
+                        border="1px solid #E2E8F0",
+                        border_radius="7px",
+                        font_size="12px",
+                        cursor="pointer",
+                        _hover={"opacity": "0.85"},
+                    ),
+                    rx.button(
+                        rx.cond(FoodState.mesa_config_form_id > 0, "Actualizar Mesa", "Agregar Mesa"),
+                        on_click=FoodState.guardar_mesa_config,
+                        background="#EA580C",
+                        color="#FFFFFF",
+                        border_radius="7px",
+                        font_size="12px",
+                        font_weight="700",
+                        cursor="pointer",
+                        flex="1",
+                        _hover={"background": "#C2410C"},
+                    ),
+                    spacing="2",
+                    width="100%",
+                ),
+                spacing="2",
+                padding="12px",
+                background="#FFF7ED",
+                border="1px solid #FED7AA",
+                border_radius="10px",
+                width="100%",
+            ),
+            # Lista mesas
+            rx.cond(
+                FoodState.mesas_config.length() == 0,
+                rx.center(
+                    rx.text("Sin mesas configuradas.", font_size="12px", color="#94A3B8", font_style="italic"),
+                    padding_y="12px",
+                    width="100%",
+                ),
+                rx.vstack(
+                    rx.foreach(FoodState.mesas_config, _mesa_row),
+                    spacing="2",
+                    width="100%",
+                ),
+            ),
+            spacing="3",
+            width="100%",
+        ),
+        background="#FFFFFF",
+        border="1px solid #E2E8F0",
+        border_radius="12px",
+        padding="16px 18px",
+        width="100%",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+    )
+
+
+def _admin_cuenta_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            _section_header("Cuenta del Dueño", "key_round"),
+            rx.text(
+                "Configura email y contraseña para acceder al panel del dueño en /dono",
+                font_size="12px",
+                color="#64748B",
+                font_style="italic",
+            ),
+            _field_row(
+                "Email",
+                FoodState.config_admin_email,
+                FoodState.set_config_admin_email,
+                "dueño@restaurante.com",
+                "email",
+            ),
+            rx.hstack(
+                rx.text("Nueva clave", font_size="13px", color="#334155", min_width="140px", font_weight="600"),
+                rx.input(
+                    placeholder="Nueva contraseña",
+                    value=FoodState.config_admin_password_nueva,
+                    on_change=FoodState.set_config_admin_password_nueva,
+                    type="password",
+                    background="#FFFFFF",
+                    border="1px solid #E2E8F0",
+                    color="#0F172A",
+                    border_radius="8px",
+                    padding_x="12px",
+                    padding_y="8px",
+                    font_size="13px",
+                    flex="1",
+                ),
+                spacing="3",
+                align="center",
+                width="100%",
+            ),
+            rx.hstack(
+                rx.text("Confirmar clave", font_size="13px", color="#334155", min_width="140px", font_weight="600"),
+                rx.input(
+                    placeholder="Repite la contraseña",
+                    value=FoodState.config_admin_password_confirm,
+                    on_change=FoodState.set_config_admin_password_confirm,
+                    type="password",
+                    background="#FFFFFF",
+                    border="1px solid #E2E8F0",
+                    color="#0F172A",
+                    border_radius="8px",
+                    padding_x="12px",
+                    padding_y="8px",
+                    font_size="13px",
+                    flex="1",
+                ),
+                spacing="3",
+                align="center",
+                width="100%",
+            ),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="key_round", size=14, color="#FFFFFF"),
+                    rx.text("Guardar cuenta del dueño", font_size="13px", font_weight="700", color="#FFFFFF"),
+                    spacing="2",
+                    align="center",
+                ),
+                on_click=FoodState.guardar_admin_cuenta,
+                background="#0F172A",
+                border_radius="8px",
+                padding_x="16px",
+                padding_y="8px",
+                cursor="pointer",
+                _hover={"background": "#1E293B"},
+                align_self="end",
+            ),
+            spacing="3",
+            width="100%",
+        ),
+        background="#FFFFFF",
+        border="1px solid #E2E8F0",
+        border_radius="12px",
+        padding="16px 18px",
+        width="100%",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+    )
+
+
 def _configuracion_content() -> rx.Component:
     return rx.vstack(
         # Header
@@ -281,6 +559,8 @@ def _configuracion_content() -> rx.Component:
         ),
         # Carta digital QR
         _qr_section(),
+        # Gestion de mesas
+        _mesas_section(),
         # Impresora cocina
         _printer_section(
             title="Impresora Cocina (red)",
@@ -303,6 +583,8 @@ def _configuracion_content() -> rx.Component:
             puerto_value=FoodState.config_caja_puerto,
             puerto_change=FoodState.set_config_caja_puerto,
         ),
+        # Cuenta del dueño
+        _admin_cuenta_section(),
         # Nota informativa
         rx.box(
             rx.hstack(

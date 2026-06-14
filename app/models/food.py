@@ -185,6 +185,8 @@ class ConfigImpresora(TimestampedModel, table=True):
     caja_ip: str = Field(default="", max_length=64, nullable=False)
     caja_puerto: int = Field(default=9100, nullable=False)
     slug: str = Field(default="mi-restaurante", max_length=80, nullable=False)
+    admin_email: str = Field(default="", max_length=120, nullable=False)
+    admin_password_hash: str = Field(default="", max_length=128, nullable=False)
 
 
 class DetallePedido(TimestampedModel, table=True):

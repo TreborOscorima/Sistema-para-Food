@@ -1,0 +1,306 @@
+"""Paginas del dueño del local — login email/pass y dashboard de configuracion."""
+
+from __future__ import annotations
+
+import reflex as rx
+
+from app.states.food_state import AdminLocalState, FoodState
+from app.pages.configuracion import (
+    _admin_cuenta_section,
+    _field_row,
+    _mesas_section,
+    _printer_section,
+    _qr_section,
+    _section_header,
+)
+
+
+def _dono_shell(content: rx.Component) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            # Top bar
+            rx.hstack(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="utensils", size=16, color="#FFFFFF"),
+                        width="34px",
+                        height="34px",
+                        border_radius="8px",
+                        background="linear-gradient(135deg, #EA580C 0%, #C2410C 100%)",
+                        display="flex",
+                        align_items="center",
+                        justify_content="center",
+                    ),
+                    rx.text("TUWAYKIFOOD", font_size="15px", font_weight="800", color="#0F172A"),
+                    rx.badge(
+                        "Panel del Dueño",
+                        background="#FFF7ED",
+                        color="#EA580C",
+                        border="1px solid #FED7AA",
+                        border_radius="5px",
+                        font_size="10px",
+                        font_weight="700",
+                        padding_x="6px",
+                    ),
+                    spacing="2",
+                    align="center",
+                ),
+                rx.spacer(),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="log_out", size=13, color="#64748B"),
+                        rx.text("Salir", font_size="12px", color="#64748B"),
+                        spacing="1",
+                        align="center",
+                    ),
+                    on_click=AdminLocalState.logout_admin_local,
+                    background="#F1F5F9",
+                    border="1px solid #E2E8F0",
+                    border_radius="6px",
+                    padding_x="10px",
+                    padding_y="6px",
+                    cursor="pointer",
+                    _hover={"opacity": "0.85"},
+                ),
+                width="100%",
+                align="center",
+                padding="12px 20px",
+                background="#FFFFFF",
+                border_bottom="1px solid #E2E8F0",
+                position="sticky",
+                top="0",
+                z_index="10",
+            ),
+            # Content
+            rx.box(
+                content,
+                padding="24px 20px",
+                max_width="640px",
+                margin="0 auto",
+                width="100%",
+            ),
+            spacing="0",
+            width="100%",
+            min_height="100vh",
+        ),
+        background="#F8FAFC",
+        min_height="100vh",
+    )
+
+
+# ── Login ────────────────────────────────────────────────────────────────────
+
+@rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login)
+def dono_login_page() -> rx.Component:
+    return rx.center(
+        rx.vstack(
+            rx.vstack(
+                rx.box(
+                    rx.icon(tag="utensils", size=22, color="#FFFFFF"),
+                    width="52px",
+                    height="52px",
+                    border_radius="14px",
+                    background="linear-gradient(135deg, #EA580C 0%, #C2410C 100%)",
+                    display="flex",
+                    align_items="center",
+                    justify_content="center",
+                    box_shadow="0 4px 12px rgba(234,88,12,0.3)",
+                ),
+                rx.text(
+                    "Panel del Dueño",
+                    font_size="20px",
+                    font_weight="800",
+                    color="#0F172A",
+                ),
+                rx.text(
+                    "Ingresa con tu email y contraseña",
+                    font_size="13px",
+                    color="#64748B",
+                ),
+                spacing="2",
+                align="center",
+            ),
+            rx.box(
+                rx.vstack(
+                    rx.cond(
+                        AdminLocalState.error_msg != "",
+                        rx.box(
+                            rx.text(AdminLocalState.error_msg, font_size="13px", color="#B91C1C", font_weight="600"),
+                            background="#FEF2F2",
+                            border="1px solid #FECACA",
+                            border_radius="8px",
+                            padding="10px 14px",
+                            width="100%",
+                        ),
+                        rx.fragment(),
+                    ),
+                    rx.vstack(
+                        rx.text("Email", font_size="12px", font_weight="600", color="#334155"),
+                        rx.input(
+                            placeholder="dueño@restaurante.com",
+                            value=AdminLocalState.email_input,
+                            on_change=AdminLocalState.set_email_input,
+                            type="text",
+                            auto_complete="off",
+                            background="#FFFFFF",
+                            border="1px solid #E2E8F0",
+                            color="#0F172A",
+                            border_radius="8px",
+                            padding_x="12px",
+                            padding_y="10px",
+                            font_size="14px",
+                            width="100%",
+                            _focus={"border": "1px solid #EA580C", "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
+                        ),
+                        spacing="1",
+                        width="100%",
+                        align="start",
+                    ),
+                    rx.vstack(
+                        rx.text("Contraseña", font_size="12px", font_weight="600", color="#334155"),
+                        rx.input(
+                            placeholder="••••••••",
+                            value=AdminLocalState.password_input,
+                            on_change=AdminLocalState.set_password_input,
+                            type="password",
+                            auto_complete="new-password",
+                            background="#FFFFFF",
+                            border="1px solid #E2E8F0",
+                            color="#0F172A",
+                            border_radius="8px",
+                            padding_x="12px",
+                            padding_y="10px",
+                            font_size="14px",
+                            width="100%",
+                            _focus={"border": "1px solid #EA580C", "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
+                        ),
+                        spacing="1",
+                        width="100%",
+                        align="start",
+                    ),
+                    rx.button(
+                        "Ingresar",
+                        on_click=AdminLocalState.login_admin_local,
+                        background="#EA580C",
+                        color="#FFFFFF",
+                        border_radius="8px",
+                        font_size="14px",
+                        font_weight="700",
+                        width="100%",
+                        padding_y="10px",
+                        cursor="pointer",
+                        _hover={"background": "#C2410C"},
+                    ),
+                    rx.center(
+                        rx.link(
+                            "← Volver al sistema (login con PIN)",
+                            href="/login",
+                            font_size="12px",
+                            color="#94A3B8",
+                            _hover={"color": "#EA580C"},
+                        ),
+                        width="100%",
+                    ),
+                    spacing="4",
+                    width="100%",
+                ),
+                background="#FFFFFF",
+                border="1px solid #E2E8F0",
+                border_radius="16px",
+                padding="28px 24px",
+                box_shadow="0 4px 24px rgba(0,0,0,0.08)",
+                width="100%",
+            ),
+            spacing="6",
+            align="center",
+            width="100%",
+            max_width="380px",
+        ),
+        min_height="100vh",
+        background="#F8FAFC",
+        padding="24px 16px",
+    )
+
+
+# ── Dashboard del dueño ──────────────────────────────────────────────────────
+
+def _dono_config_content() -> rx.Component:
+    return rx.vstack(
+        rx.text(
+            "Configuracion del local",
+            font_size="22px",
+            font_weight="800",
+            color="#0F172A",
+        ),
+        rx.cond(
+            FoodState.mensaje != "",
+            rx.box(
+                rx.text(FoodState.mensaje, font_size="13px", color="#15803D", font_weight="600"),
+                background="#F0FDF4",
+                border="1px solid #BBF7D0",
+                border_radius="8px",
+                padding="10px 14px",
+                width="100%",
+            ),
+            rx.fragment(),
+        ),
+        rx.box(
+            rx.vstack(
+                _section_header("Nombre del local", "store"),
+                _field_row("Nombre", FoodState.config_nombre_local, FoodState.set_config_nombre_local, "Mi Restaurante"),
+                rx.button(
+                    "Guardar nombre",
+                    on_click=FoodState.guardar_config_impresora,
+                    background="#EA580C",
+                    color="#FFFFFF",
+                    border_radius="8px",
+                    font_size="13px",
+                    font_weight="700",
+                    cursor="pointer",
+                    _hover={"background": "#C2410C"},
+                    align_self="end",
+                ),
+                spacing="4",
+                width="100%",
+            ),
+            background="#FFFFFF",
+            border="1px solid #E2E8F0",
+            border_radius="12px",
+            padding="16px 18px",
+            width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        _qr_section(),
+        _mesas_section(),
+        _printer_section(
+            title="Impresora Cocina (red)",
+            icon="chef_hat",
+            activo=FoodState.config_cocina_activa,
+            toggle_event=FoodState.toggle_config_cocina_activa,
+            ip_value=FoodState.config_cocina_ip,
+            ip_change=FoodState.set_config_cocina_ip,
+            puerto_value=FoodState.config_cocina_puerto,
+            puerto_change=FoodState.set_config_cocina_puerto,
+        ),
+        _printer_section(
+            title="Impresora Caja (red)",
+            icon="printer",
+            activo=FoodState.config_caja_activa,
+            toggle_event=FoodState.toggle_config_caja_activa,
+            ip_value=FoodState.config_caja_ip,
+            ip_change=FoodState.set_config_caja_ip,
+            puerto_value=FoodState.config_caja_puerto,
+            puerto_change=FoodState.set_config_caja_puerto,
+        ),
+        _admin_cuenta_section(),
+        spacing="4",
+        width="100%",
+    )
+
+
+@rx.page(
+    route="/dono",
+    on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page],
+)
+def dono_page() -> rx.Component:
+    return _dono_shell(_dono_config_content())
