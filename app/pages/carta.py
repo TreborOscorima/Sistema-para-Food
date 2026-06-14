@@ -152,6 +152,30 @@ def _categoria_form() -> rx.Component:
 
 def _producto_row(prod: ProductoView) -> rx.Component:
     return rx.hstack(
+        rx.cond(
+            prod.imagen_url != "",
+            rx.image(
+                src=prod.imagen_url,
+                width="40px",
+                height="40px",
+                object_fit="cover",
+                border_radius="6px",
+                border="1px solid #E2E8F0",
+                flex_shrink="0",
+            ),
+            rx.box(
+                rx.icon(tag="utensils", size=16, color="#CBD5E1"),
+                width="40px",
+                height="40px",
+                border_radius="6px",
+                background="#F8FAFC",
+                border="1px solid #E2E8F0",
+                display="flex",
+                align_items="center",
+                justify_content="center",
+                flex_shrink="0",
+            ),
+        ),
         rx.vstack(
             rx.hstack(
                 rx.text(prod.nombre, font_size="13px", font_weight="600", color="#0F172A"),
@@ -162,6 +186,7 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                 ),
                 spacing="2",
                 align="center",
+                flex_wrap="wrap",
             ),
             rx.hstack(
                 rx.text(prod.precio_texto, font_size="13px", font_weight="700", color="#EA580C"),
@@ -172,6 +197,8 @@ def _producto_row(prod: ProductoView) -> rx.Component:
             ),
             spacing="0",
             align="start",
+            flex="1",
+            min_width="0",
         ),
         rx.spacer(),
         rx.button(
@@ -206,6 +233,7 @@ def _producto_row(prod: ProductoView) -> rx.Component:
         background="#FFFFFF",
         border_radius="8px",
         border="1px solid #E2E8F0",
+        gap="10px",
     )
 
 
@@ -261,6 +289,67 @@ def _producto_form() -> rx.Component:
             padding_x="12px",
             padding_y="8px",
             font_size="13px",
+            width="100%",
+        ),
+        # ── Imagen del plato ──────────────────────────────────────────
+        rx.vstack(
+            rx.text("Imagen del plato", font_size="12px", font_weight="600", color="#64748B"),
+            rx.cond(
+                FoodState.producto_form_imagen_url != "",
+                rx.hstack(
+                    rx.image(
+                        src=FoodState.producto_form_imagen_url,
+                        width="80px",
+                        height="80px",
+                        object_fit="cover",
+                        border_radius="8px",
+                        border="1px solid #E2E8F0",
+                    ),
+                    rx.vstack(
+                        rx.text("Imagen cargada", font_size="11px", color="#15803D", font_weight="600"),
+                        rx.button(
+                            "Quitar imagen",
+                            on_click=FoodState.quitar_imagen_producto,
+                            background="#FEF2F2",
+                            color="#B91C1C",
+                            border="1px solid #FECACA",
+                            border_radius="6px",
+                            font_size="11px",
+                            cursor="pointer",
+                            padding_x="8px",
+                            padding_y="3px",
+                            _hover={"opacity": "0.85"},
+                        ),
+                        spacing="2",
+                        align="start",
+                    ),
+                    spacing="3",
+                    align="center",
+                ),
+                rx.upload(
+                    rx.vstack(
+                        rx.icon(tag="image_plus", size=20, color="#94A3B8"),
+                        rx.text("Arrastra o haz click", font_size="11px", color="#64748B"),
+                        rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px", color="#94A3B8"),
+                        spacing="1",
+                        align="center",
+                    ),
+                    id="upload_imagen_producto",
+                    on_drop=FoodState.handle_upload_imagen_producto(
+                        rx.upload_files(upload_id="upload_imagen_producto")
+                    ),
+                    accept={"image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"]},
+                    max_files=1,
+                    border="2px dashed #E2E8F0",
+                    border_radius="8px",
+                    padding="16px",
+                    width="100%",
+                    background="#FAFAFA",
+                    cursor="pointer",
+                    _hover={"border_color": "#EA580C", "background": "#FFF7ED"},
+                ),
+            ),
+            spacing="2",
             width="100%",
         ),
         rx.hstack(

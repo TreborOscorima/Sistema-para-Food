@@ -6,7 +6,9 @@ import asyncio
 import base64
 import io
 import os
+import pathlib
 import re
+import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -136,9 +138,10 @@ _ROL_BADGE_TEXT: dict[str, str] = {
     RolUsuario.COCINA.value: "#B45309",
 }
 
-# company_id y base URL leídos del entorno en tiempo de importación
+# company_id y base URLs leídos del entorno en tiempo de importación
 _COMPANY_ID: int = int(os.getenv("FOOD_COMPANY_ID", "0") or "0")
 _FOOD_BASE_URL: str = os.getenv("FOOD_BASE_URL", "http://localhost:3003").rstrip("/")
+_FOOD_API_URL: str = os.getenv("PUBLIC_API_URL", "http://localhost:3004").rstrip("/")
 
 
 # ─── Helpers puros ───────────────────────────────────────────────────────────
@@ -362,6 +365,7 @@ class ProductoView(BaseModel):
     precio: float
     precio_texto: str
     disponible: bool
+    imagen_url: str
 
 
 class CarritoItem(BaseModel):
@@ -493,6 +497,7 @@ class FoodState(rx.State):
     producto_form_descripcion: str = ""
     producto_form_precio: str = ""
     producto_form_disponible: bool = True
+    producto_form_imagen_url: str = ""
 
     mozos_polling_enabled: bool = False
     cocina_polling_enabled: bool = False
@@ -1338,6 +1343,7 @@ class FoodState(rx.State):
                     precio=float(_to_decimal(p.precio)),
                     precio_texto=_money_text(p.precio),
                     disponible=p.disponible,
+                    imagen_url=p.imagen_url or "",
                 )
                 for p in productos_db
             ]
@@ -2522,6 +2528,7 @@ class FoodState(rx.State):
                 prod.precio = precio
                 prod.categoria_id = cat.id or 0
                 prod.disponible = self.producto_form_disponible
+                prod.imagen_url = self.producto_form_imagen_url or None
                 prod.updated_at = datetime.utcnow()
                 session.add(prod)
             else:
@@ -2532,6 +2539,7 @@ class FoodState(rx.State):
                     descripcion=self.producto_form_descripcion.strip() or None,
                     precio=precio,
                     disponible=self.producto_form_disponible,
+                    imagen_url=self.producto_form_imagen_url or None,
                 )
                 session.add(prod)
             session.commit()
@@ -2549,6 +2557,7 @@ class FoodState(rx.State):
         self.producto_form_precio = str(prod.precio)
         self.producto_form_categoria_nombre = prod.categoria_nombre
         self.producto_form_disponible = prod.disponible
+        self.producto_form_imagen_url = prod.imagen_url
 
     def toggle_producto_disponible(self, producto_id: int) -> None:
         with get_session() as session:
@@ -2567,11 +2576,26 @@ class FoodState(rx.State):
         self.producto_form_descripcion = ""
         self.producto_form_precio = ""
         self.producto_form_disponible = True
+        self.producto_form_imagen_url = ""
         if self.categorias:
             self.producto_form_categoria_nombre = self.categorias[0].nombre
 
     def cancelar_producto_form(self) -> None:
         self._reset_producto_form()
+
+    async def handle_upload_imagen_producto(self, files: list[rx.UploadFile]) -> None:
+        for file in files:
+            data = await file.read()
+            ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
+            filename = f"food_prod_{uuid.uuid4().hex[:12]}{ext}"
+            upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_productos"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            (upload_dir / filename).write_bytes(data)
+            self.producto_form_imagen_url = f"{_FOOD_API_URL}/_upload/food_productos/{filename}"
+            break  # solo primera imagen
+
+    def quitar_imagen_producto(self) -> None:
+        self.producto_form_imagen_url = ""
 
 
 # ─── Estado público (sin auth) ────────────────────────────────────────────────
@@ -2580,6 +2604,7 @@ class ProductoPublicoView(BaseModel):
     nombre: str
     descripcion: str
     precio_texto: str
+    imagen_url: str
 
 
 class CategoriaPublicaView(BaseModel):
@@ -2645,6 +2670,7 @@ class MenuPublicoState(rx.State):
                                     nombre=p.nombre,
                                     descripcion=p.descripcion or "",
                                     precio_texto=_money_text(p.precio),
+                                    imagen_url=p.imagen_url or "",
                                 )
                                 for p in prods
                             ],

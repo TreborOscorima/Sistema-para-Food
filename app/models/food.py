@@ -120,6 +120,7 @@ class Producto(TimestampedModel, table=True):
         sa_column=Column(Numeric(10, 2), nullable=False),
     )
     disponible: bool = Field(default=True, nullable=False)
+    imagen_url: str | None = Field(default=None, max_length=500)
 
     categoria: Categoria | None = Relationship(back_populates="productos")
     detalles: list["DetallePedido"] = Relationship(back_populates="producto")
