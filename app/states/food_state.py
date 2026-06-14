@@ -401,6 +401,7 @@ class HistorialItem(BaseModel):
     estado_color: str
     preparado_por_nombre: str
     puede_entregar: bool
+    puede_cancelar: bool
 
 
 class CocinaTicketView(BaseModel):
@@ -542,6 +543,9 @@ class FoodState(rx.State):
     historial_filtro_fecha_desde: str = ""
     historial_filtro_fecha_hasta: str = ""
     historial_filtro_metodo: str = ""
+
+    # Nota global del pedido de mesa activo
+    nota_pedido_mesa: str = ""
 
     # Configuración impresoras + carta digital
     config_nombre_local: str = "Mi Restaurante"
@@ -825,6 +829,7 @@ class FoodState(rx.State):
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_efectivo_recibido = ""
+        self.nota_pedido_mesa = ""
 
     # ─── Navegación / Shell ───────────────────────────────────────────────────
 
@@ -877,6 +882,7 @@ class FoodState(rx.State):
         result = self._route_access_result("reportes")
         if result is not None:
             return result
+        self.historial_filtro_fecha_desde = datetime.utcnow().strftime("%Y-%m-%d")
         self.cargar_dashboard()
         self.cargar_historial_ventas()
         return None
@@ -1575,6 +1581,7 @@ class FoodState(rx.State):
             if pedido is None:
                 self.historial_pedido = []
                 self.mesa_atendida_por_nombre = ""
+                self.nota_pedido_mesa = ""
                 return
             detalles = session.exec(
                 select(DetallePedido).where(
@@ -1586,6 +1593,7 @@ class FoodState(rx.State):
             usuarios_map = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
             mozo = usuarios_map.get(pedido.mozo_id)
             self.mesa_atendida_por_nombre = _actor_name(mozo.nombre if mozo else "")
+            self.nota_pedido_mesa = pedido.notas or ""
             historial: list[HistorialItem] = []
             for d in detalles:
                 producto = productos_map.get(d.producto_id)
@@ -1606,6 +1614,7 @@ class FoodState(rx.State):
                     estado_color=PRODUCTION_BADGE_TEXTS.get(estado_produccion, "#334155"),
                     preparado_por_nombre=_actor_name(preparado_por.nombre if preparado_por else ""),
                     puede_entregar=(estado_produccion == EstadoProduccion.LISTO_PARA_ENTREGAR.value),
+                    puede_cancelar=(estado_produccion == EstadoProduccion.PENDIENTE.value),
                 ))
             self.historial_pedido = historial
 
@@ -1782,6 +1791,23 @@ class FoodState(rx.State):
         self.nota_producto_activo_id = 0
         self.nota_input_temporal = ""
 
+    def set_nota_pedido_mesa(self, value: str) -> None:
+        self.nota_pedido_mesa = str(value)[:500]
+
+    def guardar_nota_pedido_mesa(self) -> None:
+        if self.mesa_seleccionada_id == 0:
+            return
+        nota = self.nota_pedido_mesa.strip()
+        with get_session() as session:
+            pedido = _get_open_order(session, self.mesa_seleccionada_id)
+            if pedido is None:
+                return
+            pedido.notas = nota or None
+            pedido.updated_at = datetime.utcnow()
+            session.add(pedido)
+            session.commit()
+        self.mensaje = "Nota del pedido guardada." if nota else "Nota del pedido eliminada."
+
     # ─── Enviar a cocina ─────────────────────────────────────────────────────
 
     def solicitar_cuenta(self) -> None:
@@ -1866,6 +1892,7 @@ class FoodState(rx.State):
         try:
             self._get_printer_service().print_kitchen_ticket(
                 mesa_label=mesa_label, pedido_id=pedido_id, items=ticket_lines,
+                notes=self.nota_pedido_mesa,
             )
         except Exception as error:
             self.mensaje = f"Pedido #{pedido_id} guardado. Fallo impresion cocina: {error}"
@@ -2010,6 +2037,35 @@ class FoodState(rx.State):
         self.cargar_cocina()
         self.mensaje = "Item entregado a la mesa."
 
+    def cancelar_item_pedido(self, detalle_id: int) -> None:
+        with get_session() as session:
+            detalle = session.get(DetallePedido, detalle_id)
+            if detalle is None or detalle.company_id != _COMPANY_ID:
+                self.mensaje = "El item indicado ya no existe."
+                return
+            if detalle.estado_produccion != EstadoProduccion.PENDIENTE.value:
+                self.mensaje = "Solo se pueden cancelar items aun pendientes en cocina."
+                return
+            pedido = session.get(Pedido, detalle.pedido_id)
+            if pedido is None:
+                self.mensaje = "El pedido ya no existe."
+                return
+            nombre_item = ""
+            producto = session.get(Producto, detalle.producto_id)
+            if producto:
+                nombre_item = producto.nombre
+            session.delete(detalle)
+            session.flush()
+            _recalculate_order_total(session, pedido)
+            _sync_order_status(session, pedido)
+            session.commit()
+        if self.mesa_seleccionada_id:
+            self._cargar_historial_mesa(self.mesa_seleccionada_id)
+            self._cargar_carrito_mesa(self.mesa_seleccionada_id)
+        self.cargar_mesas()
+        self.cargar_cocina()
+        self.mensaje = f"Item '{nombre_item}' cancelado del pedido."
+
     # ─── Caja — Flujo de cobro con método de pago ────────────────────────────
 
     def abrir_cobro_mesa(self, mesa_id: int) -> None:
@@ -2122,6 +2178,7 @@ class FoodState(rx.State):
                 items=ticket_lines,
                 total=float(total_final),
                 attended_by=attended_by,
+                company_name=self.config_nombre_local or "TUWAYKIFOOD",
             )
         except Exception as error:
             self.mensaje = f"Mesa {mesa_label} cobrada. Fallo impresion caja: {error}"
@@ -2201,6 +2258,7 @@ class FoodState(rx.State):
                 items=ticket_lines,
                 total=total,
                 attended_by=attended_by,
+                company_name=self.config_nombre_local or "TUWAYKIFOOD",
             )
         except Exception as error:
             self.mensaje = f"Mesa {mesa_label} cobrada. Fallo impresion caja: {error}"
@@ -2345,7 +2403,7 @@ class FoodState(rx.State):
         try:
             svc = self._get_printer_service()
             svc.print_kitchen_ticket(mesa_label=ticket_label, pedido_id=pedido_id, items=ticket_lines)
-            svc.print_cashier_ticket(order_reference=f"Cliente: {cliente_nombre}", pedido_id=pedido_id, items=ticket_lines, total=total, attended_by=attended_by)
+            svc.print_cashier_ticket(order_reference=f"Cliente: {cliente_nombre}", pedido_id=pedido_id, items=ticket_lines, total=total, attended_by=attended_by, company_name=self.config_nombre_local or "TUWAYKIFOOD")
         except Exception as error:
             self.mensaje = f"Pedido de mostrador #{pedido_id} cobrado. Fallo impresion: {error}"
             return
