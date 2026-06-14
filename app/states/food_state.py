@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import os
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -133,11 +136,41 @@ _ROL_BADGE_TEXT: dict[str, str] = {
     RolUsuario.COCINA.value: "#B45309",
 }
 
-# company_id leído del entorno en tiempo de importación
+# company_id y base URL leídos del entorno en tiempo de importación
 _COMPANY_ID: int = int(os.getenv("FOOD_COMPANY_ID", "0") or "0")
+_FOOD_BASE_URL: str = os.getenv("FOOD_BASE_URL", "http://localhost:3003").rstrip("/")
 
 
 # ─── Helpers puros ───────────────────────────────────────────────────────────
+
+def _slugify(texto: str) -> str:
+    """Convierte texto a slug URL-safe (minúsculas, solo alfanumérico y guión)."""
+    texto = texto.lower().strip()
+    texto = re.sub(r"[áàä]", "a", texto)
+    texto = re.sub(r"[éèë]", "e", texto)
+    texto = re.sub(r"[íìï]", "i", texto)
+    texto = re.sub(r"[óòö]", "o", texto)
+    texto = re.sub(r"[úùü]", "u", texto)
+    texto = re.sub(r"[ñ]", "n", texto)
+    texto = re.sub(r"[^a-z0-9\s-]", "", texto)
+    texto = re.sub(r"[\s]+", "-", texto)
+    texto = re.sub(r"-+", "-", texto)
+    return texto[:80].strip("-") or "mi-restaurante"
+
+
+def _generar_qr_base64(url: str) -> str:
+    try:
+        import qrcode
+        qr = qrcode.QRCode(version=None, box_size=6, border=3)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="#0F172A", back_color="#FFFFFF")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ""
+
 
 def _to_decimal(value) -> Decimal:
     if value is None:
@@ -496,7 +529,7 @@ class FoodState(rx.State):
     historial_filtro_fecha_hasta: str = ""
     historial_filtro_metodo: str = ""
 
-    # Configuración impresoras
+    # Configuración impresoras + carta digital
     config_nombre_local: str = "Mi Restaurante"
     config_cocina_activa: bool = False
     config_cocina_ip: str = "192.168.1.100"
@@ -504,6 +537,9 @@ class FoodState(rx.State):
     config_caja_activa: bool = False
     config_caja_ip: str = ""
     config_caja_puerto: str = "9100"
+    config_slug: str = "mi-restaurante"
+    config_menu_qr_base64: str = ""
+    config_menu_url: str = ""
 
     # ─── Computed vars ────────────────────────────────────────────────────────
 
@@ -1083,6 +1119,10 @@ class FoodState(rx.State):
                 self.config_caja_activa = cfg.caja_activa
                 self.config_caja_ip = cfg.caja_ip or ""
                 self.config_caja_puerto = str(cfg.caja_puerto)
+                self.config_slug = cfg.slug or "mi-restaurante"
+                url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
+                self.config_menu_url = url
+                self.config_menu_qr_base64 = _generar_qr_base64(url)
 
     def guardar_config_impresora(self) -> None:
         with get_session() as session:
@@ -1104,10 +1144,16 @@ class FoodState(rx.State):
                 cfg.caja_puerto = int(self.config_caja_puerto.strip())
             except (ValueError, AttributeError):
                 cfg.caja_puerto = 9100
+            slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
+            cfg.slug = slug
             cfg.updated_at = datetime.utcnow()
             session.add(cfg)
             session.commit()
-        self.mensaje = "Configuracion de impresoras guardada."
+        self.config_slug = slug
+        url = f"{_FOOD_BASE_URL}/menu/{slug}"
+        self.config_menu_url = url
+        self.config_menu_qr_base64 = _generar_qr_base64(url)
+        self.mensaje = "Configuracion guardada."
 
     def set_config_nombre_local(self, v: str) -> None:
         self.config_nombre_local = v
@@ -1129,6 +1175,9 @@ class FoodState(rx.State):
 
     def toggle_config_caja_activa(self) -> None:
         self.config_caja_activa = not self.config_caja_activa
+
+    def set_config_slug(self, v: str) -> None:
+        self.config_slug = v
 
     def _get_printer_service(self) -> "SilentPrinterService":
         try:
@@ -2523,3 +2572,85 @@ class FoodState(rx.State):
 
     def cancelar_producto_form(self) -> None:
         self._reset_producto_form()
+
+
+# ─── Estado público (sin auth) ────────────────────────────────────────────────
+
+class ProductoPublicoView(BaseModel):
+    nombre: str
+    descripcion: str
+    precio_texto: str
+
+
+class CategoriaPublicaView(BaseModel):
+    nombre: str
+    productos: list[ProductoPublicoView]
+
+
+class MenuPublicoState(rx.State):
+    """Estado de la carta pública — no requiere sesión."""
+
+    nombre_local: str = ""
+    categorias_menu: list[CategoriaPublicaView] = []
+    cargando: bool = True
+    no_encontrado: bool = False
+
+    def on_load(self) -> None:
+        slug = self.router.page.params.get("slug", "")
+        self.cargando = True
+        self.no_encontrado = False
+        self.nombre_local = ""
+        self.categorias_menu = []
+
+        if not slug:
+            self.no_encontrado = True
+            self.cargando = False
+            return
+
+        with get_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.slug == slug)
+            ).first()
+            if cfg is None:
+                self.no_encontrado = True
+                self.cargando = False
+                return
+
+            company_id = cfg.company_id
+            self.nombre_local = cfg.nombre_local
+
+            cats = session.exec(
+                select(Categoria)
+                .where(Categoria.company_id == company_id, Categoria.activa.is_(True))
+                .order_by(Categoria.orden, Categoria.nombre)
+            ).all()
+
+            result: list[CategoriaPublicaView] = []
+            for cat in cats:
+                prods = session.exec(
+                    select(Producto)
+                    .where(
+                        Producto.company_id == company_id,
+                        Producto.categoria_id == cat.id,
+                        Producto.disponible.is_(True),
+                    )
+                    .order_by(Producto.nombre)
+                ).all()
+                if prods:
+                    result.append(
+                        CategoriaPublicaView(
+                            nombre=cat.nombre,
+                            productos=[
+                                ProductoPublicoView(
+                                    nombre=p.nombre,
+                                    descripcion=p.descripcion or "",
+                                    precio_texto=_money_text(p.precio),
+                                )
+                                for p in prods
+                            ],
+                        )
+                    )
+
+            self.categorias_menu = result
+
+        self.cargando = False

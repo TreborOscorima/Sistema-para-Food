@@ -7,3 +7,4 @@ from app.pages.carta import carta_page  # noqa: F401
 from app.pages.reportes import reportes_page  # noqa: F401
 from app.pages.usuarios import usuarios_page  # noqa: F401
 from app.pages.configuracion import configuracion_page  # noqa: F401
+from app.pages.menu_publico import menu_publico_page  # noqa: F401

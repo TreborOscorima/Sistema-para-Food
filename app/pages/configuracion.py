@@ -126,6 +126,102 @@ def _printer_section(
     )
 
 
+def _qr_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                _section_header("Carta digital (QR)", "qr_code"),
+                rx.spacer(),
+                rx.cond(
+                    FoodState.config_menu_url != "",
+                    rx.link(
+                        rx.hstack(
+                            rx.icon(tag="external_link", size=13, color="#1D4ED8"),
+                            rx.text("Abrir", font_size="12px", color="#1D4ED8", font_weight="600"),
+                            spacing="1",
+                            align="center",
+                        ),
+                        href=FoodState.config_menu_url,
+                        is_external=True,
+                    ),
+                    rx.fragment(),
+                ),
+                width="100%",
+                align="center",
+            ),
+            _field_row(
+                "Slug URL",
+                FoodState.config_slug,
+                FoodState.set_config_slug,
+                "mi-restaurante",
+            ),
+            rx.cond(
+                FoodState.config_menu_url != "",
+                rx.vstack(
+                    rx.hstack(
+                        rx.box(
+                            rx.image(
+                                src=FoodState.config_menu_qr_base64,
+                                width="120px",
+                                height="120px",
+                                border_radius="8px",
+                                border="1px solid #E2E8F0",
+                            ),
+                            padding="4px",
+                            background="#FFFFFF",
+                            border="1px solid #E2E8F0",
+                            border_radius="10px",
+                        ),
+                        rx.vstack(
+                            rx.text("URL de la carta:", font_size="11px", color="#64748B", font_weight="600"),
+                            rx.box(
+                                rx.text(
+                                    FoodState.config_menu_url,
+                                    font_size="11px",
+                                    color="#334155",
+                                    word_break="break-all",
+                                    font_family="monospace",
+                                ),
+                                background="#F8FAFC",
+                                border="1px solid #E2E8F0",
+                                border_radius="6px",
+                                padding="8px 10px",
+                            ),
+                            rx.text(
+                                "Guarda para regenerar el QR con el slug actual.",
+                                font_size="11px",
+                                color="#94A3B8",
+                                font_style="italic",
+                            ),
+                            spacing="2",
+                            align="start",
+                            flex="1",
+                        ),
+                        spacing="3",
+                        align="start",
+                        width="100%",
+                    ),
+                    width="100%",
+                ),
+                rx.text(
+                    "Guarda la configuracion para generar el QR.",
+                    font_size="12px",
+                    color="#94A3B8",
+                    font_style="italic",
+                ),
+            ),
+            spacing="4",
+            width="100%",
+        ),
+        background="#FFFFFF",
+        border="1px solid #E2E8F0",
+        border_radius="12px",
+        padding="16px 18px",
+        width="100%",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+    )
+
+
 def _configuracion_content() -> rx.Component:
     return rx.vstack(
         # Header
@@ -183,6 +279,8 @@ def _configuracion_content() -> rx.Component:
             width="100%",
             box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
+        # Carta digital QR
+        _qr_section(),
         # Impresora cocina
         _printer_section(
             title="Impresora Cocina (red)",
