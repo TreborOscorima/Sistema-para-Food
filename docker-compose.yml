@@ -2,11 +2,12 @@ version: "3.9"
 # =============================================================================
 # docker-compose.yml — TUWAYKIFOOD stack de producción (food.tuwayki.com)
 #
+# Stack 100% independiente de Sistema-de-Ventas — DB, red y proceso propios.
+#
 # PRIMERA VEZ:
 #   1. cp .env.example .env && editar (DB_PASSWORD, MYSQL_ROOT_PASSWORD obligatorios)
-#   2. Asegurarse que tuwayki_net exista: docker network create tuwayki_net
-#      (se crea sola si Sistema-de-Ventas ya está corriendo)
-#   3. docker build -t tuwayki_food:latest . && docker compose up -d
+#   2. docker build -t tuwayki_food:latest .
+#   3. docker compose up -d
 #
 # En producción nginx (host) hace el proxy food.tuwayki.com → 127.0.0.1:3003.
 # Para local: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
@@ -59,7 +60,6 @@ services:
       - food_web:/app/.web
     networks:
       - food_internal
-      - tuwayki_net
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3003/api/ping"]
       interval: 30s
@@ -74,5 +74,3 @@ volumes:
 networks:
   food_internal:
     driver: bridge
-  tuwayki_net:
-    external: true

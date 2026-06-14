@@ -21,10 +21,3 @@ services:
       PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3003"
       ENV: prod
       DB_HOST: food_mysql
-
-networks:
-  # Override: bridge local en lugar de external (no requiere tuwayki_net en el SVR de prueba).
-  tuwayki_net:
-    external: false
-    driver: bridge
-    name: food_test_net

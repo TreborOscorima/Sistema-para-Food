@@ -18,10 +18,3 @@ services:
       PUBLIC_API_URL: "http://localhost:3003"
       ENV: prod
       DB_HOST: food_mysql
-
-networks:
-  # Override: bridge local en lugar de external (sin red de producción).
-  tuwayki_net:
-    external: false
-    driver: bridge
-    name: food_local_net
