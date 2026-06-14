@@ -23,9 +23,11 @@ from app.models.food import (
     EstadoMesa,
     EstadoPedido,
     EstadoProduccion,
+    Insumo,
     Mesa,
     Pedido,
     Producto,
+    RecetaItem,
     RolUsuario,
     TipoPedido,
     UsuarioFood,
@@ -351,6 +353,28 @@ class MesaAdminView(BaseModel):
     estado: str
 
 
+class InsumoView(BaseModel):
+    id: int = 0
+    nombre: str = ""
+    unidad: str = ""
+    stock_actual: float = 0.0
+    stock_minimo: float = 0.0
+    activo: bool = True
+    bajo_stock: bool = False
+    stock_texto: str = ""
+    stock_minimo_texto: str = ""
+
+
+class RecetaItemView(BaseModel):
+    id: int = 0
+    producto_id: int = 0
+    insumo_id: int = 0
+    insumo_nombre: str = ""
+    insumo_unidad: str = ""
+    cantidad: float = 0.0
+    cantidad_texto: str = ""
+
+
 class UsuarioSesion(BaseModel):
     id: int
     nombre: str
@@ -469,6 +493,46 @@ class UsuarioAdminView(BaseModel):
     es_yo: bool
 
 
+# ─── Helpers de inventario ───────────────────────────────────────────────────
+
+def _descontar_stock_por_pedido(session, pedido_id: int) -> None:
+    """Descuenta stock de insumos según las recetas de los ítems del pedido."""
+    detalles = session.exec(
+        select(DetallePedido).where(DetallePedido.pedido_id == pedido_id)
+    ).all()
+    if not detalles:
+        return
+    producto_ids = list({d.producto_id for d in detalles})
+    recetas = session.exec(
+        select(RecetaItem).where(
+            RecetaItem.company_id == _COMPANY_ID,
+            RecetaItem.producto_id.in_(producto_ids),
+        )
+    ).all()
+    if not recetas:
+        return
+    receta_por_producto: dict[int, list] = {}
+    for r in recetas:
+        receta_por_producto.setdefault(r.producto_id, []).append(r)
+    insumo_ids = list({r.insumo_id for r in recetas})
+    insumos = {
+        i.id: i
+        for i in session.exec(select(Insumo).where(Insumo.id.in_(insumo_ids))).all()
+    }
+    descuentos: dict[int, Decimal] = {}
+    for d in detalles:
+        for ri in receta_por_producto.get(d.producto_id, []):
+            uso = Decimal(str(ri.cantidad)) * d.cantidad
+            descuentos[ri.insumo_id] = descuentos.get(ri.insumo_id, Decimal("0")) + uso
+    now = datetime.utcnow()
+    for insumo_id, uso_total in descuentos.items():
+        ins = insumos.get(insumo_id)
+        if ins:
+            ins.stock_actual = max(Decimal(str(ins.stock_actual)) - uso_total, Decimal("0"))
+            ins.updated_at = now
+            session.add(ins)
+
+
 # ─── Estado principal ─────────────────────────────────────────────────────────
 
 class FoodState(rx.State):
@@ -569,6 +633,21 @@ class FoodState(rx.State):
     mesa_config_form_numero: str = ""
     mesa_config_form_nombre: str = ""
     mesa_config_form_capacidad: str = "4"
+
+    # Inventario de insumos / recetas
+    inv_insumos: list[InsumoView] = []
+    inv_alertas_bajo_stock: list[str] = []
+    inv_form_id: int = 0
+    inv_form_nombre: str = ""
+    inv_form_unidad: str = "unidad"
+    inv_form_stock_actual: str = ""
+    inv_form_stock_minimo: str = ""
+    inv_form_editando: bool = False
+    inv_producto_sel_nombre: str = ""
+    inv_producto_sel_id: int = 0
+    inv_receta_items: list[RecetaItemView] = []
+    inv_receta_insumo_sel_nombre: str = ""
+    inv_receta_cantidad: str = ""
 
     # ─── Computed vars ────────────────────────────────────────────────────────
 
@@ -708,6 +787,18 @@ class FoodState(rx.State):
     @rx.var
     def categorias_activas_nombres(self) -> list[str]:
         return [c.nombre for c in self.categorias if c.activa]
+
+    @rx.var
+    def inv_insumos_activos_nombres(self) -> list[str]:
+        return [i.nombre for i in self.inv_insumos if i.activo]
+
+    @rx.var
+    def inv_productos_nombres(self) -> list[str]:
+        return [p.nombre for p in self.productos]
+
+    @rx.var
+    def inv_alertas_bajo_stock_texto(self) -> str:
+        return ", ".join(self.inv_alertas_bajo_stock)
 
     @rx.var
     def productos_filtrados(self) -> list[ProductoView]:
@@ -925,6 +1016,7 @@ class FoodState(rx.State):
         self.historial_filtro_metodo = ""
         self.cargar_dashboard()
         self.cargar_historial_ventas()
+        self.cargar_inventario()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
@@ -2184,6 +2276,7 @@ class FoodState(rx.State):
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
             session.add(mesa)
+            _descontar_stock_por_pedido(session, pedido.id or 0)
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -2419,6 +2512,7 @@ class FoodState(rx.State):
             total = float(_recalculate_order_total(session, pedido))
             _sync_order_status(session, pedido)
             session.add(pedido)
+            _descontar_stock_por_pedido(session, pedido.id or 0)
             session.commit()
             pedido_id = pedido.id or 0
         self.ultimo_pedido_id = pedido_id
@@ -2861,6 +2955,244 @@ class FoodState(rx.State):
 
     def quitar_imagen_producto(self) -> None:
         self.producto_form_imagen_url = ""
+
+
+    # ─── Inventario ───────────────────────────────────────────────────────────
+
+    def on_load_inventario(self) -> None:
+        self.cargar_inventario()
+        if not self.productos:
+            self.cargar_menu()
+
+    def cargar_inventario(self) -> None:
+        with get_session() as session:
+            insumos_db = session.exec(
+                select(Insumo)
+                .where(Insumo.company_id == _COMPANY_ID)
+                .order_by(Insumo.nombre)
+            ).all()
+            views: list[InsumoView] = []
+            alertas: list[str] = []
+            for ins in insumos_db:
+                stock = Decimal(str(ins.stock_actual))
+                minimo = Decimal(str(ins.stock_minimo))
+                bajo = ins.activo and minimo > 0 and stock <= minimo
+                views.append(InsumoView(
+                    id=ins.id or 0,
+                    nombre=ins.nombre,
+                    unidad=ins.unidad,
+                    stock_actual=float(stock),
+                    stock_minimo=float(minimo),
+                    activo=ins.activo,
+                    bajo_stock=bajo,
+                    stock_texto=f"{stock:.3f} {ins.unidad}".rstrip("0").rstrip(".").strip(),
+                    stock_minimo_texto=f"{minimo:.3f} {ins.unidad}".rstrip("0").rstrip(".").strip(),
+                ))
+                if bajo:
+                    alertas.append(ins.nombre)
+            self.inv_insumos = views
+            self.inv_alertas_bajo_stock = alertas
+
+    def set_inv_form_nombre(self, v: str) -> None:
+        self.inv_form_nombre = v
+
+    def set_inv_form_unidad(self, v: str) -> None:
+        self.inv_form_unidad = v
+
+    def set_inv_form_stock_actual(self, v: str) -> None:
+        self.inv_form_stock_actual = v
+
+    def set_inv_form_stock_minimo(self, v: str) -> None:
+        self.inv_form_stock_minimo = v
+
+    def guardar_insumo(self) -> None:
+        nombre = self.inv_form_nombre.strip()
+        if not nombre:
+            self.mensaje = "El nombre del insumo es obligatorio."
+            return
+        unidad = self.inv_form_unidad.strip() or "unidad"
+        try:
+            stock_actual = Decimal(self.inv_form_stock_actual.replace(",", ".").strip() or "0")
+            stock_minimo = Decimal(self.inv_form_stock_minimo.replace(",", ".").strip() or "0")
+            if stock_actual < 0 or stock_minimo < 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            self.mensaje = "Stock inválido. Ingresa números positivos."
+            return
+        with get_session() as session:
+            if self.inv_form_id == 0:
+                existente = session.exec(
+                    select(Insumo).where(
+                        Insumo.company_id == _COMPANY_ID,
+                        Insumo.nombre == nombre,
+                    )
+                ).first()
+                if existente:
+                    self.mensaje = f"Ya existe un insumo llamado '{nombre}'."
+                    return
+                ins = Insumo(
+                    company_id=_COMPANY_ID,
+                    nombre=nombre,
+                    unidad=unidad,
+                    stock_actual=stock_actual,
+                    stock_minimo=stock_minimo,
+                    activo=True,
+                )
+                session.add(ins)
+                self.mensaje = f"Insumo '{nombre}' creado."
+            else:
+                ins = session.get(Insumo, self.inv_form_id)
+                if ins is None or ins.company_id != _COMPANY_ID:
+                    self.mensaje = "Insumo no encontrado."
+                    return
+                ins.nombre = nombre
+                ins.unidad = unidad
+                ins.stock_actual = stock_actual
+                ins.stock_minimo = stock_minimo
+                ins.updated_at = datetime.utcnow()
+                session.add(ins)
+                self.mensaje = f"Insumo '{nombre}' actualizado."
+            session.commit()
+        self.inv_form_id = 0
+        self.inv_form_nombre = ""
+        self.inv_form_unidad = "unidad"
+        self.inv_form_stock_actual = ""
+        self.inv_form_stock_minimo = ""
+        self.inv_form_editando = False
+        self.cargar_inventario()
+
+    def editar_insumo(self, insumo_id: int) -> None:
+        with get_session() as session:
+            ins = session.get(Insumo, insumo_id)
+            if ins is None or ins.company_id != _COMPANY_ID:
+                return
+            self.inv_form_id = ins.id or 0
+            self.inv_form_nombre = ins.nombre
+            self.inv_form_unidad = ins.unidad
+            stock = Decimal(str(ins.stock_actual))
+            minimo = Decimal(str(ins.stock_minimo))
+            self.inv_form_stock_actual = f"{stock:.3f}".rstrip("0").rstrip(".")
+            self.inv_form_stock_minimo = f"{minimo:.3f}".rstrip("0").rstrip(".")
+        self.inv_form_editando = True
+
+    def cancelar_insumo_form(self) -> None:
+        self.inv_form_id = 0
+        self.inv_form_nombre = ""
+        self.inv_form_unidad = "unidad"
+        self.inv_form_stock_actual = ""
+        self.inv_form_stock_minimo = ""
+        self.inv_form_editando = False
+
+    def toggle_insumo_activo(self, insumo_id: int) -> None:
+        with get_session() as session:
+            ins = session.get(Insumo, insumo_id)
+            if ins is None or ins.company_id != _COMPANY_ID:
+                return
+            ins.activo = not ins.activo
+            ins.updated_at = datetime.utcnow()
+            session.add(ins)
+            session.commit()
+        self.cargar_inventario()
+
+    def set_inv_producto_sel_nombre(self, v: str) -> None:
+        self.inv_producto_sel_nombre = v
+        prod = next((p for p in self.productos if p.nombre == v), None)
+        self.inv_producto_sel_id = prod.id if prod else 0
+        self.cargar_receta_producto()
+
+    def cargar_receta_producto(self) -> None:
+        pid = self.inv_producto_sel_id
+        if pid == 0:
+            self.inv_receta_items = []
+            return
+        with get_session() as session:
+            ris = session.exec(
+                select(RecetaItem)
+                .where(RecetaItem.company_id == _COMPANY_ID, RecetaItem.producto_id == pid)
+                .order_by(RecetaItem.id)
+            ).all()
+            insumos = {
+                i.id: i
+                for i in session.exec(
+                    select(Insumo).where(Insumo.company_id == _COMPANY_ID)
+                ).all()
+            }
+            items: list[RecetaItemView] = []
+            for ri in ris:
+                ins = insumos.get(ri.insumo_id)
+                cant = Decimal(str(ri.cantidad))
+                unidad = ins.unidad if ins else ""
+                items.append(RecetaItemView(
+                    id=ri.id or 0,
+                    producto_id=pid,
+                    insumo_id=ri.insumo_id,
+                    insumo_nombre=ins.nombre if ins else "?",
+                    insumo_unidad=unidad,
+                    cantidad=float(cant),
+                    cantidad_texto=f"{cant:.3f}".rstrip("0").rstrip(".") + f" {unidad}",
+                ))
+            self.inv_receta_items = items
+
+    def set_inv_receta_insumo_sel_nombre(self, v: str) -> None:
+        self.inv_receta_insumo_sel_nombre = v
+
+    def set_inv_receta_cantidad(self, v: str) -> None:
+        self.inv_receta_cantidad = v
+
+    def guardar_receta_item(self) -> None:
+        if self.inv_producto_sel_id == 0:
+            self.mensaje = "Selecciona un producto primero."
+            return
+        insumo_match = next(
+            (i for i in self.inv_insumos if i.nombre == self.inv_receta_insumo_sel_nombre), None
+        )
+        if insumo_match is None:
+            self.mensaje = "Selecciona un insumo válido."
+            return
+        try:
+            cantidad = Decimal(self.inv_receta_cantidad.replace(",", ".").strip() or "0")
+            if cantidad <= 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            self.mensaje = "Cantidad inválida. Ingresa un número mayor a 0."
+            return
+        insumo_id = insumo_match.id
+        with get_session() as session:
+            existente = session.exec(
+                select(RecetaItem).where(
+                    RecetaItem.company_id == _COMPANY_ID,
+                    RecetaItem.producto_id == self.inv_producto_sel_id,
+                    RecetaItem.insumo_id == insumo_id,
+                )
+            ).first()
+            if existente:
+                existente.cantidad = cantidad
+                existente.updated_at = datetime.utcnow()
+                session.add(existente)
+                self.mensaje = "Cantidad actualizada en receta."
+            else:
+                ri = RecetaItem(
+                    company_id=_COMPANY_ID,
+                    producto_id=self.inv_producto_sel_id,
+                    insumo_id=insumo_id,
+                    cantidad=cantidad,
+                )
+                session.add(ri)
+                self.mensaje = "Insumo agregado a la receta."
+            session.commit()
+        self.inv_receta_cantidad = ""
+        self.inv_receta_insumo_sel_nombre = ""
+        self.cargar_receta_producto()
+
+    def eliminar_receta_item(self, item_id: int) -> None:
+        with get_session() as session:
+            ri = session.get(RecetaItem, item_id)
+            if ri is None or ri.company_id != _COMPANY_ID:
+                return
+            session.delete(ri)
+            session.commit()
+        self.cargar_receta_producto()
+        self.mensaje = "Insumo eliminado de la receta."
 
 
 # ─── Estado público (sin auth) ────────────────────────────────────────────────

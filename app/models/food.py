@@ -124,6 +124,7 @@ class Producto(TimestampedModel, table=True):
 
     categoria: Categoria | None = Relationship(back_populates="productos")
     detalles: list["DetallePedido"] = Relationship(back_populates="producto")
+    receta_items: list["RecetaItem"] = Relationship(back_populates="producto")
 
 
 class Pedido(TimestampedModel, table=True):
@@ -191,6 +192,55 @@ class ConfigImpresora(TimestampedModel, table=True):
     slug: str = Field(default="mi-restaurante", max_length=80, nullable=False)
     admin_email: str = Field(default="", max_length=120, nullable=False)
     admin_password_hash: str = Field(default="", max_length=128, nullable=False)
+
+
+class Insumo(TimestampedModel, table=True):
+    """Insumo/ingrediente con control de stock, scoped por empresa."""
+
+    __tablename__ = "food_insumos"
+    __table_args__ = (
+        UniqueConstraint("company_id", "nombre", name="uq_food_insumos_company_nombre"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    unidad: str = Field(default="unidad", max_length=30, nullable=False)
+    stock_actual: Decimal = Field(
+        default=Decimal("0.000"),
+        sa_column=Column(Numeric(12, 3), nullable=False, server_default="0.000"),
+    )
+    stock_minimo: Decimal = Field(
+        default=Decimal("0.000"),
+        sa_column=Column(Numeric(12, 3), nullable=False, server_default="0.000"),
+    )
+    activo: bool = Field(default=True, nullable=False)
+
+    receta_items: list["RecetaItem"] = Relationship(back_populates="insumo")
+
+
+class RecetaItem(TimestampedModel, table=True):
+    """Ingrediente de la receta de un producto — cuánto insumo consume por unidad vendida."""
+
+    __tablename__ = "food_receta_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "producto_id", "insumo_id",
+            name="uq_food_receta_company_prod_insumo",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    producto_id: int = Field(foreign_key="food_productos.id", index=True, nullable=False)
+    insumo_id: int = Field(foreign_key="food_insumos.id", index=True, nullable=False)
+    cantidad: Decimal = Field(
+        default=Decimal("1.000"),
+        sa_column=Column(Numeric(10, 3), nullable=False, server_default="1.000"),
+    )
+
+    producto: "Producto | None" = Relationship(back_populates="receta_items")
+    insumo: "Insumo | None" = Relationship(back_populates="receta_items")
 
 
 class DetallePedido(TimestampedModel, table=True):
