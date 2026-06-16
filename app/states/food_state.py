@@ -3369,6 +3369,7 @@ class FoodState(rx.State):
     # ─── Clientes ─────────────────────────────────────────────────────────────
 
     def on_load_clientes(self) -> None:
+        self.mensaje = ""
         self.cargar_clientes()
 
     def cargar_clientes(self) -> None:
@@ -3534,6 +3535,7 @@ class FoodState(rx.State):
     # ─── Cuentas corrientes ───────────────────────────────────────────────────
 
     def on_load_cuentas(self) -> None:
+        self.mensaje = ""
         if not self.clientes_lista:
             self.cargar_clientes()
         self.cargar_cuentas()
@@ -3677,6 +3679,7 @@ class FoodState(rx.State):
     # ─── Promociones ──────────────────────────────────────────────────────────
 
     def on_load_promociones(self) -> None:
+        self.mensaje = ""
         self.cargar_promociones()
 
     def cargar_promociones(self) -> None:

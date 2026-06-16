@@ -178,7 +178,7 @@ class Pedido(TimestampedModel, table=True):
 
     mesa: Mesa | None = Relationship(back_populates="pedidos")
     detalles: list["DetallePedido"] = Relationship(back_populates="pedido")
-    cliente: "Cliente | None" = Relationship(back_populates="pedidos")
+    cliente: "Cliente" = Relationship(back_populates="pedidos")
 
 
 class Cliente(TimestampedModel, table=True):
@@ -203,7 +203,7 @@ class Cliente(TimestampedModel, table=True):
     activo: bool = Field(default=True, nullable=False)
 
     pedidos: list["Pedido"] = Relationship(back_populates="cliente")
-    cuenta_corriente: "CuentaCorriente | None" = Relationship(back_populates="cliente")
+    cuenta_corriente: "CuentaCorriente" = Relationship(back_populates="cliente")
 
 
 class CuentaCorriente(TimestampedModel, table=True):
@@ -226,7 +226,7 @@ class CuentaCorriente(TimestampedModel, table=True):
         sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
     )
 
-    cliente: "Cliente | None" = Relationship(back_populates="cuenta_corriente")
+    cliente: "Cliente" = Relationship(back_populates="cuenta_corriente")
     movimientos: list["MovimientoCuenta"] = Relationship(back_populates="cuenta")
 
 
@@ -246,7 +246,7 @@ class MovimientoCuenta(TimestampedModel, table=True):
     )
     descripcion: str | None = Field(default=None, max_length=240)
 
-    cuenta: "CuentaCorriente | None" = Relationship(back_populates="movimientos")
+    cuenta: "CuentaCorriente" = Relationship(back_populates="movimientos")
 
 
 class Promocion(TimestampedModel, table=True):
@@ -335,8 +335,8 @@ class RecetaItem(TimestampedModel, table=True):
         sa_column=Column(Numeric(10, 3), nullable=False, server_default="1.000"),
     )
 
-    producto: "Producto | None" = Relationship(back_populates="receta_items")
-    insumo: "Insumo | None" = Relationship(back_populates="receta_items")
+    producto: "Producto" = Relationship(back_populates="receta_items")
+    insumo: "Insumo" = Relationship(back_populates="receta_items")
 
 
 class DetallePedido(TimestampedModel, table=True):
