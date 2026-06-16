@@ -241,20 +241,23 @@ def _filtros_bar() -> rx.Component:
                     rx.select(
                         [label for _, label in _METODOS_FILTRO],
                         value=rx.cond(
-                            FoodState.historial_filtro_metodo == "",
-                            "Todos los métodos",
+                            FoodState.historial_filtro_metodo == "", "Todos los métodos",
                             rx.cond(
                                 FoodState.historial_filtro_metodo == "efectivo", "Efectivo",
                                 rx.cond(
                                     FoodState.historial_filtro_metodo == "tarjeta", "Tarjeta",
-                                    "QR / Yape",
+                                    rx.cond(
+                                        FoodState.historial_filtro_metodo == "qr", "QR / Yape",
+                                        "Fiado / CC",
+                                    ),
                                 ),
                             ),
                         ),
                         on_change=lambda v: FoodState.set_historial_filtro_metodo(
                             rx.cond(v == "Todos los métodos", "",
-                                    rx.cond(v == "Efectivo", "efectivo",
-                                            rx.cond(v == "Tarjeta", "tarjeta", "qr")))
+                            rx.cond(v == "Efectivo", "efectivo",
+                            rx.cond(v == "Tarjeta", "tarjeta",
+                            rx.cond(v == "QR / Yape", "qr", "fiado"))))
                         ),
                         background="#FFFFFF",
                         border="1px solid #E2E8F0",
