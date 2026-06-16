@@ -12,6 +12,7 @@ _METODOS_FILTRO = [
     ("efectivo", "Efectivo"),
     ("tarjeta", "Tarjeta"),
     ("qr", "QR / Yape"),
+    ("fiado", "Fiado / CC"),
 ]
 
 
@@ -102,12 +103,14 @@ def _metodo_badge(metodo: str) -> rx.Component:
         background=rx.cond(
             metodo == "efectivo", "#DCFCE7",
             rx.cond(metodo == "tarjeta", "#DBEAFE",
-                    rx.cond(metodo == "qr", "#FEF3C7", "#F1F5F9")),
+            rx.cond(metodo == "qr", "#FEF3C7",
+            rx.cond(metodo == "fiado", "#FFEDD5", "#F1F5F9"))),
         ),
         color=rx.cond(
             metodo == "efectivo", "#15803D",
             rx.cond(metodo == "tarjeta", "#1D4ED8",
-                    rx.cond(metodo == "qr", "#B45309", "#64748B")),
+            rx.cond(metodo == "qr", "#B45309",
+            rx.cond(metodo == "fiado", "#C2410C", "#64748B"))),
         ),
         border_radius="5px",
         font_size="10px",

@@ -2819,7 +2819,7 @@ class FoodState(rx.State):
             pedidos_hoy = session.exec(
                 select(Pedido).where(
                     Pedido.company_id == _COMPANY_ID,
-                    Pedido.pagado.is_(True),
+                    Pedido.estado == EstadoPedido.COBRADO.value,
                     Pedido.cerrado_en >= inicio_hoy,
                     Pedido.cerrado_en < fin_hoy,
                 )
@@ -2880,7 +2880,7 @@ class FoodState(rx.State):
                 select(Pedido)
                 .where(
                     Pedido.company_id == _COMPANY_ID,
-                    Pedido.pagado.is_(True),
+                    Pedido.estado == EstadoPedido.COBRADO.value,
                 )
             )
             if self.historial_filtro_fecha_desde:

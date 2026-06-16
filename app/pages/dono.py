@@ -264,10 +264,21 @@ def _dono_ventas_row(venta) -> rx.Component:
                 text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
         rx.badge(
             venta.metodo_pago,
-            background="#F1F5F9",
-            color="#64748B",
+            background=rx.cond(
+                venta.metodo_pago == "efectivo", "#DCFCE7",
+                rx.cond(venta.metodo_pago == "tarjeta", "#DBEAFE",
+                rx.cond(venta.metodo_pago == "qr", "#FEF3C7",
+                rx.cond(venta.metodo_pago == "fiado", "#FFEDD5", "#F1F5F9"))),
+            ),
+            color=rx.cond(
+                venta.metodo_pago == "efectivo", "#15803D",
+                rx.cond(venta.metodo_pago == "tarjeta", "#1D4ED8",
+                rx.cond(venta.metodo_pago == "qr", "#B45309",
+                rx.cond(venta.metodo_pago == "fiado", "#C2410C", "#64748B"))),
+            ),
             border_radius="5px",
             font_size="10px",
+            font_weight="700",
             padding="2px 5px",
             flex_shrink="0",
         ),
