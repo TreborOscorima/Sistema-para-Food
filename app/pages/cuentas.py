@@ -60,7 +60,7 @@ def _cuenta_row(c: CuentaView) -> rx.Component:
             spacing="0", align="start", flex="1",
         ),
         rx.vstack(
-            rx.text("S/ " + c.saldo_deuda_texto,
+            rx.text("S/ " + c.saldo_texto,
                     font_size="14px", font_weight="800", color="#B91C1C"),
             rx.text("deuda", font_size="10px", color="#94A3B8"),
             spacing="0", align="end",
