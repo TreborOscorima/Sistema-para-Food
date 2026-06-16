@@ -1,10 +1,10 @@
 """Modelos SQLModel de TUWAYKIFOOD (multi-tenant, MySQL)."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Column, Numeric, UniqueConstraint
+from sqlalchemy import Column, Date, Numeric, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -40,6 +40,12 @@ class RolUsuario(str, Enum):
     CAJA = "Caja"
     COCINA = "Cocina"
     ADMIN = "Admin"
+
+
+class TipoPromocion(str, Enum):
+    PORCENTAJE = "porcentaje"
+    MONTO_FIJO = "monto_fijo"
+    HAPPY_HOUR = "happy_hour"
 
 
 class TimestampedModel(SQLModel):
@@ -168,8 +174,98 @@ class Pedido(TimestampedModel, table=True):
     abierto_en: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
 
+    cliente_id: int | None = Field(default=None, foreign_key="food_clientes.id", index=True)
+
     mesa: Mesa | None = Relationship(back_populates="pedidos")
     detalles: list["DetallePedido"] = Relationship(back_populates="pedido")
+    cliente: "Cliente | None" = Relationship(back_populates="pedidos")
+
+
+class Cliente(TimestampedModel, table=True):
+    """Cliente registrado con historial y datos de contacto."""
+
+    __tablename__ = "food_clientes"
+    __table_args__ = (
+        UniqueConstraint("company_id", "telefono", name="uq_food_clientes_company_tel"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    telefono: str | None = Field(default=None, max_length=20)
+    email: str | None = Field(default=None, max_length=120)
+    fecha_nacimiento: date | None = Field(
+        default=None,
+        sa_column=Column(Date, nullable=True),
+    )
+    notas: str | None = Field(default=None, max_length=240)
+    puntos: int = Field(default=0, nullable=False)
+    activo: bool = Field(default=True, nullable=False)
+
+    pedidos: list["Pedido"] = Relationship(back_populates="cliente")
+    cuenta_corriente: "CuentaCorriente | None" = Relationship(back_populates="cliente")
+
+
+class CuentaCorriente(TimestampedModel, table=True):
+    """Cuenta corriente / fiado por cliente, scoped por empresa."""
+
+    __tablename__ = "food_cuentas_corrientes"
+    __table_args__ = (
+        UniqueConstraint("company_id", "cliente_id", name="uq_food_cc_company_cliente"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    cliente_id: int = Field(foreign_key="food_clientes.id", index=True, nullable=False)
+    saldo_deuda: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    limite_credito: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+
+    cliente: "Cliente | None" = Relationship(back_populates="cuenta_corriente")
+    movimientos: list["MovimientoCuenta"] = Relationship(back_populates="cuenta")
+
+
+class MovimientoCuenta(TimestampedModel, table=True):
+    """Cargo o pago en una cuenta corriente de cliente."""
+
+    __tablename__ = "food_movimientos_cuenta"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    cuenta_id: int = Field(foreign_key="food_cuentas_corrientes.id", index=True, nullable=False)
+    pedido_id: int | None = Field(default=None, foreign_key="food_pedidos.id", index=True)
+    tipo: str = Field(max_length=10, nullable=False)  # "cargo" | "pago"
+    monto: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    descripcion: str | None = Field(default=None, max_length=240)
+
+    cuenta: "CuentaCorriente | None" = Relationship(back_populates="movimientos")
+
+
+class Promocion(TimestampedModel, table=True):
+    """Promoción activa del restaurante (descuento %, monto fijo o happy hour)."""
+
+    __tablename__ = "food_promociones"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    tipo: str = Field(max_length=20, nullable=False)
+    valor: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    descripcion: str | None = Field(default=None, max_length=240)
+    hora_inicio: str | None = Field(default=None, max_length=5)  # "HH:MM"
+    hora_fin: str | None = Field(default=None, max_length=5)
+    activa: bool = Field(default=True, nullable=False)
 
 
 class ConfigImpresora(TimestampedModel, table=True):

@@ -11,6 +11,7 @@ _METODOS = [
     ("efectivo", "Efectivo", "banknote"),
     ("tarjeta", "Tarjeta", "credit_card"),
     ("qr", "QR / Yape", "qr_code"),
+    ("fiado", "Fiado / CC", "clipboard_list"),
 ]
 
 
@@ -145,6 +146,59 @@ def _cobro_panel() -> rx.Component:
             spacing="3",
             width="100%",
             align="start",
+        ),
+        # Selector de cliente (solo fiado)
+        rx.cond(
+            FoodState.caja_cobro_es_fiado,
+            rx.vstack(
+                rx.text("Cliente (requerido para fiado)",
+                        font_size="13px", font_weight="700", color="#334155"),
+                rx.select(
+                    FoodState.clientes_activos_nombres,
+                    value=FoodState.caja_cobro_cliente_nombre,
+                    on_change=FoodState.set_caja_cobro_cliente_nombre,
+                    placeholder="— Seleccionar cliente —",
+                    background="#FFFFFF",
+                    border="2px solid #FED7AA",
+                    border_radius="8px",
+                    font_size="14px",
+                    width="100%",
+                ),
+                spacing="2",
+                width="100%",
+            ),
+            rx.fragment(),
+        ),
+        # Banner de promo activa
+        rx.cond(
+            FoodState.hay_promo_activa,
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="zap", size=13, color="#B45309"),
+                    rx.vstack(
+                        rx.text(
+                            "Promo activa: " + FoodState.promo_activa_nombre,
+                            font_size="12px", font_weight="700", color="#0F172A",
+                        ),
+                        rx.text(FoodState.promo_activa_descuento_texto,
+                                font_size="11px", color="#78350F"),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.button(
+                        "Aplicar",
+                        on_click=FoodState.aplicar_promo_al_cobro,
+                        background="#F59E0B", color="#FFFFFF",
+                        border_radius="6px", font_size="12px", font_weight="700",
+                        padding_x="12px", padding_y="6px", cursor="pointer",
+                        _hover={"background": "#D97706"},
+                    ),
+                    width="100%", align="center", gap="8px",
+                ),
+                background="#FFFBEB", border="1px solid #FDE68A",
+                border_radius="8px", padding="10px 12px", width="100%",
+            ),
+            rx.fragment(),
         ),
         # Monto recibido (solo efectivo)
         rx.cond(
@@ -389,7 +443,8 @@ def _caja_content() -> rx.Component:
 
 @rx.page(
     route="/caja",
-    on_load=[FoodState.on_load_caja, FoodState.start_caja_polling],
+    on_load=[FoodState.on_load_caja, FoodState.start_caja_polling,
+             FoodState.cargar_clientes, FoodState.cargar_promociones],
 )
 def caja_page() -> rx.Component:
     return app_shell(_caja_content(), page_key="caja")

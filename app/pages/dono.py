@@ -374,6 +374,109 @@ def _dono_config_content() -> rx.Component:
             rx.fragment(),
         ),
         _dono_ventas_section(),
+        # Alertas de cumpleaños
+        rx.cond(
+            FoodState.clientes_cumpleanos_hoy.length() > 0,
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="cake", size=14, color="#B45309"),
+                    rx.vstack(
+                        rx.text(
+                            "¡Cumpleaños hoy!",
+                            font_size="12px", font_weight="700", color="#0F172A",
+                        ),
+                        rx.foreach(
+                            FoodState.clientes_cumpleanos_hoy,
+                            lambda c: rx.text(
+                                "🎂 " + c.nombre + rx.cond(c.telefono != "", " · " + c.telefono, ""),
+                                font_size="11px", color="#78350F",
+                            ),
+                        ),
+                        spacing="1", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.link(
+                        rx.hstack(
+                            rx.text("Ver", font_size="11px", font_weight="700", color="#EA580C"),
+                            rx.icon(tag="arrow_right", size=11, color="#EA580C"),
+                            spacing="1", align="center",
+                        ),
+                        href="/clientes",
+                    ),
+                    width="100%", align="center", gap="8px",
+                ),
+                background="#FFFBEB", border="1px solid #FDE68A",
+                border_radius="8px", padding="10px 14px", width="100%",
+            ),
+            rx.fragment(),
+        ),
+        # Links rápidos: Clientes, Cuentas, Promociones
+        rx.hstack(
+            rx.link(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="users", size=14, color="#EA580C"),
+                        width="28px", height="28px", border_radius="7px",
+                        background="#FFF7ED", display="flex",
+                        align_items="center", justify_content="center", flex_shrink="0",
+                    ),
+                    rx.vstack(
+                        rx.text("Clientes", font_size="12px", font_weight="700", color="#0F172A"),
+                        rx.text("Cumpleaños y fidelización", font_size="10px", color="#64748B"),
+                        spacing="0", align="start",
+                    ),
+                    spacing="2", align="center", flex="1",
+                ),
+                href="/clientes",
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="9px", padding="10px 12px",
+                flex="1", text_decoration="none",
+                _hover={"border": "1px solid #FED7AA", "background": "#FFF7ED"},
+            ),
+            rx.link(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="credit_card", size=14, color="#EA580C"),
+                        width="28px", height="28px", border_radius="7px",
+                        background="#FFF7ED", display="flex",
+                        align_items="center", justify_content="center", flex_shrink="0",
+                    ),
+                    rx.vstack(
+                        rx.text("Fiado", font_size="12px", font_weight="700", color="#0F172A"),
+                        rx.text("Cuentas corrientes", font_size="10px", color="#64748B"),
+                        spacing="0", align="start",
+                    ),
+                    spacing="2", align="center", flex="1",
+                ),
+                href="/cuentas",
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="9px", padding="10px 12px",
+                flex="1", text_decoration="none",
+                _hover={"border": "1px solid #FED7AA", "background": "#FFF7ED"},
+            ),
+            rx.link(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="tag", size=14, color="#EA580C"),
+                        width="28px", height="28px", border_radius="7px",
+                        background="#FFF7ED", display="flex",
+                        align_items="center", justify_content="center", flex_shrink="0",
+                    ),
+                    rx.vstack(
+                        rx.text("Promos", font_size="12px", font_weight="700", color="#0F172A"),
+                        rx.text("Happy hour y descuentos", font_size="10px", color="#64748B"),
+                        spacing="0", align="start",
+                    ),
+                    spacing="2", align="center", flex="1",
+                ),
+                href="/promociones",
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="9px", padding="10px 12px",
+                flex="1", text_decoration="none",
+                _hover={"border": "1px solid #FED7AA", "background": "#FFF7ED"},
+            ),
+            spacing="2", width="100%",
+        ),
         rx.cond(
             FoodState.inv_alertas_bajo_stock.length() > 0,
             rx.box(

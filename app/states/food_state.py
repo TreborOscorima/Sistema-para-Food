@@ -18,18 +18,23 @@ from sqlmodel import select
 
 from app.models.food import (
     Categoria,
+    Cliente,
     ConfigImpresora,
+    CuentaCorriente,
     DetallePedido,
     EstadoMesa,
     EstadoPedido,
     EstadoProduccion,
     Insumo,
     Mesa,
+    MovimientoCuenta,
     Pedido,
     Producto,
+    Promocion,
     RecetaItem,
     RolUsuario,
     TipoPedido,
+    TipoPromocion,
     UsuarioFood,
 )
 from app.services.printer_service import SilentPrinterService, TicketLine
@@ -375,6 +380,56 @@ class RecetaItemView(BaseModel):
     cantidad_texto: str = ""
 
 
+class ClienteView(BaseModel):
+    id: int = 0
+    nombre: str = ""
+    telefono: str = ""
+    email: str = ""
+    fecha_nac_iso: str = ""
+    fecha_nac_texto: str = ""
+    notas: str = ""
+    puntos: int = 0
+    activo: bool = True
+    cumple_hoy: bool = False
+    cumple_pronto: bool = False
+    dias_para_cumple: int = 999
+
+
+class CuentaView(BaseModel):
+    id: int = 0
+    cliente_id: int = 0
+    cliente_nombre: str = ""
+    cliente_telefono: str = ""
+    saldo_deuda: float = 0.0
+    saldo_texto: str = ""
+    limite_credito: float = 0.0
+
+
+class MovimientoView(BaseModel):
+    id: int = 0
+    tipo: str = ""
+    tipo_label: str = ""
+    monto: float = 0.0
+    monto_texto: str = ""
+    descripcion: str = ""
+    fecha_texto: str = ""
+
+
+class PromocionView(BaseModel):
+    id: int = 0
+    nombre: str = ""
+    tipo: str = ""
+    tipo_label: str = ""
+    valor: float = 0.0
+    descripcion: str = ""
+    hora_inicio: str = ""
+    hora_fin: str = ""
+    activa: bool = True
+    aplica_ahora: bool = False
+    descuento_texto: str = ""
+    horario_texto: str = ""
+
+
 class UsuarioSesion(BaseModel):
     id: int
     nombre: str
@@ -649,6 +704,38 @@ class FoodState(rx.State):
     inv_receta_insumo_sel_nombre: str = ""
     inv_receta_cantidad: str = ""
 
+    # Clientes
+    clientes_lista: list[ClienteView] = []
+    cli_busqueda: str = ""
+    cli_form_id: int = 0
+    cli_form_nombre: str = ""
+    cli_form_telefono: str = ""
+    cli_form_email: str = ""
+    cli_form_fecha_nac: str = ""
+    cli_form_notas: str = ""
+    cli_form_editando: bool = False
+    caja_cobro_cliente_nombre: str = ""
+    caja_cobro_cliente_id: int = 0
+
+    # Cuentas corrientes
+    cuentas_lista: list[CuentaView] = []
+    cuenta_sel_id: int = 0
+    cuenta_movimientos: list[MovimientoView] = []
+    cc_pago_monto: str = ""
+    cc_pago_descripcion: str = ""
+    cc_cliente_sel_nombre: str = ""
+
+    # Promociones
+    promociones_lista: list[PromocionView] = []
+    promo_form_id: int = 0
+    promo_form_nombre: str = ""
+    promo_form_tipo: str = TipoPromocion.PORCENTAJE.value
+    promo_form_valor: str = ""
+    promo_form_descripcion: str = ""
+    promo_form_hora_inicio: str = ""
+    promo_form_hora_fin: str = ""
+    promo_form_editando: bool = False
+
     # ─── Computed vars ────────────────────────────────────────────────────────
 
     @rx.var
@@ -799,6 +886,75 @@ class FoodState(rx.State):
     @rx.var
     def inv_alertas_bajo_stock_texto(self) -> str:
         return ", ".join(self.inv_alertas_bajo_stock)
+
+    @rx.var
+    def clientes_filtrados(self) -> list[ClienteView]:
+        q = self.cli_busqueda.lower().strip()
+        if not q:
+            return self.clientes_lista
+        return [c for c in self.clientes_lista if q in c.nombre.lower() or q in c.telefono]
+
+    @rx.var
+    def clientes_activos_nombres(self) -> list[str]:
+        return [c.nombre for c in self.clientes_lista if c.activo]
+
+    @rx.var
+    def clientes_cumpleanos_hoy(self) -> list[ClienteView]:
+        return [c for c in self.clientes_lista if c.cumple_hoy]
+
+    @rx.var
+    def clientes_cumpleanos_pronto(self) -> list[ClienteView]:
+        return [c for c in self.clientes_lista if c.cumple_pronto and not c.cumple_hoy]
+
+    @rx.var
+    def caja_cobro_es_fiado(self) -> bool:
+        return self.caja_cobro_metodo == "fiado"
+
+    @rx.var
+    def cuentas_con_deuda(self) -> list[CuentaView]:
+        return [c for c in self.cuentas_lista if c.saldo_deuda > 0]
+
+    @rx.var
+    def cuenta_sel_nombre(self) -> str:
+        c = next((x for x in self.cuentas_lista if x.id == self.cuenta_sel_id), None)
+        return c.cliente_nombre if c else ""
+
+    @rx.var
+    def cuenta_sel_saldo(self) -> str:
+        c = next((x for x in self.cuentas_lista if x.id == self.cuenta_sel_id), None)
+        return c.saldo_texto if c else "S/ 0.00"
+
+    @rx.var
+    def hay_promo_activa(self) -> bool:
+        return any(p.aplica_ahora and p.activa for p in self.promociones_lista)
+
+    @rx.var
+    def promo_activa_nombre(self) -> str:
+        for p in self.promociones_lista:
+            if p.aplica_ahora and p.activa:
+                return p.nombre
+        return ""
+
+    @rx.var
+    def promo_activa_descuento_texto(self) -> str:
+        for p in self.promociones_lista:
+            if p.aplica_ahora and p.activa:
+                return p.descuento_texto
+        return ""
+
+    @rx.var
+    def promo_activa_descuento_sugerido(self) -> float:
+        for p in self.promociones_lista:
+            if p.aplica_ahora and p.activa:
+                if p.tipo == TipoPromocion.PORCENTAJE.value or p.tipo == TipoPromocion.HAPPY_HOUR.value:
+                    return round(self.caja_cobro_total_base * p.valor / 100, 2)
+                elif p.tipo == TipoPromocion.MONTO_FIJO.value:
+                    return p.valor
+        return 0.0
+
+    @rx.var
+    def tipos_promo_disponibles(self) -> list[str]:
+        return [t.value for t in TipoPromocion]
 
     @rx.var
     def productos_filtrados(self) -> list[ProductoView]:
@@ -1017,6 +1173,8 @@ class FoodState(rx.State):
         self.cargar_dashboard()
         self.cargar_historial_ventas()
         self.cargar_inventario()
+        self.cargar_clientes()
+        self.cargar_promociones()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
@@ -2192,6 +2350,8 @@ class FoodState(rx.State):
         self.caja_cobro_propina = ""
         self.caja_cobro_descuento = ""
         self.caja_cobro_efectivo_recibido = ""
+        self.caja_cobro_cliente_nombre = ""
+        self.caja_cobro_cliente_id = 0
 
     def set_caja_cobro_metodo(self, v: str) -> None:
         self.caja_cobro_metodo = v
@@ -2270,13 +2430,25 @@ class FoodState(rx.State):
             pedido.cerrado_en = now
             pedido.updated_at = now
             pedido.metodo_pago = metodo
-            pedido.propina = propina
+            es_fiado = metodo == "fiado"
+            pedido.propina = propina if not es_fiado else Decimal("0.00")
             pedido.descuento = descuento
+            pedido.pagado = not es_fiado
+            if self.caja_cobro_cliente_id > 0:
+                pedido.cliente_id = self.caja_cobro_cliente_id
             session.add(pedido)
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
             session.add(mesa)
             _descontar_stock_por_pedido(session, pedido.id or 0)
+            if es_fiado and self.caja_cobro_cliente_id > 0:
+                self._registrar_cargo_cc(
+                    session,
+                    self.caja_cobro_cliente_id,
+                    total_base - descuento,
+                    pedido.id,
+                    f"Fiado mesa {mesa_label or mesa.nombre or str(mesa.numero)}",
+                )
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -2288,7 +2460,7 @@ class FoodState(rx.State):
         self.cancelar_cobro()
         self.cargar_mesas()
         self.cargar_historial_ventas()
-        total_final = total_base + propina
+        total_final = max(total_base - descuento + propina, Decimal("0.00"))
         try:
             self._get_printer_service().print_cashier_ticket(
                 order_reference=mesa_label,
@@ -3193,6 +3365,477 @@ class FoodState(rx.State):
             session.commit()
         self.cargar_receta_producto()
         self.mensaje = "Insumo eliminado de la receta."
+
+    # ─── Clientes ─────────────────────────────────────────────────────────────
+
+    def on_load_clientes(self) -> None:
+        self.cargar_clientes()
+
+    def cargar_clientes(self) -> None:
+        hoy = datetime.utcnow()
+        with get_session() as session:
+            clientes_db = session.exec(
+                select(Cliente)
+                .where(Cliente.company_id == _COMPANY_ID)
+                .order_by(Cliente.nombre)
+            ).all()
+        views: list[ClienteView] = []
+        for c in clientes_db:
+            fn = c.fecha_nacimiento
+            cumple_hoy = False
+            cumple_pronto = False
+            dias = 999
+            nac_texto = ""
+            nac_iso = ""
+            if fn:
+                nac_iso = fn.isoformat()
+                meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+                nac_texto = f"{fn.day} {meses[fn.month - 1]}"
+                cumple_este_anio = datetime(hoy.year, fn.month, fn.day)
+                if cumple_este_anio < hoy.replace(hour=0, minute=0, second=0, microsecond=0):
+                    cumple_este_anio = datetime(hoy.year + 1, fn.month, fn.day)
+                dias = (cumple_este_anio - hoy.replace(hour=0, minute=0, second=0, microsecond=0)).days
+                cumple_hoy = dias == 0
+                cumple_pronto = 0 < dias <= 7
+            views.append(ClienteView(
+                id=c.id or 0,
+                nombre=c.nombre,
+                telefono=c.telefono or "",
+                email=c.email or "",
+                fecha_nac_iso=nac_iso,
+                fecha_nac_texto=nac_texto,
+                notas=c.notas or "",
+                puntos=c.puntos,
+                activo=c.activo,
+                cumple_hoy=cumple_hoy,
+                cumple_pronto=cumple_pronto,
+                dias_para_cumple=dias,
+            ))
+        self.clientes_lista = views
+
+    def set_cli_busqueda(self, v: str) -> None:
+        self.cli_busqueda = v
+
+    def set_cli_form_nombre(self, v: str) -> None:
+        self.cli_form_nombre = v
+
+    def set_cli_form_telefono(self, v: str) -> None:
+        self.cli_form_telefono = v
+
+    def set_cli_form_email(self, v: str) -> None:
+        self.cli_form_email = v
+
+    def set_cli_form_fecha_nac(self, v: str) -> None:
+        self.cli_form_fecha_nac = v
+
+    def set_cli_form_notas(self, v: str) -> None:
+        self.cli_form_notas = v
+
+    def set_caja_cobro_cliente_nombre(self, v: str) -> None:
+        self.caja_cobro_cliente_nombre = v
+        cli = next((c for c in self.clientes_lista if c.nombre == v), None)
+        self.caja_cobro_cliente_id = cli.id if cli else 0
+
+    def guardar_cliente(self) -> None:
+        nombre = self.cli_form_nombre.strip()
+        if not nombre:
+            self.mensaje = "El nombre del cliente es obligatorio."
+            return
+        tel = self.cli_form_telefono.strip() or None
+        email = self.cli_form_email.strip() or None
+        notas = self.cli_form_notas.strip() or None
+        fn: date | None = None
+        if self.cli_form_fecha_nac:
+            try:
+                from datetime import date as _date
+                parts = self.cli_form_fecha_nac.split("-")
+                fn = _date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                self.mensaje = "Fecha de nacimiento inválida. Usa el formato AAAA-MM-DD."
+                return
+        with get_session() as session:
+            if self.cli_form_id == 0:
+                existente = session.exec(
+                    select(Cliente).where(
+                        Cliente.company_id == _COMPANY_ID,
+                        Cliente.nombre == nombre,
+                    )
+                ).first()
+                if existente:
+                    self.mensaje = f"Ya existe un cliente con ese nombre."
+                    return
+                c = Cliente(
+                    company_id=_COMPANY_ID,
+                    nombre=nombre,
+                    telefono=tel,
+                    email=email,
+                    fecha_nacimiento=fn,
+                    notas=notas,
+                    activo=True,
+                )
+                session.add(c)
+                self.mensaje = f"Cliente '{nombre}' registrado."
+            else:
+                c = session.get(Cliente, self.cli_form_id)
+                if c is None or c.company_id != _COMPANY_ID:
+                    self.mensaje = "Cliente no encontrado."
+                    return
+                c.nombre = nombre
+                c.telefono = tel
+                c.email = email
+                c.fecha_nacimiento = fn
+                c.notas = notas
+                c.updated_at = datetime.utcnow()
+                session.add(c)
+                self.mensaje = f"Cliente '{nombre}' actualizado."
+            session.commit()
+        self.cli_form_id = 0
+        self.cli_form_nombre = ""
+        self.cli_form_telefono = ""
+        self.cli_form_email = ""
+        self.cli_form_fecha_nac = ""
+        self.cli_form_notas = ""
+        self.cli_form_editando = False
+        self.cargar_clientes()
+
+    def editar_cliente(self, cliente_id: int) -> None:
+        with get_session() as session:
+            c = session.get(Cliente, cliente_id)
+            if c is None or c.company_id != _COMPANY_ID:
+                return
+            self.cli_form_id = c.id or 0
+            self.cli_form_nombre = c.nombre
+            self.cli_form_telefono = c.telefono or ""
+            self.cli_form_email = c.email or ""
+            self.cli_form_fecha_nac = c.fecha_nacimiento.isoformat() if c.fecha_nacimiento else ""
+            self.cli_form_notas = c.notas or ""
+        self.cli_form_editando = True
+
+    def cancelar_cli_form(self) -> None:
+        self.cli_form_id = 0
+        self.cli_form_nombre = ""
+        self.cli_form_telefono = ""
+        self.cli_form_email = ""
+        self.cli_form_fecha_nac = ""
+        self.cli_form_notas = ""
+        self.cli_form_editando = False
+
+    def toggle_cliente_activo(self, cliente_id: int) -> None:
+        with get_session() as session:
+            c = session.get(Cliente, cliente_id)
+            if c is None or c.company_id != _COMPANY_ID:
+                return
+            c.activo = not c.activo
+            c.updated_at = datetime.utcnow()
+            session.add(c)
+            session.commit()
+        self.cargar_clientes()
+
+    # ─── Cuentas corrientes ───────────────────────────────────────────────────
+
+    def on_load_cuentas(self) -> None:
+        if not self.clientes_lista:
+            self.cargar_clientes()
+        self.cargar_cuentas()
+
+    def cargar_cuentas(self) -> None:
+        with get_session() as session:
+            cuentas_db = session.exec(
+                select(CuentaCorriente)
+                .where(CuentaCorriente.company_id == _COMPANY_ID)
+                .order_by(CuentaCorriente.saldo_deuda.desc())
+            ).all()
+            clientes_map = {
+                c.id: c
+                for c in session.exec(
+                    select(Cliente).where(Cliente.company_id == _COMPANY_ID)
+                ).all()
+            }
+        views: list[CuentaView] = []
+        for cc in cuentas_db:
+            cli = clientes_map.get(cc.cliente_id)
+            saldo = Decimal(str(cc.saldo_deuda))
+            views.append(CuentaView(
+                id=cc.id or 0,
+                cliente_id=cc.cliente_id,
+                cliente_nombre=cli.nombre if cli else "?",
+                cliente_telefono=cli.telefono or "" if cli else "",
+                saldo_deuda=float(saldo),
+                saldo_texto=_money_text(saldo),
+                limite_credito=float(Decimal(str(cc.limite_credito))),
+            ))
+        self.cuentas_lista = views
+
+    def set_cc_cliente_sel_nombre(self, v: str) -> None:
+        self.cc_cliente_sel_nombre = v
+        cli = next((c for c in self.clientes_lista if c.nombre == v), None)
+        if cli:
+            self._ver_o_crear_cuenta(cli.id)
+
+    def _ver_o_crear_cuenta(self, cliente_id: int) -> None:
+        with get_session() as session:
+            cc = session.exec(
+                select(CuentaCorriente).where(
+                    CuentaCorriente.company_id == _COMPANY_ID,
+                    CuentaCorriente.cliente_id == cliente_id,
+                )
+            ).first()
+            if cc:
+                self.cuenta_sel_id = cc.id or 0
+                movs = session.exec(
+                    select(MovimientoCuenta)
+                    .where(MovimientoCuenta.cuenta_id == cc.id)
+                    .order_by(MovimientoCuenta.created_at.desc())
+                ).all()
+                self.cuenta_movimientos = [
+                    MovimientoView(
+                        id=m.id or 0,
+                        tipo=m.tipo,
+                        tipo_label="Cargo" if m.tipo == "cargo" else "Pago",
+                        monto=float(Decimal(str(m.monto))),
+                        monto_texto=_money_text(m.monto),
+                        descripcion=m.descripcion or "",
+                        fecha_texto=m.created_at.strftime("%d/%m %H:%M"),
+                    )
+                    for m in movs
+                ]
+            else:
+                self.cuenta_sel_id = 0
+                self.cuenta_movimientos = []
+
+    def set_cc_pago_monto(self, v: str) -> None:
+        self.cc_pago_monto = v
+
+    def set_cc_pago_descripcion(self, v: str) -> None:
+        self.cc_pago_descripcion = v
+
+    def registrar_pago_cc(self) -> None:
+        if self.cuenta_sel_id == 0:
+            self.mensaje = "Selecciona un cliente con cuenta corriente."
+            return
+        try:
+            monto = Decimal(self.cc_pago_monto.replace(",", ".").strip() or "0")
+            if monto <= 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            self.mensaje = "Monto de pago inválido."
+            return
+        with get_session() as session:
+            cc = session.get(CuentaCorriente, self.cuenta_sel_id)
+            if cc is None or cc.company_id != _COMPANY_ID:
+                self.mensaje = "Cuenta no encontrada."
+                return
+            pago = MovimientoCuenta(
+                company_id=_COMPANY_ID,
+                cuenta_id=cc.id or 0,
+                tipo="pago",
+                monto=monto,
+                descripcion=self.cc_pago_descripcion.strip() or "Pago en caja",
+            )
+            session.add(pago)
+            saldo_actual = Decimal(str(cc.saldo_deuda))
+            cc.saldo_deuda = max(saldo_actual - monto, Decimal("0.00"))
+            cc.updated_at = datetime.utcnow()
+            session.add(cc)
+            session.commit()
+            cliente_id = cc.cliente_id
+        self.cc_pago_monto = ""
+        self.cc_pago_descripcion = ""
+        self.mensaje = f"Pago de {_money_text(monto)} registrado."
+        self.cargar_cuentas()
+        self._ver_o_crear_cuenta(cliente_id)
+
+    def _registrar_cargo_cc(self, session, cliente_id: int, monto: Decimal, pedido_id: int | None, descripcion: str) -> None:
+        cc = session.exec(
+            select(CuentaCorriente).where(
+                CuentaCorriente.company_id == _COMPANY_ID,
+                CuentaCorriente.cliente_id == cliente_id,
+            )
+        ).first()
+        if cc is None:
+            cc = CuentaCorriente(
+                company_id=_COMPANY_ID,
+                cliente_id=cliente_id,
+                saldo_deuda=Decimal("0.00"),
+                limite_credito=Decimal("0.00"),
+            )
+            session.add(cc)
+            session.flush()
+        cargo = MovimientoCuenta(
+            company_id=_COMPANY_ID,
+            cuenta_id=cc.id or 0,
+            pedido_id=pedido_id,
+            tipo="cargo",
+            monto=monto,
+            descripcion=descripcion,
+        )
+        session.add(cargo)
+        cc.saldo_deuda = Decimal(str(cc.saldo_deuda)) + monto
+        cc.updated_at = datetime.utcnow()
+        session.add(cc)
+
+    # ─── Promociones ──────────────────────────────────────────────────────────
+
+    def on_load_promociones(self) -> None:
+        self.cargar_promociones()
+
+    def cargar_promociones(self) -> None:
+        now = datetime.utcnow()
+        hora_actual = now.strftime("%H:%M")
+        tipo_labels = {
+            TipoPromocion.PORCENTAJE.value: "% Descuento",
+            TipoPromocion.MONTO_FIJO.value: "Monto fijo",
+            TipoPromocion.HAPPY_HOUR.value: "Happy Hour",
+        }
+        with get_session() as session:
+            promos_db = session.exec(
+                select(Promocion)
+                .where(Promocion.company_id == _COMPANY_ID)
+                .order_by(Promocion.activa.desc(), Promocion.nombre)
+            ).all()
+        views: list[PromocionView] = []
+        for p in promos_db:
+            aplica = p.activa
+            if aplica and p.hora_inicio and p.hora_fin:
+                aplica = p.hora_inicio <= hora_actual <= p.hora_fin
+            val = Decimal(str(p.valor))
+            if p.tipo in (TipoPromocion.PORCENTAJE.value, TipoPromocion.HAPPY_HOUR.value):
+                desc_txt = f"{val:.0f}% off"
+            else:
+                desc_txt = f"- {_money_text(val)}"
+            if p.hora_inicio and p.hora_fin:
+                horario = f"{p.hora_inicio} – {p.hora_fin}"
+            else:
+                horario = "Todo el día"
+            views.append(PromocionView(
+                id=p.id or 0,
+                nombre=p.nombre,
+                tipo=p.tipo,
+                tipo_label=tipo_labels.get(p.tipo, p.tipo),
+                valor=float(val),
+                descripcion=p.descripcion or "",
+                hora_inicio=p.hora_inicio or "",
+                hora_fin=p.hora_fin or "",
+                activa=p.activa,
+                aplica_ahora=aplica,
+                descuento_texto=desc_txt,
+                horario_texto=horario,
+            ))
+        self.promociones_lista = views
+
+    def set_promo_form_nombre(self, v: str) -> None:
+        self.promo_form_nombre = v
+
+    def set_promo_form_tipo(self, v: str) -> None:
+        self.promo_form_tipo = v
+
+    def set_promo_form_valor(self, v: str) -> None:
+        self.promo_form_valor = v
+
+    def set_promo_form_descripcion(self, v: str) -> None:
+        self.promo_form_descripcion = v
+
+    def set_promo_form_hora_inicio(self, v: str) -> None:
+        self.promo_form_hora_inicio = v
+
+    def set_promo_form_hora_fin(self, v: str) -> None:
+        self.promo_form_hora_fin = v
+
+    def guardar_promocion(self) -> None:
+        nombre = self.promo_form_nombre.strip()
+        if not nombre:
+            self.mensaje = "El nombre de la promoción es obligatorio."
+            return
+        try:
+            valor = Decimal(self.promo_form_valor.replace(",", ".").strip() or "0")
+            if valor <= 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            self.mensaje = "Valor inválido. Ingresa un número mayor a 0."
+            return
+        hora_ini = self.promo_form_hora_inicio.strip() or None
+        hora_fin = self.promo_form_hora_fin.strip() or None
+        with get_session() as session:
+            if self.promo_form_id == 0:
+                p = Promocion(
+                    company_id=_COMPANY_ID,
+                    nombre=nombre,
+                    tipo=self.promo_form_tipo,
+                    valor=valor,
+                    descripcion=self.promo_form_descripcion.strip() or None,
+                    hora_inicio=hora_ini,
+                    hora_fin=hora_fin,
+                    activa=True,
+                )
+                session.add(p)
+                self.mensaje = f"Promoción '{nombre}' creada."
+            else:
+                p = session.get(Promocion, self.promo_form_id)
+                if p is None or p.company_id != _COMPANY_ID:
+                    self.mensaje = "Promoción no encontrada."
+                    return
+                p.nombre = nombre
+                p.tipo = self.promo_form_tipo
+                p.valor = valor
+                p.descripcion = self.promo_form_descripcion.strip() or None
+                p.hora_inicio = hora_ini
+                p.hora_fin = hora_fin
+                p.updated_at = datetime.utcnow()
+                session.add(p)
+                self.mensaje = f"Promoción '{nombre}' actualizada."
+            session.commit()
+        self.promo_form_id = 0
+        self.promo_form_nombre = ""
+        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
+        self.promo_form_valor = ""
+        self.promo_form_descripcion = ""
+        self.promo_form_hora_inicio = ""
+        self.promo_form_hora_fin = ""
+        self.promo_form_editando = False
+        self.cargar_promociones()
+
+    def editar_promocion(self, promo_id: int) -> None:
+        with get_session() as session:
+            p = session.get(Promocion, promo_id)
+            if p is None or p.company_id != _COMPANY_ID:
+                return
+            self.promo_form_id = p.id or 0
+            self.promo_form_nombre = p.nombre
+            self.promo_form_tipo = p.tipo
+            self.promo_form_valor = str(Decimal(str(p.valor)).normalize())
+            self.promo_form_descripcion = p.descripcion or ""
+            self.promo_form_hora_inicio = p.hora_inicio or ""
+            self.promo_form_hora_fin = p.hora_fin or ""
+        self.promo_form_editando = True
+
+    def cancelar_promo_form(self) -> None:
+        self.promo_form_id = 0
+        self.promo_form_nombre = ""
+        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
+        self.promo_form_valor = ""
+        self.promo_form_descripcion = ""
+        self.promo_form_hora_inicio = ""
+        self.promo_form_hora_fin = ""
+        self.promo_form_editando = False
+
+    def toggle_promo_activa(self, promo_id: int) -> None:
+        with get_session() as session:
+            p = session.get(Promocion, promo_id)
+            if p is None or p.company_id != _COMPANY_ID:
+                return
+            p.activa = not p.activa
+            p.updated_at = datetime.utcnow()
+            session.add(p)
+            session.commit()
+        self.cargar_promociones()
+
+    def aplicar_promo_al_cobro(self) -> None:
+        desc = self.promo_activa_descuento_sugerido
+        if desc > 0:
+            self.caja_cobro_descuento = str(round(desc, 2))
+
+    def refrescar_promos(self) -> None:
+        self.cargar_promociones()
 
 
 # ─── Estado público (sin auth) ────────────────────────────────────────────────
