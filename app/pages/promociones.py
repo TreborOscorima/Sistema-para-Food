@@ -265,7 +265,7 @@ def _promociones_content() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="plus_circle", size=14, color="#EA580C"),
+                    rx.icon(tag="circle_plus", size=14, color="#EA580C"),
                     rx.text(
                         rx.cond(FoodState.promo_form_editando, "Editar promoción", "Crear promoción"),
                         font_size="14px", font_weight="700", color="#0F172A",

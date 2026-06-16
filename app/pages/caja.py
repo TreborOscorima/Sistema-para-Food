@@ -282,7 +282,7 @@ def _cobro_panel() -> rx.Component:
             ),
             rx.button(
                 rx.hstack(
-                    rx.icon(tag="check_circle", size=16, color="#FFFFFF"),
+                    rx.icon(tag="circle_check", size=16, color="#FFFFFF"),
                     rx.text("Confirmar Cobro", font_size="14px", font_weight="700", color="#FFFFFF"),
                     spacing="2",
                     align="center",
