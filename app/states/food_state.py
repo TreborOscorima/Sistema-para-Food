@@ -14,6 +14,7 @@ from decimal import Decimal, InvalidOperation
 
 import reflex as rx
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlmodel import select
 
 from app.models.food import (
@@ -2819,7 +2820,10 @@ class FoodState(rx.State):
             pedidos_hoy = session.exec(
                 select(Pedido).where(
                     Pedido.company_id == _COMPANY_ID,
-                    Pedido.estado == EstadoPedido.COBRADO.value,
+                    or_(
+                        Pedido.pagado.is_(True),
+                        Pedido.estado == EstadoPedido.COBRADO.value,
+                    ),
                     Pedido.cerrado_en >= inicio_hoy,
                     Pedido.cerrado_en < fin_hoy,
                 )
@@ -2880,7 +2884,10 @@ class FoodState(rx.State):
                 select(Pedido)
                 .where(
                     Pedido.company_id == _COMPANY_ID,
-                    Pedido.estado == EstadoPedido.COBRADO.value,
+                    or_(
+                        Pedido.pagado.is_(True),
+                        Pedido.estado == EstadoPedido.COBRADO.value,
+                    ),
                 )
             )
             if self.historial_filtro_fecha_desde:
