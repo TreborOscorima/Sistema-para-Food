@@ -4,13 +4,19 @@ Se integran con Reflex via api_transformer en app/app.py.
 """
 from __future__ import annotations
 
+import pathlib
 import time
 from datetime import datetime, timezone
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route
+
+# Reflex 0.9.x no genera HTML estático para rutas dinámicas ([slug]).
+# El static-files handler devuelve 404 para /menu/algo.
+# Interceptamos /menu/{slug} antes y servimos el SPA entry point.
+_BUILD_DIR = pathlib.Path(".web/build/client")
 
 _BOOT_TS = time.monotonic()
 
@@ -65,9 +71,19 @@ async def _ping(request: Request) -> JSONResponse:
     return JSONResponse(content={"pong": True}, status_code=200)
 
 
+async def _menu_spa(request: Request) -> Response:
+    """Sirve el SPA entry para /menu/{slug} — Reflex no pre-genera HTML para rutas dinámicas."""
+    for candidate in ("__spa-fallback.html", "index.html"):
+        p = _BUILD_DIR / candidate
+        if p.exists():
+            return FileResponse(str(p), media_type="text/html")
+    return JSONResponse({"error": "frontend not built"}, status_code=503)
+
+
 health_app = Starlette(
     routes=[
         Route("/api/health", _health, methods=["GET"]),
         Route("/api/ping", _ping, methods=["GET"]),
+        Route("/menu/{slug}", _menu_spa, methods=["GET"]),
     ],
 )

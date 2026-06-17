@@ -610,6 +610,7 @@ class FoodState(rx.State):
     categoria_activa_id: int = 0
     mostrador_categoria_activa_id: int = 0
     mostrador_cliente_nombre: str = ""
+    mostrador_metodo_pago: str = "efectivo"
     ultimo_pedido_id: int = 0
     mensaje: str = ""
     usuario_actual: UsuarioSesion | None = None
@@ -1073,6 +1074,7 @@ class FoodState(rx.State):
         self.categoria_activa_id = 0
         self.mostrador_categoria_activa_id = 0
         self.mostrador_cliente_nombre = ""
+        self.mostrador_metodo_pago = "efectivo"
         self.ultimo_pedido_id = 0
         self.mensaje = ""
         self.login_pin_input = ""
@@ -2621,7 +2623,11 @@ class FoodState(rx.State):
 
     def limpiar_carrito_mostrador(self) -> None:
         self.mostrador_carrito = []
+        self.mostrador_metodo_pago = "efectivo"
         self.mensaje = "Carrito de mostrador limpio."
+
+    def seleccionar_mostrador_metodo(self, metodo: str) -> None:
+        self.mostrador_metodo_pago = metodo
 
     def cobrar_y_enviar_mostrador(self) -> None:
         if not self.mostrador_carrito:
@@ -2651,6 +2657,7 @@ class FoodState(rx.State):
                 nombre_cliente=_actor_name(self.mostrador_cliente_nombre) or None,
                 pagado=True,
                 estado=EstadoPedido.ENVIADO.value,
+                metodo_pago=self.mostrador_metodo_pago,
                 total=Decimal("0.00"),
                 abierto_en=now,
                 cerrado_en=now,
@@ -2691,6 +2698,7 @@ class FoodState(rx.State):
         self.ultimo_pedido_id = pedido_id
         self.mostrador_carrito = []
         self.mostrador_cliente_nombre = ""
+        self.mostrador_metodo_pago = "efectivo"
         self.cargar_cocina()
         self.cargar_historial_ventas()
         try:

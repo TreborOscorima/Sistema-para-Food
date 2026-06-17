@@ -239,6 +239,40 @@ def _mostrador_content() -> rx.Component:
                     rx.text(FoodState.total_mostrador_texto, font_size="16px", font_weight="800", color="#0F172A"),
                     width="100%",
                 ),
+                # ── Método de pago ──────────────────────────────────────────
+                rx.vstack(
+                    rx.text("Método de pago", font_size="12px", font_weight="700", color="#64748B"),
+                    rx.hstack(
+                        *[
+                            rx.button(
+                                rx.hstack(
+                                    rx.icon(tag=icon, size=14,
+                                            color=rx.cond(FoodState.mostrador_metodo_pago == val, "#FFFFFF", "#64748B")),
+                                    rx.text(label, font_size="12px", font_weight="700",
+                                            color=rx.cond(FoodState.mostrador_metodo_pago == val, "#FFFFFF", "#64748B")),
+                                    spacing="1", align="center",
+                                ),
+                                on_click=FoodState.seleccionar_mostrador_metodo(val),
+                                background=rx.cond(FoodState.mostrador_metodo_pago == val, "#EA580C", "#F8FAFC"),
+                                border=rx.cond(FoodState.mostrador_metodo_pago == val, "2px solid #EA580C", "2px solid #E2E8F0"),
+                                border_radius="8px",
+                                padding="6px 0",
+                                cursor="pointer",
+                                flex="1",
+                                _hover={"border": "2px solid #EA580C"},
+                            )
+                            for val, label, icon in [
+                                ("efectivo", "Efectivo", "banknote"),
+                                ("tarjeta", "Tarjeta", "credit_card"),
+                                ("qr", "QR / Yape", "qr_code"),
+                            ]
+                        ],
+                        spacing="2",
+                        width="100%",
+                    ),
+                    spacing="1",
+                    width="100%",
+                ),
                 rx.hstack(
                     rx.button(
                         "Limpiar",
