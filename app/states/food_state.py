@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
+import bcrypt as _bcrypt
+
 import reflex as rx
 from pydantic import BaseModel
 from sqlalchemy import or_
@@ -160,6 +162,19 @@ if _COMPANY_ID <= 0:
 def _utcnow() -> datetime:
     """Datetime UTC naive compatible con columnas MySQL sin TZ."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _hash_pin(plain: str) -> str:
+    """Hashea un PIN con bcrypt. Retorna el hash como str."""
+    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
+
+
+def _verify_pin(plain: str, hashed: str) -> bool:
+    """Verifica un PIN contra su hash bcrypt."""
+    try:
+        return _bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False
 
 
 # ─── Helpers puros ───────────────────────────────────────────────────────────
@@ -1134,12 +1149,21 @@ class FoodState(rx.State):
         return None
 
     def on_load_mozos(self):
+        self.stop_caja_polling()
+        self.stop_cocina_polling()
+        self.stop_mostrador_polling()
         return self._route_access_result("mozos")
 
     def on_load_caja(self):
+        self.stop_mozos_polling()
+        self.stop_cocina_polling()
+        self.stop_mostrador_polling()
         return self._route_access_result("caja")
 
     def on_load_mostrador(self):
+        self.stop_mozos_polling()
+        self.stop_caja_polling()
+        self.stop_cocina_polling()
         result = self._route_access_result("mostrador")
         if result is not None:
             return result
@@ -1148,6 +1172,9 @@ class FoodState(rx.State):
         return None
 
     def on_load_cocina(self):
+        self.stop_mozos_polling()
+        self.stop_caja_polling()
+        self.stop_mostrador_polling()
         return self._route_access_result("cocina")
 
     def on_load_carta(self):
@@ -1216,13 +1243,13 @@ class FoodState(rx.State):
             self.login_pin_input = ""
             return rx.window_alert("Ingresa un PIN valido de 4 a 6 digitos.")
         with get_session() as session:
-            usuario = session.exec(
+            candidatos = session.exec(
                 select(UsuarioFood).where(
                     UsuarioFood.company_id == _COMPANY_ID,
-                    UsuarioFood.pin == normalized,
                     UsuarioFood.activo.is_(True),
                 )
-            ).first()
+            ).all()
+            usuario = next((u for u in candidatos if _verify_pin(normalized, u.pin)), None)
         if usuario is None:
             self.login_pin_input = ""
             return rx.window_alert("PIN incorrecto. Intenta nuevamente.")
@@ -1285,7 +1312,7 @@ class FoodState(rx.State):
                 nombre=u.nombre,
                 rol=u.rol,
                 rol_label=_ROL_LABELS.get(u.rol, u.rol),
-                pin_masked="●" * len(u.pin),
+                pin_masked="●●●●",
                 activo=u.activo,
                 badge_bg=_ROL_BADGE_BG.get(u.rol, "rgba(100,116,139,0.16)"),
                 badge_text=_ROL_BADGE_TEXT.get(u.rol, "#94A3B8"),
@@ -1341,23 +1368,23 @@ class FoodState(rx.State):
                 return
 
         with get_session() as session:
+            otros = session.exec(
+                select(UsuarioFood).where(
+                    UsuarioFood.company_id == _COMPANY_ID,
+                    UsuarioFood.id != self.usuario_form_id,
+                )
+            ).all()
             if es_edicion:
                 u = session.get(UsuarioFood, self.usuario_form_id)
                 if u is None or u.company_id != _COMPANY_ID:
                     self.mensaje = "Usuario no encontrado."
                     return
                 if nuevo_pin:
-                    conflicto = session.exec(
-                        select(UsuarioFood).where(
-                            UsuarioFood.company_id == _COMPANY_ID,
-                            UsuarioFood.pin == nuevo_pin,
-                            UsuarioFood.id != self.usuario_form_id,
-                        )
-                    ).first()
+                    conflicto = next((o for o in otros if _verify_pin(nuevo_pin, o.pin)), None)
                     if conflicto:
                         self.mensaje = f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}."
                         return
-                    u.pin = nuevo_pin
+                    u.pin = _hash_pin(nuevo_pin)
                 u.nombre = nombre
                 u.rol = rol
                 u.activo = self.usuario_form_activo
@@ -1366,19 +1393,14 @@ class FoodState(rx.State):
                 session.commit()
                 self.mensaje = f"Usuario '{nombre}' actualizado."
             else:
-                conflicto = session.exec(
-                    select(UsuarioFood).where(
-                        UsuarioFood.company_id == _COMPANY_ID,
-                        UsuarioFood.pin == nuevo_pin,
-                    )
-                ).first()
+                conflicto = next((o for o in otros if _verify_pin(nuevo_pin, o.pin)), None)
                 if conflicto:
                     self.mensaje = f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}."
                     return
                 u = UsuarioFood(
                     company_id=_COMPANY_ID,
                     nombre=nombre,
-                    pin=nuevo_pin,
+                    pin=_hash_pin(nuevo_pin),
                     rol=rol,
                     activo=True,
                 )
@@ -2550,6 +2572,7 @@ class FoodState(rx.State):
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
             session.add(mesa)
+            _descontar_stock_por_pedido(session, pedido.id or 0)
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"

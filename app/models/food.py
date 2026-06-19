@@ -57,14 +57,10 @@ class UsuarioFood(TimestampedModel, table=True):
     """Usuario operativo del restaurante, autenticado por PIN + company_id."""
 
     __tablename__ = "food_usuarios"
-    __table_args__ = (
-        UniqueConstraint("company_id", "pin", name="uq_food_usuarios_company_pin"),
-    )
-
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
     nombre: str = Field(max_length=120, nullable=False)
-    pin: str = Field(max_length=6, nullable=False)
+    pin: str = Field(max_length=72, nullable=False)
     rol: str = Field(index=True, max_length=32, nullable=False)
     activo: bool = Field(default=True, nullable=False)
 
