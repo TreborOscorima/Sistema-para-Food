@@ -1,0 +1,40 @@
+# Entorno virtual y cache Python
+.venv
+venv
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.mypy_cache
+*.egg-info
+
+# Vendor local — tuwayki-core se instala desde GitHub en el build
+_vendor/
+
+# Git e IDE
+.git
+.gitignore
+.cursor
+.vscode
+
+# Logs y artefactos locales
+*.log
+*.err
+dev.log
+dev.err
+reflex_run*.log
+reflex_run*.err
+
+# Build/cache local de Reflex y frontend
+.web/
+.states/
+node_modules/
+
+# Env local (se inyecta por compose)
+.env
+.env.*
+!.env.example
+
+# CI y docs
+.github
+docs/

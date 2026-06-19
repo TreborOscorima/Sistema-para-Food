@@ -13,15 +13,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    git \
     default-libmysqlclient-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 COPY requirements.txt .
-COPY _vendor/ _vendor/
-# tuwayki-core se instala desde vendor local (paquete privado sin PyPI).
-RUN pip install --no-cache-dir --prefix=/install /build/_vendor/tuwayki-core 2>/dev/null || true && \
+# tuwayki-core se instala desde GitHub (paquete privado, pinneado a commit estable).
+# Para actualizar: cambiar el hash al nuevo commit de tuwayki-core.
+RUN pip install --no-cache-dir --prefix=/install \
+        "tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@13dfc5e" && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 

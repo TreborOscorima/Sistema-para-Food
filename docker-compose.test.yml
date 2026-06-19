@@ -2,17 +2,16 @@ version: "3.9"
 # =============================================================================
 # docker-compose.test.yml — Override para SVR de Prueba en AWS (sin dominio)
 #
-# Uso — definir TEST_IP en .env o inline:
-#   docker build -t tuwayki_food:latest .
-#   TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+# Uso:
+#   TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
 #
 # Acceso desde el navegador:
 #   TUWAYKIFOOD : http://<TEST_IP>:3003
 #
 # Prerrequisitos en AWS:
-#   - Security Group EC2: abrir puerto TCP 3003 para tu IP (o 0.0.0.0/0 en test)
-#   - .env con DB_PASSWORD, MYSQL_ROOT_PASSWORD definidos
-#   - docker build -t tuwayki_food:latest . corrido antes
+#   - Security Group EC2: puerto TCP 3003 abierto
+#   - .env con DB_PASSWORD, MYSQL_ROOT_PASSWORD, AUTH_SECRET_KEY definidos
+#   - git clone del repo en ~/sist-food
 # =============================================================================
 
 services:

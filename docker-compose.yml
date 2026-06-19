@@ -5,13 +5,13 @@ version: "3.9"
 # Stack 100% independiente de Sistema-de-Ventas — DB, red y proceso propios.
 #
 # PRIMERA VEZ:
-#   1. cp .env.example .env && editar (DB_PASSWORD, MYSQL_ROOT_PASSWORD obligatorios)
-#   2. docker build -t tuwayki_food:latest .
-#   3. docker compose up -d
+#   1. cp .env.example .env && editar (DB_PASSWORD, MYSQL_ROOT_PASSWORD, AUTH_SECRET_KEY)
+#   2. TEST_IP=<IP> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
 #
 # En producción nginx (host) hace el proxy food.tuwayki.com → 127.0.0.1:3003.
-# Para local: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
-# Para test:  TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+# Para local: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+# Para test:  TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+# Re-deploy:  git pull origin docker-deploy-prod && mismo comando de arriba
 # =============================================================================
 
 services:
@@ -43,6 +43,9 @@ services:
       - food_internal
 
   tuwayki_food:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: tuwayki_food:latest
     container_name: tuwayki_food
     restart: unless-stopped
