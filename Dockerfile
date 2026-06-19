@@ -66,4 +66,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
 USER app
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/docker-entrypoint.sh"]
-CMD ["reflex", "run", "--env", "prod", "--loglevel", "warning", "--backend-host", "0.0.0.0"]
+CMD ["reflex", "run", "--env", "prod", "--loglevel", "warning", "--backend-host", "0.0.0.0", "--single-port"]

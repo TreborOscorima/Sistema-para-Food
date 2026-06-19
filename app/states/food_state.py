@@ -9,7 +9,7 @@ import os
 import pathlib
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import reflex as rx
@@ -151,6 +151,16 @@ _COMPANY_ID: int = int(os.getenv("FOOD_COMPANY_ID", "0") or "0")
 _FOOD_BASE_URL: str = os.getenv("FOOD_BASE_URL", "http://localhost:3003").rstrip("/")
 _FOOD_API_URL: str = os.getenv("PUBLIC_API_URL", "http://localhost:3004").rstrip("/")
 
+if _COMPANY_ID <= 0:
+    raise RuntimeError(
+        "FOOD_COMPANY_ID debe ser > 0. Revisá el .env o la variable de entorno."
+    )
+
+
+def _utcnow() -> datetime:
+    """Datetime UTC naive compatible con columnas MySQL sin TZ."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 # ─── Helpers puros ───────────────────────────────────────────────────────────
 
@@ -281,7 +291,7 @@ def _recalculate_order_total(session, pedido: Pedido) -> Decimal:
     ).all()
     total = sum((_to_decimal(d.subtotal) for d in detalles), Decimal("0.00"))
     pedido.total = total
-    pedido.updated_at = datetime.utcnow()
+    pedido.updated_at = _utcnow()
     session.add(pedido)
     return total
 
@@ -305,7 +315,7 @@ def _sync_order_status(session, pedido: Pedido) -> None:
         pedido.estado = EstadoPedido.COBRADO.value
     else:
         pedido.estado = EstadoPedido.ENVIADO.value
-    pedido.updated_at = datetime.utcnow()
+    pedido.updated_at = _utcnow()
     session.add(pedido)
 
 
@@ -314,7 +324,7 @@ def _ensure_open_order(session, mesa: Mesa, mozo_id: int | None = None) -> Pedid
     if pedido is not None:
         if mozo_id is not None and pedido.mozo_id is None:
             pedido.mozo_id = mozo_id
-            pedido.updated_at = datetime.utcnow()
+            pedido.updated_at = _utcnow()
             session.add(pedido)
         return pedido
     pedido = Pedido(
@@ -573,14 +583,19 @@ def _descontar_stock_por_pedido(session, pedido_id: int) -> None:
     insumo_ids = list({r.insumo_id for r in recetas})
     insumos = {
         i.id: i
-        for i in session.exec(select(Insumo).where(Insumo.id.in_(insumo_ids))).all()
+        for i in session.exec(
+            select(Insumo).where(
+                Insumo.company_id == _COMPANY_ID,
+                Insumo.id.in_(insumo_ids),
+            )
+        ).all()
     }
     descuentos: dict[int, Decimal] = {}
     for d in detalles:
         for ri in receta_por_producto.get(d.producto_id, []):
             uso = Decimal(str(ri.cantidad)) * d.cantidad
             descuentos[ri.insumo_id] = descuentos.get(ri.insumo_id, Decimal("0")) + uso
-    now = datetime.utcnow()
+    now = _utcnow()
     for insumo_id, uso_total in descuentos.items():
         ins = insumos.get(insumo_id)
         if ins:
@@ -1142,7 +1157,7 @@ class FoodState(rx.State):
         result = self._route_access_result("reportes")
         if result is not None:
             return result
-        self.historial_filtro_fecha_desde = datetime.utcnow().strftime("%Y-%m-%d")
+        self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
         self.cargar_dashboard()
         self.cargar_historial_ventas()
         return None
@@ -1170,7 +1185,7 @@ class FoodState(rx.State):
     def on_load_dono_page(self) -> None:
         self.cargar_config_impresora()
         self.cargar_mesas_config()
-        self.historial_filtro_fecha_desde = datetime.utcnow().strftime("%Y-%m-%d")
+        self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
         self.historial_filtro_fecha_hasta = ""
         self.historial_filtro_metodo = ""
         self.cargar_dashboard()
@@ -1346,7 +1361,7 @@ class FoodState(rx.State):
                 u.nombre = nombre
                 u.rol = rol
                 u.activo = self.usuario_form_activo
-                u.updated_at = datetime.utcnow()
+                u.updated_at = _utcnow()
                 session.add(u)
                 session.commit()
                 self.mensaje = f"Usuario '{nombre}' actualizado."
@@ -1396,7 +1411,7 @@ class FoodState(rx.State):
                     self.mensaje = "No puedes desactivar al ultimo administrador."
                     return
             u.activo = not u.activo
-            u.updated_at = datetime.utcnow()
+            u.updated_at = _utcnow()
             session.add(u)
             session.commit()
             accion = "activado" if u.activo else "desactivado"
@@ -1450,7 +1465,7 @@ class FoodState(rx.State):
                 cfg.caja_puerto = 9100
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
-            cfg.updated_at = datetime.utcnow()
+            cfg.updated_at = _utcnow()
             session.add(cfg)
             session.commit()
         self.config_slug = slug
@@ -1591,7 +1606,7 @@ class FoodState(rx.State):
             m.numero = numero
             m.nombre = nombre
             m.capacidad = capacidad
-            m.updated_at = datetime.utcnow()
+            m.updated_at = _utcnow()
             session.add(m)
             session.commit()
         accion = "actualizada" if self.mesa_config_form_id > 0 else "creada"
@@ -1605,7 +1620,7 @@ class FoodState(rx.State):
             if m is None or m.company_id != _COMPANY_ID:
                 return
             m.activa = not m.activa
-            m.updated_at = datetime.utcnow()
+            m.updated_at = _utcnow()
             session.add(m)
             session.commit()
         self.cargar_mesas_config()
@@ -1928,7 +1943,7 @@ class FoodState(rx.State):
             session.add(detalle)
             _recalculate_order_total(session, pedido)
             mesa.estado = EstadoMesa.OCUPADA.value
-            mesa.updated_at = datetime.utcnow()
+            mesa.updated_at = _utcnow()
             session.add(mesa)
             session.commit()
         self._cargar_carrito_mesa(self.mesa_seleccionada_id)
@@ -1979,13 +1994,13 @@ class FoodState(rx.State):
         if not detalles_restantes:
             session.delete(pedido)
             mesa.estado = EstadoMesa.LIBRE.value
-            mesa.updated_at = datetime.utcnow()
+            mesa.updated_at = _utcnow()
             session.add(mesa)
             return
         _recalculate_order_total(session, pedido)
         _sync_order_status(session, pedido)
         mesa.estado = EstadoMesa.OCUPADA.value
-        mesa.updated_at = datetime.utcnow()
+        mesa.updated_at = _utcnow()
         session.add(mesa)
 
     def limpiar_carrito(self) -> None:
@@ -2047,7 +2062,7 @@ class FoodState(rx.State):
                 self.nota_producto_activo_id = 0
                 return
             detalle.notas = nota or None
-            detalle.updated_at = datetime.utcnow()
+            detalle.updated_at = _utcnow()
             session.add(detalle)
             session.commit()
         self.nota_producto_activo_id = 0
@@ -2071,7 +2086,7 @@ class FoodState(rx.State):
             if pedido is None:
                 return
             pedido.notas = nota or None
-            pedido.updated_at = datetime.utcnow()
+            pedido.updated_at = _utcnow()
             session.add(pedido)
             session.commit()
         self.mensaje = "Nota del pedido guardada." if nota else "Nota del pedido eliminada."
@@ -2098,7 +2113,7 @@ class FoodState(rx.State):
                 self.mensaje = "Todavia hay items en cocina o listos por entregar."
                 return
             mesa.estado = EstadoMesa.ESPERANDO_CUENTA.value
-            mesa.updated_at = datetime.utcnow()
+            mesa.updated_at = _utcnow()
             session.add(mesa)
             session.commit()
         self.cargar_mesas()
@@ -2122,14 +2137,14 @@ class FoodState(rx.State):
                 return
             if self.usuario_actual and pedido.mozo_id is None:
                 pedido.mozo_id = self.usuario_actual.id
-                pedido.updated_at = datetime.utcnow()
+                pedido.updated_at = _utcnow()
                 session.add(pedido)
             detalles_pendientes = _get_unsent_details(session, pedido.id or 0)
             if not detalles_pendientes:
                 self.mensaje = "No hay items nuevos pendientes de enviar."
                 return
             productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
-            now = datetime.utcnow()
+            now = _utcnow()
             for d in detalles_pendientes:
                 producto = productos_map.get(d.producto_id)
                 ticket_lines.append(TicketLine(
@@ -2250,7 +2265,7 @@ class FoodState(rx.State):
                 self.mensaje = "El ticket ya cambio de estado."
                 return
             pedidos_afectados: set[int] = set()
-            now = datetime.utcnow()
+            now = _utcnow()
             for d in actualizables:
                 d.estado_produccion = target_state
                 d.updated_at = now
@@ -2293,7 +2308,7 @@ class FoodState(rx.State):
                 self.mensaje = "Ese item no esta listo para entrega."
                 return
             detalle.estado_produccion = EstadoProduccion.ENTREGADO_AL_CLIENTE.value
-            detalle.updated_at = datetime.utcnow()
+            detalle.updated_at = _utcnow()
             session.add(detalle)
             pedido = session.get(Pedido, detalle.pedido_id)
             if pedido is not None:
@@ -2425,18 +2440,17 @@ class FoodState(rx.State):
             ) or "Sin asignar"
             total_base = _to_decimal(pedido.total)
             total_final = max(total_base - descuento + propina, Decimal("0.00"))
-            now = datetime.utcnow()
+            now = _utcnow()
             if self.usuario_actual:
                 pedido.cajero_id = self.usuario_actual.id
-            pedido.pagado = True
+            es_fiado = metodo == "fiado"
+            pedido.pagado = not es_fiado
             pedido.estado = EstadoPedido.COBRADO.value
             pedido.cerrado_en = now
             pedido.updated_at = now
             pedido.metodo_pago = metodo
-            es_fiado = metodo == "fiado"
             pedido.propina = propina if not es_fiado else Decimal("0.00")
             pedido.descuento = descuento
-            pedido.pagado = not es_fiado
             if self.caja_cobro_cliente_id > 0:
                 pedido.cliente_id = self.caja_cobro_cliente_id
             session.add(pedido)
@@ -2525,7 +2539,7 @@ class FoodState(rx.State):
                 mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
             ) or "Sin asignar"
             total = float(_to_decimal(pedido.total))
-            now = datetime.utcnow()
+            now = _utcnow()
             if self.usuario_actual:
                 pedido.cajero_id = self.usuario_actual.id
             pedido.pagado = True
@@ -2648,7 +2662,7 @@ class FoodState(rx.State):
             if invalidos:
                 self.mensaje = f"Productos no disponibles: {', '.join(invalidos)}"
                 return
-            now = datetime.utcnow()
+            now = _utcnow()
             pedido = Pedido(
                 company_id=_COMPANY_ID,
                 mesa_id=None,
@@ -2804,7 +2818,7 @@ class FoodState(rx.State):
             if not detalles_listos:
                 self.mensaje = "Ese pedido ya no tiene items listos para entregar."
                 return
-            now = datetime.utcnow()
+            now = _utcnow()
             for d in detalles_listos:
                 d.estado_produccion = EstadoProduccion.ENTREGADO_AL_CLIENTE.value
                 d.updated_at = now
@@ -2821,7 +2835,7 @@ class FoodState(rx.State):
     # ─── Dashboard KPIs ───────────────────────────────────────────────────────
 
     def cargar_dashboard(self) -> None:
-        hoy = datetime.utcnow().date()
+        hoy = _utcnow().date()
         inicio_hoy = datetime(hoy.year, hoy.month, hoy.day)
         fin_hoy = inicio_hoy + timedelta(days=1)
         with get_session() as session:
@@ -2984,7 +2998,7 @@ class FoodState(rx.State):
                 cat.nombre = nombre
                 cat.descripcion = self.categoria_form_descripcion.strip() or None
                 cat.orden = orden
-                cat.updated_at = datetime.utcnow()
+                cat.updated_at = _utcnow()
                 session.add(cat)
             else:
                 cat = Categoria(
@@ -3014,7 +3028,7 @@ class FoodState(rx.State):
             if cat is None or cat.company_id != _COMPANY_ID:
                 return
             cat.activa = not cat.activa
-            cat.updated_at = datetime.utcnow()
+            cat.updated_at = _utcnow()
             session.add(cat)
             session.commit()
         self.cargar_menu()
@@ -3075,7 +3089,7 @@ class FoodState(rx.State):
                 prod.categoria_id = cat.id or 0
                 prod.disponible = self.producto_form_disponible
                 prod.imagen_url = self.producto_form_imagen_url or None
-                prod.updated_at = datetime.utcnow()
+                prod.updated_at = _utcnow()
                 session.add(prod)
             else:
                 prod = Producto(
@@ -3111,7 +3125,7 @@ class FoodState(rx.State):
             if prod is None or prod.company_id != _COMPANY_ID:
                 return
             prod.disponible = not prod.disponible
-            prod.updated_at = datetime.utcnow()
+            prod.updated_at = _utcnow()
             session.add(prod)
             session.commit()
         self.cargar_menu()
@@ -3236,7 +3250,7 @@ class FoodState(rx.State):
                 ins.unidad = unidad
                 ins.stock_actual = stock_actual
                 ins.stock_minimo = stock_minimo
-                ins.updated_at = datetime.utcnow()
+                ins.updated_at = _utcnow()
                 session.add(ins)
                 self.mensaje = f"Insumo '{nombre}' actualizado."
             session.commit()
@@ -3276,7 +3290,7 @@ class FoodState(rx.State):
             if ins is None or ins.company_id != _COMPANY_ID:
                 return
             ins.activo = not ins.activo
-            ins.updated_at = datetime.utcnow()
+            ins.updated_at = _utcnow()
             session.add(ins)
             session.commit()
         self.cargar_inventario()
@@ -3354,7 +3368,7 @@ class FoodState(rx.State):
             ).first()
             if existente:
                 existente.cantidad = cantidad
-                existente.updated_at = datetime.utcnow()
+                existente.updated_at = _utcnow()
                 session.add(existente)
                 self.mensaje = "Cantidad actualizada en receta."
             else:
@@ -3388,7 +3402,7 @@ class FoodState(rx.State):
         self.cargar_clientes()
 
     def cargar_clientes(self) -> None:
-        hoy = datetime.utcnow()
+        hoy = _utcnow()
         with get_session() as session:
             clientes_db = session.exec(
                 select(Cliente)
@@ -3501,7 +3515,7 @@ class FoodState(rx.State):
                 c.email = email
                 c.fecha_nacimiento = fn
                 c.notas = notas
-                c.updated_at = datetime.utcnow()
+                c.updated_at = _utcnow()
                 session.add(c)
                 self.mensaje = f"Cliente '{nombre}' actualizado."
             session.commit()
@@ -3542,7 +3556,7 @@ class FoodState(rx.State):
             if c is None or c.company_id != _COMPANY_ID:
                 return
             c.activo = not c.activo
-            c.updated_at = datetime.utcnow()
+            c.updated_at = _utcnow()
             session.add(c)
             session.commit()
         self.cargar_clientes()
@@ -3652,7 +3666,7 @@ class FoodState(rx.State):
             session.add(pago)
             saldo_actual = Decimal(str(cc.saldo_deuda))
             cc.saldo_deuda = max(saldo_actual - monto, Decimal("0.00"))
-            cc.updated_at = datetime.utcnow()
+            cc.updated_at = _utcnow()
             session.add(cc)
             session.commit()
             cliente_id = cc.cliente_id
@@ -3688,7 +3702,7 @@ class FoodState(rx.State):
         )
         session.add(cargo)
         cc.saldo_deuda = Decimal(str(cc.saldo_deuda)) + monto
-        cc.updated_at = datetime.utcnow()
+        cc.updated_at = _utcnow()
         session.add(cc)
 
     # ─── Promociones ──────────────────────────────────────────────────────────
@@ -3698,7 +3712,7 @@ class FoodState(rx.State):
         self.cargar_promociones()
 
     def cargar_promociones(self) -> None:
-        now = datetime.utcnow()
+        now = _utcnow()
         hora_actual = now.strftime("%H:%M")
         tipo_labels = {
             TipoPromocion.PORCENTAJE.value: "% Descuento",
@@ -3798,7 +3812,7 @@ class FoodState(rx.State):
                 p.descripcion = self.promo_form_descripcion.strip() or None
                 p.hora_inicio = hora_ini
                 p.hora_fin = hora_fin
-                p.updated_at = datetime.utcnow()
+                p.updated_at = _utcnow()
                 session.add(p)
                 self.mensaje = f"Promoción '{nombre}' actualizada."
             session.commit()
@@ -3842,7 +3856,7 @@ class FoodState(rx.State):
             if p is None or p.company_id != _COMPANY_ID:
                 return
             p.activa = not p.activa
-            p.updated_at = datetime.utcnow()
+            p.updated_at = _utcnow()
             session.add(p)
             session.commit()
         self.cargar_promociones()
