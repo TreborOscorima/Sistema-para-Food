@@ -101,36 +101,11 @@ def _keypad() -> rx.Component:
 def login_page() -> rx.Component:
     return rx.center(
         rx.vstack(
-            rx.hstack(
-                rx.box(
-                    rx.icon(tag="utensils", size=18, color="#FFFFFF"),
-                    width="40px",
-                    height="40px",
-                    border_radius="10px",
-                    style={"background": "linear-gradient(135deg, #EA580C 0%, #C2410C 100%)"},
-                    display="flex",
-                    align_items="center",
-                    justify_content="center",
-                    box_shadow="0 2px 8px rgba(234,88,12,0.25)",
-                ),
-                rx.vstack(
-                    rx.text(
-                        "TUWAYKIFOOD",
-                        font_size="22px",
-                        font_weight="800",
-                        color="#0F172A",
-                        letter_spacing="0.06em",
-                    ),
-                    rx.text(
-                        "POS Sistema para Restaurantes",
-                        font_size="12px",
-                        color="#64748B",
-                    ),
-                    spacing="0",
-                    align="start",
-                ),
-                spacing="3",
-                align="center",
+            rx.image(
+                src="/TUWAYKIFOOD.png",
+                width="220px",
+                height="auto",
+                alt="TUWAYKIFOOD",
             ),
             rx.box(
                 rx.vstack(

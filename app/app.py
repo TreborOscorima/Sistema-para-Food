@@ -23,8 +23,8 @@ def index() -> rx.Component:
 app = rx.App(
     api_transformer=health_app,
     head_components=[
-        rx.el.link(rel="icon", type="image/svg+xml", href="/favicon.svg"),
-        rx.el.link(rel="icon", type="image/x-icon", href="/favicon.ico"),
+        rx.el.link(rel="icon", type="image/png", href="/TUWAYKIFOODFAVICON.png"),
+        rx.el.link(rel="shortcut icon", href="/TUWAYKIFOODFAVICON.png"),
     ],
 )
 
