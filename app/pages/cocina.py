@@ -121,17 +121,23 @@ def _column_nuevos() -> rx.Component:
             spacing="2",
             align="center",
         ),
-        rx.cond(
-            FoodState.tickets_nuevos.length() == 0,
-            rx.center(
-                rx.text("Sin pedidos nuevos", font_size="13px", color="#94A3B8"),
-                padding_y="40px",
+        rx.box(
+            rx.cond(
+                FoodState.tickets_nuevos.length() == 0,
+                rx.center(
+                    rx.text("Sin pedidos nuevos", font_size="13px", color="#94A3B8"),
+                    padding_y="40px",
+                ),
+                rx.vstack(
+                    rx.foreach(FoodState.tickets_nuevos, _ticket_card),
+                    spacing="3",
+                    width="100%",
+                ),
             ),
-            rx.vstack(
-                rx.foreach(FoodState.tickets_nuevos, _ticket_card),
-                spacing="3",
-                width="100%",
-            ),
+            overflow_y="auto",
+            max_height="70vh",
+            width="100%",
+            padding_right="4px",
         ),
         spacing="3",
         align="start",
@@ -144,7 +150,7 @@ def _column_en_preparacion() -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.text(
-                "En preparacion",
+                "En preparación",
                 font_size="14px",
                 font_weight="700",
                 color="#9A3412",
@@ -159,17 +165,23 @@ def _column_en_preparacion() -> rx.Component:
             spacing="2",
             align="center",
         ),
-        rx.cond(
-            FoodState.tickets_en_preparacion.length() == 0,
-            rx.center(
-                rx.text("Sin pedidos en preparacion", font_size="13px", color="#94A3B8"),
-                padding_y="40px",
+        rx.box(
+            rx.cond(
+                FoodState.tickets_en_preparacion.length() == 0,
+                rx.center(
+                    rx.text("Sin pedidos en preparación", font_size="13px", color="#94A3B8"),
+                    padding_y="40px",
+                ),
+                rx.vstack(
+                    rx.foreach(FoodState.tickets_en_preparacion, _ticket_card),
+                    spacing="3",
+                    width="100%",
+                ),
             ),
-            rx.vstack(
-                rx.foreach(FoodState.tickets_en_preparacion, _ticket_card),
-                spacing="3",
-                width="100%",
-            ),
+            overflow_y="auto",
+            max_height="70vh",
+            width="100%",
+            padding_right="4px",
         ),
         spacing="3",
         align="start",

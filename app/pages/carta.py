@@ -215,7 +215,15 @@ def _producto_row(prod: ProductoView) -> rx.Component:
             _hover={"opacity": "0.85"},
         ),
         rx.button(
-            rx.cond(prod.disponible, "86 it", "Activar"),
+            rx.hstack(
+                rx.cond(
+                    prod.disponible,
+                    rx.icon(tag="toggle_right", size=14),
+                    rx.icon(tag="toggle_left", size=14),
+                ),
+                rx.text(rx.cond(prod.disponible, "Deshabilitar", "Activar"), font_size="11px"),
+                spacing="1", align="center",
+            ),
             on_click=FoodState.toggle_producto_disponible(prod.id),
             background=rx.cond(prod.disponible, "#FEF2F2", "#F0FDF4"),
             color=rx.cond(prod.disponible, "#B91C1C", "#15803D"),

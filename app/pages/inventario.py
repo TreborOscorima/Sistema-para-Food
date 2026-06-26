@@ -123,7 +123,7 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                 _hover={"background": "#E2E8F0"},
             ),
             rx.button(
-                rx.cond(ins.activo, rx.icon(tag="eye_off", size=12), rx.icon(tag="eye", size=12)),
+                rx.cond(ins.activo, rx.icon(tag="toggle_right", size=14), rx.icon(tag="toggle_left", size=14)),
                 on_click=FoodState.toggle_insumo_activo(ins.id),
                 background=rx.cond(ins.activo, "#FEF2F2", "#F0FDF4"),
                 color=rx.cond(ins.activo, "#B91C1C", "#15803D"),

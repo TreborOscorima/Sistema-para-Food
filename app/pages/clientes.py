@@ -81,7 +81,7 @@ def _cliente_row(c: ClienteView) -> rx.Component:
                 _hover={"background": "#E2E8F0"},
             ),
             rx.button(
-                rx.cond(c.activo, rx.icon(tag="eye_off", size=12), rx.icon(tag="eye", size=12)),
+                rx.cond(c.activo, rx.icon(tag="toggle_right", size=14), rx.icon(tag="toggle_left", size=14)),
                 on_click=FoodState.toggle_cliente_activo(c.id),
                 background=rx.cond(c.activo, "#FEF2F2", "#F0FDF4"),
                 color=rx.cond(c.activo, "#B91C1C", "#15803D"),

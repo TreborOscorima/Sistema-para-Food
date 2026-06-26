@@ -470,7 +470,15 @@ def _reportes_content() -> rx.Component:
                     width="100%",
                 ),
                 rx.vstack(
-                    _historial_header(),
+                    rx.box(
+                        _historial_header(),
+                        position="sticky",
+                        top="0",
+                        z_index="10",
+                        background="#F8FAFC",
+                        border_bottom="1px solid #E2E8F0",
+                        padding_y="4px",
+                    ),
                     rx.foreach(FoodState.historial_ventas, _venta_row),
                     spacing="1",
                     width="100%",

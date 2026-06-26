@@ -110,7 +110,15 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
                 u.es_yo,
                 rx.fragment(),
                 rx.button(
-                    rx.cond(u.activo, "Desactivar", "Activar"),
+                    rx.hstack(
+                        rx.cond(
+                            u.activo,
+                            rx.icon(tag="toggle_right", size=14),
+                            rx.icon(tag="toggle_left", size=14),
+                        ),
+                        rx.text(rx.cond(u.activo, "Desactivar", "Activar"), font_size="11px"),
+                        spacing="1", align="center",
+                    ),
                     on_click=FoodState.toggle_usuario_activo(u.id),
                     background=rx.cond(u.activo, DANGER_BG, SUCCESS_BG),
                     color=rx.cond(u.activo, DANGER_TEXT, SUCCESS_TEXT),

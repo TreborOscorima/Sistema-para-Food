@@ -31,8 +31,10 @@ def _metodo_btn(value: str, label: str, icon: str) -> rx.Component:
         border_radius="10px",
         padding="10px 0",
         cursor="pointer",
-        flex="1",
-        _hover={"border": "2px solid #EA580C"},
+        flex=rx.breakpoints(initial="1 0 calc(50% - 4px)", sm="1"),
+        min_width="0",
+        transition="all 0.15s ease",
+        _hover={"border": "2px solid #EA580C", "background": rx.cond(activo, "#C2410C", "#FFF7ED")},
     )
 
 
@@ -60,6 +62,22 @@ def _cobro_panel() -> rx.Component:
             align="center",
             width="100%",
         ),
+        # Banner de error de cobro
+        rx.cond(
+            FoodState.caja_cobro_error != "",
+            rx.hstack(
+                rx.icon(tag="circle_alert", size=14, color="#B91C1C"),
+                rx.text(FoodState.caja_cobro_error, font_size="12px", color="#B91C1C", font_weight="600"),
+                spacing="2",
+                align="center",
+                background="#FEF2F2",
+                border="1px solid #FECACA",
+                border_radius="8px",
+                padding="10px 12px",
+                width="100%",
+            ),
+            rx.fragment(),
+        ),
         # Total base
         rx.box(
             rx.hstack(
@@ -79,9 +97,10 @@ def _cobro_panel() -> rx.Component:
         # Método de pago
         rx.vstack(
             rx.text("Método de pago", font_size="13px", font_weight="700", color="#334155"),
-            rx.hstack(
+            rx.flex(
                 *[_metodo_btn(v, l, i) for v, l, i in _METODOS],
-                spacing="2",
+                flex_wrap="wrap",
+                gap="8px",
                 width="100%",
             ),
             spacing="2",
@@ -151,8 +170,13 @@ def _cobro_panel() -> rx.Component:
         rx.cond(
             FoodState.caja_cobro_es_fiado,
             rx.vstack(
-                rx.text("Cliente (requerido para fiado)",
-                        font_size="13px", font_weight="700", color="#334155"),
+                rx.hstack(
+                    rx.text("Cliente", font_size="13px", font_weight="700", color="#334155"),
+                    rx.text("*", font_size="13px", font_weight="700", color="#B91C1C"),
+                    rx.text("(requerido para fiado)", font_size="12px", color="#94A3B8"),
+                    spacing="1",
+                    align="center",
+                ),
                 rx.select(
                     FoodState.clientes_activos_nombres,
                     value=FoodState.caja_cobro_cliente_nombre,

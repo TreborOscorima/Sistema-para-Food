@@ -540,7 +540,7 @@ def _mozos_content() -> rx.Component:
             rx.spacer(),
             rx.hstack(
                 rx.button(
-                    "Salon",
+                    "Salón",
                     on_click=FoodState.set_mozos_tab("salon"),
                     background=rx.cond(FoodState.mozos_tab_activa == "salon", "#FFF7ED", "#F1F5F9"),
                     color=rx.cond(FoodState.mozos_tab_activa == "salon", "#EA580C", "#64748B"),
@@ -550,7 +550,8 @@ def _mozos_content() -> rx.Component:
                     font_weight=rx.cond(FoodState.mozos_tab_activa == "salon", "700", "500"),
                     cursor="pointer",
                     padding_x="14px",
-                    _hover={"opacity": "0.85"},
+                    transition="all 0.15s ease",
+                    _hover={"background": "#FFF7ED", "color": "#EA580C", "border": "1px solid #FED7AA"},
                 ),
                 rx.button(
                     "Agregar",
@@ -563,7 +564,8 @@ def _mozos_content() -> rx.Component:
                     font_weight=rx.cond(FoodState.mozos_tab_activa == "menu", "700", "500"),
                     cursor="pointer",
                     padding_x="14px",
-                    _hover={"opacity": "0.85"},
+                    transition="all 0.15s ease",
+                    _hover={"background": "#FFF7ED", "color": "#EA580C", "border": "1px solid #FED7AA"},
                 ),
                 rx.button(
                     "Historial",
@@ -576,7 +578,8 @@ def _mozos_content() -> rx.Component:
                     font_weight=rx.cond(FoodState.mozos_tab_activa == "historial", "700", "500"),
                     cursor="pointer",
                     padding_x="14px",
-                    _hover={"opacity": "0.85"},
+                    transition="all 0.15s ease",
+                    _hover={"background": "#FFF7ED", "color": "#EA580C", "border": "1px solid #FED7AA"},
                 ),
                 spacing="1",
             ),

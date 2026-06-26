@@ -643,6 +643,7 @@ class FoodState(rx.State):
     mostrador_metodo_pago: str = "efectivo"
     ultimo_pedido_id: int = 0
     mensaje: str = ""
+    login_error: str = ""
     usuario_actual: UsuarioSesion | None = None
     login_pin_input: str = ""
     sidebar_collapsed: bool = False
@@ -683,6 +684,7 @@ class FoodState(rx.State):
     caja_cobro_propina: str = ""
     caja_cobro_descuento: str = ""
     caja_cobro_efectivo_recibido: str = ""
+    caja_cobro_error: str = ""
 
     # Dashboard KPIs
     dashboard_ventas_hoy_texto: str = "S/ 0.00"
@@ -1229,6 +1231,7 @@ class FoodState(rx.State):
     def append_login_digit(self, digit: str) -> None:
         if not digit.isdigit() or len(self.login_pin_input) >= 6:
             return
+        self.login_error = ""
         self.login_pin_input = f"{self.login_pin_input}{digit}"
 
     def backspace_login_pin(self) -> None:
@@ -1241,7 +1244,9 @@ class FoodState(rx.State):
         normalized = _normalize_pin(pin)
         if len(normalized) < 4:
             self.login_pin_input = ""
-            return rx.window_alert("Ingresa un PIN valido de 4 a 6 digitos.")
+            self.login_error = "Ingresa un PIN válido de 4 a 6 dígitos."
+            return
+        self.login_error = ""
         with get_session() as session:
             candidatos = session.exec(
                 select(UsuarioFood).where(
@@ -1252,7 +1257,9 @@ class FoodState(rx.State):
             usuario = next((u for u in candidatos if _verify_pin(normalized, u.pin)), None)
         if usuario is None:
             self.login_pin_input = ""
-            return rx.window_alert("PIN incorrecto. Intenta nuevamente.")
+            self.login_error = "PIN incorrecto. Intenta nuevamente."
+            return
+        self.login_error = ""
         self.usuario_actual = UsuarioSesion(
             id=usuario.id or 0,
             nombre=usuario.nombre,
@@ -2382,6 +2389,7 @@ class FoodState(rx.State):
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_efectivo_recibido = ""
+        self.caja_cobro_error = ""
         self.mensaje = ""
 
     def cancelar_cobro(self) -> None:
@@ -2392,6 +2400,7 @@ class FoodState(rx.State):
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_cliente_nombre = ""
         self.caja_cobro_cliente_id = 0
+        self.caja_cobro_error = ""
 
     def set_caja_cobro_metodo(self, v: str) -> None:
         self.caja_cobro_metodo = v
@@ -2407,9 +2416,10 @@ class FoodState(rx.State):
         self.caja_cobro_efectivo_recibido = v
 
     def confirmar_cobro(self) -> None:
+        self.caja_cobro_error = ""
         objetivo = self.caja_cobro_mesa_id
         if objetivo == 0:
-            self.mensaje = "No hay mesa seleccionada para cobrar."
+            self.caja_cobro_error = "No hay mesa seleccionada para cobrar."
             return
         metodo = self.caja_cobro_metodo or "efectivo"
         try:
@@ -2461,6 +2471,9 @@ class FoodState(rx.State):
                 mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
             ) or "Sin asignar"
             total_base = _to_decimal(pedido.total)
+            if descuento > total_base:
+                self.caja_cobro_error = f"El descuento ({_money_text(descuento)}) no puede superar el total ({_money_text(total_base)})."
+                return
             total_final = max(total_base - descuento + propina, Decimal("0.00"))
             now = _utcnow()
             if self.usuario_actual:
@@ -2481,13 +2494,17 @@ class FoodState(rx.State):
             session.add(mesa)
             _descontar_stock_por_pedido(session, pedido.id or 0)
             if es_fiado and self.caja_cobro_cliente_id > 0:
-                self._registrar_cargo_cc(
-                    session,
-                    self.caja_cobro_cliente_id,
-                    total_base - descuento,
-                    pedido.id,
-                    f"Fiado mesa {mesa_label or mesa.nombre or str(mesa.numero)}",
-                )
+                try:
+                    self._registrar_cargo_cc(
+                        session,
+                        self.caja_cobro_cliente_id,
+                        total_base - descuento,
+                        pedido.id,
+                        f"Fiado mesa {mesa_label or mesa.nombre or str(mesa.numero)}",
+                    )
+                except ValueError as exc:
+                    self.caja_cobro_error = str(exc)
+                    return
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -3715,6 +3732,13 @@ class FoodState(rx.State):
             )
             session.add(cc)
             session.flush()
+        saldo_actual = Decimal(str(cc.saldo_deuda))
+        limite = Decimal(str(cc.limite_credito))
+        if limite > Decimal("0.00") and saldo_actual + monto > limite:
+            raise ValueError(
+                f"Límite de crédito excedido. Deuda actual: {_money_text(saldo_actual)}, "
+                f"límite: {_money_text(limite)}, cargo solicitado: {_money_text(monto)}."
+            )
         cargo = MovimientoCuenta(
             company_id=_COMPANY_ID,
             cuenta_id=cc.id or 0,
@@ -3724,7 +3748,7 @@ class FoodState(rx.State):
             descripcion=descripcion,
         )
         session.add(cargo)
-        cc.saldo_deuda = Decimal(str(cc.saldo_deuda)) + monto
+        cc.saldo_deuda = saldo_actual + monto
         cc.updated_at = _utcnow()
         session.add(cc)
 
