@@ -95,16 +95,11 @@ def dono_login_page() -> rx.Component:
     return rx.center(
         rx.vstack(
             rx.vstack(
-                rx.box(
-                    rx.icon(tag="utensils", size=22, color="#FFFFFF"),
-                    width="52px",
-                    height="52px",
-                    border_radius="14px",
-                    background="linear-gradient(135deg, #EA580C 0%, #C2410C 100%)",
-                    display="flex",
-                    align_items="center",
-                    justify_content="center",
-                    box_shadow="0 4px 12px rgba(234,88,12,0.3)",
+                rx.image(
+                    src="/TUWAYKIFOOD.png",
+                    width="180px",
+                    height="auto",
+                    alt="TUWAYKIFOOD",
                 ),
                 rx.text(
                     "Panel del Dueño",
