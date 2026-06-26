@@ -60,12 +60,7 @@ def _key_num(digit: str, letters: str, on_click) -> rx.Component:
 
 def _key_zero(on_click) -> rx.Component:
     return rx.button(
-        rx.vstack(
-            rx.text("0", font_size="24px", font_weight="300", color="#0F172A", line_height="1.1"),
-            rx.text("+", font_size="9px", font_weight="600", color="#475569", letter_spacing="0.08em"),
-            spacing="0",
-            align="center",
-        ),
+        rx.text("0", font_size="24px", font_weight="300", color="#0F172A"),
         on_click=on_click,
         width="78px",
         height="78px",
