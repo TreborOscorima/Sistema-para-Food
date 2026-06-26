@@ -576,6 +576,50 @@ class UsuarioAdminView(BaseModel):
 
 # ─── Helpers de inventario ───────────────────────────────────────────────────
 
+def _validar_stock_para_items(session, items: list[tuple[int, int]]) -> list[str]:
+    """Devuelve mensajes de error si el stock es insuficiente. Lista vacía = OK.
+    items: lista de (producto_id, cantidad)."""
+    if not items:
+        return []
+    producto_ids = list({pid for pid, _ in items})
+    recetas = session.exec(
+        select(RecetaItem).where(
+            RecetaItem.company_id == _COMPANY_ID,
+            RecetaItem.producto_id.in_(producto_ids),
+        )
+    ).all()
+    if not recetas:
+        return []
+    receta_por_producto: dict[int, list] = {}
+    for r in recetas:
+        receta_por_producto.setdefault(r.producto_id, []).append(r)
+    uso_total: dict[int, Decimal] = {}
+    for pid, cantidad in items:
+        for ri in receta_por_producto.get(pid, []):
+            uso = Decimal(str(ri.cantidad)) * cantidad
+            uso_total[ri.insumo_id] = uso_total.get(ri.insumo_id, Decimal("0")) + uso
+    if not uso_total:
+        return []
+    insumos = {
+        i.id: i
+        for i in session.exec(
+            select(Insumo).where(
+                Insumo.company_id == _COMPANY_ID,
+                Insumo.id.in_(list(uso_total.keys())),
+            )
+        ).all()
+    }
+    errores: list[str] = []
+    for insumo_id, uso in uso_total.items():
+        ins = insumos.get(insumo_id)
+        if ins is None:
+            continue
+        stock = Decimal(str(ins.stock_actual))
+        if stock < uso:
+            errores.append(f"{ins.nombre}: necesario {uso:.2f}, disponible {stock:.2f} {ins.unidad}")
+    return errores
+
+
 def _descontar_stock_por_pedido(session, pedido_id: int) -> None:
     """Descuenta stock de insumos según las recetas de los ítems del pedido."""
     detalles = session.exec(
@@ -697,6 +741,9 @@ class FoodState(rx.State):
     historial_filtro_fecha_desde: str = ""
     historial_filtro_fecha_hasta: str = ""
     historial_filtro_metodo: str = ""
+    historial_pagina: int = 0
+    historial_total: int = 0
+    _HISTORIAL_PAGE_SIZE: int = 50
 
     # Nota global del pedido de mesa activo
     nota_pedido_mesa: str = ""
@@ -839,6 +886,22 @@ class FoodState(rx.State):
             or self.historial_filtro_fecha_hasta
             or self.historial_filtro_metodo
         )
+
+    @rx.var
+    def historial_tiene_anterior(self) -> bool:
+        return self.historial_pagina > 0
+
+    @rx.var
+    def historial_tiene_siguiente(self) -> bool:
+        return (self.historial_pagina + 1) * self._HISTORIAL_PAGE_SIZE < self.historial_total
+
+    @rx.var
+    def historial_pagina_label(self) -> str:
+        if self.historial_total == 0:
+            return "Sin resultados"
+        desde = self.historial_pagina * self._HISTORIAL_PAGE_SIZE + 1
+        hasta = min((self.historial_pagina + 1) * self._HISTORIAL_PAGE_SIZE, self.historial_total)
+        return f"{desde}–{hasta} de {self.historial_total}"
 
     @rx.var
     def puede_ver_usuarios(self) -> bool:
@@ -1781,6 +1844,12 @@ class FoodState(rx.State):
             ).all()
             for mesa in mesas_db:
                 pedido_abierto = _get_open_order(session, mesa.id or 0)
+                # Auto-corregir mesa stuck: si figura OCUPADA pero no hay pedido abierto, volver a LIBRE
+                if mesa.estado != EstadoMesa.LIBRE.value and pedido_abierto is None:
+                    mesa.estado = EstadoMesa.LIBRE.value
+                    mesa.updated_at = _utcnow()
+                    session.add(mesa)
+                    session.commit()
                 total_abierto = _to_decimal(pedido_abierto.total if pedido_abierto else Decimal("0.00"))
                 ready_details = _get_ready_details(session, pedido_abierto.id or 0) if pedido_abierto else []
                 items_listos_count = sum(d.cantidad for d in ready_details)
@@ -2171,6 +2240,12 @@ class FoodState(rx.State):
             detalles_pendientes = _get_unsent_details(session, pedido.id or 0)
             if not detalles_pendientes:
                 self.mensaje = "No hay items nuevos pendientes de enviar."
+                return
+            errores_stock = _validar_stock_para_items(
+                session, [(d.producto_id, d.cantidad) for d in detalles_pendientes]
+            )
+            if errores_stock:
+                self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
                 return
             productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
             now = _utcnow()
@@ -2702,6 +2777,12 @@ class FoodState(rx.State):
             if invalidos:
                 self.mensaje = f"Productos no disponibles: {', '.join(invalidos)}"
                 return
+            errores_stock = _validar_stock_para_items(
+                session, [(item.producto_id, item.cantidad) for item in self.mostrador_carrito]
+            )
+            if errores_stock:
+                self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
+                return
             now = _utcnow()
             pedido = Pedido(
                 company_id=_COMPANY_ID,
@@ -2968,7 +3049,10 @@ class FoodState(rx.State):
             if self.historial_filtro_metodo:
                 query = query.where(Pedido.metodo_pago == self.historial_filtro_metodo)
             query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
-            pedidos = session.exec(query).all()
+            total_count = len(session.exec(query).all())
+            self.historial_total = total_count
+            offset = self.historial_pagina * self._HISTORIAL_PAGE_SIZE
+            pedidos = session.exec(query.offset(offset).limit(self._HISTORIAL_PAGE_SIZE)).all()
             mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == _COMPANY_ID)).all()}
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
             historial: list[VentaHistorialView] = []
@@ -3001,13 +3085,25 @@ class FoodState(rx.State):
         self.historial_filtro_metodo = v
 
     def aplicar_filtros_historial(self) -> None:
+        self.historial_pagina = 0
         self.cargar_historial_ventas()
 
     def limpiar_filtros_historial(self) -> None:
         self.historial_filtro_fecha_desde = ""
         self.historial_filtro_fecha_hasta = ""
         self.historial_filtro_metodo = ""
+        self.historial_pagina = 0
         self.cargar_historial_ventas()
+
+    def historial_pagina_anterior(self) -> None:
+        if self.historial_pagina > 0:
+            self.historial_pagina -= 1
+            self.cargar_historial_ventas()
+
+    def historial_pagina_siguiente(self) -> None:
+        if self.historial_tiene_siguiente:
+            self.historial_pagina += 1
+            self.cargar_historial_ventas()
 
     # ─── Admin Carta — Categorías ─────────────────────────────────────────────
 
