@@ -534,6 +534,6 @@ def _reportes_content() -> rx.Component:
     )
 
 
-@rx.page(route="/reportes", on_load=FoodState.on_load_reportes)
+@rx.page(route="/reportes", on_load=FoodState.on_load_reportes, title="TUWAYKIFOOD | Reportes")
 def reportes_page() -> rx.Component:
     return app_shell(_reportes_content(), page_key="reportes")

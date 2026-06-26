@@ -531,6 +531,7 @@ def _inventario_content() -> rx.Component:
 @rx.page(
     route="/inventario",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_inventario],
+    title="TUWAYKIFOOD | Inventario",
 )
 def inventario_page() -> rx.Component:
     return _dono_shell(_inventario_content())

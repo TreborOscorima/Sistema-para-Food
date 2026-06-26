@@ -409,6 +409,6 @@ def _usuarios_content() -> rx.Component:
     )
 
 
-@rx.page(route="/usuarios", on_load=FoodState.on_load_usuarios)
+@rx.page(route="/usuarios", on_load=FoodState.on_load_usuarios, title="TUWAYKIFOOD | Usuarios")
 def usuarios_page() -> rx.Component:
     return app_shell(_usuarios_content(), page_key="usuarios")

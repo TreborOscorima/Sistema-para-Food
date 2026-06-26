@@ -90,7 +90,7 @@ def _dono_shell(content: rx.Component) -> rx.Component:
 
 # ── Login ────────────────────────────────────────────────────────────────────
 
-@rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login)
+@rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login, title="TUWAYKIFOOD | Acceso Dono")
 def dono_login_page() -> rx.Component:
     return rx.center(
         rx.vstack(
@@ -621,6 +621,7 @@ def _dono_config_content() -> rx.Component:
 @rx.page(
     route="/dono",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page],
+    title="TUWAYKIFOOD | Panel Dueño",
 )
 def dono_page() -> rx.Component:
     return _dono_shell(_dono_config_content())

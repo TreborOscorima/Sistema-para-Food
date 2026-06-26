@@ -460,6 +460,6 @@ def _carta_content() -> rx.Component:
     )
 
 
-@rx.page(route="/carta", on_load=FoodState.on_load_carta)
+@rx.page(route="/carta", on_load=FoodState.on_load_carta, title="TUWAYKIFOOD | Carta")
 def carta_page() -> rx.Component:
     return app_shell(_carta_content(), page_key="carta")

@@ -352,6 +352,7 @@ def _mostrador_content() -> rx.Component:
 @rx.page(
     route="/mostrador",
     on_load=[FoodState.on_load_mostrador, FoodState.start_mostrador_polling],
+    title="TUWAYKIFOOD | Mostrador",
 )
 def mostrador_page() -> rx.Component:
     return app_shell(_mostrador_content(), page_key="mostrador")

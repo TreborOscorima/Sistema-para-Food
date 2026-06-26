@@ -319,6 +319,7 @@ def _promociones_content() -> rx.Component:
 @rx.page(
     route="/promociones",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_promociones],
+    title="TUWAYKIFOOD | Promociones",
 )
 def promociones_page() -> rx.Component:
     return _dono_shell(_promociones_content())

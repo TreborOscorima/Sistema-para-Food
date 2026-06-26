@@ -20,6 +20,12 @@ def index() -> rx.Component:
     )
 
 
-app = rx.App(api_transformer=health_app)
+app = rx.App(
+    api_transformer=health_app,
+    head_components=[
+        rx.el.link(rel="icon", type="image/x-icon", href="/favicon.ico"),
+        rx.el.link(rel="shortcut icon", href="/favicon.ico"),
+    ],
+)
 
 app.add_page(index, route="/", on_load=FoodState.on_load_root)

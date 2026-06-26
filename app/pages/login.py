@@ -97,7 +97,7 @@ def _keypad() -> rx.Component:
     )
 
 
-@rx.page(route="/login", on_load=FoodState.on_load_login)
+@rx.page(route="/login", on_load=FoodState.on_load_login, title="TUWAYKIFOOD | Iniciar Sesión")
 def login_page() -> rx.Component:
     return rx.center(
         rx.vstack(

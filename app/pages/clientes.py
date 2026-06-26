@@ -373,6 +373,7 @@ def _clientes_content() -> rx.Component:
 @rx.page(
     route="/clientes",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_clientes],
+    title="TUWAYKIFOOD | Clientes",
 )
 def clientes_page() -> rx.Component:
     return _dono_shell(_clientes_content())

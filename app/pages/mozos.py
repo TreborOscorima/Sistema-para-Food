@@ -627,6 +627,7 @@ def _mozos_content() -> rx.Component:
 @rx.page(
     route="/mozos",
     on_load=[FoodState.on_load_mozos, FoodState.start_mozos_polling],
+    title="TUWAYKIFOOD | Salón",
 )
 def mozos_page() -> rx.Component:
     return app_shell(_mozos_content(), page_key="mozos")

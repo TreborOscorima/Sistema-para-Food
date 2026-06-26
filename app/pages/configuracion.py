@@ -611,6 +611,6 @@ def _configuracion_content() -> rx.Component:
     )
 
 
-@rx.page(route="/configuracion", on_load=FoodState.on_load_configuracion)
+@rx.page(route="/configuracion", on_load=FoodState.on_load_configuracion, title="TUWAYKIFOOD | Configuración")
 def configuracion_page() -> rx.Component:
     return app_shell(_configuracion_content(), page_key="configuracion")

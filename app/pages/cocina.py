@@ -230,6 +230,7 @@ def _cocina_content() -> rx.Component:
 @rx.page(
     route="/cocina",
     on_load=[FoodState.on_load_cocina, FoodState.start_cocina_polling],
+    title="TUWAYKIFOOD | Cocina",
 )
 def cocina_page() -> rx.Component:
     return app_shell(_cocina_content(), page_key="cocina")

@@ -469,6 +469,7 @@ def _caja_content() -> rx.Component:
     route="/caja",
     on_load=[FoodState.on_load_caja, FoodState.start_caja_polling,
              FoodState.cargar_clientes, FoodState.cargar_promociones],
+    title="TUWAYKIFOOD | Caja",
 )
 def caja_page() -> rx.Component:
     return app_shell(_caja_content(), page_key="caja")
