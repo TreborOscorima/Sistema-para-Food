@@ -129,7 +129,6 @@ def _cli_form() -> rx.Component:
                         _focus={"border": "1px solid #EA580C"},
                     ),
                     spacing="1", align="start", flex="2",
-                    width=rx.breakpoints(initial="100%", md="auto"),
                 ),
                 rx.vstack(
                     rx.text("Teléfono", font_size="11px", font_weight="600", color="#64748B"),
@@ -143,10 +142,9 @@ def _cli_form() -> rx.Component:
                         _focus={"border": "1px solid #EA580C"},
                     ),
                     spacing="1", align="start", flex="1",
-                    width=rx.breakpoints(initial="100%", md="auto"),
                 ),
                 spacing="3", width="100%",
-                flex_direction=rx.breakpoints(initial="column", md="row"),
+                class_name="twk-form-row",
             ),
             rx.hstack(
                 rx.vstack(
@@ -161,7 +159,6 @@ def _cli_form() -> rx.Component:
                         _focus={"border": "1px solid #EA580C"},
                     ),
                     spacing="1", align="start", flex="2",
-                    width=rx.breakpoints(initial="100%", md="auto"),
                 ),
                 rx.vstack(
                     rx.text("Fecha de nacimiento", font_size="11px", font_weight="600", color="#64748B"),
@@ -175,10 +172,9 @@ def _cli_form() -> rx.Component:
                         _focus={"border": "1px solid #EA580C"},
                     ),
                     spacing="1", align="start", flex="1",
-                    width=rx.breakpoints(initial="100%", md="auto"),
                 ),
                 spacing="3", width="100%",
-                flex_direction=rx.breakpoints(initial="column", md="row"),
+                class_name="twk-form-row",
             ),
             rx.vstack(
                 rx.text("Notas internas", font_size="11px", font_weight="600", color="#64748B"),

@@ -58,7 +58,7 @@ def _section_header(title: str, icon: str) -> rx.Component:
 
 def _field_row(label: str, value, on_change, placeholder: str = "", tipo: str = "text") -> rx.Component:
     return rx.hstack(
-        rx.text(label, font_size="13px", color="#334155", min_width="140px", font_weight="600"),
+        rx.text(label, font_size="13px", color="#334155", font_weight="600"),
         rx.input(
             placeholder=placeholder,
             value=value,
@@ -77,6 +77,7 @@ def _field_row(label: str, value, on_change, placeholder: str = "", tipo: str = 
         spacing="3",
         align="center",
         width="100%",
+        class_name="twk-field-row",
     )
 
 

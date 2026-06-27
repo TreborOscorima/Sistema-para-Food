@@ -203,6 +203,7 @@ def _insumo_form() -> rx.Component:
                 ),
                 spacing="3",
                 width="100%",
+                class_name="twk-form-row",
             ),
             rx.hstack(
                 rx.vstack(
@@ -247,6 +248,7 @@ def _insumo_form() -> rx.Component:
                 ),
                 spacing="3",
                 width="100%",
+                class_name="twk-form-row",
             ),
             rx.hstack(
                 rx.button(

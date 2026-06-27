@@ -609,7 +609,7 @@ def _mobile_topbar(active: str) -> rx.Component:
             align="center",
             width="100%",
         ),
-        display=rx.breakpoints(initial="flex", lg="none"),
+        display=rx.breakpoints(initial="block", lg="none"),
         padding="0.6rem 1rem",
         border_bottom=f"1px solid {BORDER_COLOR}",
         background=SURFACE_ELEVATED,

@@ -6,106 +6,97 @@ textarea::placeholder {
 }
 
 /* ── Scroll suave global ──────────────────────────────────────────────── */
-html {
-  scroll-behavior: smooth;
-}
+html { scroll-behavior: smooth; }
 
 /* ── Tap highlight en touch ───────────────────────────────────────────── */
-* {
-  -webkit-tap-highlight-color: rgba(234, 88, 12, 0.12);
-}
+* { -webkit-tap-highlight-color: rgba(234, 88, 12, 0.12); }
 
-/* ── Evita zoom automático en iOS/Android al enfocar inputs ───────────── */
+/* ── Evita zoom automático iOS/Android al enfocar inputs ──────────────── */
 @media (max-width: 1023px) {
-  input[type="text"],
-  input[type="number"],
-  input[type="email"],
-  input[type="password"],
-  input[type="search"],
-  input[type="tel"],
-  input[type="url"],
-  input[type="date"],
-  textarea,
-  select {
+  input[type="text"], input[type="number"], input[type="email"],
+  input[type="password"], input[type="search"], input[type="tel"],
+  input[type="url"], input[type="date"], textarea, select {
     font-size: 16px !important;
   }
 }
 
-/* ── Tablas: scroll horizontal en pantallas angostas ──────────────────── */
-.rx-table-wrapper,
-[data-radix-scroll-area-viewport] table {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  display: block;
-}
+/* ═══════════════════════════════════════════════════════════════════════
+   LAYOUTS MULTI-COLUMNA RESPONSIVE
+   Usan !important para pisar flex="1" min_width="0" inline de Reflex.
+   twk-cols-lg : apila en <1024px, lado a lado en ≥1024px
+   twk-cols-md : apila en <768px,  lado a lado en ≥768px
+   ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Radix select legible ─────────────────────────────────────────────── */
-[data-radix-select-viewport] {
-  font-size: 15px !important;
-}
-
-/* ── Columnas que deben apilar en móvil ───────────────────────────────── */
-.twk-columns {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 1.25rem;
+.twk-cols-lg, .twk-cols-md {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 20px;
   width: 100%;
   align-items: flex-start;
 }
 
-@media (min-width: 1024px) {
-  .twk-columns {
-    flex-wrap: nowrap;
-  }
+/* En móvil: cada panel ocupa ancho completo */
+.twk-panel {
+  flex: 0 0 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
 }
 
-.twk-columns-md {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 1.25rem;
+/* En tablet/desktop: los paneles comparten el espacio */
+@media (min-width: 1024px) {
+  .twk-cols-lg             { flex-wrap: nowrap !important; }
+  .twk-cols-lg .twk-panel  { flex: 1 1 0 !important; }
+}
+@media (min-width: 768px) {
+  .twk-cols-md             { flex-wrap: nowrap !important; }
+  .twk-cols-md .twk-panel  { flex: 1 1 0 !important; }
+}
+
+/* Divisores verticales: ocultos en móvil, visibles al lado a lado */
+.twk-sep { display: none !important; }
+@media (min-width: 1024px) { .twk-cols-lg .twk-sep { display: block !important; flex: 0 0 auto !important; } }
+@media (min-width: 768px)  { .twk-cols-md .twk-sep { display: block !important; flex: 0 0 auto !important; } }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FORMULARIOS MULTI-CAMPO
+   twk-form-row: 2+ inputs en fila en desktop, apilados en móvil
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.twk-form-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px;
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .twk-form-row             { flex-direction: row !important; gap: 12px; }
+  .twk-form-row > *         { flex: 1 !important; min-width: 0 !important; }
+}
+.twk-form-row > * { width: 100%; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CAMPO ETIQUETA + INPUT (configuración, tipo label: input en fila)
+   twk-field-row: label a la izquierda en desktop, encima en móvil
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.twk-field-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px;
   width: 100%;
   align-items: flex-start;
 }
-
-@media (min-width: 768px) {
-  .twk-columns-md {
-    flex-wrap: nowrap;
-  }
+@media (min-width: 640px) {
+  .twk-field-row             { flex-direction: row !important; align-items: center !important; }
+  .twk-field-row > *:first-child { flex: 0 0 140px !important; min-width: 0; }
+  .twk-field-row > *:last-child  { flex: 1 !important; min-width: 0; }
 }
 
-/* Paneles hijos del contenedor twk-columns ocupan ancho completo en móvil */
-.twk-columns > *,
-.twk-columns-md > * {
-  min-width: 0;
-  flex: 1 1 100%;
-}
+/* ─── Scrollbar sutil ──────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
-@media (min-width: 768px) {
-  .twk-columns-md > * {
-    flex: 1 1 0;
-  }
-}
-
-@media (min-width: 1024px) {
-  .twk-columns > * {
-    flex: 1 1 0;
-  }
-}
-
-/* ── Scrollbar sutil (webkit) ─────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #F1F5F9;
-}
-::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
-}
+/* ─── Radix select legible en tablet ──────────────────────────────────── */
+[data-radix-select-viewport] { font-size: 15px !important; }

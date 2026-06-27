@@ -112,6 +112,7 @@ def _pago_form() -> rx.Component:
                     spacing="1", align="start", flex="2",
                 ),
                 spacing="3", width="100%",
+                class_name="twk-form-row",
             ),
             rx.button(
                 rx.icon(tag="check", size=13),
