@@ -43,6 +43,9 @@ _TWK_CSS = (
     "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}"
     "::-webkit-scrollbar-thumb:hover{background:#94A3B8}"
     "[data-radix-select-viewport]{font-size:15px!important}"
+    ".twk-login-input{width:100%;padding:11px 14px;font-size:14px;border-radius:8px;border:1px solid #E2E8F0;background:#FFFFFF;color:#0F172A;outline:none;transition:border 0.15s,box-shadow 0.15s;box-sizing:border-box}"
+    ".twk-login-input:focus{border:1px solid #EA580C!important;box-shadow:0 0 0 3px rgba(234,88,12,0.12)!important}"
+    ".twk-login-input:-webkit-autofill,.twk-login-input:-webkit-autofill:hover,.twk-login-input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0px 1000px #FFFFFF inset!important;-webkit-text-fill-color:#0F172A!important;transition:background-color 5000s ease-in-out 0s}"
 )
 
 _CSS_SCRIPT = f"(function(){{if(document.getElementById('twk-css'))return;var s=document.createElement('style');s.id='twk-css';s.textContent={json.dumps(_TWK_CSS)};document.head.appendChild(s);}})();"

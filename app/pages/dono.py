@@ -169,64 +169,31 @@ def dono_login_page() -> rx.Component:
                             ),
                             rx.fragment(),
                         ),
-                        # Script para desactivar autofill de Chrome post-render
-                        rx.script("""
-(function(){
-  function patchAC(){
-    var inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
-    inputs.forEach(function(el){
-      el.setAttribute('autocomplete','off');
-      el.setAttribute('readonly','');
-    });
-    setTimeout(function(){
-      inputs.forEach(function(el){ el.removeAttribute('readonly'); });
-    }, 300);
-  }
-  setTimeout(patchAC, 500);
-  setTimeout(patchAC, 1500);
-})();
-"""),
-                        # Email
+                        # Email — rx.el.input (HTML puro) para poder usar autocomplete="off"
                         rx.vstack(
                             rx.text("Email", font_size="12px", font_weight="700", color=_SLATE_700),
-                            rx.input(
+                            rx.el.input(
                                 placeholder="dueño@restaurante.com",
                                 value=AdminLocalState.email_input,
                                 on_change=AdminLocalState.set_email_input,
                                 type="text",
-                                auto_complete=False,
-                                background=_WHITE,
-                                border=f"1px solid {_SLATE_200}",
-                                color=_SLATE_900,
-                                border_radius="8px",
-                                padding_x="14px",
-                                padding_y="11px",
-                                font_size="14px",
-                                width="100%",
-                                _focus={"border": f"1px solid {_ORANGE}", "box_shadow": "0 0 0 3px rgba(234,88,12,0.12)"},
+                                autocomplete="off",
+                                class_name="twk-login-input",
                             ),
                             spacing="1",
                             width="100%",
                             align="start",
                         ),
-                        # Contraseña
+                        # Contraseña — rx.el.input (HTML puro)
                         rx.vstack(
                             rx.text("Contraseña", font_size="12px", font_weight="700", color=_SLATE_700),
-                            rx.input(
+                            rx.el.input(
                                 placeholder="••••••••",
                                 value=AdminLocalState.password_input,
                                 on_change=AdminLocalState.set_password_input,
                                 type="password",
-                                auto_complete=False,
-                                background=_WHITE,
-                                border=f"1px solid {_SLATE_200}",
-                                color=_SLATE_900,
-                                border_radius="8px",
-                                padding_x="14px",
-                                padding_y="11px",
-                                font_size="14px",
-                                width="100%",
-                                _focus={"border": f"1px solid {_ORANGE}", "box_shadow": "0 0 0 3px rgba(234,88,12,0.12)"},
+                                autocomplete="new-password",
+                                class_name="twk-login-input",
                             ),
                             spacing="1",
                             width="100%",
