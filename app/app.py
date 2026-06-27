@@ -68,7 +68,7 @@ app = rx.App(
     head_components=[
         rx.el.link(rel="icon", type="image/png", href="/TUWAYKIFOODFAVICON.png"),
         rx.el.link(rel="shortcut icon", href="/TUWAYKIFOODFAVICON.png"),
-        rx.el.style(_text=_GLOBAL_CSS),
+        rx.el.style(dangerously_set_inner_html={"__html": _GLOBAL_CSS}),
     ],
 )
 
