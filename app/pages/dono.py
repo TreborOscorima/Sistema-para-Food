@@ -169,9 +169,23 @@ def dono_login_page() -> rx.Component:
                             ),
                             rx.fragment(),
                         ),
-                        # Campos señuelo para bloquear el autofill del navegador
-                        rx.el.input(type="text", name="fake_user", style={"display": "none"}),
-                        rx.el.input(type="password", name="fake_pass", style={"display": "none"}),
+                        # Script para desactivar autofill de Chrome post-render
+                        rx.script("""
+(function(){
+  function patchAC(){
+    var inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
+    inputs.forEach(function(el){
+      el.setAttribute('autocomplete','off');
+      el.setAttribute('readonly','');
+    });
+    setTimeout(function(){
+      inputs.forEach(function(el){ el.removeAttribute('readonly'); });
+    }, 300);
+  }
+  setTimeout(patchAC, 500);
+  setTimeout(patchAC, 1500);
+})();
+"""),
                         # Email
                         rx.vstack(
                             rx.text("Email", font_size="12px", font_weight="700", color=_SLATE_700),
@@ -180,8 +194,7 @@ def dono_login_page() -> rx.Component:
                                 value=AdminLocalState.email_input,
                                 on_change=AdminLocalState.set_email_input,
                                 type="text",
-                                auto_complete="off",
-                                name="admin_email_twk",
+                                auto_complete=False,
                                 background=_WHITE,
                                 border=f"1px solid {_SLATE_200}",
                                 color=_SLATE_900,
@@ -204,8 +217,7 @@ def dono_login_page() -> rx.Component:
                                 value=AdminLocalState.password_input,
                                 on_change=AdminLocalState.set_password_input,
                                 type="password",
-                                auto_complete="new-password",
-                                name="admin_pass_twk",
+                                auto_complete=False,
                                 background=_WHITE,
                                 border=f"1px solid {_SLATE_200}",
                                 color=_SLATE_900,
