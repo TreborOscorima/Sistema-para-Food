@@ -421,7 +421,7 @@ def _admin_cuenta_section() -> rx.Component:
         rx.vstack(
             _section_header("Cuenta del Dueño", "key_round"),
             rx.text(
-                "Configura email y contraseña para acceder al panel del dueño en /dono",
+                "Configura email y contraseña para acceder al panel del dueño en /admin",
                 font_size="12px",
                 color="#64748B",
                 font_style="italic",

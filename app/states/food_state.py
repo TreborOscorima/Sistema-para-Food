@@ -4113,12 +4113,12 @@ class AdminLocalState(rx.State):
     def on_load_dono_login(self):
         self.error_msg = ""
         if self.autenticado:
-            return rx.redirect("/dono")
+            return rx.redirect("/admin")
         return None
 
     def on_load_dono(self):
         if not self.autenticado:
-            return rx.redirect("/dono/login")
+            return rx.redirect("/admin/login")
         return None
 
     def login_on_enter(self, key: str) -> None:
@@ -4149,10 +4149,10 @@ class AdminLocalState(rx.State):
             return
         self.autenticado = True
         self.password_input = ""
-        return rx.redirect("/dono")
+        return rx.redirect("/admin")
 
     def logout_admin_local(self) -> None:
         self.autenticado = False
         self.email_input = ""
         self.password_input = ""
-        return rx.redirect("/dono/login")
+        return rx.redirect("/admin/login")

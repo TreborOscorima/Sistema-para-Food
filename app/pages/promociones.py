@@ -247,7 +247,7 @@ def _promociones_content() -> rx.Component:
                     rx.text("Panel del Dueño", font_size="12px", color="#64748B"),
                     spacing="1", align="center",
                 ),
-                href="/dono", _hover={"opacity": "0.7"},
+                href="/admin", _hover={"opacity": "0.7"},
             ),
             rx.spacer(),
         ),

@@ -264,17 +264,14 @@ def kpi_card(title: str, value, description: str = "", accent_color: str = ACCEN
 
 def _brand(compact: bool = False) -> rx.Component:
     return rx.hstack(
-        rx.box(
-            rx.icon(tag="utensils", size=18, color="#FFFFFF"),
+        rx.image(
+            src="/TUWAYKIFOODFAVICON.png",
             width="38px",
             height="38px",
             border_radius="10px",
-            style={"background": "linear-gradient(135deg, #EA580C 0%, #C2410C 100%)"},
-            display="flex",
-            align_items="center",
-            justify_content="center",
             box_shadow=ACCENT_GLOW,
             flex_shrink="0",
+            alt="TUWAYKIFOOD",
         ),
         rx.cond(
             compact,

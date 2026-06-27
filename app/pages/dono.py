@@ -45,7 +45,7 @@ def _dono_shell(content: rx.Component) -> rx.Component:
                 rx.hstack(
                     rx.image(
                         src="/TUWAYKIFOOD.png",
-                        height="36px",
+                        height="48px",
                         width="auto",
                         alt="TUWAYKIFOOD",
                     ),
@@ -115,7 +115,7 @@ def _dono_shell(content: rx.Component) -> rx.Component:
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
-@rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login, title="TUWAYKIFOOD | Acceso Administrativo")
+@rx.page(route="/admin/login", on_load=AdminLocalState.on_load_dono_login, title="TUWAYKIFOOD | Acceso Administrativo")
 def dono_login_page() -> rx.Component:
     return rx.box(
         rx.script(_CSS_SCRIPT),
@@ -770,7 +770,7 @@ def _dono_config_content() -> rx.Component:
 
 
 @rx.page(
-    route="/dono",
+    route="/admin",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page],
     title="TUWAYKIFOOD | Panel Administrativo",
 )

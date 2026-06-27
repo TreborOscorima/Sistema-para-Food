@@ -495,7 +495,7 @@ def _inventario_content() -> rx.Component:
                     spacing="1",
                     align="center",
                 ),
-                href="/dono",
+                href="/admin",
                 _hover={"opacity": "0.7"},
             ),
             rx.spacer(),
