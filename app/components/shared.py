@@ -2,9 +2,50 @@
 
 from __future__ import annotations
 
+import json
 import reflex as rx
 
 from app.states.food_state import FoodState
+
+# CSS global inyectado via script en el body porque:
+# - assets/ está bakeado en la imagen Docker (no es volumen)
+# - rx.el.style() en head_components pasa por Emotion y scopea TODO como
+#   .css-XXXX .twk-panel, donde .css-XXXX es el <style> tag mismo, nunca
+#   un ancestro del body → las reglas no matchean nada en el DOM.
+# - rx.script() en head_components no ejecuta (React no ejecuta <script>
+#   creados vía virtual DOM).
+# Solución: rx.script() en el body sí ejecuta (usado también para redirects).
+# El IIFE guarda con id='twk-css' para no duplicar en navegación SPA.
+_TWK_CSS = (
+    "input::placeholder,textarea::placeholder{color:#94A3B8!important;opacity:1!important}"
+    "html{scroll-behavior:smooth}"
+    "*{-webkit-tap-highlight-color:rgba(234,88,12,0.12)}"
+    "@media(max-width:1023px){"
+    "input[type=text],input[type=number],input[type=email],"
+    "input[type=password],input[type=search],input[type=tel],"
+    "input[type=url],input[type=date],textarea,select{font-size:16px!important}}"
+    ".twk-cols-lg,.twk-cols-md{display:flex!important;flex-wrap:wrap!important;gap:20px;width:100%;align-items:flex-start}"
+    ".twk-panel{flex:0 0 100%!important;min-width:0!important;box-sizing:border-box}"
+    "@media(min-width:1024px){.twk-cols-lg{flex-wrap:nowrap!important}.twk-cols-lg .twk-panel{flex:1 1 0!important}}"
+    "@media(min-width:768px){.twk-cols-md{flex-wrap:nowrap!important}.twk-cols-md .twk-panel{flex:1 1 0!important}}"
+    ".twk-sep{display:none!important}"
+    "@media(min-width:1024px){.twk-cols-lg .twk-sep{display:block!important;flex:0 0 auto!important}}"
+    "@media(min-width:768px){.twk-cols-md .twk-sep{display:block!important;flex:0 0 auto!important}}"
+    ".twk-form-row{display:flex!important;flex-direction:column!important;gap:12px;width:100%}"
+    "@media(min-width:768px){.twk-form-row{flex-direction:row!important;gap:12px}.twk-form-row>*{flex:1!important;min-width:0!important}}"
+    ".twk-form-row>*{width:100%}"
+    ".twk-field-row{display:flex!important;flex-direction:column!important;gap:6px;width:100%;align-items:flex-start}"
+    "@media(min-width:640px){.twk-field-row{flex-direction:row!important;align-items:center!important}"
+    ".twk-field-row>*:first-child{flex:0 0 140px!important;min-width:0}"
+    ".twk-field-row>*:last-child{flex:1!important;min-width:0}}"
+    "::-webkit-scrollbar{width:6px;height:6px}"
+    "::-webkit-scrollbar-track{background:#F1F5F9}"
+    "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}"
+    "::-webkit-scrollbar-thumb:hover{background:#94A3B8}"
+    "[data-radix-select-viewport]{font-size:15px!important}"
+)
+
+_CSS_SCRIPT = f"(function(){{if(document.getElementById('twk-css'))return;var s=document.createElement('style');s.id='twk-css';s.textContent={json.dumps(_TWK_CSS)};document.head.appendChild(s);}})();"
 
 
 # ── Paleta light (misma escala que Sistema de Ventas, acento naranja para food) ─
@@ -629,6 +670,7 @@ def app_shell(
 ) -> rx.Component:
     _active = page_key or active
     return rx.box(
+        rx.script(_CSS_SCRIPT),
         rx.hstack(
             _desktop_sidebar(_active),
             rx.box(

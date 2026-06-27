@@ -5,6 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.states.food_state import AdminLocalState, FoodState
+from app.components.shared import _CSS_SCRIPT
 from app.pages.configuracion import (
     _admin_cuenta_section,
     _field_row,
@@ -17,6 +18,7 @@ from app.pages.configuracion import (
 
 def _dono_shell(content: rx.Component) -> rx.Component:
     return rx.box(
+        rx.script(_CSS_SCRIPT),
         rx.vstack(
             # Top bar
             rx.hstack(
