@@ -1203,12 +1203,11 @@ class FoodState(rx.State):
         return None
 
     def on_load_root(self):
-        if self.usuario_actual is None:
-            return rx.redirect("/login", replace=True)
-        return rx.redirect(self.usuario_home_route, replace=True)
+        if self.usuario_actual is not None:
+            return rx.redirect(self.usuario_home_route, replace=True)
+        # Usuario no autenticado: el componente index() ya hace window.location.href='/login'
 
     def on_load_login(self):
-        self.login_pin_input = ""
         if self.usuario_actual is not None:
             return rx.redirect(self.usuario_home_route, replace=True)
         return None
