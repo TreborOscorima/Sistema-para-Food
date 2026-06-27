@@ -4121,6 +4121,10 @@ class AdminLocalState(rx.State):
             return rx.redirect("/dono/login")
         return None
 
+    def login_on_enter(self, key: str) -> None:
+        if key == "Enter":
+            return self.login_admin_local()
+
     def login_admin_local(self) -> None:
         import hashlib
         email = self.email_input.strip().lower()
