@@ -94,7 +94,9 @@ def _dono_shell(content: rx.Component) -> rx.Component:
 
 @rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login, title="TUWAYKIFOOD | Acceso Dono")
 def dono_login_page() -> rx.Component:
-    return rx.center(
+    return rx.box(
+        rx.script(_CSS_SCRIPT),
+        rx.center(
         rx.vstack(
             rx.vstack(
                 rx.image(
@@ -216,7 +218,8 @@ def dono_login_page() -> rx.Component:
         min_height="100vh",
         background="#F8FAFC",
         padding="24px 16px",
-    )
+    ),
+)
 
 
 # ── Ventas de hoy (mini-dashboard) ──────────────────────────────────────────
