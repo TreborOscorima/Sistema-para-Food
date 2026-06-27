@@ -304,7 +304,8 @@ def _mostrador_content() -> rx.Component:
                 flex="1",
                 min_width="0",
             ),
-            rx.divider(orientation="vertical", border_color="#E2E8F0", height="auto"),
+            rx.divider(orientation="vertical", border_color="#E2E8F0", height="auto",
+                       display=rx.breakpoints(initial="none", md="block")),
             # ─── Panel der: listos + historial ───────────────────────────
             rx.vstack(
                 rx.text("Listos para entrega", font_size="14px", font_weight="700", color="#15803D"),

@@ -327,7 +327,7 @@ def _cobro_panel() -> rx.Component:
         ),
         spacing="4",
         width="100%",
-        max_width="520px",
+        max_width=rx.breakpoints(initial="100%", md="520px"),
     )
 
 

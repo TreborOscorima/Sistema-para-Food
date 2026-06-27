@@ -329,6 +329,7 @@ def _dono_ventas_section() -> rx.Component:
                           "heart", "#9A3412", "#FFF7ED"),
                 spacing="3",
                 width="100%",
+                flex_wrap=rx.breakpoints(initial="wrap", md="nowrap"),
             ),
             # Últimas ventas
             rx.cond(
@@ -482,6 +483,7 @@ def _dono_config_content() -> rx.Component:
                 _hover={"border": "1px solid #FED7AA", "background": "#FFF7ED"},
             ),
             spacing="2", width="100%",
+            flex_wrap=rx.breakpoints(initial="wrap", md="nowrap"),
         ),
         rx.cond(
             FoodState.inv_alertas_bajo_stock.length() > 0,

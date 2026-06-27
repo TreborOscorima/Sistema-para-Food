@@ -436,7 +436,8 @@ def _carta_content() -> rx.Component:
                 flex="1",
                 min_width="0",
             ),
-            rx.divider(orientation="vertical", border_color="#E2E8F0", height="auto"),
+            rx.divider(orientation="vertical", border_color="#E2E8F0", height="auto",
+                       display=rx.breakpoints(initial="none", lg="block")),
             # ─── Productos ────────────────────────────────────────────────
             rx.vstack(
                 rx.text("Productos", font_size="15px", font_weight="700", color="#64748B"),

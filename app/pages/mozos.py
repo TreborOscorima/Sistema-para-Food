@@ -66,7 +66,7 @@ def _mesa_card(mesa: MesaView) -> rx.Component:
         on_click=FoodState.seleccionar_mesa(mesa.id),
         _hover={"border": "2px solid rgba(234,88,12,0.45)", "transform": "translateY(-1px)"},
         transition="all 0.15s ease",
-        min_width="140px",
+        min_width=rx.breakpoints(initial="100px", md="120px", lg="140px"),
         box_shadow="0 1px 3px rgba(0,0,0,0.06)",
     )
 
@@ -512,7 +512,7 @@ def _menu_section() -> rx.Component:
                     ),
                     rx.grid(
                         rx.foreach(FoodState.productos_filtrados, _producto_card),
-                        columns="2",
+                        columns=rx.breakpoints(initial="1", md="2"),
                         gap="10px",
                         width="100%",
                     ),
