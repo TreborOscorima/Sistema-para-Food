@@ -50,7 +50,7 @@ def _dono_shell(content: rx.Component) -> rx.Component:
                         alt="TUWAYKIFOOD",
                     ),
                     rx.badge(
-                        "Panel del Dueño",
+                        "Panel Administrativo",
                         background=_ORANGE_LT,
                         color=_ORANGE,
                         border=f"1px solid {_ORANGE_BD}",
@@ -115,7 +115,7 @@ def _dono_shell(content: rx.Component) -> rx.Component:
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
-@rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login, title="TUWAYKIFOOD | Acceso Dono")
+@rx.page(route="/dono/login", on_load=AdminLocalState.on_load_dono_login, title="TUWAYKIFOOD | Acceso Administrativo")
 def dono_login_page() -> rx.Component:
     return rx.box(
         rx.script(_CSS_SCRIPT),
@@ -125,13 +125,13 @@ def dono_login_page() -> rx.Component:
                 rx.vstack(
                     rx.image(
                         src="/TUWAYKIFOOD.png",
-                        height="48px",
+                        height="80px",
                         width="auto",
                         alt="TUWAYKIFOOD",
                     ),
                     rx.vstack(
                         rx.text(
-                            "Panel del Dueño",
+                            "Panel Administrativo",
                             font_size="22px",
                             font_weight="800",
                             color=_SLATE_900,
@@ -719,7 +719,7 @@ def _dono_config_content() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text(
-                    "Panel del Dueno",
+                    "Panel Administrativo",
                     font_size=rx.breakpoints(initial="20px", md="24px"),
                     font_weight="800",
                     color=_SLATE_900,
@@ -786,7 +786,7 @@ def _dono_config_content() -> rx.Component:
 @rx.page(
     route="/dono",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page],
-    title="TUWAYKIFOOD | Panel Dueno",
+    title="TUWAYKIFOOD | Panel Administrativo",
 )
 def dono_page() -> rx.Component:
     return _dono_shell(_dono_config_content())
