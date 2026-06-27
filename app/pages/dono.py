@@ -125,7 +125,7 @@ def dono_login_page() -> rx.Component:
                 rx.vstack(
                     rx.image(
                         src="/TUWAYKIFOOD.png",
-                        height="80px",
+                        height="110px",
                         width="auto",
                         alt="TUWAYKIFOOD",
                     ),
@@ -169,6 +169,9 @@ def dono_login_page() -> rx.Component:
                             ),
                             rx.fragment(),
                         ),
+                        # Campos señuelo para bloquear el autofill del navegador
+                        rx.el.input(type="text", name="fake_user", style={"display": "none"}),
+                        rx.el.input(type="password", name="fake_pass", style={"display": "none"}),
                         # Email
                         rx.vstack(
                             rx.text("Email", font_size="12px", font_weight="700", color=_SLATE_700),
@@ -177,7 +180,8 @@ def dono_login_page() -> rx.Component:
                                 value=AdminLocalState.email_input,
                                 on_change=AdminLocalState.set_email_input,
                                 type="text",
-                                auto_complete=False,
+                                auto_complete="off",
+                                name="admin_email_twk",
                                 background=_WHITE,
                                 border=f"1px solid {_SLATE_200}",
                                 color=_SLATE_900,
@@ -200,7 +204,8 @@ def dono_login_page() -> rx.Component:
                                 value=AdminLocalState.password_input,
                                 on_change=AdminLocalState.set_password_input,
                                 type="password",
-                                auto_complete=False,
+                                auto_complete="new-password",
+                                name="admin_pass_twk",
                                 background=_WHITE,
                                 border=f"1px solid {_SLATE_200}",
                                 color=_SLATE_900,
