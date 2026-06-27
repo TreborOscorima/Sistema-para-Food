@@ -17,6 +17,24 @@ from app.states.food_state import FoodState
 # Solución: rx.script() en el body sí ejecuta (usado también para redirects).
 # El IIFE guarda con id='twk-css' para no duplicar en navegación SPA.
 _TWK_CSS = (
+    # ── Design Tokens ────────────────────────────────────────────────────────
+    ":root{"
+    "--twk-orange:#EA580C;--twk-orange-dk:#C2410C;--twk-orange-lt:#FFF7ED;--twk-orange-muted:#FED7AA;"
+    "--twk-900:#0F172A;--twk-800:#1E293B;--twk-700:#334155;--twk-600:#475569;"
+    "--twk-500:#64748B;--twk-400:#94A3B8;--twk-300:#CBD5E1;--twk-200:#E2E8F0;"
+    "--twk-100:#F1F5F9;--twk-50:#F8FAFC;"
+    "--twk-success:#16A34A;--twk-success-lt:#DCFCE7;--twk-success-bd:#BBF7D0;"
+    "--twk-error:#DC2626;--twk-error-lt:#FEF2F2;--twk-error-bd:#FECACA;"
+    "--twk-warning:#D97706;--twk-warning-lt:#FFFBEB;--twk-warning-bd:#FDE68A;"
+    "--twk-info:#2563EB;--twk-info-lt:#EFF6FF;--twk-info-bd:#BFDBFE;"
+    "--twk-r-sm:6px;--twk-r-md:10px;--twk-r-lg:16px;--twk-r-full:9999px;"
+    "--twk-sh-sm:0 1px 3px rgba(0,0,0,0.08);--twk-sh-md:0 4px 12px rgba(0,0,0,0.1);"
+    "--twk-sh-lg:0 8px 32px rgba(0,0,0,0.12);--twk-sh-orange:0 4px 12px rgba(234,88,12,0.25);"
+    "--twk-font:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+    "}"
+    # ── Tipografía global: Inter ──────────────────────────────────────────────
+    "html,body,*,*::before,*::after{font-family:var(--twk-font)!important}"
+    # ── Base ─────────────────────────────────────────────────────────────────
     "input::placeholder,textarea::placeholder{color:#94A3B8!important;opacity:1!important}"
     "html{scroll-behavior:smooth}"
     "*{-webkit-tap-highlight-color:rgba(234,88,12,0.12)}"
@@ -24,6 +42,7 @@ _TWK_CSS = (
     "input[type=text],input[type=number],input[type=email],"
     "input[type=password],input[type=search],input[type=tel],"
     "input[type=url],input[type=date],textarea,select{font-size:16px!important}}"
+    # ── Layout utils ─────────────────────────────────────────────────────────
     ".twk-cols-lg,.twk-cols-md{display:flex!important;flex-wrap:wrap!important;gap:20px;width:100%;align-items:flex-start}"
     ".twk-panel{flex:0 0 100%!important;min-width:0!important;box-sizing:border-box}"
     "@media(min-width:1024px){.twk-cols-lg{flex-wrap:nowrap!important}.twk-cols-lg .twk-panel{flex:1 1 0!important}}"
@@ -38,17 +57,62 @@ _TWK_CSS = (
     "@media(min-width:640px){.twk-field-row{flex-direction:row!important;align-items:center!important}"
     ".twk-field-row>*:first-child{flex:0 0 140px!important;min-width:0}"
     ".twk-field-row>*:last-child{flex:1!important;min-width:0}}"
+    # ── Scrollbar ─────────────────────────────────────────────────────────────
     "::-webkit-scrollbar{width:6px;height:6px}"
     "::-webkit-scrollbar-track{background:#F1F5F9}"
     "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}"
     "::-webkit-scrollbar-thumb:hover{background:#94A3B8}"
     "[data-radix-select-viewport]{font-size:15px!important}"
-    ".twk-login-input{width:100%;padding:11px 14px;font-size:14px;border-radius:8px;border:1px solid #E2E8F0;background:#FFFFFF;color:#0F172A;outline:none;transition:border 0.15s,box-shadow 0.15s;box-sizing:border-box}"
-    ".twk-login-input:focus{border:1px solid #EA580C!important;box-shadow:0 0 0 3px rgba(234,88,12,0.12)!important}"
-    ".twk-login-input:-webkit-autofill,.twk-login-input:-webkit-autofill:hover,.twk-login-input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0px 1000px #FFFFFF inset!important;-webkit-text-fill-color:#0F172A!important;transition:background-color 5000s ease-in-out 0s}"
+    # ── Inputs ────────────────────────────────────────────────────────────────
+    ".twk-input,.twk-login-input{width:100%;padding:10px 14px;font-size:14px;border-radius:var(--twk-r-md);border:1.5px solid var(--twk-200);background:#fff;color:var(--twk-900);outline:none;transition:border .15s,box-shadow .15s;box-sizing:border-box}"
+    ".twk-input:focus,.twk-login-input:focus{border-color:var(--twk-orange)!important;box-shadow:0 0 0 3px rgba(234,88,12,0.12)!important}"
+    ".twk-input:-webkit-autofill,.twk-login-input:-webkit-autofill{-webkit-box-shadow:0 0 0px 1000px #fff inset!important;-webkit-text-fill-color:var(--twk-900)!important;transition:background-color 5000s 0s}"
+    # ── Buttons ───────────────────────────────────────────────────────────────
+    ".twk-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:var(--twk-r-md);font-size:13px;font-weight:600;border:none;cursor:pointer;transition:all .15s;text-decoration:none;white-space:nowrap}"
+    ".twk-btn-primary{background:var(--twk-orange);color:#fff!important;box-shadow:var(--twk-sh-orange)}"
+    ".twk-btn-primary:hover{background:var(--twk-orange-dk)}"
+    ".twk-btn-secondary{background:#fff;color:var(--twk-orange)!important;border:1.5px solid var(--twk-orange)}"
+    ".twk-btn-secondary:hover{background:var(--twk-orange-lt)}"
+    ".twk-btn-ghost{background:transparent;color:var(--twk-700)!important;border:1.5px solid var(--twk-200)}"
+    ".twk-btn-ghost:hover{background:var(--twk-100)}"
+    ".twk-btn-danger{background:var(--twk-error-lt);color:var(--twk-error)!important;border:1.5px solid var(--twk-error-bd)}"
+    ".twk-btn-danger:hover{background:#FEE2E2}"
+    ".twk-btn-sm{padding:6px 12px!important;font-size:12px!important;border-radius:var(--twk-r-sm)!important}"
+    # ── Badges ────────────────────────────────────────────────────────────────
+    ".twk-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:var(--twk-r-full);font-size:11px;font-weight:600}"
+    ".twk-badge-success{background:var(--twk-success-lt);color:var(--twk-success)}"
+    ".twk-badge-error{background:var(--twk-error-lt);color:var(--twk-error)}"
+    ".twk-badge-warning{background:var(--twk-warning-lt);color:var(--twk-warning)}"
+    ".twk-badge-info{background:var(--twk-info-lt);color:var(--twk-info)}"
+    ".twk-badge-orange{background:var(--twk-orange-lt);color:var(--twk-orange)}"
+    ".twk-badge-gray{background:var(--twk-100);color:var(--twk-600)}"
+    # ── Cards ─────────────────────────────────────────────────────────────────
+    ".twk-card{background:#fff;border:1px solid var(--twk-200);border-radius:var(--twk-r-lg);padding:18px;box-shadow:var(--twk-sh-sm)}"
+    ".twk-card-sm{background:#fff;border:1px solid var(--twk-100);border-radius:var(--twk-r-md);padding:14px}"
+    # ── Section title con acento naranja ──────────────────────────────────────
+    ".twk-section-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--twk-900)}"
+    ".twk-section-title::before{content:'';display:block;width:3px;height:16px;background:var(--twk-orange);border-radius:2px;flex-shrink:0}"
+    # ── Status dots ───────────────────────────────────────────────────────────
+    ".twk-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}"
+    ".twk-dot-green{background:var(--twk-success)}"
+    ".twk-dot-red{background:var(--twk-error)}"
+    ".twk-dot-yellow{background:var(--twk-warning)}"
+    ".twk-dot-gray{background:var(--twk-400)}"
+    ".twk-dot-orange{background:var(--twk-orange)}"
 )
 
-_CSS_SCRIPT = f"(function(){{if(document.getElementById('twk-css'))return;var s=document.createElement('style');s.id='twk-css';s.textContent={json.dumps(_TWK_CSS)};document.head.appendChild(s);}})();"
+# Script que carga Inter (Google Fonts, open source) y luego inyecta el CSS
+_FONT_JS = (
+    "if(!document.getElementById('twk-inter')){"
+    "var p1=document.createElement('link');p1.rel='preconnect';"
+    "p1.href='https://fonts.googleapis.com';document.head.appendChild(p1);"
+    "var p2=document.createElement('link');p2.rel='preconnect';"
+    "p2.href='https://fonts.gstatic.com';p2.crossOrigin='anonymous';document.head.appendChild(p2);"
+    "var fl=document.createElement('link');fl.id='twk-inter';fl.rel='stylesheet';"
+    "fl.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';"
+    "document.head.appendChild(fl);}"
+)
+_CSS_SCRIPT = f"(function(){{{_FONT_JS}if(!document.getElementById('twk-css')){{var s=document.createElement('style');s.id='twk-css';s.textContent={json.dumps(_TWK_CSS)};document.head.appendChild(s);}}}})();"
 
 
 # ── Paleta light (misma escala que Sistema de Ventas, acento naranja para food) ─
