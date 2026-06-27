@@ -453,6 +453,15 @@ def _desktop_sidebar(active: str) -> rx.Component:
                     border=f"1px solid {BORDER_COLOR}",
                 ),
             ),
+            rx.cond(
+                FoodState.sidebar_collapsed,
+                rx.fragment(),
+                rx.box(
+                    user_session_badge(),
+                    width="100%",
+                    padding_top="0.25rem",
+                ),
+            ),
             height="100%",
             width="100%",
             spacing="0",
