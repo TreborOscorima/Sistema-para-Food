@@ -106,15 +106,12 @@ def _menu_content() -> rx.Component:
             # Header
             rx.box(
                 rx.hstack(
-                    rx.box(
-                        rx.text("🍽", font_size="28px"),
+                    rx.image(
+                        src="/TUWAYKIFOODFAVICON.png",
                         width="52px",
                         height="52px",
                         border_radius="14px",
-                        background="linear-gradient(135deg, #EA580C 0%, #F97316 100%)",
-                        display="flex",
-                        align_items="center",
-                        justify_content="center",
+                        alt="TUWAYKIFOOD",
                         box_shadow="0 4px 12px rgba(234,88,12,0.3)",
                     ),
                     rx.vstack(
