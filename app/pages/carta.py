@@ -422,7 +422,7 @@ def _carta_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        rx.hstack(
+        rx.flex(
             # ─── Categorias ───────────────────────────────────────────────
             rx.vstack(
                 rx.text("Categorias", font_size="15px", font_weight="700", color="#64748B"),
@@ -451,10 +451,10 @@ def _carta_content() -> rx.Component:
                 flex="1",
                 min_width="0",
             ),
-            spacing="5",
+            wrap=rx.breakpoints(initial="wrap", lg="nowrap"),
+            gap="5",
             width="100%",
             align="start",
-            flex_wrap=rx.breakpoints(initial="wrap", lg="nowrap"),
         ),
         spacing="5",
         width="100%",

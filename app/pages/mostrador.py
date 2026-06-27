@@ -162,7 +162,7 @@ def _entregado_card(pedido: MostradorEntregadoView) -> rx.Component:
 def _mostrador_content() -> rx.Component:
     return rx.vstack(
         rx.text("Mostrador", font_size="22px", font_weight="800", color="#0F172A"),
-        rx.hstack(
+        rx.flex(
             # ─── Panel izq: menu + carrito ────────────────────────────────
             rx.vstack(
                 rx.text("Nuevo pedido para llevar", font_size="14px", font_weight="700", color="#EA580C"),
@@ -338,12 +338,12 @@ def _mostrador_content() -> rx.Component:
                 spacing="3",
                 flex="1",
                 min_width="0",
-                max_width="340px",
+                max_width=rx.breakpoints(initial="100%", md="340px"),
             ),
-            spacing="5",
+            wrap=rx.breakpoints(initial="wrap", md="nowrap"),
+            gap="5",
             width="100%",
             align="start",
-            flex_wrap=rx.breakpoints(initial="wrap", md="nowrap"),
         ),
         spacing="5",
         width="100%",

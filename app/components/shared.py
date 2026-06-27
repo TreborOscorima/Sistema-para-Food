@@ -600,6 +600,27 @@ def _page_header(active: str, title: str, subtitle: str, action=None) -> rx.Comp
     )
 
 
+def _mobile_topbar(active: str) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            _mobile_nav_drawer(active),
+            _brand(compact=False),
+            spacing="3",
+            align="center",
+            width="100%",
+        ),
+        display=rx.breakpoints(initial="flex", lg="none"),
+        padding="0.6rem 1rem",
+        border_bottom=f"1px solid {BORDER_COLOR}",
+        background=SURFACE_ELEVATED,
+        width="100%",
+        position="sticky",
+        top="0",
+        z_index="200",
+        box_shadow="0 1px 4px rgba(0,0,0,0.06)",
+    )
+
+
 def app_shell(
     content: rx.Component,
     *,
@@ -611,15 +632,19 @@ def app_shell(
         rx.hstack(
             _desktop_sidebar(_active),
             rx.box(
-                rx.vstack(
-                    content,
+                _mobile_topbar(_active),
+                rx.box(
+                    rx.vstack(
+                        content,
+                        width="100%",
+                        align="start",
+                        spacing="5",
+                    ),
+                    padding=rx.breakpoints(initial="1rem", md="1.5rem", xl="2rem"),
                     width="100%",
-                    align="start",
-                    spacing="5",
                 ),
                 width="100%",
                 min_height="100vh",
-                padding=rx.breakpoints(initial="1rem", md="1.5rem", xl="2rem"),
             ),
             width="100%",
             align="start",

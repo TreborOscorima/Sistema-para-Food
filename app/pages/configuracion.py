@@ -607,7 +607,7 @@ def _configuracion_content() -> rx.Component:
         ),
         spacing="4",
         width="100%",
-        max_width="600px",
+        max_width=rx.breakpoints(initial="100%", md="600px"),
     )
 
 

@@ -311,7 +311,7 @@ def _usuarios_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        rx.hstack(
+        rx.flex(
             rx.vstack(
                 rx.hstack(
                     rx.text("Personal", font_size="15px", font_weight="700", color=TEXT_SECONDARY),
@@ -399,10 +399,10 @@ def _usuarios_content() -> rx.Component:
                 min_width="0",
                 max_width=rx.breakpoints(initial="100%", lg="420px"),
             ),
-            spacing="5",
+            wrap=rx.breakpoints(initial="wrap", lg="nowrap"),
+            gap="5",
             width="100%",
             align="start",
-            flex_wrap=rx.breakpoints(initial="wrap", lg="nowrap"),
         ),
         spacing="5",
         width="100%",

@@ -214,15 +214,15 @@ def _cocina_content() -> rx.Component:
             width="100%",
             align="center",
         ),
-        rx.hstack(
+        rx.flex(
             _column_nuevos(),
             rx.divider(orientation="vertical", border_color="#E2E8F0", height="auto",
                        display=rx.breakpoints(initial="none", md="block")),
             _column_en_preparacion(),
-            spacing="5",
+            wrap=rx.breakpoints(initial="wrap", md="nowrap"),
+            gap="5",
             width="100%",
             align="start",
-            flex_wrap=rx.breakpoints(initial="wrap", md="nowrap"),
         ),
         spacing="5",
         width="100%",
