@@ -27,9 +27,9 @@ _TWK_CSS = (
     "--twk-sh-lg:0 12px 40px rgba(0,0,0,0.12),0 4px 8px rgba(0,0,0,0.06);"
     "--twk-sh-orange:0 4px 14px rgba(234,88,12,0.35);"
     "--twk-font:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-    "--twk-sb:#0F172A;--twk-sb-bd:rgba(255,255,255,0.07);"
+    "--twk-sb:#1E293B;--twk-sb-bd:#334155;"
     "--twk-sb-tx:rgba(255,255,255,0.58);--twk-sb-tx-act:#FFFFFF;"
-    "--twk-sb-hover:rgba(255,255,255,0.07);"
+    "--twk-sb-hover:rgba(255,255,255,0.08);"
     "}"
 
     # ── Tipografía global ─────────────────────────────────────────────────────
@@ -165,11 +165,21 @@ _TWK_CSS = (
     ".twk-nav-item:hover{background:var(--twk-sb-hover);color:#fff}"
     ".twk-nav-item-active{background:var(--twk-orange)!important;"
     "color:#fff!important;box-shadow:var(--twk-sh-orange)}"
-    ".twk-nav-icon-box{width:30px;height:30px;border-radius:8px;"
+    ".twk-nav-icon-box{width:32px;height:32px;border-radius:8px;"
     "display:flex;align-items:center;justify-content:center;flex-shrink:0;"
-    "background:rgba(255,255,255,0.07);transition:all .15s}"
-    ".twk-nav-item-active .twk-nav-icon-box{background:rgba(255,255,255,0.2)}"
-    ".twk-nav-item:hover .twk-nav-icon-box{background:rgba(255,255,255,0.1)}"
+    "background:rgba(255,255,255,0.06);transition:all .15s}"
+    ".twk-nav-item-active .twk-nav-icon-box{background:rgba(255,255,255,0.22)}"
+    ".twk-nav-item:hover .twk-nav-icon-box{background:rgba(255,255,255,0.12)}"
+
+    # ── Login dark card ────────────────────────────────────────────────────────
+    ".twk-login-card{background:#1E293B;border:1px solid #334155;"
+    "border-radius:20px;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.4)}"
+    ".twk-login-input{border:2px solid #334155!important;"
+    "background:#0F172A!important;color:#FFFFFF!important;"
+    "border-radius:10px!important;padding:12px 14px!important}"
+    ".twk-login-input:focus{border-color:#EA580C!important;"
+    "box-shadow:0 0 0 3px rgba(234,88,12,0.15)!important}"
+    ".twk-login-input::placeholder{color:#475569!important}"
 )
 
 _FONT_JS = (
@@ -669,8 +679,8 @@ def _desktop_sidebar(active: str) -> rx.Component:
         position="sticky",
         top="0",
         padding="14px 10px",
-        background="#0F172A",
-        border_right="1px solid rgba(255,255,255,0.07)",
+        background="#1E293B",
+        border_right="1px solid #334155",
         display=rx.breakpoints(initial="none", lg="flex"),
         flex_direction="column",
         flex_shrink="0",

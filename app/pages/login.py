@@ -16,9 +16,9 @@ def _pin_dot(filled: bool) -> rx.Component:
         height="13px",
         border_radius="50%",
         background=rx.cond(filled, "#EA580C", "rgba(0,0,0,0)"),
-        border=rx.cond(filled, "2px solid #EA580C", "2px solid #CBD5E1"),
+        border=rx.cond(filled, "2px solid #EA580C", "2px solid #334155"),
         transition="all 0.12s ease",
-        box_shadow=rx.cond(filled, "0 0 8px rgba(234,88,12,0.4)", "none"),
+        box_shadow=rx.cond(filled, "0 0 8px rgba(234,88,12,0.5)", "none"),
     )
 
 
@@ -41,25 +41,26 @@ def _pin_display() -> rx.Component:
 
 def _key_btn(content: rx.Component, on_click, variant: str = "default") -> rx.Component:
     bg_map = {
-        "default":    "#FFFFFF",
-        "backspace":  "#F8FAFC",
-        "ok":         "#EA580C",
+        "default":   "#0F172A",
+        "backspace": "#0F172A",
+        "ok":        "#EA580C",
     }
     color_map = {
-        "default":   "#0F172A",
-        "backspace": "#64748B",
+        "default":   "#FFFFFF",
+        "backspace": "#94A3B8",
         "ok":        "#FFFFFF",
     }
     hover_map = {
-        "default":   {"background": "#FFF7ED", "border_color": "#FED7AA",
+        "default":   {"background": "#1E293B", "border_color": "#475569",
                       "transform": "scale(0.97)"},
-        "backspace": {"background": "#FEF2F2", "border_color": "#FECACA",
-                      "transform": "scale(0.97)"},
-        "ok":        {"background": "#C2410C", "box_shadow": "0 6px 20px rgba(234,88,12,0.5)",
+        "backspace": {"background": "#1E293B", "border_color": "#DC2626",
+                      "color": "#FCA5A5", "transform": "scale(0.97)"},
+        "ok":        {"background": "#C2410C",
+                      "box_shadow": "0 6px 20px rgba(234,88,12,0.5)",
                       "transform": "scale(0.97)"},
     }
-    shadow = "0 4px 16px rgba(234,88,12,0.35)" if variant == "ok" else "0 1px 4px rgba(0,0,0,0.07)"
-    border = "none" if variant == "ok" else "1.5px solid #E2E8F0"
+    shadow = "0 4px 16px rgba(234,88,12,0.35)" if variant == "ok" else "0 1px 3px rgba(0,0,0,0.3)"
+    border = "none" if variant == "ok" else "2px solid #334155"
     return rx.button(
         content,
         on_click=on_click,
@@ -85,9 +86,9 @@ def _key_num(digit: str, letters: str, on_click) -> rx.Component:
     return _key_btn(
         rx.vstack(
             rx.text(digit, font_size=rx.breakpoints(initial="22px", sm="26px"),
-                    font_weight="300", color="#0F172A", line_height="1"),
+                    font_weight="300", color="#FFFFFF", line_height="1"),
             rx.text(letters, font_size="8px", font_weight="700",
-                    color="#94A3B8", letter_spacing="0.16em"),
+                    color="#475569", letter_spacing="0.16em"),
             spacing="0",
             align="center",
         ),
@@ -99,7 +100,7 @@ def _key_num(digit: str, letters: str, on_click) -> rx.Component:
 def _key_zero(on_click) -> rx.Component:
     return _key_btn(
         rx.text("0", font_size=rx.breakpoints(initial="22px", sm="26px"),
-                font_weight="300", color="#0F172A"),
+                font_weight="300", color="#FFFFFF"),
         on_click,
         variant="default",
     )
@@ -270,7 +271,7 @@ def _right_panel() -> rx.Component:
                     "Ingresa tu PIN",
                     font_size=rx.breakpoints(initial="20px", sm="22px"),
                     font_weight="800",
-                    color="#0F172A",
+                    color="#FFFFFF",
                     text_align="center",
                 ),
                 rx.text(
@@ -306,7 +307,7 @@ def _right_panel() -> rx.Component:
                     rx.text(
                         FoodState.login_pin_input.length().to_string() + " dígito(s)",
                         font_size="11px",
-                        color="#64748B",
+                        color="#475569",
                         text_align="center",
                         font_weight="500",
                     ),
@@ -335,7 +336,7 @@ def _right_panel() -> rx.Component:
         width="100%",
         height="100%",
         padding=rx.breakpoints(initial="32px 20px", sm="40px 32px"),
-        background="#FFFFFF",
+        background="#0A0F1E",
         min_height=rx.breakpoints(initial="100vh", md="auto"),
     )
 
@@ -345,7 +346,6 @@ def _right_panel() -> rx.Component:
 def login_page() -> rx.Component:
     return rx.box(
         rx.script(_CSS_SCRIPT),
-        # ── Desktop: split 45/55 ── Mobile: solo panel derecho ────────────────
         rx.box(
             # Panel izquierdo: oculto en mobile
             rx.box(
@@ -370,5 +370,5 @@ def login_page() -> rx.Component:
             min_height="100vh",
         ),
         min_height="100vh",
-        background="#FFFFFF",
+        background="#0A0F1E",
     )
