@@ -14,60 +14,96 @@ def _mesa_card(mesa: MesaView) -> rx.Component:
     selected = FoodState.mesa_seleccionada_id == mesa.id
     return rx.box(
         rx.vstack(
+            # Estado badge superior
             rx.hstack(
-                rx.text(
-                    mesa.nombre,
-                    font_size="14px",
-                    font_weight="700",
-                    color=rx.cond(selected, "#EA580C", "#0F172A"),
-                ),
-                rx.spacer(),
                 rx.badge(
                     mesa.estado_label,
                     background=mesa.badge_bg,
                     color=mesa.badge_text,
-                    border_radius="6px",
-                    font_size="10px",
+                    border_radius="5px",
+                    font_size="9px",
+                    font_weight="700",
                     padding="2px 7px",
+                    letter_spacing="0.04em",
+                    text_transform="uppercase",
+                ),
+                rx.spacer(),
+                # Indicador de items listos
+                rx.cond(
+                    mesa.tiene_items_listos,
+                    rx.box(
+                        rx.icon(tag="bell", size=11, color="#D97706"),
+                        width="20px",
+                        height="20px",
+                        border_radius="50%",
+                        background="#FEF3C7",
+                        border="1.5px solid #FDE68A",
+                        display="flex",
+                        align_items="center",
+                        justify_content="center",
+                    ),
+                    rx.fragment(),
                 ),
                 width="100%",
+                align="center",
             ),
+            # Nombre grande
+            rx.text(
+                mesa.nombre,
+                font_size=rx.breakpoints(initial="15px", md="16px"),
+                font_weight="800",
+                color=rx.cond(selected, "#EA580C", "#0F172A"),
+                line_height="1",
+            ),
+            # Total si tiene consumo
             rx.cond(
                 mesa.total_abierto > 0,
                 rx.text(
                     mesa.total_abierto_texto,
                     font_size="13px",
-                    font_weight="600",
-                    color="#64748B",
+                    font_weight="700",
+                    color=rx.cond(selected, "#EA580C", "#334155"),
                 ),
                 rx.fragment(),
             ),
+            # Items listos texto
             rx.cond(
                 mesa.tiene_items_listos,
-                rx.hstack(
-                    rx.text(
-                        mesa.items_listos_count.to_string() + " items listos",
-                        font_size="11px",
-                        color="#B45309",
-                        font_weight="600",
-                    ),
-                    spacing="1",
+                rx.text(
+                    mesa.items_listos_count.to_string() + " listos ↑",
+                    font_size="10px",
+                    color="#B45309",
+                    font_weight="700",
                 ),
                 rx.fragment(),
             ),
-            spacing="1",
+            spacing="2",
             align="start",
+            width="100%",
         ),
-        background=rx.cond(selected, "#FFF7ED", mesa.card_bg),
+        background=rx.cond(
+            selected,
+            "linear-gradient(135deg,#FFF7ED 0%,#FFFFFF 100%)",
+            mesa.card_bg,
+        ),
         border=rx.cond(selected, "2px solid #EA580C", mesa.card_border),
-        border_radius="10px",
-        padding="12px",
+        border_radius="14px",
+        padding=rx.breakpoints(initial="12px", md="14px 16px"),
         cursor="pointer",
         on_click=FoodState.seleccionar_mesa(mesa.id),
-        _hover={"border": "2px solid rgba(234,88,12,0.45)", "transform": "translateY(-1px)"},
+        _hover={
+            "border": "2px solid rgba(234,88,12,0.5)",
+            "transform": "translateY(-2px)",
+            "box_shadow": "0 6px 20px rgba(0,0,0,0.1)",
+        },
         transition="all 0.15s ease",
-        min_width=rx.breakpoints(initial="100px", md="120px", lg="140px"),
-        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        min_width=rx.breakpoints(initial="110px", md="130px", lg="150px"),
+        box_shadow=rx.cond(
+            selected,
+            "0 0 0 3px rgba(234,88,12,0.18), 0 4px 12px rgba(0,0,0,0.08)",
+            "0 1px 4px rgba(0,0,0,0.06)",
+        ),
+        position="relative",
     )
 
 
