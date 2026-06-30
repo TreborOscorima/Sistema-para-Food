@@ -27,7 +27,7 @@ _TWK_CSS = (
     "--twk-sh-lg:0 12px 40px rgba(0,0,0,0.12),0 4px 8px rgba(0,0,0,0.06);"
     "--twk-sh-orange:0 4px 14px rgba(234,88,12,0.35);"
     "--twk-font:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-    "--twk-sb:#1E293B;--twk-sb-bd:#334155;"
+    "--twk-sb:#0F172A;--twk-sb-bd:#1E293B;"
     "--twk-sb-tx:rgba(255,255,255,0.58);--twk-sb-tx-act:#FFFFFF;"
     "--twk-sb-hover:rgba(255,255,255,0.08);"
     "}"
@@ -679,8 +679,8 @@ def _desktop_sidebar(active: str) -> rx.Component:
         position="sticky",
         top="0",
         padding="14px 10px",
-        background="#1E293B",
-        border_right="1px solid #334155",
+        background="#0F172A",
+        border_right="1px solid #1E293B",
         display=rx.breakpoints(initial="none", lg="flex"),
         flex_direction="column",
         flex_shrink="0",
