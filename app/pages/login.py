@@ -8,19 +8,12 @@ from app.components.shared import _CSS_SCRIPT
 from app.states.food_state import FoodState
 
 
-# ─── Estado local: rol seleccionado en el login ───────────────────────────────
-
-class LoginRolState(rx.State):
-    rol: str = "Mozo"
-
-    def seleccionar(self, r: str):
-        self.rol = r
-
-
 # ─── Tarjeta de rol ───────────────────────────────────────────────────────────
+# El rol seleccionado se valida contra el rol real del usuario dueño del PIN
+# (ver FoodState._authenticate_with_pin) — no es solo decorativo.
 
 def _rol_card(emoji: str, label: str, rol_value: str) -> rx.Component:
-    activo = LoginRolState.rol == rol_value
+    activo = FoodState.login_rol_seleccionado == rol_value
     return rx.box(
         rx.vstack(
             rx.text(emoji, font_size="20px", line_height="1"),
@@ -34,7 +27,7 @@ def _rol_card(emoji: str, label: str, rol_value: str) -> rx.Component:
             spacing="1",
             align="center",
         ),
-        on_click=LoginRolState.seleccionar(rol_value),
+        on_click=FoodState.seleccionar_login_rol(rol_value),
         background="#0F172A",
         border=rx.cond(activo, "2px solid #EA580C", "2px solid #334155"),
         border_radius="12px",
@@ -163,8 +156,7 @@ def _login_card() -> rx.Component:
             _rol_card("🧑‍🍳", "Mozo", "Mozo"),
             _rol_card("🍳", "Cocina", "Cocina"),
             _rol_card("🖥️", "Caja", "Caja"),
-            _rol_card("🏪", "Mostrador", "Mostrador"),
-            columns="2",
+            columns="3",
             gap="8px",
             margin_bottom="28px",
         ),

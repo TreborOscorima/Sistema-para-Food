@@ -690,6 +690,7 @@ class FoodState(rx.State):
     login_error: str = ""
     usuario_actual: UsuarioSesion | None = None
     login_pin_input: str = ""
+    login_rol_seleccionado: str = RolUsuario.MOZO.value
     sidebar_collapsed: bool = False
 
     categoria_form_id: int = 0
@@ -1302,6 +1303,10 @@ class FoodState(rx.State):
     def clear_login_pin(self) -> None:
         self.login_pin_input = ""
 
+    def seleccionar_login_rol(self, rol: str) -> None:
+        self.login_rol_seleccionado = rol
+        self.login_error = ""
+
     def _authenticate_with_pin(self, pin: str):
         normalized = _normalize_pin(pin)
         if len(normalized) < 4:
@@ -1320,6 +1325,17 @@ class FoodState(rx.State):
         if usuario is None:
             self.login_pin_input = ""
             self.login_error = "PIN incorrecto. Intenta nuevamente."
+            return
+        if (
+            self.login_rol_seleccionado
+            and usuario.rol != RolUsuario.ADMIN.value
+            and usuario.rol != self.login_rol_seleccionado
+        ):
+            self.login_pin_input = ""
+            self.login_error = (
+                f"Ese PIN pertenece al rol {usuario.rol}. "
+                f"Seleccioná {usuario.rol} para ingresar."
+            )
             return
         self.login_error = ""
         self.usuario_actual = UsuarioSesion(
