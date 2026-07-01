@@ -64,24 +64,24 @@ MESA_LABELS = {
     EstadoMesa.ESPERANDO_CUENTA.value: "Esperando cuenta",
 }
 MESA_BADGE_BACKGROUNDS = {
-    EstadoMesa.LIBRE.value: "#DCFCE7",
-    EstadoMesa.OCUPADA.value: "#FEE2E2",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#FEF3C7",
+    EstadoMesa.LIBRE.value: "rgba(51,65,85,0.5)",
+    EstadoMesa.OCUPADA.value: "rgba(234,88,12,0.18)",
+    EstadoMesa.ESPERANDO_CUENTA.value: "rgba(245,158,11,0.18)",
 }
 MESA_BADGE_TEXTS = {
-    EstadoMesa.LIBRE.value: "#15803D",
-    EstadoMesa.OCUPADA.value: "#B91C1C",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#B45309",
+    EstadoMesa.LIBRE.value: "#94A3B8",
+    EstadoMesa.OCUPADA.value: "#FDBA74",
+    EstadoMesa.ESPERANDO_CUENTA.value: "#FCD34D",
 }
 MESA_CARD_BACKGROUNDS = {
-    EstadoMesa.LIBRE.value: "#F0FDF4",
-    EstadoMesa.OCUPADA.value: "#FEF2F2",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#FFFBEB",
+    EstadoMesa.LIBRE.value: "#1E293B",
+    EstadoMesa.OCUPADA.value: "#1E293B",
+    EstadoMesa.ESPERANDO_CUENTA.value: "#1E293B",
 }
 MESA_CARD_BORDERS = {
-    EstadoMesa.LIBRE.value: "1px solid #BBF7D0",
-    EstadoMesa.OCUPADA.value: "1px solid #FECACA",
-    EstadoMesa.ESPERANDO_CUENTA.value: "1px solid #FDE68A",
+    EstadoMesa.LIBRE.value: "2px solid #334155",
+    EstadoMesa.OCUPADA.value: "2px solid #EA580C",
+    EstadoMesa.ESPERANDO_CUENTA.value: "2px solid #F59E0B",
 }
 READY_ALERT_BORDER = "3px solid #F59E0B"
 
@@ -92,24 +92,24 @@ PRODUCTION_LABELS = {
     EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "Entregado al cliente",
 }
 PRODUCTION_BADGE_BACKGROUNDS = {
+    EstadoProduccion.PENDIENTE.value: "#F59E0B",
+    EstadoProduccion.EN_PREPARACION.value: "#EA580C",
+    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#16A34A",
+    EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "#3B82F6",
+}
+PRODUCTION_BADGE_TEXTS = {
     EstadoProduccion.PENDIENTE.value: "#FEF3C7",
-    EstadoProduccion.EN_PREPARACION.value: "#FFEDD5",
+    EstadoProduccion.EN_PREPARACION.value: "#FEF3C7",
     EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#DCFCE7",
     EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "#DBEAFE",
 }
-PRODUCTION_BADGE_TEXTS = {
-    EstadoProduccion.PENDIENTE.value: "#B45309",
-    EstadoProduccion.EN_PREPARACION.value: "#9A3412",
-    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#15803D",
-    EstadoProduccion.ENTREGADO_AL_CLIENTE.value: "#1D4ED8",
-}
 KITCHEN_CARD_BACKGROUNDS = {
-    EstadoProduccion.PENDIENTE.value: "#FFFBEB",
-    EstadoProduccion.EN_PREPARACION.value: "#FFF7ED",
+    EstadoProduccion.PENDIENTE.value: "#0F172A",
+    EstadoProduccion.EN_PREPARACION.value: "#0F172A",
 }
 KITCHEN_CARD_BORDERS = {
-    EstadoProduccion.PENDIENTE.value: "#FDE68A",
-    EstadoProduccion.EN_PREPARACION.value: "#FED7AA",
+    EstadoProduccion.PENDIENTE.value: "#F59E0B",
+    EstadoProduccion.EN_PREPARACION.value: "#EA580C",
 }
 
 ROLE_HOME_ROUTES: dict[str, str] = {

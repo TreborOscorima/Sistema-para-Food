@@ -19,22 +19,22 @@ def _metodo_btn(value: str, label: str, icon: str) -> rx.Component:
     activo = FoodState.caja_cobro_metodo == value
     return rx.button(
         rx.vstack(
-            rx.icon(tag=icon, size=18, color=rx.cond(activo, "#FFFFFF", "#64748B")),
+            rx.icon(tag=icon, size=18, color=rx.cond(activo, "#FFFFFF", "#94A3B8")),
             rx.text(label, font_size="12px", font_weight="700",
-                    color=rx.cond(activo, "#FFFFFF", "#64748B")),
+                    color=rx.cond(activo, "#FFFFFF", "#94A3B8")),
             spacing="1",
             align="center",
         ),
         on_click=FoodState.set_caja_cobro_metodo(value),
-        background=rx.cond(activo, "#EA580C", "#F8FAFC"),
-        border=rx.cond(activo, "2px solid #EA580C", "2px solid #E2E8F0"),
+        background=rx.cond(activo, "#EA580C", "#0F172A"),
+        border=rx.cond(activo, "2px solid #EA580C", "2px solid #334155"),
         border_radius="10px",
         padding="10px 0",
         cursor="pointer",
         flex=rx.breakpoints(initial="1 0 calc(50% - 4px)", sm="1"),
         min_width="0",
         transition="all 0.15s ease",
-        _hover={"border": "2px solid #EA580C", "background": rx.cond(activo, "#C2410C", "#FFF7ED")},
+        _hover={"border": "2px solid #EA580C"},
     )
 
 
@@ -45,17 +45,17 @@ def _cobro_panel() -> rx.Component:
             rx.button(
                 rx.icon(tag="arrow_left", size=16),
                 on_click=FoodState.cancelar_cobro,
-                background="#F1F5F9",
-                color="#64748B",
-                border="1px solid #E2E8F0",
+                background="#1E293B",
+                color="#94A3B8",
+                border="1px solid #334155",
                 border_radius="8px",
                 cursor="pointer",
                 padding="6px 10px",
                 _hover={"opacity": "0.85"},
             ),
             rx.vstack(
-                rx.text("Cobrar mesa", font_size="22px", font_weight="800", color="#0F172A"),
-                rx.text(FoodState.caja_cobro_mesa_nombre, font_size="13px", color="#64748B"),
+                rx.text("Cobrar mesa", font_size="22px", font_weight="800", color="#FFFFFF"),
+                rx.text(FoodState.caja_cobro_mesa_nombre, font_size="13px", color="#94A3B8"),
                 spacing="0",
             ),
             spacing="3",
@@ -81,22 +81,22 @@ def _cobro_panel() -> rx.Component:
         # Total base
         rx.box(
             rx.hstack(
-                rx.text("Consumo", font_size="14px", color="#334155"),
+                rx.text("Consumo", font_size="14px", color="#94A3B8"),
                 rx.spacer(),
                 rx.text(FoodState.caja_cobro_total_base_texto, font_size="20px",
-                        font_weight="800", color="#0F172A"),
+                        font_weight="800", color="#FFFFFF"),
                 width="100%",
                 align="center",
             ),
-            background="#F8FAFC",
-            border="1px solid #E2E8F0",
+            background="#1E293B",
+            border="1px solid #334155",
             border_radius="10px",
             padding="14px 16px",
             width="100%",
         ),
         # Método de pago
         rx.vstack(
-            rx.text("Método de pago", font_size="13px", font_weight="700", color="#334155"),
+            rx.text("Método de pago", font_size="13px", font_weight="700", color="#94A3B8"),
             rx.flex(
                 *[_metodo_btn(v, l, i) for v, l, i in _METODOS],
                 flex_wrap="wrap",
@@ -109,7 +109,7 @@ def _cobro_panel() -> rx.Component:
         # Descuento + Propina (fila par)
         rx.hstack(
             rx.vstack(
-                rx.text("Descuento", font_size="13px", font_weight="700", color="#334155"),
+                rx.text("Descuento", font_size="13px", font_weight="700", color="#94A3B8"),
                 rx.hstack(
                     rx.text("S/", font_size="14px", font_weight="700", color="#64748B"),
                     rx.input(
@@ -119,14 +119,15 @@ def _cobro_panel() -> rx.Component:
                         type="number",
                         min="0",
                         step="0.50",
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
-                        color="#0F172A",
+                        background="#0F172A",
+                        border="1px solid #334155",
+                        color="#F1F5F9",
                         border_radius="8px",
                         padding_x="12px",
                         padding_y="8px",
                         font_size="14px",
                         flex="1",
+                        _focus={"border_color": "#EA580C"},
                     ),
                     spacing="2",
                     align="center",
@@ -136,7 +137,7 @@ def _cobro_panel() -> rx.Component:
                 flex="1",
             ),
             rx.vstack(
-                rx.text("Propina (opcional)", font_size="13px", font_weight="700", color="#334155"),
+                rx.text("Propina (opcional)", font_size="13px", font_weight="700", color="#94A3B8"),
                 rx.hstack(
                     rx.text("S/", font_size="14px", font_weight="700", color="#64748B"),
                     rx.input(
@@ -146,14 +147,15 @@ def _cobro_panel() -> rx.Component:
                         type="number",
                         min="0",
                         step="0.50",
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
-                        color="#0F172A",
+                        background="#0F172A",
+                        border="1px solid #334155",
+                        color="#F1F5F9",
                         border_radius="8px",
                         padding_x="12px",
                         padding_y="8px",
                         font_size="14px",
                         flex="1",
+                        _focus={"border_color": "#EA580C"},
                     ),
                     spacing="2",
                     align="center",
@@ -171,9 +173,9 @@ def _cobro_panel() -> rx.Component:
             FoodState.caja_cobro_es_fiado,
             rx.vstack(
                 rx.hstack(
-                    rx.text("Cliente", font_size="13px", font_weight="700", color="#334155"),
-                    rx.text("*", font_size="13px", font_weight="700", color="#B91C1C"),
-                    rx.text("(requerido para fiado)", font_size="12px", color="#94A3B8"),
+                    rx.text("Cliente", font_size="13px", font_weight="700", color="#94A3B8"),
+                    rx.text("*", font_size="13px", font_weight="700", color="#FCA5A5"),
+                    rx.text("(requerido para fiado)", font_size="12px", color="#64748B"),
                     spacing="1",
                     align="center",
                 ),
@@ -182,8 +184,9 @@ def _cobro_panel() -> rx.Component:
                     value=FoodState.caja_cobro_cliente_nombre,
                     on_change=FoodState.set_caja_cobro_cliente_nombre,
                     placeholder="— Seleccionar cliente —",
-                    background="#FFFFFF",
-                    border="2px solid #FED7AA",
+                    background="#0F172A",
+                    color="#F1F5F9",
+                    border="2px solid #EA580C",
                     border_radius="8px",
                     font_size="14px",
                     width="100%",
@@ -198,28 +201,28 @@ def _cobro_panel() -> rx.Component:
             FoodState.hay_promo_activa,
             rx.box(
                 rx.hstack(
-                    rx.icon(tag="zap", size=13, color="#B45309"),
+                    rx.icon(tag="zap", size=13, color="#FCD34D"),
                     rx.vstack(
                         rx.text(
                             "Promo activa: " + FoodState.promo_activa_nombre,
-                            font_size="12px", font_weight="700", color="#0F172A",
+                            font_size="12px", font_weight="700", color="#FFFFFF",
                         ),
                         rx.text(FoodState.promo_activa_descuento_texto,
-                                font_size="11px", color="#78350F"),
+                                font_size="11px", color="#FCD34D"),
                         spacing="0", align="start",
                     ),
                     rx.spacer(),
                     rx.button(
                         "Aplicar",
                         on_click=FoodState.aplicar_promo_al_cobro,
-                        background="#F59E0B", color="#FFFFFF",
+                        background="#F59E0B", color="#1C1917",
                         border_radius="6px", font_size="12px", font_weight="700",
                         padding_x="12px", padding_y="6px", cursor="pointer",
-                        _hover={"background": "#D97706"},
+                        _hover={"opacity": "0.9"},
                     ),
                     width="100%", align="center", gap="8px",
                 ),
-                background="#FFFBEB", border="1px solid #FDE68A",
+                background="#1E293B", border="1px solid #92400E",
                 border_radius="8px", padding="10px 12px", width="100%",
             ),
             rx.fragment(),
@@ -228,7 +231,7 @@ def _cobro_panel() -> rx.Component:
         rx.cond(
             FoodState.caja_cobro_es_efectivo,
             rx.vstack(
-                rx.text("Efectivo recibido", font_size="13px", font_weight="700", color="#334155"),
+                rx.text("Efectivo recibido", font_size="13px", font_weight="700", color="#94A3B8"),
                 rx.hstack(
                     rx.text("S/", font_size="14px", font_weight="700", color="#64748B"),
                     rx.input(
@@ -238,14 +241,15 @@ def _cobro_panel() -> rx.Component:
                         type="number",
                         min="0",
                         step="0.50",
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
-                        color="#0F172A",
+                        background="#0F172A",
+                        border="1px solid #334155",
+                        color="#F1F5F9",
                         border_radius="8px",
                         padding_x="12px",
                         padding_y="8px",
                         font_size="14px",
                         flex="1",
+                        _focus={"border_color": "#EA580C"},
                     ),
                     spacing="2",
                     align="center",
@@ -254,15 +258,15 @@ def _cobro_panel() -> rx.Component:
                 rx.cond(
                     FoodState.caja_cobro_efectivo_recibido != "",
                     rx.hstack(
-                        rx.text("Vuelto:", font_size="13px", color="#64748B"),
+                        rx.text("Vuelto:", font_size="13px", color="#94A3B8"),
                         rx.spacer(),
                         rx.text(FoodState.caja_cobro_vuelto_texto,
-                                font_size="16px", font_weight="700", color="#15803D"),
+                                font_size="16px", font_weight="700", color="#4ADE80"),
                         width="100%",
                         align="center",
                         padding="8px 12px",
-                        background="#F0FDF4",
-                        border="1px solid #BBF7D0",
+                        background="#0F172A",
+                        border="1px solid #16A34A",
                         border_radius="8px",
                     ),
                     rx.fragment(),
@@ -275,15 +279,15 @@ def _cobro_panel() -> rx.Component:
         # Total final
         rx.box(
             rx.hstack(
-                rx.text("TOTAL A COBRAR", font_size="13px", font_weight="700", color="#EA580C"),
+                rx.text("TOTAL A COBRAR", font_size="13px", font_weight="700", color="#FED7AA"),
                 rx.spacer(),
                 rx.text(FoodState.caja_cobro_total_final_texto,
-                        font_size="26px", font_weight="900", color="#EA580C"),
+                        font_size="26px", font_weight="900", color="#FFFFFF"),
                 width="100%",
                 align="center",
             ),
-            background="#FFF7ED",
-            border="2px solid #FED7AA",
+            background="#EA580C",
+            border="none",
             border_radius="12px",
             padding="16px",
             width="100%",
@@ -293,9 +297,9 @@ def _cobro_panel() -> rx.Component:
             rx.button(
                 "Cancelar",
                 on_click=FoodState.cancelar_cobro,
-                background="#F1F5F9",
-                color="#64748B",
-                border="1px solid #E2E8F0",
+                background="#1E293B",
+                color="#94A3B8",
+                border="1px solid #334155",
                 border_radius="10px",
                 font_size="14px",
                 font_weight="600",
@@ -312,7 +316,7 @@ def _cobro_panel() -> rx.Component:
                     align="center",
                 ),
                 on_click=FoodState.confirmar_cobro,
-                background="#15803D",
+                background="#16A34A",
                 color="#FFFFFF",
                 border_radius="10px",
                 font_size="14px",
@@ -337,7 +341,7 @@ def _mesa_cobro_card(mesa: MesaView) -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.vstack(
-                    rx.text(mesa.nombre, font_size="15px", font_weight="700", color="#0F172A"),
+                    rx.text(mesa.nombre, font_size="15px", font_weight="700", color="#FFFFFF"),
                     rx.badge(
                         mesa.estado_label,
                         background=mesa.badge_bg,
@@ -363,7 +367,7 @@ def _mesa_cobro_card(mesa: MesaView) -> rx.Component:
                 rx.text(
                     mesa.items_listos_count.to_string() + " items listos para entregar",
                     font_size="11px",
-                    color="#B45309",
+                    color="#FCD34D",
                     font_weight="600",
                 ),
                 rx.fragment(),
@@ -372,12 +376,12 @@ def _mesa_cobro_card(mesa: MesaView) -> rx.Component:
                 "Cobrar Mesa",
                 on_click=FoodState.abrir_cobro_mesa(mesa.id),
                 width="100%",
-                background=rx.cond(cobrable, "#15803D", "#F1F5F9"),
-                color=rx.cond(cobrable, "#FFFFFF", "#94A3B8"),
+                background=rx.cond(cobrable, "#16A34A", "#1E293B"),
+                color=rx.cond(cobrable, "#FFFFFF", "#64748B"),
                 border=rx.cond(
                     cobrable,
-                    "1px solid #15803D",
-                    "1px solid #E2E8F0",
+                    "1px solid #16A34A",
+                    "1px solid #334155",
                 ),
                 border_radius="8px",
                 font_size="13px",
@@ -396,7 +400,6 @@ def _mesa_cobro_card(mesa: MesaView) -> rx.Component:
         border_radius="12px",
         padding="16px",
         opacity=rx.cond(cobrable, "1", "0.6"),
-        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
     )
 
 
@@ -404,11 +407,11 @@ def _caja_content() -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.vstack(
-                rx.text("Caja", font_size="22px", font_weight="800", color="#0F172A"),
+                rx.text("Caja", font_size="22px", font_weight="800", color="#FFFFFF"),
                 rx.text(
                     FoodState.cantidad_mesas_abiertas.to_string() + " mesa(s) abiertas",
                     font_size="13px",
-                    color="#64748B",
+                    color="#94A3B8",
                 ),
                 spacing="0",
             ),
@@ -418,13 +421,14 @@ def _caja_content() -> rx.Component:
                 rx.button(
                     "Actualizar",
                     on_click=FoodState.cargar_mesas,
-                    background="#FFF7ED",
+                    background="#1E293B",
                     color="#EA580C",
-                    border="1px solid #FED7AA",
+                    border="1px solid #334155",
                     border_radius="8px",
                     font_size="13px",
+                    font_weight="600",
                     cursor="pointer",
-                    _hover={"opacity": "0.85"},
+                    _hover={"border_color": "#EA580C"},
                 ),
                 rx.fragment(),
             ),
@@ -434,9 +438,9 @@ def _caja_content() -> rx.Component:
         rx.cond(
             FoodState.mensaje != "",
             rx.box(
-                rx.text(FoodState.mensaje, font_size="12px", color="#334155"),
-                background="#F1F5F9",
-                border="1px solid #E2E8F0",
+                rx.text(FoodState.mensaje, font_size="12px", color="#CBD5E1"),
+                background="#1E293B",
+                border="1px solid #334155",
                 border_radius="6px",
                 padding="8px 12px",
                 width="100%",
@@ -449,7 +453,7 @@ def _caja_content() -> rx.Component:
             rx.cond(
                 FoodState.mesas.length() == 0,
                 rx.center(
-                    rx.text("No hay mesas configuradas.", font_size="14px", color="#94A3B8"),
+                    rx.text("No hay mesas configuradas.", font_size="14px", color="#64748B"),
                     padding_y="60px",
                 ),
                 rx.grid(
@@ -472,4 +476,4 @@ def _caja_content() -> rx.Component:
     title="TUWAYKIFOOD | Caja",
 )
 def caja_page() -> rx.Component:
-    return app_shell(_caja_content(), page_key="caja")
+    return app_shell(_caja_content(), page_key="caja", dark=True)

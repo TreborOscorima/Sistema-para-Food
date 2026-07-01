@@ -840,8 +840,11 @@ def app_shell(
     *,
     page_key: str = "",
     active: str = "",
+    dark: bool = False,
 ) -> rx.Component:
     _active = page_key or active
+    _bg = "#0F172A" if dark else PAGE_BACKGROUND
+    _text = "#FFFFFF" if dark else TEXT_PRIMARY
     return rx.box(
         rx.script(_CSS_SCRIPT),
         rx.hstack(
@@ -868,6 +871,6 @@ def app_shell(
         ),
         min_height="100vh",
         width="100%",
-        background=PAGE_BACKGROUND,
-        color=TEXT_PRIMARY,
+        background=_bg,
+        color=_text,
     )
