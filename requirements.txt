@@ -32,3 +32,7 @@ starlette==1.1.0
 typing_extensions==4.15.0
 tzdata==2025.3
 watchfiles==1.2.0
+
+# Paquete privado compartido con Sistema-de-Ventas. Mismo commit que Dockerfile:
+# actualizar ambos juntos.
+tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@64850c8

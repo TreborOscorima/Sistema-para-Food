@@ -270,6 +270,8 @@ class ConfigImpresora(TimestampedModel, table=True):
     __tablename__ = "food_config_impresora"
     __table_args__ = (
         UniqueConstraint("company_id", name="uq_food_config_impresora_company"),
+        UniqueConstraint("admin_email", name="uq_food_config_impresora_admin_email"),
+        UniqueConstraint("slug", name="uq_food_config_impresora_slug"),
     )
 
     id: int | None = Field(default=None, primary_key=True)

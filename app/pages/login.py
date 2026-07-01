@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import _CSS_SCRIPT
-from app.states.food_state import FoodState
+from app.states.food_state import CompanyOptionView, FoodState
 
 
 # ─── Tarjeta de rol ───────────────────────────────────────────────────────────
@@ -142,18 +142,84 @@ def _keypad() -> rx.Component:
     )
 
 
-# ─── Card principal ────────────────────────────────────────────────────────────
+# ─── Selector de restaurante (paso previo al PIN) ─────────────────────────────
 
-def _login_card() -> rx.Component:
+def _restaurant_row(empresa: CompanyOptionView) -> rx.Component:
     return rx.box(
-        # Selector de rol
+        rx.text(empresa.name, font_size="14px", font_weight="600", color="#FFFFFF"),
+        on_click=FoodState.seleccionar_restaurante(empresa.id),
+        background="#0F172A",
+        border="2px solid #334155",
+        border_radius="12px",
+        padding="14px 16px",
+        width="100%",
+        cursor="pointer",
+        transition="border-color 0.15s, transform 0.1s",
+        _hover={"border_color": "#EA580C", "transform": "scale(0.99)"},
+        _active={"transform": "scale(0.97)"},
+    )
+
+
+def _restaurant_selector_card() -> rx.Component:
+    return rx.box(
         rx.text(
-            "Seleccioná tu rol",
+            "Elegí tu restaurante",
             font_size="11px",
             font_weight="700",
             color="#64748B",
             text_transform="uppercase",
             letter_spacing="0.08em",
+            margin_bottom="16px",
+        ),
+        rx.cond(
+            FoodState.companies_activas.length() > 0,
+            rx.vstack(
+                rx.foreach(FoodState.companies_activas, _restaurant_row),
+                spacing="2",
+                width="100%",
+            ),
+            rx.text(
+                "No hay restaurantes activos por ahora.",
+                font_size="13px",
+                color="#64748B",
+                text_align="center",
+            ),
+        ),
+        background="#1E293B",
+        border_radius="20px",
+        border="1px solid #334155",
+        padding="32px",
+        width="100%",
+        max_width="400px",
+    )
+
+
+# ─── Card principal ────────────────────────────────────────────────────────────
+
+def _login_card() -> rx.Component:
+    return rx.box(
+        # Selector de rol
+        rx.hstack(
+            rx.text(
+                "Seleccioná tu rol",
+                font_size="11px",
+                font_weight="700",
+                color="#64748B",
+                text_transform="uppercase",
+                letter_spacing="0.08em",
+            ),
+            rx.spacer(),
+            rx.link(
+                "← Volver",
+                on_click=FoodState.volver_a_seleccion_restaurante,
+                font_size="11px",
+                color="#64748B",
+                cursor="pointer",
+                text_decoration="none",
+                _hover={"color": "#94A3B8"},
+            ),
+            width="100%",
+            align="center",
             margin_bottom="12px",
         ),
         rx.grid(
@@ -265,7 +331,11 @@ def login_page() -> rx.Component:
                     margin_bottom="8px",
                 ),
                 # Card principal
-                _login_card(),
+                rx.cond(
+                    FoodState.login_step == "pin",
+                    _login_card(),
+                    _restaurant_selector_card(),
+                ),
                 # Link administrador
                 rx.link(
                     "Acceso administrador →",

@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import reflex as rx
 
+import app.models  # noqa: F401  Importar modelos ANTES de registrar los listeners de tenant
+
+# IMPORTANTE: registrar aislamiento multi-tenant antes de cualquier query.
+from app.utils.tenant import register_tenant_listeners
+register_tenant_listeners()
+
 # Importar páginas para que los decoradores @rx.page las registren
 import app.pages  # noqa: F401
 from app.states.food_state import FoodState

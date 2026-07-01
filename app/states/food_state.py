@@ -9,6 +9,7 @@ import os
 import pathlib
 import re
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -19,6 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlmodel import select
 
+from app.models.company import Company
 from app.models.food import (
     Categoria,
     Cliente,
@@ -42,6 +44,7 @@ from app.models.food import (
 )
 from app.services.printer_service import SilentPrinterService, TicketLine
 from app.utils.db import get_session
+from app.utils.tenant import set_tenant_context, tenant_bypass
 
 # ─── Constantes de negocio ───────────────────────────────────────────────────
 CURRENCY_SYMBOL = "S/"
@@ -148,15 +151,10 @@ _ROL_BADGE_TEXT: dict[str, str] = {
     RolUsuario.COCINA.value: "#B45309",
 }
 
-# company_id y base URLs leídos del entorno en tiempo de importación
-_COMPANY_ID: int = int(os.getenv("FOOD_COMPANY_ID", "0") or "0")
+# Base URLs leídas del entorno en tiempo de importación. El company_id ya no es
+# fijo: FoodState._company_id() lo resuelve por sesión (ver clase FoodState).
 _FOOD_BASE_URL: str = os.getenv("FOOD_BASE_URL", "http://localhost:3003").rstrip("/")
 _FOOD_API_URL: str = os.getenv("PUBLIC_API_URL", "http://localhost:3004").rstrip("/")
-
-if _COMPANY_ID <= 0:
-    raise RuntimeError(
-        "FOOD_COMPANY_ID debe ser > 0. Revisá el .env o la variable de entorno."
-    )
 
 
 def _utcnow() -> datetime:
@@ -261,10 +259,10 @@ def _pedido_sales_label(pedido: Pedido, mesas: dict) -> str:
     return _pedido_table_label(pedido, mesas)
 
 
-def _get_open_order(session, mesa_id: int) -> Pedido | None:
+def _get_open_order(session, mesa_id: int, company_id: int) -> Pedido | None:
     return session.exec(
         select(Pedido).where(
-            Pedido.company_id == _COMPANY_ID,
+            Pedido.company_id == company_id,
             Pedido.mesa_id == mesa_id,
             Pedido.estado.in_(OPEN_ORDER_STATES),
         ).order_by(Pedido.id.desc())
@@ -334,8 +332,8 @@ def _sync_order_status(session, pedido: Pedido) -> None:
     session.add(pedido)
 
 
-def _ensure_open_order(session, mesa: Mesa, mozo_id: int | None = None) -> Pedido:
-    pedido = _get_open_order(session, mesa.id or 0)
+def _ensure_open_order(session, mesa: Mesa, company_id: int, mozo_id: int | None = None) -> Pedido:
+    pedido = _get_open_order(session, mesa.id or 0, company_id)
     if pedido is not None:
         if mozo_id is not None and pedido.mozo_id is None:
             pedido.mozo_id = mozo_id
@@ -343,7 +341,7 @@ def _ensure_open_order(session, mesa: Mesa, mozo_id: int | None = None) -> Pedid
             session.add(pedido)
         return pedido
     pedido = Pedido(
-        company_id=_COMPANY_ID,
+        company_id=company_id,
         mesa_id=mesa.id or 0,
         mozo_id=mozo_id,
         estado=EstadoPedido.BORRADOR.value,
@@ -460,6 +458,13 @@ class UsuarioSesion(BaseModel):
     id: int
     nombre: str
     rol: str
+    company_id: int
+
+
+class CompanyOptionView(BaseModel):
+    id: int
+    name: str
+    slug: str
 
 
 class CategoriaView(BaseModel):
@@ -576,7 +581,7 @@ class UsuarioAdminView(BaseModel):
 
 # ─── Helpers de inventario ───────────────────────────────────────────────────
 
-def _validar_stock_para_items(session, items: list[tuple[int, int]]) -> list[str]:
+def _validar_stock_para_items(session, items: list[tuple[int, int]], company_id: int) -> list[str]:
     """Devuelve mensajes de error si el stock es insuficiente. Lista vacía = OK.
     items: lista de (producto_id, cantidad)."""
     if not items:
@@ -584,7 +589,7 @@ def _validar_stock_para_items(session, items: list[tuple[int, int]]) -> list[str
     producto_ids = list({pid for pid, _ in items})
     recetas = session.exec(
         select(RecetaItem).where(
-            RecetaItem.company_id == _COMPANY_ID,
+            RecetaItem.company_id == company_id,
             RecetaItem.producto_id.in_(producto_ids),
         )
     ).all()
@@ -604,7 +609,7 @@ def _validar_stock_para_items(session, items: list[tuple[int, int]]) -> list[str
         i.id: i
         for i in session.exec(
             select(Insumo).where(
-                Insumo.company_id == _COMPANY_ID,
+                Insumo.company_id == company_id,
                 Insumo.id.in_(list(uso_total.keys())),
             )
         ).all()
@@ -620,7 +625,7 @@ def _validar_stock_para_items(session, items: list[tuple[int, int]]) -> list[str
     return errores
 
 
-def _descontar_stock_por_pedido(session, pedido_id: int) -> None:
+def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> None:
     """Descuenta stock de insumos según las recetas de los ítems del pedido."""
     detalles = session.exec(
         select(DetallePedido).where(DetallePedido.pedido_id == pedido_id)
@@ -630,7 +635,7 @@ def _descontar_stock_por_pedido(session, pedido_id: int) -> None:
     producto_ids = list({d.producto_id for d in detalles})
     recetas = session.exec(
         select(RecetaItem).where(
-            RecetaItem.company_id == _COMPANY_ID,
+            RecetaItem.company_id == company_id,
             RecetaItem.producto_id.in_(producto_ids),
         )
     ).all()
@@ -644,7 +649,7 @@ def _descontar_stock_por_pedido(session, pedido_id: int) -> None:
         i.id: i
         for i in session.exec(
             select(Insumo).where(
-                Insumo.company_id == _COMPANY_ID,
+                Insumo.company_id == company_id,
                 Insumo.id.in_(insumo_ids),
             )
         ).all()
@@ -692,6 +697,32 @@ class FoodState(rx.State):
     login_pin_input: str = ""
     login_rol_seleccionado: str = RolUsuario.MOZO.value
     sidebar_collapsed: bool = False
+
+    login_step: str = "restaurant"
+    companies_activas: list[CompanyOptionView] = []
+    login_selected_company_id: int = 0
+    login_selected_company_slug: str = ""
+
+    def _company_id(self) -> int:
+        """company_id del tenant activo — de la sesión logueada, o del restaurante
+        elegido en el paso previo al login. Arma el contexto de aislamiento tenant."""
+        company_id = (
+            self.usuario_actual.company_id
+            if self.usuario_actual is not None
+            else self.login_selected_company_id
+        )
+        set_tenant_context(company_id, None)
+        return company_id
+
+    @contextmanager
+    def _tenant_session(self):
+        """Como get_session(), pero arma el contexto tenant y evita que el listener
+        de tuwayki_core dispare un RuntimeError — el filtro real sigue siendo
+        explícito en cada query vía self._company_id()."""
+        self._company_id()
+        with get_session() as session:
+            session.info["tenant_bypass"] = True
+            yield session
 
     categoria_form_id: int = 0
     categoria_form_nombre: str = ""
@@ -1211,7 +1242,36 @@ class FoodState(rx.State):
     def on_load_login(self):
         if self.usuario_actual is not None:
             return rx.redirect(self.usuario_home_route, replace=True)
+        self.login_step = "restaurant"
+        self.login_selected_company_id = 0
+        self.login_selected_company_slug = ""
+        self.login_pin_input = ""
+        self.login_error = ""
+        with tenant_bypass():
+            with get_session() as session:
+                empresas = session.exec(
+                    select(Company)
+                    .where(Company.is_active.is_(True))
+                    .order_by(Company.name)
+                ).all()
+        self.companies_activas = [
+            CompanyOptionView(id=c.id or 0, name=c.name, slug=c.slug) for c in empresas
+        ]
         return None
+
+    def seleccionar_restaurante(self, company_id: int) -> None:
+        empresa = next((c for c in self.companies_activas if c.id == company_id), None)
+        if empresa is None:
+            return
+        self.login_selected_company_id = empresa.id
+        self.login_selected_company_slug = empresa.slug
+        self.login_step = "pin"
+        self.login_error = ""
+
+    def volver_a_seleccion_restaurante(self) -> None:
+        self.login_step = "restaurant"
+        self.login_pin_input = ""
+        self.login_error = ""
 
     def on_load_mozos(self):
         self.stop_caja_polling()
@@ -1314,10 +1374,10 @@ class FoodState(rx.State):
             self.login_error = "Ingresa un PIN válido de 4 a 6 dígitos."
             return
         self.login_error = ""
-        with get_session() as session:
+        with self._tenant_session() as session:
             candidatos = session.exec(
                 select(UsuarioFood).where(
-                    UsuarioFood.company_id == _COMPANY_ID,
+                    UsuarioFood.company_id == self._company_id(),
                     UsuarioFood.activo.is_(True),
                 )
             ).all()
@@ -1342,6 +1402,7 @@ class FoodState(rx.State):
             id=usuario.id or 0,
             nombre=usuario.nombre,
             rol=usuario.rol,
+            company_id=usuario.company_id,
         )
         self.login_pin_input = ""
         self.mensaje = f"Sesion iniciada como {usuario.nombre}."
@@ -1385,10 +1446,10 @@ class FoodState(rx.State):
 
     def cargar_usuarios_admin(self) -> None:
         mi_id = self.usuario_actual.id if self.usuario_actual else 0
-        with get_session() as session:
+        with self._tenant_session() as session:
             rows = session.exec(
                 select(UsuarioFood)
-                .where(UsuarioFood.company_id == _COMPANY_ID)
+                .where(UsuarioFood.company_id == self._company_id())
                 .order_by(UsuarioFood.rol, UsuarioFood.nombre)
             ).all()
         self.usuarios_admin = [
@@ -1411,9 +1472,9 @@ class FoodState(rx.State):
         self.mensaje = ""
 
     def editar_usuario(self, user_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             u = session.get(UsuarioFood, user_id)
-        if u is None or u.company_id != _COMPANY_ID:
+        if u is None or u.company_id != self._company_id():
             self.mensaje = "Usuario no encontrado."
             return
         self.usuario_form_id = u.id or 0
@@ -1452,16 +1513,16 @@ class FoodState(rx.State):
                 self.mensaje = "Los PINs no coinciden."
                 return
 
-        with get_session() as session:
+        with self._tenant_session() as session:
             otros = session.exec(
                 select(UsuarioFood).where(
-                    UsuarioFood.company_id == _COMPANY_ID,
+                    UsuarioFood.company_id == self._company_id(),
                     UsuarioFood.id != self.usuario_form_id,
                 )
             ).all()
             if es_edicion:
                 u = session.get(UsuarioFood, self.usuario_form_id)
-                if u is None or u.company_id != _COMPANY_ID:
+                if u is None or u.company_id != self._company_id():
                     self.mensaje = "Usuario no encontrado."
                     return
                 if nuevo_pin:
@@ -1483,7 +1544,7 @@ class FoodState(rx.State):
                     self.mensaje = f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}."
                     return
                 u = UsuarioFood(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     nombre=nombre,
                     pin=_hash_pin(nuevo_pin),
                     rol=rol,
@@ -1501,15 +1562,15 @@ class FoodState(rx.State):
         if user_id == mi_id:
             self.mensaje = "No puedes desactivarte a ti mismo."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             u = session.get(UsuarioFood, user_id)
-            if u is None or u.company_id != _COMPANY_ID:
+            if u is None or u.company_id != self._company_id():
                 self.mensaje = "Usuario no encontrado."
                 return
             if u.activo and u.rol == RolUsuario.ADMIN.value:
                 admins_activos = session.exec(
                     select(UsuarioFood).where(
-                        UsuarioFood.company_id == _COMPANY_ID,
+                        UsuarioFood.company_id == self._company_id(),
                         UsuarioFood.rol == RolUsuario.ADMIN.value,
                         UsuarioFood.activo.is_(True),
                     )
@@ -1532,9 +1593,9 @@ class FoodState(rx.State):
     # ─── Configuración impresoras ─────────────────────────────────────────────
 
     def cargar_config_impresora(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             cfg = session.exec(
-                select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+                select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
             ).first()
             if cfg:
                 self.config_nombre_local = cfg.nombre_local
@@ -1551,12 +1612,12 @@ class FoodState(rx.State):
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
 
     def guardar_config_impresora(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             cfg = session.exec(
-                select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+                select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
             ).first()
             if cfg is None:
-                cfg = ConfigImpresora(company_id=_COMPANY_ID)
+                cfg = ConfigImpresora(company_id=self._company_id())
             cfg.nombre_local = self.config_nombre_local.strip() or "Mi Restaurante"
             cfg.cocina_activa = self.config_cocina_activa
             cfg.cocina_ip = self.config_cocina_ip.strip()
@@ -1625,12 +1686,12 @@ class FoodState(rx.State):
         if nueva and nueva != confirm:
             self.mensaje = "Las contraseñas no coinciden."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             cfg = session.exec(
-                select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+                select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
             ).first()
             if cfg is None:
-                cfg = ConfigImpresora(company_id=_COMPANY_ID)
+                cfg = ConfigImpresora(company_id=self._company_id())
             cfg.admin_email = email
             if nueva:
                 cfg.admin_password_hash = hashlib.sha256(nueva.encode()).hexdigest()
@@ -1644,10 +1705,10 @@ class FoodState(rx.State):
     # ─── CRUD Mesas (admin config) ────────────────────────────────────────────
 
     def cargar_mesas_config(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesas = session.exec(
                 select(Mesa)
-                .where(Mesa.company_id == _COMPANY_ID)
+                .where(Mesa.company_id == self._company_id())
                 .order_by(Mesa.numero)
             ).all()
             self.mesas_config = [
@@ -1672,9 +1733,9 @@ class FoodState(rx.State):
         self._reset_mesa_config_form()
 
     def editar_mesa_config(self, mesa_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             m = session.get(Mesa, mesa_id)
-        if m is None or m.company_id != _COMPANY_ID:
+        if m is None or m.company_id != self._company_id():
             return
         self.mesa_config_form_id = m.id or 0
         self.mesa_config_form_numero = str(m.numero)
@@ -1692,24 +1753,24 @@ class FoodState(rx.State):
         except ValueError:
             capacidad = 4
         nombre = self.mesa_config_form_nombre.strip()
-        with get_session() as session:
+        with self._tenant_session() as session:
             es_edicion = self.mesa_config_form_id > 0
             if es_edicion:
                 m = session.get(Mesa, self.mesa_config_form_id)
-                if m is None or m.company_id != _COMPANY_ID:
+                if m is None or m.company_id != self._company_id():
                     self.mensaje = "Mesa no encontrada."
                     return
             else:
                 conflicto = session.exec(
                     select(Mesa).where(
-                        Mesa.company_id == _COMPANY_ID,
+                        Mesa.company_id == self._company_id(),
                         Mesa.numero == numero,
                     )
                 ).first()
                 if conflicto:
                     self.mensaje = f"Ya existe la mesa #{numero}."
                     return
-                m = Mesa(company_id=_COMPANY_ID, numero=numero)
+                m = Mesa(company_id=self._company_id(), numero=numero)
             m.numero = numero
             m.nombre = nombre
             m.capacidad = capacidad
@@ -1722,9 +1783,9 @@ class FoodState(rx.State):
         self.cargar_mesas_config()
 
     def toggle_mesa_activa_config(self, mesa_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             m = session.get(Mesa, mesa_id)
-            if m is None or m.company_id != _COMPANY_ID:
+            if m is None or m.company_id != self._company_id():
                 return
             m.activa = not m.activa
             m.updated_at = _utcnow()
@@ -1733,9 +1794,9 @@ class FoodState(rx.State):
         self.cargar_mesas_config()
 
     def eliminar_mesa_config(self, mesa_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             m = session.get(Mesa, mesa_id)
-            if m is None or m.company_id != _COMPANY_ID:
+            if m is None or m.company_id != self._company_id():
                 self.mensaje = "Mesa no encontrada."
                 return
             pedido_abierto = session.exec(
@@ -1763,9 +1824,9 @@ class FoodState(rx.State):
 
     def _get_printer_service(self) -> "SilentPrinterService":
         try:
-            with get_session() as session:
+            with self._tenant_session() as session:
                 cfg = session.exec(
-                    select(ConfigImpresora).where(ConfigImpresora.company_id == _COMPANY_ID)
+                    select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
                 ).first()
                 if cfg is not None:
                     return SilentPrinterService.from_db_config(cfg)
@@ -1850,15 +1911,15 @@ class FoodState(rx.State):
 
     def cargar_mesas(self) -> None:
         mesas_ui: list[MesaView] = []
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesas_db = session.exec(
                 select(Mesa).where(
-                    Mesa.company_id == _COMPANY_ID,
+                    Mesa.company_id == self._company_id(),
                     Mesa.activa.is_(True),
                 ).order_by(Mesa.numero)
             ).all()
             for mesa in mesas_db:
-                pedido_abierto = _get_open_order(session, mesa.id or 0)
+                pedido_abierto = _get_open_order(session, mesa.id or 0, self._company_id())
                 # Auto-corregir mesa stuck: si figura OCUPADA pero no hay pedido abierto, volver a LIBRE
                 if mesa.estado != EstadoMesa.LIBRE.value and pedido_abierto is None:
                     mesa.estado = EstadoMesa.LIBRE.value
@@ -1898,12 +1959,12 @@ class FoodState(rx.State):
     # ─── Carta ────────────────────────────────────────────────────────────────
 
     def cargar_menu(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             categorias_db = session.exec(
-                select(Categoria).where(Categoria.company_id == _COMPANY_ID).order_by(Categoria.orden, Categoria.nombre)
+                select(Categoria).where(Categoria.company_id == self._company_id()).order_by(Categoria.orden, Categoria.nombre)
             ).all()
             productos_db = session.exec(
-                select(Producto).where(Producto.company_id == _COMPANY_ID).order_by(Producto.nombre)
+                select(Producto).where(Producto.company_id == self._company_id()).order_by(Producto.nombre)
             ).all()
             categorias_map = {c.id: c.nombre for c in categorias_db}
             self.categorias = [
@@ -1951,13 +2012,13 @@ class FoodState(rx.State):
         self.mensaje = f"{self.mesa_seleccionada_label} seleccionada. {self.cantidad_items_carrito} items pendientes.{alerta}"
 
     def _cargar_carrito_mesa(self, mesa_id: int) -> None:
-        with get_session() as session:
-            pedido = _get_open_order(session, mesa_id)
+        with self._tenant_session() as session:
+            pedido = _get_open_order(session, mesa_id, self._company_id())
             if pedido is None:
                 self.carrito = []
                 return
             detalles = _get_unsent_details(session, pedido.id or 0)
-            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             self.carrito = [
                 CarritoItem(
                     producto_id=d.producto_id,
@@ -1972,8 +2033,8 @@ class FoodState(rx.State):
             ]
 
     def _cargar_historial_mesa(self, mesa_id: int) -> None:
-        with get_session() as session:
-            pedido = _get_open_order(session, mesa_id)
+        with self._tenant_session() as session:
+            pedido = _get_open_order(session, mesa_id, self._company_id())
             if pedido is None:
                 self.historial_pedido = []
                 self.mesa_atendida_por_nombre = ""
@@ -1985,8 +2046,8 @@ class FoodState(rx.State):
                     DetallePedido.impreso_cocina.is_(True),
                 ).order_by(DetallePedido.enviado_cocina_at, DetallePedido.id)
             ).all()
-            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
-            usuarios_map = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
+            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            usuarios_map = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             mozo = usuarios_map.get(pedido.mozo_id)
             self.mesa_atendida_por_nombre = _actor_name(mozo.nombre if mozo else "")
             self.nota_pedido_mesa = pedido.notas or ""
@@ -2018,17 +2079,17 @@ class FoodState(rx.State):
         if self.mesa_seleccionada_id == 0:
             self.mensaje = "Selecciona una mesa antes de agregar productos."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
-            if mesa is None or mesa.company_id != _COMPANY_ID:
+            if mesa is None or mesa.company_id != self._company_id():
                 self.mensaje = "La mesa seleccionada ya no existe."
                 return
             producto = session.get(Producto, producto_id)
-            if producto is None or producto.company_id != _COMPANY_ID or not producto.disponible:
+            if producto is None or producto.company_id != self._company_id() or not producto.disponible:
                 self.mensaje = "Producto no disponible."
                 return
             producto_nombre = producto.nombre
-            pedido = _ensure_open_order(session, mesa, mozo_id=self.usuario_actual.id if self.usuario_actual else None)
+            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=self.usuario_actual.id if self.usuario_actual else None)
             detalle = session.exec(
                 select(DetallePedido).where(
                     DetallePedido.pedido_id == pedido.id,
@@ -2039,7 +2100,7 @@ class FoodState(rx.State):
             precio = _to_decimal(producto.precio)
             if detalle is None:
                 detalle = DetallePedido(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     pedido_id=pedido.id or 0,
                     producto_id=producto.id or 0,
                     cantidad=1,
@@ -2068,12 +2129,12 @@ class FoodState(rx.State):
         if self.mesa_seleccionada_id == 0:
             self.mensaje = "Selecciona una mesa antes de editar el carrito."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None:
                 self.mensaje = "La mesa seleccionada ya no existe."
                 return
-            pedido = _get_open_order(session, mesa.id or 0)
+            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
             if pedido is None:
                 self.mensaje = "No hay pedido abierto para esta mesa."
                 return
@@ -2121,12 +2182,12 @@ class FoodState(rx.State):
             self.carrito = []
             self.mensaje = "No hay mesa seleccionada."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None:
                 self.mensaje = "La mesa seleccionada ya no existe."
                 return
-            pedido = _get_open_order(session, mesa.id or 0)
+            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
             if pedido is None:
                 self.carrito = []
                 self.mensaje = "No hay pedido abierto para limpiar."
@@ -2158,8 +2219,8 @@ class FoodState(rx.State):
             self.nota_producto_activo_id = 0
             return
         nota = self.nota_input_temporal.strip()
-        with get_session() as session:
-            pedido = _get_open_order(session, self.mesa_seleccionada_id)
+        with self._tenant_session() as session:
+            pedido = _get_open_order(session, self.mesa_seleccionada_id, self._company_id())
             if pedido is None:
                 self.nota_producto_activo_id = 0
                 return
@@ -2194,8 +2255,8 @@ class FoodState(rx.State):
         if self.mesa_seleccionada_id == 0:
             return
         nota = self.nota_pedido_mesa.strip()
-        with get_session() as session:
-            pedido = _get_open_order(session, self.mesa_seleccionada_id)
+        with self._tenant_session() as session:
+            pedido = _get_open_order(session, self.mesa_seleccionada_id, self._company_id())
             if pedido is None:
                 return
             pedido.notas = nota or None
@@ -2213,12 +2274,12 @@ class FoodState(rx.State):
         if self.cantidad_items_carrito > 0:
             self.mensaje = "Primero envia a cocina los items pendientes."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None:
                 self.mensaje = "La mesa seleccionada ya no existe."
                 return
-            pedido = _get_open_order(session, mesa.id or 0)
+            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
             if pedido is None or _to_decimal(pedido.total) <= 0:
                 self.mensaje = "No hay consumo pendiente en esa mesa."
                 return
@@ -2239,12 +2300,12 @@ class FoodState(rx.State):
         pedido_id = 0
         mesa_label = ""
         ticket_lines: list[TicketLine] = []
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None:
                 self.mensaje = "La mesa seleccionada ya no existe."
                 return
-            pedido = _get_open_order(session, mesa.id or 0)
+            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
             if pedido is None:
                 self.mensaje = "No hay items pendientes para enviar."
                 return
@@ -2257,12 +2318,12 @@ class FoodState(rx.State):
                 self.mensaje = "No hay items nuevos pendientes de enviar."
                 return
             errores_stock = _validar_stock_para_items(
-                session, [(d.producto_id, d.cantidad) for d in detalles_pendientes]
+                session, [(d.producto_id, d.cantidad) for d in detalles_pendientes], self._company_id()
             )
             if errores_stock:
                 self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
                 return
-            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             now = _utcnow()
             for d in detalles_pendientes:
                 producto = productos_map.get(d.producto_id)
@@ -2304,19 +2365,19 @@ class FoodState(rx.State):
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
 
     def cargar_cocina(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             detalles = session.exec(
                 select(DetallePedido).where(
-                    DetallePedido.company_id == _COMPANY_ID,
+                    DetallePedido.company_id == self._company_id(),
                     DetallePedido.impreso_cocina.is_(True),
                     DetallePedido.estado_produccion.in_(KITCHEN_VISIBLE_STATES),
                 ).order_by(DetallePedido.enviado_cocina_at, DetallePedido.id)
             ).all()
             pedido_ids = {d.pedido_id for d in detalles}
             pedidos = {p.id: p for p in session.exec(select(Pedido).where(Pedido.id.in_(pedido_ids))).all()}
-            mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == _COMPANY_ID)).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+            mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == self._company_id())).all()}
+            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             grupos: dict = {}
             for d in detalles:
                 pedido = pedidos.get(d.pedido_id)
@@ -2377,7 +2438,7 @@ class FoodState(rx.State):
         if not ids:
             self.mensaje = "No se encontro el ticket de cocina."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             detalles = session.exec(select(DetallePedido).where(DetallePedido.id.in_(ids))).all()
             actualizables = [d for d in detalles if d.impreso_cocina and d.estado_produccion == source_state]
             if not actualizables:
@@ -2418,7 +2479,7 @@ class FoodState(rx.State):
         )
 
     def entregar_item_historial(self, detalle_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             detalle = session.get(DetallePedido, detalle_id)
             if detalle is None or not detalle.impreso_cocina:
                 self.mensaje = "El item indicado ya no existe."
@@ -2440,9 +2501,9 @@ class FoodState(rx.State):
         self.mensaje = "Item entregado a la mesa."
 
     def cancelar_item_pedido(self, detalle_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             detalle = session.get(DetallePedido, detalle_id)
-            if detalle is None or detalle.company_id != _COMPANY_ID:
+            if detalle is None or detalle.company_id != self._company_id():
                 self.mensaje = "El item indicado ya no existe."
                 return
             if detalle.estado_produccion != EstadoProduccion.PENDIENTE.value:
@@ -2528,12 +2589,12 @@ class FoodState(rx.State):
         attended_by = ""
         total_base = Decimal("0.00")
         ticket_lines: list[TicketLine] = []
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, objetivo)
             if mesa is None:
                 self.mensaje = "La mesa indicada ya no existe."
                 return
-            pedido = _get_open_order(session, mesa.id or 0)
+            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
             if pedido is None:
                 self.mensaje = "No hay pedido abierto para esa mesa."
                 return
@@ -2544,8 +2605,8 @@ class FoodState(rx.State):
                 self.mensaje = "Todavia hay items en cocina o listos por entregar."
                 return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             ticket_lines = [
                 TicketLine(
                     name=(productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"),
@@ -2582,7 +2643,7 @@ class FoodState(rx.State):
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
             session.add(mesa)
-            _descontar_stock_por_pedido(session, pedido.id or 0)
+            _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
             if es_fiado and self.caja_cobro_cliente_id > 0:
                 try:
                     self._registrar_cargo_cc(
@@ -2635,12 +2696,12 @@ class FoodState(rx.State):
         attended_by = ""
         total = 0.0
         ticket_lines: list[TicketLine] = []
-        with get_session() as session:
+        with self._tenant_session() as session:
             mesa = session.get(Mesa, objetivo)
             if mesa is None:
                 self.mensaje = "La mesa indicada ya no existe."
                 return
-            pedido = _get_open_order(session, mesa.id or 0)
+            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
             if pedido is None:
                 self.mensaje = "No hay pedido abierto para esa mesa."
                 return
@@ -2651,8 +2712,8 @@ class FoodState(rx.State):
                 self.mensaje = "Todavia hay items en cocina o listos por entregar."
                 return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             ticket_lines = [
                 TicketLine(
                     name=(productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"),
@@ -2679,7 +2740,7 @@ class FoodState(rx.State):
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
             session.add(mesa)
-            _descontar_stock_por_pedido(session, pedido.id or 0)
+            _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -2786,21 +2847,21 @@ class FoodState(rx.State):
         ticket_label = f"Para Llevar - Cliente: {cliente_nombre}"
         attended_by = _actor_name(self.usuario_actual.nombre if self.usuario_actual else "") or "Sin asignar"
         ticket_lines: list[TicketLine] = []
-        with get_session() as session:
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+        with self._tenant_session() as session:
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             invalidos = [item.nombre for item in self.mostrador_carrito if item.producto_id not in productos or not productos[item.producto_id].disponible]
             if invalidos:
                 self.mensaje = f"Productos no disponibles: {', '.join(invalidos)}"
                 return
             errores_stock = _validar_stock_para_items(
-                session, [(item.producto_id, item.cantidad) for item in self.mostrador_carrito]
+                session, [(item.producto_id, item.cantidad) for item in self.mostrador_carrito], self._company_id()
             )
             if errores_stock:
                 self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
                 return
             now = _utcnow()
             pedido = Pedido(
-                company_id=_COMPANY_ID,
+                company_id=self._company_id(),
                 mesa_id=None,
                 cajero_id=self.usuario_actual.id,
                 tipo_pedido=TipoPedido.MOSTRADOR.value,
@@ -2820,7 +2881,7 @@ class FoodState(rx.State):
                 precio = _to_decimal(producto.precio)
                 subtotal = precio * item.cantidad
                 detalle = DetallePedido(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     pedido_id=pedido.id or 0,
                     producto_id=producto.id or 0,
                     cantidad=item.cantidad,
@@ -2842,7 +2903,7 @@ class FoodState(rx.State):
             total = float(_recalculate_order_total(session, pedido))
             _sync_order_status(session, pedido)
             session.add(pedido)
-            _descontar_stock_por_pedido(session, pedido.id or 0)
+            _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
             session.commit()
             pedido_id = pedido.id or 0
         self.ultimo_pedido_id = pedido_id
@@ -2861,10 +2922,10 @@ class FoodState(rx.State):
         self.mensaje = f"Pedido de mostrador #{pedido_id} cobrado y enviado."
 
     def cargar_pedidos_mostrador_listos(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             detalles = session.exec(
                 select(DetallePedido).where(
-                    DetallePedido.company_id == _COMPANY_ID,
+                    DetallePedido.company_id == self._company_id(),
                     DetallePedido.impreso_cocina.is_(True),
                     DetallePedido.estado_produccion == EstadoProduccion.LISTO_PARA_ENTREGAR.value,
                 ).order_by(DetallePedido.enviado_cocina_at, DetallePedido.id)
@@ -2878,7 +2939,7 @@ class FoodState(rx.State):
                 for p in session.exec(select(Pedido).where(Pedido.id.in_(pedido_ids))).all()
                 if p.tipo_pedido == TipoPedido.MOSTRADOR.value
             }
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             grupos: dict = {}
             for d in detalles:
                 pedido = pedidos.get(d.pedido_id)
@@ -2901,10 +2962,10 @@ class FoodState(rx.State):
             ]
 
     def cargar_pedidos_mostrador_entregados(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             pedidos = session.exec(
                 select(Pedido).where(
-                    Pedido.company_id == _COMPANY_ID,
+                    Pedido.company_id == self._company_id(),
                     Pedido.tipo_pedido == TipoPedido.MOSTRADOR.value,
                     Pedido.pagado.is_(True),
                 ).order_by(Pedido.updated_at.desc(), Pedido.id.desc())
@@ -2912,7 +2973,7 @@ class FoodState(rx.State):
             if not pedidos:
                 self.pedidos_mostrador_entregados = []
                 return
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             historial: list = []
             for pedido in pedidos:
                 detalles = session.exec(
@@ -2939,9 +3000,9 @@ class FoodState(rx.State):
             self.pedidos_mostrador_entregados = [item for _, item in historial[:10]]
 
     def entregar_pedido_mostrador(self, pedido_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             pedido = session.get(Pedido, pedido_id)
-            if pedido is None or pedido.tipo_pedido != TipoPedido.MOSTRADOR.value or pedido.company_id != _COMPANY_ID:
+            if pedido is None or pedido.tipo_pedido != TipoPedido.MOSTRADOR.value or pedido.company_id != self._company_id():
                 self.mensaje = "El pedido de mostrador ya no existe."
                 return
             detalles_listos = session.exec(
@@ -2974,10 +3035,10 @@ class FoodState(rx.State):
         hoy = _utcnow().date()
         inicio_hoy = datetime(hoy.year, hoy.month, hoy.day)
         fin_hoy = inicio_hoy + timedelta(days=1)
-        with get_session() as session:
+        with self._tenant_session() as session:
             pedidos_hoy = session.exec(
                 select(Pedido).where(
-                    Pedido.company_id == _COMPANY_ID,
+                    Pedido.company_id == self._company_id(),
                     or_(
                         Pedido.pagado.is_(True),
                         Pedido.estado == EstadoPedido.COBRADO.value,
@@ -2993,7 +3054,7 @@ class FoodState(rx.State):
             propina_total = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_hoy)
             mesas_no_libres = session.exec(
                 select(Mesa).where(
-                    Mesa.company_id == _COMPANY_ID,
+                    Mesa.company_id == self._company_id(),
                     Mesa.estado != EstadoMesa.LIBRE.value,
                     Mesa.activa.is_(True),
                 )
@@ -3006,7 +3067,7 @@ class FoodState(rx.State):
                 ).all()
                 productos = {
                     p.id: p
-                    for p in session.exec(select(Producto).where(Producto.company_id == _COMPANY_ID)).all()
+                    for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()
                 }
                 for d in detalles:
                     pid = d.producto_id
@@ -3037,11 +3098,11 @@ class FoodState(rx.State):
     # ─── Historial de ventas ──────────────────────────────────────────────────
 
     def cargar_historial_ventas(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             query = (
                 select(Pedido)
                 .where(
-                    Pedido.company_id == _COMPANY_ID,
+                    Pedido.company_id == self._company_id(),
                     or_(
                         Pedido.pagado.is_(True),
                         Pedido.estado == EstadoPedido.COBRADO.value,
@@ -3068,8 +3129,8 @@ class FoodState(rx.State):
             self.historial_total = total_count
             offset = self.historial_pagina * self._HISTORIAL_PAGE_SIZE
             pedidos = session.exec(query.offset(offset).limit(self._HISTORIAL_PAGE_SIZE)).all()
-            mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == _COMPANY_ID)).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == _COMPANY_ID)).all()}
+            mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == self._company_id())).all()}
+            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             historial: list[VentaHistorialView] = []
             for p in pedidos:
                 total_base = _to_decimal(p.total)
@@ -3140,10 +3201,10 @@ class FoodState(rx.State):
             orden = int(self.categoria_form_orden)
         except ValueError:
             orden = len(self.categorias) + 1
-        with get_session() as session:
+        with self._tenant_session() as session:
             if self.categoria_form_id:
                 cat = session.get(Categoria, self.categoria_form_id)
-                if cat is None or cat.company_id != _COMPANY_ID:
+                if cat is None or cat.company_id != self._company_id():
                     self.mensaje = "Categoria no encontrada."
                     return
                 cat.nombre = nombre
@@ -3153,7 +3214,7 @@ class FoodState(rx.State):
                 session.add(cat)
             else:
                 cat = Categoria(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     nombre=nombre,
                     descripcion=self.categoria_form_descripcion.strip() or None,
                     orden=orden,
@@ -3174,9 +3235,9 @@ class FoodState(rx.State):
         self.categoria_form_orden = str(cat.orden)
 
     def toggle_categoria_activa(self, categoria_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             cat = session.get(Categoria, categoria_id)
-            if cat is None or cat.company_id != _COMPANY_ID:
+            if cat is None or cat.company_id != self._company_id():
                 return
             cat.activa = not cat.activa
             cat.updated_at = _utcnow()
@@ -3219,10 +3280,10 @@ class FoodState(rx.State):
         if precio is None:
             self.mensaje = "El precio debe ser un numero mayor a 0."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             cat = session.exec(
                 select(Categoria).where(
-                    Categoria.company_id == _COMPANY_ID,
+                    Categoria.company_id == self._company_id(),
                     Categoria.nombre == self.producto_form_categoria_nombre,
                 )
             ).first()
@@ -3231,7 +3292,7 @@ class FoodState(rx.State):
                 return
             if self.producto_form_id:
                 prod = session.get(Producto, self.producto_form_id)
-                if prod is None or prod.company_id != _COMPANY_ID:
+                if prod is None or prod.company_id != self._company_id():
                     self.mensaje = "Producto no encontrado."
                     return
                 prod.nombre = nombre
@@ -3244,7 +3305,7 @@ class FoodState(rx.State):
                 session.add(prod)
             else:
                 prod = Producto(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     categoria_id=cat.id or 0,
                     nombre=nombre,
                     descripcion=self.producto_form_descripcion.strip() or None,
@@ -3271,9 +3332,9 @@ class FoodState(rx.State):
         self.producto_form_imagen_url = prod.imagen_url
 
     def toggle_producto_disponible(self, producto_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             prod = session.get(Producto, producto_id)
-            if prod is None or prod.company_id != _COMPANY_ID:
+            if prod is None or prod.company_id != self._company_id():
                 return
             prod.disponible = not prod.disponible
             prod.updated_at = _utcnow()
@@ -3317,10 +3378,10 @@ class FoodState(rx.State):
             self.cargar_menu()
 
     def cargar_inventario(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             insumos_db = session.exec(
                 select(Insumo)
-                .where(Insumo.company_id == _COMPANY_ID)
+                .where(Insumo.company_id == self._company_id())
                 .order_by(Insumo.nombre)
             ).all()
             views: list[InsumoView] = []
@@ -3371,11 +3432,11 @@ class FoodState(rx.State):
         except (InvalidOperation, ValueError):
             self.mensaje = "Stock inválido. Ingresa números positivos."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             if self.inv_form_id == 0:
                 existente = session.exec(
                     select(Insumo).where(
-                        Insumo.company_id == _COMPANY_ID,
+                        Insumo.company_id == self._company_id(),
                         Insumo.nombre == nombre,
                     )
                 ).first()
@@ -3383,7 +3444,7 @@ class FoodState(rx.State):
                     self.mensaje = f"Ya existe un insumo llamado '{nombre}'."
                     return
                 ins = Insumo(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     nombre=nombre,
                     unidad=unidad,
                     stock_actual=stock_actual,
@@ -3394,7 +3455,7 @@ class FoodState(rx.State):
                 self.mensaje = f"Insumo '{nombre}' creado."
             else:
                 ins = session.get(Insumo, self.inv_form_id)
-                if ins is None or ins.company_id != _COMPANY_ID:
+                if ins is None or ins.company_id != self._company_id():
                     self.mensaje = "Insumo no encontrado."
                     return
                 ins.nombre = nombre
@@ -3414,9 +3475,9 @@ class FoodState(rx.State):
         self.cargar_inventario()
 
     def editar_insumo(self, insumo_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             ins = session.get(Insumo, insumo_id)
-            if ins is None or ins.company_id != _COMPANY_ID:
+            if ins is None or ins.company_id != self._company_id():
                 return
             self.inv_form_id = ins.id or 0
             self.inv_form_nombre = ins.nombre
@@ -3436,9 +3497,9 @@ class FoodState(rx.State):
         self.inv_form_editando = False
 
     def toggle_insumo_activo(self, insumo_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             ins = session.get(Insumo, insumo_id)
-            if ins is None or ins.company_id != _COMPANY_ID:
+            if ins is None or ins.company_id != self._company_id():
                 return
             ins.activo = not ins.activo
             ins.updated_at = _utcnow()
@@ -3457,16 +3518,16 @@ class FoodState(rx.State):
         if pid == 0:
             self.inv_receta_items = []
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             ris = session.exec(
                 select(RecetaItem)
-                .where(RecetaItem.company_id == _COMPANY_ID, RecetaItem.producto_id == pid)
+                .where(RecetaItem.company_id == self._company_id(), RecetaItem.producto_id == pid)
                 .order_by(RecetaItem.id)
             ).all()
             insumos = {
                 i.id: i
                 for i in session.exec(
-                    select(Insumo).where(Insumo.company_id == _COMPANY_ID)
+                    select(Insumo).where(Insumo.company_id == self._company_id())
                 ).all()
             }
             items: list[RecetaItemView] = []
@@ -3509,10 +3570,10 @@ class FoodState(rx.State):
             self.mensaje = "Cantidad inválida. Ingresa un número mayor a 0."
             return
         insumo_id = insumo_match.id
-        with get_session() as session:
+        with self._tenant_session() as session:
             existente = session.exec(
                 select(RecetaItem).where(
-                    RecetaItem.company_id == _COMPANY_ID,
+                    RecetaItem.company_id == self._company_id(),
                     RecetaItem.producto_id == self.inv_producto_sel_id,
                     RecetaItem.insumo_id == insumo_id,
                 )
@@ -3524,7 +3585,7 @@ class FoodState(rx.State):
                 self.mensaje = "Cantidad actualizada en receta."
             else:
                 ri = RecetaItem(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     producto_id=self.inv_producto_sel_id,
                     insumo_id=insumo_id,
                     cantidad=cantidad,
@@ -3537,9 +3598,9 @@ class FoodState(rx.State):
         self.cargar_receta_producto()
 
     def eliminar_receta_item(self, item_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             ri = session.get(RecetaItem, item_id)
-            if ri is None or ri.company_id != _COMPANY_ID:
+            if ri is None or ri.company_id != self._company_id():
                 return
             session.delete(ri)
             session.commit()
@@ -3554,10 +3615,10 @@ class FoodState(rx.State):
 
     def cargar_clientes(self) -> None:
         hoy = _utcnow()
-        with get_session() as session:
+        with self._tenant_session() as session:
             clientes_db = session.exec(
                 select(Cliente)
-                .where(Cliente.company_id == _COMPANY_ID)
+                .where(Cliente.company_id == self._company_id())
                 .order_by(Cliente.nombre)
             ).all()
         views: list[ClienteView] = []
@@ -3634,11 +3695,11 @@ class FoodState(rx.State):
             except (ValueError, IndexError):
                 self.mensaje = "Fecha de nacimiento inválida. Usa el formato AAAA-MM-DD."
                 return
-        with get_session() as session:
+        with self._tenant_session() as session:
             if self.cli_form_id == 0:
                 existente = session.exec(
                     select(Cliente).where(
-                        Cliente.company_id == _COMPANY_ID,
+                        Cliente.company_id == self._company_id(),
                         Cliente.nombre == nombre,
                     )
                 ).first()
@@ -3646,7 +3707,7 @@ class FoodState(rx.State):
                     self.mensaje = f"Ya existe un cliente con ese nombre."
                     return
                 c = Cliente(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     nombre=nombre,
                     telefono=tel,
                     email=email,
@@ -3658,7 +3719,7 @@ class FoodState(rx.State):
                 self.mensaje = f"Cliente '{nombre}' registrado."
             else:
                 c = session.get(Cliente, self.cli_form_id)
-                if c is None or c.company_id != _COMPANY_ID:
+                if c is None or c.company_id != self._company_id():
                     self.mensaje = "Cliente no encontrado."
                     return
                 c.nombre = nombre
@@ -3680,9 +3741,9 @@ class FoodState(rx.State):
         self.cargar_clientes()
 
     def editar_cliente(self, cliente_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             c = session.get(Cliente, cliente_id)
-            if c is None or c.company_id != _COMPANY_ID:
+            if c is None or c.company_id != self._company_id():
                 return
             self.cli_form_id = c.id or 0
             self.cli_form_nombre = c.nombre
@@ -3702,9 +3763,9 @@ class FoodState(rx.State):
         self.cli_form_editando = False
 
     def toggle_cliente_activo(self, cliente_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             c = session.get(Cliente, cliente_id)
-            if c is None or c.company_id != _COMPANY_ID:
+            if c is None or c.company_id != self._company_id():
                 return
             c.activo = not c.activo
             c.updated_at = _utcnow()
@@ -3721,16 +3782,16 @@ class FoodState(rx.State):
         self.cargar_cuentas()
 
     def cargar_cuentas(self) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             cuentas_db = session.exec(
                 select(CuentaCorriente)
-                .where(CuentaCorriente.company_id == _COMPANY_ID)
+                .where(CuentaCorriente.company_id == self._company_id())
                 .order_by(CuentaCorriente.saldo_deuda.desc())
             ).all()
             clientes_map = {
                 c.id: c
                 for c in session.exec(
-                    select(Cliente).where(Cliente.company_id == _COMPANY_ID)
+                    select(Cliente).where(Cliente.company_id == self._company_id())
                 ).all()
             }
         views: list[CuentaView] = []
@@ -3755,10 +3816,10 @@ class FoodState(rx.State):
             self._ver_o_crear_cuenta(cli.id)
 
     def _ver_o_crear_cuenta(self, cliente_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             cc = session.exec(
                 select(CuentaCorriente).where(
-                    CuentaCorriente.company_id == _COMPANY_ID,
+                    CuentaCorriente.company_id == self._company_id(),
                     CuentaCorriente.cliente_id == cliente_id,
                 )
             ).first()
@@ -3802,13 +3863,13 @@ class FoodState(rx.State):
         except (InvalidOperation, ValueError):
             self.mensaje = "Monto de pago inválido."
             return
-        with get_session() as session:
+        with self._tenant_session() as session:
             cc = session.get(CuentaCorriente, self.cuenta_sel_id)
-            if cc is None or cc.company_id != _COMPANY_ID:
+            if cc is None or cc.company_id != self._company_id():
                 self.mensaje = "Cuenta no encontrada."
                 return
             pago = MovimientoCuenta(
-                company_id=_COMPANY_ID,
+                company_id=self._company_id(),
                 cuenta_id=cc.id or 0,
                 tipo="pago",
                 monto=monto,
@@ -3830,13 +3891,13 @@ class FoodState(rx.State):
     def _registrar_cargo_cc(self, session, cliente_id: int, monto: Decimal, pedido_id: int | None, descripcion: str) -> None:
         cc = session.exec(
             select(CuentaCorriente).where(
-                CuentaCorriente.company_id == _COMPANY_ID,
+                CuentaCorriente.company_id == self._company_id(),
                 CuentaCorriente.cliente_id == cliente_id,
             )
         ).first()
         if cc is None:
             cc = CuentaCorriente(
-                company_id=_COMPANY_ID,
+                company_id=self._company_id(),
                 cliente_id=cliente_id,
                 saldo_deuda=Decimal("0.00"),
                 limite_credito=Decimal("0.00"),
@@ -3851,7 +3912,7 @@ class FoodState(rx.State):
                 f"límite: {_money_text(limite)}, cargo solicitado: {_money_text(monto)}."
             )
         cargo = MovimientoCuenta(
-            company_id=_COMPANY_ID,
+            company_id=self._company_id(),
             cuenta_id=cc.id or 0,
             pedido_id=pedido_id,
             tipo="cargo",
@@ -3877,10 +3938,10 @@ class FoodState(rx.State):
             TipoPromocion.MONTO_FIJO.value: "Monto fijo",
             TipoPromocion.HAPPY_HOUR.value: "Happy Hour",
         }
-        with get_session() as session:
+        with self._tenant_session() as session:
             promos_db = session.exec(
                 select(Promocion)
-                .where(Promocion.company_id == _COMPANY_ID)
+                .where(Promocion.company_id == self._company_id())
                 .order_by(Promocion.activa.desc(), Promocion.nombre)
             ).all()
         views: list[PromocionView] = []
@@ -3951,10 +4012,10 @@ class FoodState(rx.State):
             return
         hora_ini = self.promo_form_hora_inicio.strip() or None
         hora_fin = self.promo_form_hora_fin.strip() or None
-        with get_session() as session:
+        with self._tenant_session() as session:
             if self.promo_form_id == 0:
                 p = Promocion(
-                    company_id=_COMPANY_ID,
+                    company_id=self._company_id(),
                     nombre=nombre,
                     tipo=self.promo_form_tipo,
                     valor=valor,
@@ -3967,7 +4028,7 @@ class FoodState(rx.State):
                 self.mensaje = f"Promoción '{nombre}' creada."
             else:
                 p = session.get(Promocion, self.promo_form_id)
-                if p is None or p.company_id != _COMPANY_ID:
+                if p is None or p.company_id != self._company_id():
                     self.mensaje = "Promoción no encontrada."
                     return
                 p.nombre = nombre
@@ -3991,9 +4052,9 @@ class FoodState(rx.State):
         self.cargar_promociones()
 
     def editar_promocion(self, promo_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             p = session.get(Promocion, promo_id)
-            if p is None or p.company_id != _COMPANY_ID:
+            if p is None or p.company_id != self._company_id():
                 return
             self.promo_form_id = p.id or 0
             self.promo_form_nombre = p.nombre
@@ -4015,9 +4076,9 @@ class FoodState(rx.State):
         self.promo_form_editando = False
 
     def toggle_promo_activa(self, promo_id: int) -> None:
-        with get_session() as session:
+        with self._tenant_session() as session:
             p = session.get(Promocion, promo_id)
-            if p is None or p.company_id != _COMPANY_ID:
+            if p is None or p.company_id != self._company_id():
                 return
             p.activa = not p.activa
             p.updated_at = _utcnow()
@@ -4068,7 +4129,10 @@ class MenuPublicoState(rx.State):
             self.cargando = False
             return
 
-        with get_session() as session:
+        # Único punto legítimamente cross-tenant de todo el sistema: la carta
+        # pública se resuelve por slug, no por sesión — ningún contexto tenant
+        # está armado todavía cuando llega esta request.
+        with tenant_bypass(), get_session() as session:
             cfg = session.exec(
                 select(ConfigImpresora).where(ConfigImpresora.slug == slug)
             ).first()
@@ -4164,13 +4228,16 @@ class AdminLocalState(rx.State):
         if not email or not password:
             self.error_msg = "Ingresa email y contraseña."
             return
-        with get_session() as session:
-            cfg = session.exec(
-                select(ConfigImpresora).where(
-                    ConfigImpresora.company_id == _COMPANY_ID,
-                    ConfigImpresora.admin_email == email,
-                )
-            ).first()
+        # El email de admin es único globalmente (migración 0014), así que esta
+        # búsqueda es la única legítimamente cross-tenant: todavía no sabemos a
+        # qué empresa pertenece este login hasta encontrar el email.
+        with tenant_bypass():
+            with get_session() as session:
+                cfg = session.exec(
+                    select(ConfigImpresora).where(
+                        ConfigImpresora.admin_email == email,
+                    )
+                ).first()
         if cfg is None or not cfg.admin_password_hash:
             self.error_msg = "Credenciales incorrectas."
             return
@@ -4180,15 +4247,18 @@ class AdminLocalState(rx.State):
             return
         self.autenticado = True
         self.password_input = ""
+        company_id = cfg.company_id
         # Vincular esta sesion con FoodState.usuario_actual: Carta, Reportes,
         # Usuarios y Configuracion validan acceso via usuario_actual.rol, no
         # via AdminLocalState.autenticado, asi que sin esto el dueño podia
         # ver el Dashboard pero quedaba bloqueado en todos sus sub-modulos.
         food_state = await self.get_state(FoodState)
+        set_tenant_context(company_id, None)
         with get_session() as session:
+            session.info["tenant_bypass"] = True
             admin_usuario = session.exec(
                 select(UsuarioFood).where(
-                    UsuarioFood.company_id == _COMPANY_ID,
+                    UsuarioFood.company_id == company_id,
                     UsuarioFood.rol == RolUsuario.ADMIN.value,
                     UsuarioFood.activo.is_(True),
                 )
@@ -4198,10 +4268,11 @@ class AdminLocalState(rx.State):
                 id=admin_usuario.id or 0,
                 nombre=admin_usuario.nombre,
                 rol=admin_usuario.rol,
+                company_id=company_id,
             )
         else:
             food_state.usuario_actual = UsuarioSesion(
-                id=0, nombre=email, rol=RolUsuario.ADMIN.value,
+                id=0, nombre=email, rol=RolUsuario.ADMIN.value, company_id=company_id,
             )
         return rx.redirect("/admin")
 
