@@ -71,11 +71,12 @@ def _pin_display() -> rx.Component:
 
 # ─── Teclas rectangulares ─────────────────────────────────────────────────────
 
-def _key_rect(content: rx.Component, on_click,
+def _key_rect(content: rx.Component, on_click, aria_label: str,
               bg: str = "#0F172A", border_color: str = "#334155") -> rx.Component:
     return rx.button(
         content,
         on_click=on_click,
+        aria_label=aria_label,
         background=bg,
         border=f"1px solid {border_color}",
         border_radius="12px",
@@ -96,6 +97,7 @@ def _key_digit(digit: str, on_click) -> rx.Component:
         rx.text(digit, font_size="22px", font_weight="600", color="#FFFFFF",
                 line_height="1"),
         on_click,
+        aria_label=f"Dígito {digit}",
     )
 
 
@@ -104,6 +106,7 @@ def _key_clear_btn(on_click) -> rx.Component:
         rx.text("C", font_size="14px", font_weight="700", color="#64748B",
                 line_height="1"),
         on_click,
+        aria_label="Borrar PIN completo",
         bg="#1E293B",
         border_color="#334155",
     )
@@ -113,6 +116,7 @@ def _key_backspace_btn(on_click) -> rx.Component:
     return _key_rect(
         rx.icon(tag="delete", size=18, color="#94A3B8"),
         on_click,
+        aria_label="Borrar último dígito",
         bg="#1E293B",
         border_color="#334155",
     )
@@ -131,7 +135,7 @@ def _keypad() -> rx.Component:
         _key_digit("9", FoodState.append_login_digit("9")),
         _key_clear_btn(FoodState.clear_login_pin),
         _key_digit("0", FoodState.append_login_digit("0")),
-        _key_backspace_btn(FoodState.clear_login_pin),
+        _key_backspace_btn(FoodState.backspace_login_pin),
         columns="3",
         gap="10px",
         width="100%",
@@ -171,7 +175,7 @@ def _login_card() -> rx.Component:
             margin_bottom="16px",
         ),
         _pin_display(),
-        # Error / contador
+        # Error (solo ocupa espacio cuando existe)
         rx.cond(
             FoodState.login_error != "",
             rx.hstack(
@@ -188,6 +192,11 @@ def _login_card() -> rx.Component:
                 justify="center",
                 margin_y="10px",
             ),
+            rx.fragment(),
+        ),
+        # Contador de dígitos — altura fija siempre para que el teclado
+        # de abajo no salte al escribir el primer dígito.
+        rx.box(
             rx.cond(
                 FoodState.login_pin_input.length() > 0,
                 rx.text(
@@ -195,10 +204,14 @@ def _login_card() -> rx.Component:
                     font_size="11px",
                     color="#475569",
                     text_align="center",
-                    margin_y="10px",
                 ),
-                rx.box(height="22px", margin_y="4px"),
+                rx.fragment(),
             ),
+            height="22px",
+            margin_y="4px",
+            display="flex",
+            align_items="center",
+            justify_content="center",
         ),
         # Teclado
         _keypad(),
