@@ -4132,16 +4132,25 @@ class AdminLocalState(rx.State):
             return rx.redirect("/admin")
         return None
 
-    def on_load_dono(self):
-        if not self.autenticado:
-            return rx.redirect("/admin/login")
-        return None
+    async def on_load_dono(self):
+        if self.autenticado:
+            return None
+        # Una sesion PIN de rol Admin (login rapido en /login) tambien
+        # habilita el Dashboard, no solo el login por email/contraseña.
+        food_state = await self.get_state(FoodState)
+        if (
+            food_state.usuario_actual is not None
+            and food_state.usuario_actual.rol == RolUsuario.ADMIN.value
+        ):
+            self.autenticado = True
+            return None
+        return rx.redirect("/admin/login")
 
     def login_on_enter(self, key: str) -> None:
         if key == "Enter":
             return self.login_admin_local()
 
-    def login_admin_local(self) -> None:
+    async def login_admin_local(self) -> None:
         import hashlib
         email = self.email_input.strip().lower()
         password = self.password_input.strip()
@@ -4165,10 +4174,35 @@ class AdminLocalState(rx.State):
             return
         self.autenticado = True
         self.password_input = ""
+        # Vincular esta sesion con FoodState.usuario_actual: Carta, Reportes,
+        # Usuarios y Configuracion validan acceso via usuario_actual.rol, no
+        # via AdminLocalState.autenticado, asi que sin esto el dueño podia
+        # ver el Dashboard pero quedaba bloqueado en todos sus sub-modulos.
+        food_state = await self.get_state(FoodState)
+        with get_session() as session:
+            admin_usuario = session.exec(
+                select(UsuarioFood).where(
+                    UsuarioFood.company_id == _COMPANY_ID,
+                    UsuarioFood.rol == RolUsuario.ADMIN.value,
+                    UsuarioFood.activo.is_(True),
+                )
+            ).first()
+        if admin_usuario is not None:
+            food_state.usuario_actual = UsuarioSesion(
+                id=admin_usuario.id or 0,
+                nombre=admin_usuario.nombre,
+                rol=admin_usuario.rol,
+            )
+        else:
+            food_state.usuario_actual = UsuarioSesion(
+                id=0, nombre=email, rol=RolUsuario.ADMIN.value,
+            )
         return rx.redirect("/admin")
 
-    def logout_admin_local(self) -> None:
+    async def logout_admin_local(self) -> None:
         self.autenticado = False
         self.email_input = ""
         self.password_input = ""
+        food_state = await self.get_state(FoodState)
+        food_state.usuario_actual = None
         return rx.redirect("/admin/login")
