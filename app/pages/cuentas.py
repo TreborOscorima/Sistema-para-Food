@@ -131,6 +131,22 @@ def _pago_form() -> rx.Component:
     )
 
 
+def _cuenta_sin_cargos() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.icon(tag="info", size=14, color="#94A3B8"),
+            rx.text(
+                "Este cliente no tiene cuenta corriente activa. "
+                "Se crea automáticamente al registrar el primer cargo fiado.",
+                font_size="13px", color="#64748B",
+            ),
+            spacing="2", align="center",
+        ),
+        background="#F8FAFC", border="1px solid #E2E8F0",
+        border_radius="10px", padding="14px 16px", width="100%",
+    )
+
+
 def _cuenta_detalle() -> rx.Component:
     return rx.cond(
         FoodState.cuenta_sel_id > 0,
@@ -170,7 +186,11 @@ def _cuenta_detalle() -> rx.Component:
             border_radius="12px", padding="16px 18px", width="100%",
             box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
-        rx.fragment(),
+        rx.cond(
+            FoodState.cc_cliente_sel_nombre != "",
+            _cuenta_sin_cargos(),
+            rx.fragment(),
+        ),
     )
 
 
