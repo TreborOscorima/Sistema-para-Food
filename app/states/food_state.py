@@ -3887,7 +3887,13 @@ class FoodState(rx.State):
         for p in promos_db:
             aplica = p.activa
             if aplica and p.hora_inicio and p.hora_fin:
-                aplica = p.hora_inicio <= hora_actual <= p.hora_fin
+                if p.hora_inicio <= p.hora_fin:
+                    aplica = p.hora_inicio <= hora_actual <= p.hora_fin
+                else:
+                    # El horario cruza la medianoche (ej. 22:00 a 02:00):
+                    # esta comparado lexicografica simple nunca seria True
+                    # para ninguna hora si no se maneja este caso aparte.
+                    aplica = hora_actual >= p.hora_inicio or hora_actual <= p.hora_fin
             val = Decimal(str(p.valor))
             if p.tipo in (TipoPromocion.PORCENTAJE.value, TipoPromocion.HAPPY_HOUR.value):
                 desc_txt = f"{val:.0f}% off"
