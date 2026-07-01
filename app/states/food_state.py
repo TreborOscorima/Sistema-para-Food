@@ -4189,12 +4189,16 @@ class AdminLocalState(rx.State):
     email_input: str = ""
     password_input: str = ""
     error_msg: str = ""
+    show_password: bool = False
 
     def set_email_input(self, v: str) -> None:
         self.email_input = v
 
     def set_password_input(self, v: str) -> None:
         self.password_input = v
+
+    def toggle_show_password(self) -> None:
+        self.show_password = not self.show_password
 
     def on_load_dono_login(self):
         self.error_msg = ""
