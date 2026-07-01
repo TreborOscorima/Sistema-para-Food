@@ -239,12 +239,47 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
             border_radius="6px", font_size="10px", cursor="pointer",
             padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
         ),
-        rx.button(
-            rx.icon(tag="trash_2", size=12, color="#B91C1C"),
-            on_click=FoodState.eliminar_mesa_config(mesa.id),
-            background="#FEF2F2", border="1px solid #FECACA",
-            border_radius="6px", cursor="pointer",
-            padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+        rx.alert_dialog.root(
+            rx.alert_dialog.trigger(
+                rx.button(
+                    rx.icon(tag="trash_2", size=12, color="#B91C1C"),
+                    background="#FEF2F2", border="1px solid #FECACA",
+                    border_radius="6px", cursor="pointer",
+                    padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+                ),
+            ),
+            rx.alert_dialog.content(
+                rx.alert_dialog.title("¿Eliminar mesa?"),
+                rx.alert_dialog.description(
+                    "Se eliminará \"" + mesa.nombre + "\" permanentemente. "
+                    "Esta acción no se puede deshacer. Si preferís conservarla "
+                    "pero dejarla fuera de uso, usá \"Desactivar\" en su lugar.",
+                    size="2",
+                ),
+                rx.hstack(
+                    rx.alert_dialog.cancel(
+                        rx.button(
+                            "Cancelar",
+                            background="#F1F5F9", color="#64748B",
+                            border="1px solid #E2E8F0", border_radius="8px",
+                            font_size="13px", cursor="pointer",
+                            padding_x="14px", padding_y="8px",
+                        ),
+                    ),
+                    rx.alert_dialog.action(
+                        rx.button(
+                            "Eliminar mesa",
+                            on_click=FoodState.eliminar_mesa_config(mesa.id),
+                            background="#DC2626", color="#FFFFFF",
+                            border_radius="8px", font_size="13px",
+                            font_weight="700", cursor="pointer",
+                            padding_x="14px", padding_y="8px",
+                            _hover={"background": "#B91C1C"},
+                        ),
+                    ),
+                    spacing="3", justify="end", width="100%", margin_top="16px",
+                ),
+            ),
         ),
         width="100%", align="center",
         padding="8px 10px", background="#FFFFFF",

@@ -329,22 +329,56 @@ def _historial_item_row(item: HistorialItem) -> rx.Component:
             ),
             rx.cond(
                 item.puede_cancelar,
-                rx.button(
-                    rx.hstack(
-                        rx.icon(tag="x", size=10),
-                        rx.text("Anular", font_size="10px", font_weight="600"),
-                        spacing="1",
-                        align="center",
+                rx.alert_dialog.root(
+                    rx.alert_dialog.trigger(
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="x", size=10),
+                                rx.text("Anular", font_size="10px", font_weight="600"),
+                                spacing="1",
+                                align="center",
+                            ),
+                            background="#FEF2F2",
+                            color="#B91C1C",
+                            border="1px solid #FECACA",
+                            border_radius="6px",
+                            cursor="pointer",
+                            padding_x="7px",
+                            padding_y="3px",
+                            _hover={"opacity": "0.85"},
+                        ),
                     ),
-                    on_click=FoodState.cancelar_item_pedido(item.detalle_id),
-                    background="#FEF2F2",
-                    color="#B91C1C",
-                    border="1px solid #FECACA",
-                    border_radius="6px",
-                    cursor="pointer",
-                    padding_x="7px",
-                    padding_y="3px",
-                    _hover={"opacity": "0.85"},
+                    rx.alert_dialog.content(
+                        rx.alert_dialog.title("¿Anular item?"),
+                        rx.alert_dialog.description(
+                            "Se va a anular \"" + item.nombre + "\" del pedido. "
+                            "Esta acción no se puede deshacer.",
+                            size="2",
+                        ),
+                        rx.hstack(
+                            rx.alert_dialog.cancel(
+                                rx.button(
+                                    "Volver",
+                                    background="#1E293B", color="#94A3B8",
+                                    border="1px solid #334155", border_radius="8px",
+                                    font_size="13px", cursor="pointer",
+                                    padding_x="14px", padding_y="8px",
+                                ),
+                            ),
+                            rx.alert_dialog.action(
+                                rx.button(
+                                    "Anular item",
+                                    on_click=FoodState.cancelar_item_pedido(item.detalle_id),
+                                    background="#DC2626", color="#FFFFFF",
+                                    border_radius="8px", font_size="13px",
+                                    font_weight="700", cursor="pointer",
+                                    padding_x="14px", padding_y="8px",
+                                    _hover={"background": "#B91C1C"},
+                                ),
+                            ),
+                            spacing="3", justify="end", width="100%", margin_top="16px",
+                        ),
+                    ),
                 ),
                 rx.fragment(),
             ),
