@@ -867,7 +867,7 @@ def dono_login_page() -> rx.Component:
                                     font_weight="600", color="#64748B",
                                     text_transform="uppercase",
                                     letter_spacing="0.06em"),
-                            rx.el.input(
+                            rx.input(
                                 placeholder="dueño@restaurante.com",
                                 value=AdminLocalState.email_input,
                                 on_change=AdminLocalState.set_email_input,
@@ -883,7 +883,7 @@ def dono_login_page() -> rx.Component:
                                     font_weight="600", color="#64748B",
                                     text_transform="uppercase",
                                     letter_spacing="0.06em"),
-                            rx.el.input(
+                            rx.input(
                                 placeholder="••••••••",
                                 value=AdminLocalState.password_input,
                                 on_change=AdminLocalState.set_password_input,
