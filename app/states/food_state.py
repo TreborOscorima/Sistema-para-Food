@@ -2617,11 +2617,11 @@ class FoodState(rx.State):
                 company_name=self.config_nombre_local or "TUWAYKIFOOD",
             )
         except Exception as error:
-            self.mensaje = f"Mesa {mesa_label} cobrada. Fallo impresion caja: {error}"
+            self.mensaje = f"{mesa_label} cobrada. Fallo impresion caja: {error}"
             return
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
-        self.mensaje = f"Mesa {mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
+        self.mensaje = f"{mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 
@@ -2699,9 +2699,9 @@ class FoodState(rx.State):
                 company_name=self.config_nombre_local or "TUWAYKIFOOD",
             )
         except Exception as error:
-            self.mensaje = f"Mesa {mesa_label} cobrada. Fallo impresion caja: {error}"
+            self.mensaje = f"{mesa_label} cobrada. Fallo impresion caja: {error}"
             return
-        self.mensaje = f"Mesa {mesa_label} cobrada. Total: {_money_text(total)}."
+        self.mensaje = f"{mesa_label} cobrada. Total: {_money_text(total)}."
 
     # ─── Mostrador ────────────────────────────────────────────────────────────
 
