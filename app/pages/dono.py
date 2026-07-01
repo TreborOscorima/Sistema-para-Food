@@ -43,8 +43,8 @@ class AdminPanelState(rx.State):
 def _dono_topbar() -> rx.Component:
     return rx.hstack(
         rx.hstack(
-            rx.image(src="/TUWAYKIFOOD.png", height="44px", width="auto",
-                     alt="TUWAYKIFOOD"),
+            rx.image(src="/TUWAYKIFOODFAVICON.png", height="36px", width="36px",
+                     border_radius="9px", alt="TUWAYKIFOOD"),
             rx.badge(
                 "Panel Administrativo",
                 background=_ORANGE_LT,
@@ -820,11 +820,12 @@ def dono_login_page() -> rx.Component:
             rx.vstack(
                 rx.vstack(
                     rx.box(
-                        rx.image(src="/TUWAYKIFOOD.png", height="60px",
+                        rx.image(src="/TUWAYKIFOOD.png", height="90px",
                                  width="auto", alt="TUWAYKIFOOD"),
-                        background=_ORANGE,
+                        background=_WHITE,
                         border_radius="16px",
-                        padding="10px 14px",
+                        padding="12px 20px",
+                        box_shadow="0 8px 28px rgba(0,0,0,0.35)",
                         display="flex",
                         align_items="center",
                         justify_content="center",

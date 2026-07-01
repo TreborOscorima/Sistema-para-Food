@@ -245,45 +245,18 @@ def login_page() -> rx.Component:
         rx.script(_CSS_SCRIPT),
         rx.center(
             rx.vstack(
-                # Logo + marca
-                rx.vstack(
-                    rx.hstack(
-                        rx.image(
-                            src="/TUWAYKIFOODFAVICON.png",
-                            width="36px",
-                            height="36px",
-                            border_radius="8px",
-                            flex_shrink="0",
-                            alt="",
-                        ),
-                        rx.hstack(
-                            rx.text(
-                                "TUWAYKI",
-                                font_size="22px",
-                                font_weight="800",
-                                color="#FFFFFF",
-                                letter_spacing="-0.3px",
-                            ),
-                            rx.text(
-                                "FOOD",
-                                font_size="22px",
-                                font_weight="800",
-                                color="#EA580C",
-                                letter_spacing="-0.3px",
-                            ),
-                            spacing="0",
-                        ),
-                        spacing="3",
-                        align="center",
+                # Logo completo (marca) — pantalla de login
+                rx.box(
+                    rx.image(
+                        src="/TUWAYKIFOOD.png",
+                        height="100px",
+                        width="auto",
+                        alt="TUWAYKIFOOD",
                     ),
-                    rx.text(
-                        "Sistema de gestión gastronómica",
-                        font_size="13px",
-                        color="#64748B",
-                        font_weight="500",
-                    ),
-                    spacing="1",
-                    align="center",
+                    background="#FFFFFF",
+                    border_radius="16px",
+                    padding="12px 20px",
+                    box_shadow="0 8px 28px rgba(0,0,0,0.35)",
                     margin_bottom="8px",
                 ),
                 # Card principal
