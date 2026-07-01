@@ -666,7 +666,7 @@ def _configuracion_content() -> rx.Component:
         rx.cond(
             FoodState.mensaje != "",
             rx.hstack(
-                rx.icon(tag="check_circle", size=14, color="#15803D"),
+                rx.icon(tag="circle_check", size=14, color="#15803D"),
                 rx.text(FoodState.mensaje, font_size="13px", color="#15803D",
                         font_weight="600"),
                 spacing="2", align="center",

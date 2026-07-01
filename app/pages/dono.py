@@ -758,7 +758,7 @@ def _dono_dashboard() -> rx.Component:
         rx.cond(
             FoodState.mensaje != "",
             rx.hstack(
-                rx.icon(tag="check_circle", size=14, color=_GREEN),
+                rx.icon(tag="circle_check", size=14, color=_GREEN),
                 rx.text(FoodState.mensaje, font_size="13px",
                         color=_GREEN, font_weight="600"),
                 spacing="2", align="center",
