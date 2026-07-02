@@ -523,7 +523,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
         try:
             with self._tenant_session() as session:
                 abrir_turno_caja(
-                    session, self._company_id(), self.usuario_actual.id, monto
+                    session, self._company_id(), self.usuario_actual.id or None, monto
                 )
                 session.commit()
         except ValueError as exc:
@@ -590,7 +590,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 registrar_movimiento_caja(
                     session,
                     turno,
-                    self.usuario_actual.id if self.usuario_actual else None,
+                    (self.usuario_actual.id or None) if self.usuario_actual else None,
                     self.turno_mov_tipo,
                     self.turno_mov_categoria,
                     monto,
@@ -671,7 +671,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 cerrar_turno_caja(
                     session,
                     turno,
-                    self.usuario_actual.id if self.usuario_actual else None,
+                    (self.usuario_actual.id or None) if self.usuario_actual else None,
                     contado,
                     arqueo_detalle=json.dumps(conteo_limpio) if conteo_limpio else None,
                     notas=self.turno_cierre_notas,
