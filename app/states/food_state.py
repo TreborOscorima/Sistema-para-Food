@@ -1100,6 +1100,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     cli_form_notas: str = ""
     cli_form_editando: bool = False
     cli_form_visible: bool = False
+    cli_dni_ruc: str = ""
+    cli_dni_ruc_buscando: bool = False
+    cli_dni_ruc_error: str = ""
     caja_cobro_cliente_nombre: str = ""
     caja_cobro_cliente_id: int = 0
 
@@ -1353,7 +1356,14 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     @rx.var
     def clientes_activos_nombres(self) -> list[str]:
-        return [c.nombre for c in self.clientes_lista if c.activo]
+        """Opciones para el selector de fiado: "Nombre — tel" para evitar homónimos."""
+        opciones = []
+        for c in self.clientes_lista:
+            if not c.activo:
+                continue
+            label = c.nombre + (f" — {c.telefono}" if c.telefono else "")
+            opciones.append(label)
+        return opciones
 
     @rx.var
     def clientes_cumpleanos_hoy(self) -> list[ClienteView]:
@@ -2001,6 +2011,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             empresa = session.get(Company, self._company_id())
             if empresa is not None:
                 empresa.logo_url = self.config_logo_url or None
+                empresa.slug = slug
                 session.add(empresa)
             session.commit()
         self.config_slug = slug
@@ -2031,7 +2042,6 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.config_admin_show_password = not self.config_admin_show_password
 
     def guardar_admin_cuenta(self) -> None:
-        import hashlib
         email = self.config_admin_email.strip().lower()
         if not email or "@" not in email:
             self.mensaje = "Ingresa un email valido."
@@ -2049,7 +2059,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 cfg = ConfigImpresora(company_id=self._company_id())
             cfg.admin_email = email
             if nueva:
-                cfg.admin_password_hash = hashlib.sha256(nueva.encode()).hexdigest()
+                cfg.admin_password_hash = _bcrypt.hashpw(nueva.encode(), _bcrypt.gensalt()).decode()
             session.add(cfg)
             session.commit()
         self.config_admin_email = email
@@ -2273,24 +2283,62 @@ class FoodState(CajaTurnoMixin, rx.State):
                     Mesa.activa.is_(True),
                 ).order_by(Mesa.numero)
             ).all()
+
+            mesa_ids = [m.id for m in mesas_db if m.id]
+
+            # Bulk: 1 query para todos los pedidos abiertos del tenant
+            pedidos_abiertos: dict[int, Pedido] = {}
+            if mesa_ids:
+                for p in session.exec(
+                    select(Pedido).where(
+                        Pedido.company_id == self._company_id(),
+                        Pedido.mesa_id.in_(mesa_ids),
+                        Pedido.estado.in_(OPEN_ORDER_STATES),
+                    ).order_by(Pedido.id.desc())
+                ).all():
+                    if p.mesa_id not in pedidos_abiertos:
+                        pedidos_abiertos[p.mesa_id] = p
+
+            pedido_ids = [p.id for p in pedidos_abiertos.values() if p.id]
+
+            # Bulk: 1 query para detalles listos para entregar
+            ready_by_pedido: dict[int, list] = {}
+            if pedido_ids:
+                for d in session.exec(
+                    select(DetallePedido).where(
+                        DetallePedido.pedido_id.in_(pedido_ids),
+                        DetallePedido.impreso_cocina.is_(True),
+                        DetallePedido.estado_produccion == EstadoProduccion.LISTO_PARA_ENTREGAR.value,
+                    )
+                ).all():
+                    ready_by_pedido.setdefault(d.pedido_id, []).append(d)
+
+            # Bulk: 1 query para conteo total de items por pedido
+            items_total_by_pedido: dict[int, int] = {}
+            if pedido_ids:
+                for d in session.exec(
+                    select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids))
+                ).all():
+                    items_total_by_pedido[d.pedido_id] = (
+                        items_total_by_pedido.get(d.pedido_id, 0) + d.cantidad
+                    )
+
+            # Construir vistas y acumular correcciones de mesas stuck
+            hay_stuck = False
             for mesa in mesas_db:
-                pedido_abierto = _get_open_order(session, mesa.id or 0, self._company_id())
+                pedido_abierto = pedidos_abiertos.get(mesa.id or 0)
                 # Auto-corregir mesa stuck: si figura OCUPADA pero no hay pedido abierto, volver a LIBRE
                 if mesa.estado != EstadoMesa.LIBRE.value and pedido_abierto is None:
                     mesa.estado = EstadoMesa.LIBRE.value
                     mesa.updated_at = _utcnow()
                     session.add(mesa)
-                    session.commit()
+                    hay_stuck = True
                 total_abierto = _to_decimal(pedido_abierto.total if pedido_abierto else Decimal("0.00"))
-                ready_details = _get_ready_details(session, pedido_abierto.id or 0) if pedido_abierto else []
+                pid = (pedido_abierto.id or 0) if pedido_abierto else 0
+                ready_details = ready_by_pedido.get(pid, [])
                 items_listos_count = sum(d.cantidad for d in ready_details)
                 tiene_items_listos = items_listos_count > 0
-                items_total_count = 0
-                if pedido_abierto is not None:
-                    todos_los_detalles = session.exec(
-                        select(DetallePedido).where(DetallePedido.pedido_id == pedido_abierto.id)
-                    ).all()
-                    items_total_count = sum(d.cantidad for d in todos_los_detalles)
+                items_total_count = items_total_by_pedido.get(pid, 0) if pedido_abierto else 0
                 tiempo_abierto_texto = ""
                 if pedido_abierto is not None:
                     elapsed_min = max(0, int((_utcnow() - pedido_abierto.created_at).total_seconds() // 60))
@@ -2317,6 +2365,8 @@ class FoodState(CajaTurnoMixin, rx.State):
                     items_total_count=items_total_count,
                     tiempo_abierto_texto=tiempo_abierto_texto,
                 ))
+            if hay_stuck:
+                session.commit()
         self.mesas = mesas_ui
         if self.mesa_seleccionada_id and not any(m.id == self.mesa_seleccionada_id for m in self.mesas):
             self.mesa_seleccionada_id = 0
@@ -3330,94 +3380,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 
     def cobrar_mesa(self, mesa_id: int) -> None:
-        objetivo = mesa_id or self.mesa_seleccionada_id
-        if objetivo == 0:
-            self.mensaje = "Selecciona una mesa antes de cobrar."
-            return
-        pedido_id = 0
-        mesa_label = ""
-        attended_by = ""
-        total = 0.0
-        ticket_lines: list[TicketLine] = []
-        with self._tenant_session() as session:
-            mesa = session.get(Mesa, objetivo)
-            if mesa is None:
-                self.mensaje = "La mesa indicada ya no existe."
-                return
-            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
-            if pedido is None:
-                self.mensaje = "No hay pedido abierto para esa mesa."
-                return
-            if _get_unsent_details(session, pedido.id or 0):
-                self.mensaje = "Todavia hay items pendientes de enviar a cocina."
-                return
-            if _get_not_delivered_details(session, pedido.id or 0):
-                self.mensaje = "Todavia hay items en cocina o listos por entregar."
-                return
-            turno = get_turno_abierto(session, self._company_id())
-            if turno is None:
-                self.mensaje = "No hay turno de caja abierto. Abre el turno antes de cobrar."
-                return
-            detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
-            ticket_lines = [
-                TicketLine(
-                    name=(productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"),
-                    quantity=d.cantidad,
-                    unit_price=float(_to_decimal(d.precio_unitario)),
-                    subtotal=float(_to_decimal(d.subtotal)),
-                    note=d.notas or "",
-                )
-                for d in detalles
-            ]
-            mozo = usuarios.get(pedido.mozo_id)
-            attended_by = _actor_name(
-                mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
-            ) or "Sin asignar"
-            total = float(_to_decimal(pedido.total))
-            now = _utcnow()
-            if self.usuario_actual:
-                pedido.cajero_id = self.usuario_actual.id
-            pedido.pagado = True
-            pedido.estado = EstadoPedido.COBRADO.value
-            pedido.cerrado_en = now
-            pedido.updated_at = now
-            pedido.turno_caja_id = turno.id
-            session.add(pedido)
-            mesa.estado = EstadoMesa.LIBRE.value
-            mesa.updated_at = now
-            session.add(mesa)
-            _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
-            if total > 0:
-                session.add(PagoPedido(
-                    company_id=self._company_id(),
-                    pedido_id=pedido.id or 0,
-                    turno_caja_id=turno.id,
-                    usuario_id=self.usuario_actual.id if self.usuario_actual else None,
-                    metodo="efectivo",
-                    monto=Decimal(str(round(total, 2))),
-                ))
-            session.commit()
-            pedido_id = pedido.id or 0
-            mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
-        if self.mesa_seleccionada_id == objetivo:
-            self.mesa_seleccionada_id = 0
-            self.carrito = []
-            self.historial_pedido = []
-        self.cargar_mesas()
-        self.cargar_historial_ventas()
-        html_ticket = generate_cashier_ticket_html(
-            order_reference=mesa_label,
-            pedido_id=pedido_id,
-            items=ticket_lines,
-            total=total,
-            attended_by=attended_by,
-            company_name=self.config_nombre_local or "TUWAYKIFOOD",
-            paper_width_mm=self._ticket_paper_width_mm(),
-        )
-        self.mensaje = f"{mesa_label} cobrada. Total: {_money_text(total)}."
-        return rx.call_script(build_print_script(html_ticket))
+        """Redirige al panel de cobro completo (método, descuento, propina, turno).
+        El cobro directo sin panel quedó deprecado — siempre pasa por abrir_cobro_mesa."""
+        return self.abrir_cobro_mesa(mesa_id or self.mesa_seleccionada_id)
 
     # ─── Mostrador ────────────────────────────────────────────────────────────
 
@@ -3836,7 +3801,20 @@ class FoodState(CajaTurnoMixin, rx.State):
                 except ValueError:
                     pass
             if self.historial_filtro_metodo:
-                query = query.where(Pedido.metodo_pago == self.historial_filtro_metodo)
+                from app.models.food import PagoPedido as _PP
+                # Captura ventas con método exacto en Pedido + ventas mixtas que
+                # incluyen ese método en alguno de sus PagoPedido.
+                query = query.where(
+                    or_(
+                        Pedido.metodo_pago == self.historial_filtro_metodo,
+                        Pedido.id.in_(
+                            select(_PP.pedido_id).where(
+                                _PP.company_id == self._company_id(),
+                                _PP.metodo == self.historial_filtro_metodo,
+                            )
+                        ),
+                    )
+                )
             query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
             total_count = len(session.exec(query).all())
             self.historial_total = total_count
@@ -4063,7 +4041,18 @@ class FoodState(CajaTurnoMixin, rx.State):
                 except ValueError:
                     pass
             if self.historial_filtro_metodo:
-                query = query.where(Pedido.metodo_pago == self.historial_filtro_metodo)
+                from app.models.food import PagoPedido as _PP
+                query = query.where(
+                    or_(
+                        Pedido.metodo_pago == self.historial_filtro_metodo,
+                        Pedido.id.in_(
+                            select(_PP.pedido_id).where(
+                                _PP.company_id == self._company_id(),
+                                _PP.metodo == self.historial_filtro_metodo,
+                            )
+                        ),
+                    )
+                )
             query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
             pedidos = session.exec(query).all()
             mesas = {m.id: m for m in session.exec(
@@ -4899,7 +4888,14 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_caja_cobro_cliente_nombre(self, v: str) -> None:
         self.caja_cobro_cliente_nombre = v
-        cli = next((c for c in self.clientes_lista if c.nombre == v), None)
+        # v puede ser "Nombre" o "Nombre — tel" — buscar por el par exacto
+        nombre_parte = v.split(" — ")[0].strip()
+        tel_parte = v.split(" — ")[1].strip() if " — " in v else ""
+        cli = next(
+            (c for c in self.clientes_lista
+             if c.nombre == nombre_parte and (not tel_parte or c.telefono == tel_parte)),
+            None,
+        )
         self.caja_cobro_cliente_id = cli.id if cli else 0
 
     def guardar_cliente(self) -> None:
@@ -4974,6 +4970,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cli_form_notas = ""
         self.cli_form_editando = False
         self.cli_form_visible = True
+        self.cli_dni_ruc = ""
+        self.cli_dni_ruc_error = ""
 
     def editar_cliente(self, cliente_id: int) -> None:
         with self._tenant_session() as session:
@@ -4998,6 +4996,54 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cli_form_notas = ""
         self.cli_form_editando = False
         self.cli_form_visible = False
+        self.cli_dni_ruc = ""
+        self.cli_dni_ruc_error = ""
+
+    def set_cli_dni_ruc(self, v: str) -> None:
+        self.cli_dni_ruc = re.sub(r"\D", "", v)[:11]
+        self.cli_dni_ruc_error = ""
+
+    async def buscar_dni_ruc(self) -> None:
+        import os
+        numero = self.cli_dni_ruc.strip()
+        if not numero:
+            self.cli_dni_ruc_error = "Ingresa un DNI (8 dígitos) o RUC (11 dígitos)."
+            return
+        if len(numero) not in (8, 11):
+            self.cli_dni_ruc_error = "DNI debe tener 8 dígitos y RUC 11 dígitos."
+            return
+        token = (os.getenv("RENIEC_API_TOKEN") or "").strip()
+        if not token:
+            self.cli_dni_ruc_error = "Servicio no configurado (falta RENIEC_API_TOKEN)."
+            return
+        self.cli_dni_ruc_buscando = True
+        self.cli_dni_ruc_error = ""
+        yield
+        try:
+            import httpx
+            tipo = "dni" if len(numero) == 8 else "ruc"
+            url = f"https://apiperu.dev/api/{tipo}/{numero}"
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+            if resp.status_code == 200:
+                data = resp.json()
+                if tipo == "dni":
+                    nombre = data.get("nombre_completo") or data.get("nombre") or ""
+                else:
+                    nombre = data.get("nombre_o_razon_social") or data.get("razon_social") or ""
+                if nombre:
+                    self.cli_form_nombre = nombre
+                    self.cli_dni_ruc_error = ""
+                else:
+                    self.cli_dni_ruc_error = "No se encontraron datos para ese número."
+            elif resp.status_code == 404:
+                self.cli_dni_ruc_error = "Número no encontrado en el registro."
+            else:
+                self.cli_dni_ruc_error = f"Error del servicio ({resp.status_code})."
+        except Exception:
+            self.cli_dni_ruc_error = "No se pudo conectar al servicio de consulta."
+        finally:
+            self.cli_dni_ruc_buscando = False
 
     def set_cli_form_visible(self, v: bool) -> None:
         self.cli_form_visible = v
@@ -5701,13 +5747,24 @@ class AdminLocalState(rx.State):
                         ConfigImpresora.admin_email == email,
                     )
                 ).first()
-        if cfg is None or not cfg.admin_password_hash:
-            self.error_msg = "Credenciales incorrectas."
-            return
-        hashed = hashlib.sha256(password.encode()).hexdigest()
-        if hashed != cfg.admin_password_hash:
-            self.error_msg = "Credenciales incorrectas."
-            return
+                if cfg is None or not cfg.admin_password_hash:
+                    self.error_msg = "Credenciales incorrectas."
+                    return
+                stored = cfg.admin_password_hash
+                # Detectar hash legacy SHA-256 (64 hex chars) vs bcrypt ($2b$ prefix).
+                # Si es legacy y la contraseña coincide, actualizar silenciosamente a bcrypt.
+                is_bcrypt = stored.startswith("$2b$") or stored.startswith("$2a$")
+                if is_bcrypt:
+                    ok = _verify_pin(password, stored)  # _verify_pin usa bcrypt.checkpw
+                else:
+                    ok = hashlib.sha256(password.encode()).hexdigest() == stored
+                if not ok:
+                    self.error_msg = "Credenciales incorrectas."
+                    return
+                if not is_bcrypt:
+                    cfg.admin_password_hash = _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+                    session.add(cfg)
+                    session.commit()
         bloqueo = _bloqueo_suscripcion(cfg.company_id)
         if bloqueo:
             self.error_msg = bloqueo

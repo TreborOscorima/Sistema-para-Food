@@ -67,16 +67,22 @@ def _cliente_card(c: ClienteView) -> rx.Component:
                 spacing="3", align="center", min_width="0", flex="1",
             ),
             rx.hstack(
-                rx.icon(
-                    tag="pencil", size=13, color="#94A3B8", cursor="pointer",
+                rx.button(
+                    rx.icon(tag="pencil", size=13),
                     on_click=FoodState.editar_cliente(c.id),
+                    background="transparent", border="none",
+                    color="#94A3B8", padding="2px", cursor="pointer",
+                    _hover={"color": "#64748B"},
                 ),
-                rx.icon(
-                    tag=rx.cond(c.activo, "toggle_right", "toggle_left"),
-                    size=15,
-                    color=rx.cond(c.activo, "#16A34A", "#CBD5E1"),
-                    cursor="pointer",
+                rx.button(
+                    rx.icon(
+                        tag=rx.cond(c.activo, "toggle_right", "toggle_left"),
+                        size=15,
+                    ),
                     on_click=FoodState.toggle_cliente_activo(c.id),
+                    background="transparent", border="none",
+                    color=rx.cond(c.activo, "#16A34A", "#CBD5E1"),
+                    padding="2px", cursor="pointer",
                 ),
                 spacing="2", align="center", flex_shrink="0",
             ),
@@ -130,6 +136,39 @@ def _cli_form() -> rx.Component:
                     font_size="13px", font_weight="700", color="#0F172A",
                 ),
                 spacing="1", align="center",
+            ),
+            rx.cond(
+                ~FoodState.cli_form_editando,
+                rx.vstack(
+                    rx.text("DNI / RUC (opcional)", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.hstack(
+                        rx.input(
+                            placeholder="DNI (8 dígitos) o RUC (11 dígitos)",
+                            value=FoodState.cli_dni_ruc,
+                            on_change=FoodState.set_cli_dni_ruc,
+                            background="#F8FAFC", border="1px solid #E2E8F0",
+                            border_radius="7px", font_size="13px",
+                            padding_x="10px", padding_y="8px",
+                            _focus={"border": "1px solid #EA580C"},
+                            flex="1",
+                        ),
+                        rx.button(
+                            rx.cond(FoodState.cli_dni_ruc_buscando, "Buscando…", "Consultar"),
+                            on_click=FoodState.buscar_dni_ruc,
+                            is_disabled=FoodState.cli_dni_ruc_buscando,
+                            background="#EA580C", color="#FFFFFF",
+                            border_radius="7px", font_size="13px",
+                            padding_x="14px", padding_y="8px", cursor="pointer",
+                            _hover={"background": "#C2410C"},
+                        ),
+                        spacing="2", width="100%",
+                    ),
+                    rx.cond(
+                        FoodState.cli_dni_ruc_error != "",
+                        rx.text(FoodState.cli_dni_ruc_error, font_size="11px", color="#DC2626"),
+                    ),
+                    spacing="1", align="start", width="100%",
+                ),
             ),
             rx.hstack(
                 rx.vstack(

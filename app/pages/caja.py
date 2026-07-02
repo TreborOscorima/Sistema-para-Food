@@ -319,6 +319,7 @@ def _cobro_panel() -> rx.Component:
                     background="#FFFFFF", color="#0F172A",
                     border="2px solid #EA580C", border_radius="8px",
                     font_size="14px", width="100%",
+                    _placeholder={"color": "#94A3B8"},
                 ),
                 spacing="2", width="100%",
                 background="#FFFFFF", border="1px solid #E2E8F0",
@@ -549,12 +550,24 @@ def _resumen_dia() -> rx.Component:
                 rx.text("Pedidos cobrados", font_size="11px", color="#94A3B8", font_weight="600"),
                 rx.text(FoodState.dashboard_pedidos_hoy.to_string(), font_size="22px",
                         font_weight="800", color="#0F172A"),
+                rx.text(
+                    rx.cond(FoodState.dashboard_pedidos_trend >= 0, "↑ +", "↓ ")
+                    + FoodState.dashboard_pedidos_trend.to_string() + " vs ayer",
+                    font_size="11px", font_weight="600",
+                    color=rx.cond(FoodState.dashboard_pedidos_trend >= 0, "#16A34A", "#DC2626"),
+                ),
                 background="#F8FAFC", border_radius="10px", padding="14px", width="100%",
             ),
             rx.box(
                 rx.text("Propinas", font_size="11px", color="#94A3B8", font_weight="600"),
                 rx.text(FoodState.dashboard_propina_hoy_texto, font_size="22px",
                         font_weight="800", color="#0F172A"),
+                rx.text(
+                    rx.cond(FoodState.dashboard_propina_trend_pct >= 0, "↑ ", "↓ ")
+                    + FoodState.dashboard_propina_trend_pct.to_string() + "% vs ayer",
+                    font_size="11px", font_weight="600",
+                    color=rx.cond(FoodState.dashboard_propina_trend_pct >= 0, "#16A34A", "#DC2626"),
+                ),
                 background="#F8FAFC", border_radius="10px", padding="14px", width="100%",
             ),
             rx.link(

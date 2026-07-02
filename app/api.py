@@ -200,7 +200,8 @@ async def _registro(request: Request) -> JSONResponse:
                 session.add(company)
                 session.flush()
 
-                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                import bcrypt as _bcrypt_api
+                password_hash = _bcrypt_api.hashpw(password.encode(), _bcrypt_api.gensalt()).decode()
                 config = ConfigImpresora(
                     company_id=company.id,
                     nombre_local=company_name,

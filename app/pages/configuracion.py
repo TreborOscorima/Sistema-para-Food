@@ -271,7 +271,7 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
 def _mesas_section() -> rx.Component:
     return rx.box(
         rx.vstack(
-            _section_header("Gestion de Mesas", "layout_grid", "🍽️"),
+            _section_header("Gestión de Mesas", "layout_grid", "🍽️"),
             rx.vstack(
                 rx.text(
                     rx.cond(FoodState.mesa_config_form_id > 0,
@@ -807,7 +807,7 @@ def _configuracion_content() -> rx.Component:
         # Header
         rx.hstack(
             rx.vstack(
-                rx.text("Configuracion", font_size=rx.breakpoints(initial="20px", md="24px"),
+                rx.text("Configuración", font_size=rx.breakpoints(initial="20px", md="24px"),
                         font_weight="800", color="#0F172A", line_height="1"),
                 rx.text("Ajusta el funcionamiento del sistema",
                         font_size="13px", color="#64748B"),

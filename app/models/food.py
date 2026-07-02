@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Column, Date, Numeric, UniqueConstraint
+from sqlalchemy import Column, Date, Numeric, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -554,3 +554,8 @@ class DetallePedido(TimestampedModel, table=True):
 
     pedido: Pedido | None = Relationship(back_populates="detalles")
     producto: Producto | None = Relationship(back_populates="detalles")
+
+
+@event.listens_for(TimestampedModel, "before_update", propagate=True)
+def _auto_updated_at(mapper, connection, target) -> None:
+    target.updated_at = datetime.utcnow()
