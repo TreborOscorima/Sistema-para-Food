@@ -2512,7 +2512,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.mensaje = "Producto no disponible."
                 return
             producto_nombre = producto.nombre
-            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=self.usuario_actual.id if self.usuario_actual else None)
+            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=(self.usuario_actual.id or None) if self.usuario_actual else None)
             detalle = session.exec(
                 select(DetallePedido).where(
                     DetallePedido.pedido_id == pedido.id,
@@ -2733,7 +2733,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.mensaje = "No hay items pendientes para enviar."
                 return
             if self.usuario_actual and pedido.mozo_id is None:
-                pedido.mozo_id = self.usuario_actual.id
+                pedido.mozo_id = self.usuario_actual.id or None
                 pedido.updated_at = _utcnow()
                 session.add(pedido)
             detalles_pendientes = _get_unsent_details(session, pedido.id or 0)
@@ -2912,7 +2912,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self._transition_ticket_state(
             detalle_ids_csv, EstadoProduccion.EN_PREPARACION.value,
             EstadoProduccion.LISTO_PARA_ENTREGAR.value, "Pedido listo para entregar a salon.",
-            actor_user_id=(self.usuario_actual.id if self.usuario_actual else None),
+            actor_user_id=((self.usuario_actual.id or None) if self.usuario_actual else None),
             actor_field_name="preparado_por_id",
         )
 
@@ -3193,7 +3193,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 if pedido is None:
                     self.anulacion_error = "El pedido ya no existe."
                     return
-                usuario_id = self.usuario_actual.id if self.usuario_actual else None
+                usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
                 if self.anulacion_es_venta:
                     fiado_revertido = anular_venta_cobrada(
                         session, pedido, usuario_id, self.anulacion_motivo
@@ -3313,7 +3313,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 return
             now = _utcnow()
             if self.usuario_actual:
-                pedido.cajero_id = self.usuario_actual.id
+                pedido.cajero_id = self.usuario_actual.id or None
             pedido.pagado = total_fiado == 0
             pedido.estado = EstadoPedido.COBRADO.value
             pedido.cerrado_en = now
@@ -3346,7 +3346,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     session,
                     pedido,
                     turno.id,
-                    self.usuario_actual.id if self.usuario_actual else None,
+                    (self.usuario_actual.id or None) if self.usuario_actual else None,
                     pagos_lista,
                     resultado_pagos,
                 )
@@ -3487,7 +3487,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             pedido = Pedido(
                 company_id=self._company_id(),
                 mesa_id=None,
-                cajero_id=self.usuario_actual.id,
+                cajero_id=self.usuario_actual.id or None,
                 tipo_pedido=TipoPedido.MOSTRADOR.value,
                 nombre_cliente=_actor_name(self.mostrador_cliente_nombre) or None,
                 pagado=True,
@@ -3534,7 +3534,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     company_id=self._company_id(),
                     pedido_id=pedido.id or 0,
                     turno_caja_id=turno.id,
-                    usuario_id=self.usuario_actual.id,
+                    usuario_id=self.usuario_actual.id or None,
                     metodo=self.mostrador_metodo_pago or "efectivo",
                     monto=Decimal(str(round(total, 2))),
                 ))
@@ -4467,7 +4467,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         except InvalidOperation:
             self.inv_mov_error = "Cantidad inválida."
             return
-        usuario_id = self.usuario_actual.id if self.usuario_actual else None
+        usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
         try:
             with self._tenant_session() as session:
                 ins = session.get(Insumo, self.inv_mov_insumo_id)
@@ -4604,7 +4604,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 if stock_actual > 0:
                     registrar_entrada(
                         session, ins,
-                        self.usuario_actual.id if self.usuario_actual else None,
+                        (self.usuario_actual.id or None) if self.usuario_actual else None,
                         stock_actual, "Stock inicial",
                     )
                 self.mensaje = f"Insumo '{nombre}' creado."
@@ -4624,7 +4624,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 if stock_actual != Decimal(str(ins.stock_actual)):
                     registrar_ajuste(
                         session, ins,
-                        self.usuario_actual.id if self.usuario_actual else None,
+                        (self.usuario_actual.id or None) if self.usuario_actual else None,
                         stock_actual, "Edición manual del insumo",
                     )
                 self.mensaje = f"Insumo '{nombre}' actualizado."
