@@ -346,6 +346,10 @@ class Insumo(TimestampedModel, table=True):
         default=None,
         sa_column=Column(Date, nullable=True),
     )
+    costo_unitario: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )  # costo por unidad de medida — alimenta el margen por plato
     activo: bool = Field(default=True, nullable=False)
 
     receta_items: list["RecetaItem"] = Relationship(back_populates="insumo")

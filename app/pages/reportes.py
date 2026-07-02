@@ -121,6 +121,77 @@ def _metodo_badge(metodo: str) -> rx.Component:
 
 # ─── Fila historial ───────────────────────────────────────────────────────────
 
+def _mozo_row(m) -> rx.Component:
+    return rx.hstack(
+        rx.text(m.nombre, font_size="13px", font_weight="600", color="#0F172A", flex="1"),
+        rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color="#64748B",
+                min_width="52px", text_align="right"),
+        rx.vstack(
+            rx.text(m.total_texto, font_size="13px", font_weight="800",
+                    color="#15803D", text_align="right"),
+            rx.cond(
+                m.propinas_texto != "",
+                rx.text("prop. " + m.propinas_texto, font_size="10px",
+                        color="#B45309", text_align="right"),
+                rx.fragment(),
+            ),
+            spacing="0", align="end", min_width="90px",
+        ),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+    )
+
+
+def _hora_row(h) -> rx.Component:
+    return rx.hstack(
+        rx.text(h.hora_label, font_size="12px", font_weight="700", color="#334155",
+                min_width="44px"),
+        rx.box(
+            rx.box(
+                background="#EA580C", border_radius="4px", height="10px",
+                width=h.barra_pct.to_string() + "%", min_width="2px",
+            ),
+            flex="1", background="#F1F5F9", border_radius="4px", height="10px",
+        ),
+        rx.text(h.total_texto, font_size="12px", font_weight="700", color="#0F172A",
+                min_width="80px", text_align="right"),
+        rx.text(h.pedidos.to_string(), font_size="11px", color="#94A3B8",
+                min_width="24px", text_align="right"),
+        width="100%", align="center", gap="8px",
+    )
+
+
+def _margen_row(p) -> rx.Component:
+    return rx.hstack(
+        rx.text(p.nombre, font_size="13px", font_weight="600", color="#0F172A", flex="1",
+                min_width="0", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
+        rx.text("P " + p.precio_texto, font_size="12px", color="#64748B",
+                min_width="86px", text_align="right",
+                display=rx.breakpoints(initial="none", sm="block")),
+        rx.text("C " + p.costo_texto, font_size="12px", color="#64748B",
+                min_width="86px", text_align="right",
+                display=rx.breakpoints(initial="none", sm="block")),
+        rx.text(p.margen_texto, font_size="13px", font_weight="700", color="#334155",
+                min_width="86px", text_align="right"),
+        rx.hstack(
+            rx.badge(
+                p.margen_pct_texto,
+                background="#FFFFFF", color=p.color,
+                border="1.5px solid", border_color=p.color,
+                border_radius="8px", font_size="11px", font_weight="800",
+            ),
+            rx.cond(
+                p.costo_completo,
+                rx.fragment(),
+                rx.text("costos incompletos", font_size="10px", color="#94A3B8"),
+            ),
+            spacing="1", align="center", min_width="70px", justify="end",
+        ),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+    )
+
+
 def _venta_row(venta: VentaHistorialView) -> rx.Component:
     return rx.hstack(
         rx.text(
@@ -586,6 +657,70 @@ def _reportes_content() -> rx.Component:
                 width="100%",
             ),
             rx.fragment(),
+        ),
+
+        # ── Analítica: por mozo / por hora / margen por plato ─────────────────
+        rx.flex(
+            # Ranking por mozo
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="users", size=14, color="#EA580C"),
+                    rx.text("Ventas por mozo", font_size="13px", font_weight="700", color="#334155"),
+                    spacing="2", align="center", margin_bottom="10px",
+                ),
+                rx.cond(
+                    FoodState.reporte_mozos.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.reporte_mozos, _mozo_row),
+                        spacing="0", width="100%",
+                    ),
+                    rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                background="#F8FAFC", border="1px solid #E2E8F0",
+                border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+            ),
+            # Ventas por hora
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="clock", size=14, color="#EA580C"),
+                    rx.text("Ventas por hora", font_size="13px", font_weight="700", color="#334155"),
+                    spacing="2", align="center", margin_bottom="10px",
+                ),
+                rx.cond(
+                    FoodState.reporte_horas.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.reporte_horas, _hora_row),
+                        spacing="1", width="100%",
+                    ),
+                    rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                background="#F8FAFC", border="1px solid #E2E8F0",
+                border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+            ),
+            gap="12px", width="100%",
+            direction=rx.breakpoints(initial="column", md="row"),
+        ),
+        # Margen por plato
+        rx.box(
+            rx.hstack(
+                rx.icon(tag="chef_hat", size=14, color="#EA580C"),
+                rx.text("Margen por plato (precio vs costo de receta)",
+                        font_size="13px", font_weight="700", color="#334155"),
+                spacing="2", align="center", margin_bottom="10px",
+            ),
+            rx.cond(
+                FoodState.reporte_margen.length() > 0,
+                rx.vstack(
+                    rx.foreach(FoodState.reporte_margen, _margen_row),
+                    spacing="0", width="100%",
+                ),
+                rx.text(
+                    "Carga recetas y costos de insumos en Inventario para ver el margen de cada plato.",
+                    font_size="12px", color="#94A3B8",
+                ),
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", width="100%",
         ),
 
         # ── Historial con filtros ─────────────────────────────────────────────

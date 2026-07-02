@@ -51,6 +51,11 @@ from app.services.receipt_service import (
 from tuwayki_core.utils.timezone import format_local_datetime
 
 from app.models.food import MovimientoInsumo, PagoPedido, TipoMovimientoInsumo
+from app.services.analitica_service import (
+    margen_por_plato,
+    ventas_por_hora,
+    ventas_por_mozo,
+)
 from app.services.anulacion_service import (
     anular_pedido_abierto,
     anular_venta_cobrada,
@@ -67,6 +72,7 @@ from app.services.pago_service import (
     registrar_pagos_pedido,
     validar_pagos,
 )
+from app.services.suscripcion_service import evaluar_bloqueo
 from app.services.promo_service import (
     DIAS_SEMANA as PROMO_DIAS,
     ItemCobro,
@@ -195,6 +201,18 @@ _FOOD_API_URL: str = os.getenv("PUBLIC_API_URL", "http://localhost:3004").rstrip
 def _utcnow() -> datetime:
     """Datetime UTC naive compatible con columnas MySQL sin TZ."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _bloqueo_suscripcion(company_id: int) -> str:
+    """'' si la empresa puede operar; mensaje de bloqueo si está suspendida o
+    su período de prueba venció. Se verifica al iniciar sesión y en cada carga
+    de página operativa (enforcement del plan, gestionado desde el Owner Admin)."""
+    if not company_id:
+        return "Empresa no válida."
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+    return evaluar_bloqueo(company, _utcnow())
 
 
 def _hash_pin(plain: str) -> str:
@@ -538,6 +556,30 @@ class KardexView(BaseModel):
     stock_resultante_texto: str = ""
     motivo: str = ""
     usuario: str = ""
+
+
+class MozoRankView(BaseModel):
+    nombre: str = ""
+    pedidos: int = 0
+    total_texto: str = ""
+    propinas_texto: str = ""
+
+
+class FranjaHoraView(BaseModel):
+    hora_label: str = ""
+    pedidos: int = 0
+    total_texto: str = ""
+    barra_pct: int = 0
+
+
+class MargenPlatoView(BaseModel):
+    nombre: str = ""
+    precio_texto: str = ""
+    costo_texto: str = ""
+    margen_texto: str = ""
+    margen_pct_texto: str = ""
+    color: str = "#16A34A"
+    costo_completo: bool = True
 
 
 class RecetaItemView(BaseModel):
@@ -968,6 +1010,11 @@ class FoodState(CajaTurnoMixin, rx.State):
     dashboard_propina_trend_pct: int = 0
 
     # Historial — filtros
+    # Analítica de reportes (P6)
+    reporte_mozos: list[MozoRankView] = []
+    reporte_horas: list[FranjaHoraView] = []
+    reporte_margen: list[MargenPlatoView] = []
+
     historial_filtro_fecha_desde: str = ""
     historial_filtro_fecha_hasta: str = ""
     historial_filtro_metodo: str = ""
@@ -1018,6 +1065,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     inv_form_stock_actual: str = ""
     inv_form_stock_minimo: str = ""
     inv_form_vencimiento: str = ""
+    inv_form_costo: str = ""
     inv_form_editando: bool = False
     inv_form_visible: bool = False
 
@@ -1110,6 +1158,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
         self.inv_form_vencimiento = ""
+        self.inv_form_costo = ""
         self.inv_form_editando = False
         self.inv_form_visible = True
 
@@ -1515,6 +1564,15 @@ class FoodState(CajaTurnoMixin, rx.State):
                 rx.window_alert("No tienes permisos para este modulo."),
                 rx.redirect(self.usuario_home_route, replace=True),
             ]
+        bloqueo = _bloqueo_suscripcion(self._company_id())
+        if bloqueo:
+            self.usuario_actual = None
+            self._clear_operational_context()
+            self.login_error = bloqueo
+            return [
+                rx.window_alert(bloqueo),
+                rx.redirect("/login", replace=True),
+            ]
         self.cargar_datos_iniciales()
         return None
 
@@ -1613,6 +1671,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
         self.cargar_dashboard()
         self.cargar_historial_ventas()
+        self.cargar_analitica()
         return None
 
     def on_load_usuarios(self):
@@ -1675,6 +1734,11 @@ class FoodState(CajaTurnoMixin, rx.State):
         if len(normalized) < 4:
             self.login_pin_input = ""
             self.login_error = "Ingresa un PIN válido de 4 a 6 dígitos."
+            return
+        bloqueo = _bloqueo_suscripcion(self._company_id())
+        if bloqueo:
+            self.login_pin_input = ""
+            self.login_error = bloqueo
             return
         self.login_error = ""
         with self._tenant_session() as session:
@@ -3821,6 +3885,70 @@ class FoodState(CajaTurnoMixin, rx.State):
     def aplicar_filtros_historial(self) -> None:
         self.historial_pagina = 0
         self.cargar_historial_ventas()
+        self.cargar_analitica()
+
+    def _rango_filtros_historial(self) -> tuple[datetime | None, datetime | None]:
+        desde = hasta = None
+        if self.historial_filtro_fecha_desde:
+            try:
+                desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
+            except ValueError:
+                pass
+        if self.historial_filtro_fecha_hasta:
+            try:
+                hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
+                hasta = hasta.replace(hour=23, minute=59, second=59)
+            except ValueError:
+                pass
+        return desde, hasta
+
+    def cargar_analitica(self) -> None:
+        """Ranking por mozo, ventas por hora y margen por plato (P6)."""
+        desde, hasta = self._rango_filtros_historial()
+        with self._tenant_session() as session:
+            mozos = ventas_por_mozo(session, self._company_id(), desde, hasta)
+            horas = ventas_por_hora(session, self._company_id(), desde, hasta)
+            margenes = margen_por_plato(session, self._company_id())
+        self.reporte_mozos = [
+            MozoRankView(
+                nombre=f["nombre"],
+                pedidos=f["pedidos"],
+                total_texto=_money_text(f["total"]),
+                propinas_texto=_money_text(f["propinas"]) if f["propinas"] > 0 else "",
+            )
+            for f in mozos[:10]
+        ]
+        max_total = max((float(f["total"]) for f in horas), default=0.0)
+        self.reporte_horas = [
+            FranjaHoraView(
+                hora_label=f"{f['hora']:02d}:00",
+                pedidos=f["pedidos"],
+                total_texto=_money_text(f["total"]),
+                barra_pct=int(float(f["total"]) / max_total * 100) if max_total > 0 else 0,
+            )
+            for f in horas
+        ]
+        vistas_margen: list[MargenPlatoView] = []
+        for f in margenes:
+            pct = f["margen_pct"]
+            if not f["costo_completo"]:
+                color = "#94A3B8"
+            elif pct < 30:
+                color = "#DC2626"
+            elif pct < 60:
+                color = "#D97706"
+            else:
+                color = "#16A34A"
+            vistas_margen.append(MargenPlatoView(
+                nombre=f["nombre"],
+                precio_texto=_money_text(f["precio"]),
+                costo_texto=_money_text(f["costo"]),
+                margen_texto=_money_text(f["margen"]),
+                margen_pct_texto=f"{pct:.1f}%",
+                color=color,
+                costo_completo=f["costo_completo"],
+            ))
+        self.reporte_margen = vistas_margen
 
     def buscar_historial_manual(self) -> None:
         self.historial_filtro_rapido = "personalizado"
@@ -3833,6 +3961,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.historial_filtro_rapido = ""
         self.historial_pagina = 0
         self.cargar_historial_ventas()
+        self.cargar_analitica()
 
     def filtro_rapido_hoy(self) -> None:
         hoy = _utcnow().date().isoformat()
@@ -4299,6 +4428,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     def set_inv_form_vencimiento(self, v: str) -> None:
         self.inv_form_vencimiento = v
 
+    def set_inv_form_costo(self, v: str) -> None:
+        self.inv_form_costo = v
+
     # ─── Kardex de insumos ───────────────────────────────────────────────────
 
     @rx.var
@@ -4450,6 +4582,13 @@ class FoodState(CajaTurnoMixin, rx.State):
             except ValueError:
                 self.mensaje = "Fecha de vencimiento inválida."
                 return
+        try:
+            costo = Decimal(self.inv_form_costo.replace(",", ".").strip() or "0")
+            if costo < 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            self.mensaje = "Costo inválido. Ingresa un número positivo."
+            return
         with self._tenant_session() as session:
             if self.inv_form_id == 0:
                 existente = session.exec(
@@ -4468,6 +4607,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     stock_actual=stock_actual,
                     stock_minimo=stock_minimo,
                     fecha_vencimiento=fecha_venc,
+                    costo_unitario=costo,
                     activo=True,
                 )
                 session.add(ins)
@@ -4488,6 +4628,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 ins.unidad = unidad
                 ins.stock_minimo = stock_minimo
                 ins.fecha_vencimiento = fecha_venc
+                ins.costo_unitario = costo
                 ins.updated_at = _utcnow()
                 session.add(ins)
                 # El stock no se pisa directo: la diferencia queda en el kardex
@@ -4505,6 +4646,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
         self.inv_form_vencimiento = ""
+        self.inv_form_costo = ""
         self.inv_form_editando = False
         self.inv_form_visible = False
         self.cargar_inventario()
@@ -4524,6 +4666,8 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.inv_form_vencimiento = (
                 ins.fecha_vencimiento.strftime("%Y-%m-%d") if ins.fecha_vencimiento else ""
             )
+            costo_dec = Decimal(str(ins.costo_unitario))
+            self.inv_form_costo = f"{costo_dec:.2f}" if costo_dec > 0 else ""
         self.inv_form_editando = True
         self.inv_form_visible = True
 
@@ -4534,6 +4678,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
         self.inv_form_vencimiento = ""
+        self.inv_form_costo = ""
         self.inv_form_editando = False
         self.inv_form_visible = False
 
@@ -5431,6 +5576,12 @@ class MenuPublicoState(rx.State):
                 return
 
             company_id = cfg.company_id
+            # Empresa suspendida o con trial vencido: la carta pública también
+            # deja de servirse (mismo enforcement que las páginas operativas).
+            if _bloqueo_suscripcion(company_id):
+                self.no_encontrado = True
+                self.cargando = False
+                return
             self.nombre_local = cfg.nombre_local
 
             cats = session.exec(
@@ -5556,6 +5707,10 @@ class AdminLocalState(rx.State):
         hashed = hashlib.sha256(password.encode()).hexdigest()
         if hashed != cfg.admin_password_hash:
             self.error_msg = "Credenciales incorrectas."
+            return
+        bloqueo = _bloqueo_suscripcion(cfg.company_id)
+        if bloqueo:
+            self.error_msg = bloqueo
             return
         self.autenticado = True
         self.password_input = ""

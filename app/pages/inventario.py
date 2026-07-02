@@ -450,6 +450,26 @@ def _insumo_form() -> rx.Component:
                     flex="1",
                 ),
                 rx.vstack(
+                    rx.text("Costo por unidad S/", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.input(
+                        placeholder="0.00",
+                        value=FoodState.inv_form_costo,
+                        on_change=FoodState.set_inv_form_costo,
+                        type="number", min="0", step="0.01",
+                        background="#F8FAFC",
+                        border="1px solid #E2E8F0",
+                        border_radius="7px",
+                        font_size="13px",
+                        padding_x="10px",
+                        padding_y="8px",
+                        width="100%",
+                        _focus={"border": "1px solid #EA580C"},
+                    ),
+                    spacing="1",
+                    align="start",
+                    flex="1",
+                ),
+                rx.vstack(
                     rx.text("Vencimiento (opcional)", font_size="11px", font_weight="600", color="#64748B"),
                     rx.input(
                         value=FoodState.inv_form_vencimiento,
