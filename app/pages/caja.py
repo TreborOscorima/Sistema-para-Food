@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import app_shell, cumpleanos_banner
+from app.components.shared import anulacion_modal, app_shell, cumpleanos_banner
 from app.states.caja_turno_mixin import (
     DenominacionRow,
     MovimientoCajaView,
@@ -385,6 +385,15 @@ def _cobro_panel() -> rx.Component:
         ),
         # Botones
         rx.hstack(
+            rx.button(
+                rx.hstack(rx.icon(tag="ban", size=14), rx.text("Anular"),
+                          spacing="1", align="center"),
+                on_click=FoodState.abrir_anulacion_pedido_abierto(FoodState.caja_cobro_mesa_id),
+                background="#FFFFFF", color="#DC2626",
+                border="1px solid #FECACA", border_radius="12px",
+                font_size="14px", font_weight="600", padding_y="14px",
+                cursor="pointer", _hover={"background": "#FEF2F2"}, flex="1",
+            ),
             rx.button(
                 "Cancelar",
                 on_click=FoodState.cancelar_cobro,
@@ -1012,6 +1021,7 @@ def _caja_content() -> rx.Component:
         _mov_modal(),
         _cierre_modal(),
         _historial_modal(),
+        anulacion_modal(),
         spacing="4", width="100%",
     )
 

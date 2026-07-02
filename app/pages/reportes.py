@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import app_shell
+from app.components.shared import anulacion_modal, app_shell
 from app.states.food_state import FoodState, TopPlatoView, VentaDetalleItemView, VentaHistorialView
 
 _METODOS_FILTRO = [
@@ -130,8 +130,18 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             min_width="36px",
             flex_shrink="0",
         ),
-        rx.text(venta.mesa_label, font_size="13px", color="#334155", flex="1",
-                min_width="0", text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
+        rx.vstack(
+            rx.text(venta.mesa_label, font_size="13px", color="#334155", width="100%",
+                    text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
+            rx.cond(
+                venta.anulada,
+                rx.text(venta.anulacion_texto, font_size="10px", color="#B91C1C",
+                        width="100%", text_overflow="ellipsis", overflow="hidden",
+                        white_space="nowrap"),
+                rx.fragment(),
+            ),
+            spacing="0", align="start", flex="1", min_width="0",
+        ),
         _metodo_badge(venta.metodo_pago),
         rx.text(
             venta.mozo_nombre,
@@ -146,18 +156,41 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             display=rx.breakpoints(initial="none", lg="block"),
         ),
         rx.vstack(
-            rx.text(venta.total_con_propina_texto, font_size="13px", font_weight="700",
-                    color="#15803D", text_align="right"),
             rx.cond(
-                venta.propina > 0,
-                rx.text("+ " + venta.propina_texto + " prop.",
-                        font_size="10px", color="#B45309", text_align="right"),
-                rx.fragment(),
+                venta.anulada,
+                rx.badge(
+                    "ANULADA", background="#FEE2E2", color="#B91C1C",
+                    border_radius="6px", font_size="10px", font_weight="800",
+                ),
+                rx.text(venta.total_con_propina_texto, font_size="13px", font_weight="700",
+                        color="#15803D", text_align="right"),
+            ),
+            rx.cond(
+                venta.anulada,
+                rx.text(venta.total_con_propina_texto, font_size="10px", color="#94A3B8",
+                        text_decoration="line-through", text_align="right"),
+                rx.cond(
+                    venta.propina > 0,
+                    rx.text("+ " + venta.propina_texto + " prop.",
+                            font_size="10px", color="#B45309", text_align="right"),
+                    rx.fragment(),
+                ),
             ),
             spacing="0",
             align="end",
             min_width="80px",
             flex_shrink="0",
+        ),
+        rx.cond(
+            venta.anulada,
+            rx.fragment(),
+            rx.icon(
+                tag="ban", size=15, color="#CBD5E1", cursor="pointer",
+                on_click=FoodState.abrir_anulacion_venta(venta.pedido_id).stop_propagation,
+                _hover={"color": "#DC2626"},
+                flex_shrink="0",
+                title="Anular venta",
+            ),
         ),
         width="100%",
         align="center",
@@ -167,6 +200,7 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         border="1px solid #E2E8F0",
         gap="8px",
         cursor="pointer",
+        opacity=rx.cond(venta.anulada, "0.75", "1"),
         on_click=FoodState.abrir_detalle_venta(venta.pedido_id),
         _hover={"background": "#F8FAFC"},
     )
@@ -431,6 +465,7 @@ def _historial_header() -> rx.Component:
 def _reportes_content() -> rx.Component:
     return rx.vstack(
         _venta_detalle_modal(),
+        anulacion_modal(),
         # Header
         rx.hstack(
             rx.vstack(

@@ -960,3 +960,68 @@ def app_shell(
         color=_text,
         class_name="" if dark else "light",
     )
+
+
+# ─── Modal de anulación auditada (compartido por Caja y Reportes) ─────────────
+
+def anulacion_modal() -> rx.Component:
+    """Modal de anulación con motivo obligatorio. La anulación nunca borra el
+    pedido: queda CANCELADO con motivo, usuario y hora."""
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="triangle_alert", size=18, color="#DC2626"),
+                    rx.text("Anular " + FoodState.anulacion_referencia,
+                            font_size="17px", font_weight="800", color="#0F172A"),
+                    spacing="2", align="center",
+                ),
+                rx.text(
+                    rx.cond(
+                        FoodState.anulacion_es_venta,
+                        "Se repondrá el stock de insumos, se revertirá el fiado si lo hubo "
+                        "y la venta saldrá del arqueo del turno. La operación queda registrada.",
+                        "El pedido se cancelará y la mesa quedará libre. La operación queda registrada.",
+                    ),
+                    font_size="13px", color="#64748B",
+                ),
+                rx.input(
+                    placeholder="Motivo de la anulación (obligatorio)",
+                    value=FoodState.anulacion_motivo,
+                    on_change=FoodState.set_anulacion_motivo,
+                    width="100%",
+                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    border_radius="8px", font_size="13px",
+                    _focus={"border_color": "#DC2626"},
+                ),
+                rx.cond(
+                    FoodState.anulacion_error != "",
+                    rx.text(FoodState.anulacion_error, font_size="12px",
+                            color="#B91C1C", font_weight="600"),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Volver",
+                        on_click=FoodState.cancelar_anulacion,
+                        background="#FFFFFF", color="#64748B",
+                        border="1px solid #E2E8F0", border_radius="10px",
+                        font_size="14px", font_weight="600", cursor="pointer",
+                        _hover={"background": "#F8FAFC"}, flex="1",
+                    ),
+                    rx.button(
+                        "Confirmar anulación",
+                        on_click=FoodState.confirmar_anulacion,
+                        background="#DC2626", color="#FFFFFF",
+                        border_radius="10px", font_size="14px", font_weight="800",
+                        cursor="pointer", _hover={"background": "#B91C1C"}, flex="2",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            class_name="light", max_width="440px",
+        ),
+        open=FoodState.anulacion_modal_visible,
+        on_open_change=FoodState.set_anulacion_modal_visible,
+    )

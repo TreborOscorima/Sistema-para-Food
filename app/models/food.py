@@ -184,6 +184,11 @@ class Pedido(TimestampedModel, table=True):
     cliente_id: int | None = Field(default=None, foreign_key="food_clientes.id", index=True)
     turno_caja_id: int | None = Field(default=None, foreign_key="food_turnos_caja.id", index=True)
 
+    # Auditoría de anulación (estado CANCELADO con motivo obligatorio)
+    motivo_cancelacion: str | None = Field(default=None, max_length=240)
+    cancelado_por_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
+    cancelado_en: datetime | None = Field(default=None)
+
     mesa: Mesa | None = Relationship(back_populates="pedidos")
     detalles: list["DetallePedido"] = Relationship(back_populates="pedido")
     cliente: "Cliente" = Relationship(back_populates="pedidos")

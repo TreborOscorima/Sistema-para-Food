@@ -17,7 +17,7 @@ import bcrypt as _bcrypt
 
 import reflex as rx
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlmodel import select
 
 from app.models.company import Company
@@ -49,6 +49,10 @@ from app.services.receipt_service import (
     generate_kitchen_ticket_html,
 )
 from app.models.food import PagoPedido
+from app.services.anulacion_service import (
+    anular_pedido_abierto,
+    anular_venta_cobrada,
+)
 from app.services.pago_service import (
     metodo_pago_resumen,
     registrar_pagos_pedido,
@@ -664,6 +668,8 @@ class VentaHistorialView(BaseModel):
     metodo_pago: str
     mozo_nombre: str
     cajero_nombre: str
+    anulada: bool = False
+    anulacion_texto: str = ""
 
 
 class VentaDetalleItemView(BaseModel):
@@ -910,6 +916,14 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_pago_staged_metodo: str = "efectivo"
     caja_pago_staged_monto: str = ""
     caja_pagos_staged: list[PagoStagedView] = []
+
+    # Anulación auditada de pedidos/ventas
+    anulacion_modal_visible: bool = False
+    anulacion_pedido_id: int = 0
+    anulacion_es_venta: bool = False
+    anulacion_referencia: str = ""
+    anulacion_motivo: str = ""
+    anulacion_error: str = ""
 
     # Dashboard KPIs
     dashboard_ventas_hoy_texto: str = "S/ 0.00"
@@ -2618,7 +2632,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             grupos: dict = {}
             for d in detalles:
                 pedido = pedidos.get(d.pedido_id)
-                if pedido is None:
+                if pedido is None or pedido.estado == EstadoPedido.CANCELADO.value:
                     continue
                 marca = d.enviado_cocina_at or d.updated_at
                 lote = marca.isoformat()
@@ -2922,6 +2936,86 @@ class FoodState(CajaTurnoMixin, rx.State):
             pagos = list(self.caja_pagos_staged)
             pagos.pop(idx)
             self.caja_pagos_staged = pagos
+
+    # ─── Anulación auditada de pedidos y ventas ──────────────────────────────
+
+    def set_anulacion_motivo(self, v: str) -> None:
+        self.anulacion_motivo = v
+
+    def set_anulacion_modal_visible(self, v: bool) -> None:
+        self.anulacion_modal_visible = bool(v)
+
+    def cancelar_anulacion(self) -> None:
+        self.anulacion_modal_visible = False
+        self.anulacion_pedido_id = 0
+        self.anulacion_motivo = ""
+        self.anulacion_error = ""
+
+    def abrir_anulacion_pedido_abierto(self, mesa_id: int) -> None:
+        """Anular el pedido abierto de una mesa (desde Caja) — libera la mesa."""
+        with self._tenant_session() as session:
+            pedido = _get_open_order(session, mesa_id, self._company_id())
+            if pedido is None:
+                self.mensaje = "No hay pedido abierto para esa mesa."
+                return
+            mesa = session.get(Mesa, mesa_id)
+            referencia = (mesa.nombre or f"Mesa {mesa.numero}") if mesa else f"Mesa {mesa_id}"
+            self.anulacion_pedido_id = pedido.id or 0
+            self.anulacion_referencia = f"{referencia} — pedido #{pedido.id}"
+        self.anulacion_es_venta = False
+        self.anulacion_motivo = ""
+        self.anulacion_error = ""
+        self.anulacion_modal_visible = True
+
+    def abrir_anulacion_venta(self, pedido_id: int) -> None:
+        """Anular una venta ya cobrada (desde Reportes) — solo Admin."""
+        if self.usuario_actual is None or self.usuario_actual.rol != RolUsuario.ADMIN.value:
+            self.mensaje = "Solo el administrador puede anular ventas cobradas."
+            return
+        self.anulacion_pedido_id = pedido_id
+        self.anulacion_referencia = f"Venta #{pedido_id}"
+        self.anulacion_es_venta = True
+        self.anulacion_motivo = ""
+        self.anulacion_error = ""
+        self.anulacion_modal_visible = True
+
+    def confirmar_anulacion(self) -> None:
+        self.anulacion_error = ""
+        if self.anulacion_pedido_id == 0:
+            return
+        fiado_revertido = Decimal("0.00")
+        try:
+            with self._tenant_session() as session:
+                pedido = session.get(Pedido, self.anulacion_pedido_id)
+                if pedido is None:
+                    self.anulacion_error = "El pedido ya no existe."
+                    return
+                usuario_id = self.usuario_actual.id if self.usuario_actual else None
+                if self.anulacion_es_venta:
+                    fiado_revertido = anular_venta_cobrada(
+                        session, pedido, usuario_id, self.anulacion_motivo
+                    )
+                else:
+                    anular_pedido_abierto(session, pedido, usuario_id, self.anulacion_motivo)
+                session.commit()
+        except ValueError as exc:
+            self.anulacion_error = str(exc)
+            return
+        referencia = self.anulacion_referencia
+        es_venta = self.anulacion_es_venta
+        self.cancelar_anulacion()
+        if self.caja_cobro_mesa_id:
+            self.cancelar_cobro()
+        self.cargar_mesas()
+        self.cargar_cocina()
+        if es_venta:
+            self.cargar_historial_ventas()
+            self.cargar_dashboard()
+        fiado_txt = (
+            f" Fiado revertido: {_money_text(fiado_revertido)}."
+            if fiado_revertido > 0 else ""
+        )
+        self.mensaje = f"{referencia} anulado. Motivo registrado.{fiado_txt}"
 
     def confirmar_cobro(self) -> None:
         self.caja_cobro_error = ""
@@ -3567,6 +3661,11 @@ class FoodState(CajaTurnoMixin, rx.State):
                     or_(
                         Pedido.pagado.is_(True),
                         Pedido.estado == EstadoPedido.COBRADO.value,
+                        # Ventas anuladas: visibles con badge, no desaparecen
+                        and_(
+                            Pedido.estado == EstadoPedido.CANCELADO.value,
+                            Pedido.cerrado_en.isnot(None),
+                        ),
                     ),
                 )
             )
@@ -3597,6 +3696,13 @@ class FoodState(CajaTurnoMixin, rx.State):
                 total_base = _to_decimal(p.total)
                 propina = _to_decimal(getattr(p, "propina", Decimal("0.00")))
                 total_con_propina = total_base + propina
+                anulada = p.estado == EstadoPedido.CANCELADO.value
+                anulacion_texto = ""
+                if anulada:
+                    quien = usuarios.get(p.cancelado_por_id)
+                    anulacion_texto = (p.motivo_cancelacion or "Sin motivo") + (
+                        f" — {quien.nombre}" if quien else ""
+                    )
                 historial.append(VentaHistorialView(
                     pedido_id=p.id or 0,
                     mesa_label=_pedido_sales_label(p, mesas),
@@ -3609,6 +3715,8 @@ class FoodState(CajaTurnoMixin, rx.State):
                     metodo_pago=getattr(p, "metodo_pago", None) or "—",
                     mozo_nombre=_actor_name(usuarios[p.mozo_id].nombre if p.mozo_id in usuarios else "Sin asignar"),
                     cajero_nombre=_actor_name(usuarios[p.cajero_id].nombre if p.cajero_id in usuarios else "Sin asignar"),
+                    anulada=anulada,
+                    anulacion_texto=anulacion_texto,
                 ))
             self.historial_ventas = historial
 
