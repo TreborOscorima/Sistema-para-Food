@@ -48,15 +48,31 @@ from app.services.receipt_service import (
     generate_cashier_ticket_html,
     generate_kitchen_ticket_html,
 )
-from app.models.food import PagoPedido
+from tuwayki_core.utils.timezone import format_local_datetime
+
+from app.models.food import MovimientoInsumo, PagoPedido, TipoMovimientoInsumo
 from app.services.anulacion_service import (
     anular_pedido_abierto,
     anular_venta_cobrada,
+)
+from app.services.kardex_service import (
+    CATEGORIAS_MERMA,
+    registrar_ajuste,
+    registrar_consumo,
+    registrar_entrada,
+    registrar_merma,
 )
 from app.services.pago_service import (
     metodo_pago_resumen,
     registrar_pagos_pedido,
     validar_pagos,
+)
+from app.services.promo_service import (
+    DIAS_SEMANA as PROMO_DIAS,
+    ItemCobro,
+    ahora_local_pe,
+    mejor_promo,
+    promo_vigente,
 )
 from app.states.caja_turno_mixin import CajaTurnoMixin, get_turno_abierto
 from app.utils.db import get_session
@@ -508,6 +524,20 @@ class InsumoView(BaseModel):
     bajo_stock: bool = False
     stock_texto: str = ""
     stock_minimo_texto: str = ""
+    vencimiento_texto: str = ""      # "" si no tiene fecha
+    vencimiento_estado: str = ""     # "" | "por_vencer" | "vencido"
+
+
+class KardexView(BaseModel):
+    id: int = 0
+    fecha_texto: str = ""
+    tipo: str = ""
+    tipo_label: str = ""
+    cantidad_texto: str = ""
+    es_entrada: bool = False
+    stock_resultante_texto: str = ""
+    motivo: str = ""
+    usuario: str = ""
 
 
 class RecetaItemView(BaseModel):
@@ -572,6 +602,9 @@ class PromocionView(BaseModel):
     aplica_ahora: bool = False
     descuento_texto: str = ""
     horario_texto: str = ""
+    dias_texto: str = "Todos los días"
+    alcance_texto: str = "Toda la carta"
+    auto_aplicar: bool = True
 
 
 class UsuarioSesion(BaseModel):
@@ -795,13 +828,10 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
         for ri in receta_por_producto.get(d.producto_id, []):
             uso = Decimal(str(ri.cantidad)) * d.cantidad
             descuentos[ri.insumo_id] = descuentos.get(ri.insumo_id, Decimal("0")) + uso
-    now = _utcnow()
     for insumo_id, uso_total in descuentos.items():
         ins = insumos.get(insumo_id)
         if ins:
-            ins.stock_actual = max(Decimal(str(ins.stock_actual)) - uso_total, Decimal("0"))
-            ins.updated_at = now
-            session.add(ins)
+            registrar_consumo(session, ins, uso_total, pedido_id)
 
 
 # ─── Estado principal ─────────────────────────────────────────────────────────
@@ -987,8 +1017,23 @@ class FoodState(CajaTurnoMixin, rx.State):
     inv_form_unidad: str = "unidad"
     inv_form_stock_actual: str = ""
     inv_form_stock_minimo: str = ""
+    inv_form_vencimiento: str = ""
     inv_form_editando: bool = False
     inv_form_visible: bool = False
+
+    # Kardex — movimiento manual (entrada / merma / ajuste) + historial
+    inv_mov_modal_visible: bool = False
+    inv_mov_insumo_id: int = 0
+    inv_mov_insumo_nombre: str = ""
+    inv_mov_tipo: str = "entrada"
+    inv_mov_cantidad: str = ""
+    inv_mov_merma_categoria: str = "Vencido"
+    inv_mov_motivo: str = ""
+    inv_mov_error: str = ""
+    inv_kardex_visible: bool = False
+    inv_kardex_insumo_nombre: str = ""
+    inv_kardex_movimientos: list[KardexView] = []
+    inv_alertas_vencimiento: list[str] = []
     inv_search: str = ""
     inv_producto_sel_nombre: str = ""
     inv_producto_sel_id: int = 0
@@ -1027,8 +1072,17 @@ class FoodState(CajaTurnoMixin, rx.State):
     promo_form_descripcion: str = ""
     promo_form_hora_inicio: str = ""
     promo_form_hora_fin: str = ""
+    promo_form_dias_mask: int = 127
+    promo_form_alcance: str = "todo"  # todo | categoria | producto
+    promo_form_categoria_nombre: str = ""
+    promo_form_producto_nombre: str = ""
+    promo_form_auto: bool = True
     promo_form_editando: bool = False
     promo_form_visible: bool = False
+
+    # Promo aplicada automáticamente al cobro actual
+    caja_promo_aplicada_nombre: str = ""
+    caja_promo_aplicada_texto: str = ""
 
     # ─── Computed vars ────────────────────────────────────────────────────────
 
@@ -1055,6 +1109,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.inv_form_unidad = "unidad"
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
+        self.inv_form_vencimiento = ""
         self.inv_form_editando = False
         self.inv_form_visible = True
 
@@ -2811,7 +2866,10 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.mensaje = ""
+        self.caja_promo_aplicada_nombre = ""
+        self.caja_promo_aplicada_texto = ""
         items_ui: list[CajaItemView] = []
+        promo_ganadora = None
         with self._tenant_session() as session:
             pedido_abierto = _get_open_order(session, mesa_id, self._company_id())
             if pedido_abierto is not None:
@@ -2835,7 +2893,36 @@ class FoodState(CajaTurnoMixin, rx.State):
                         subtotal_texto=_money_text(_to_decimal(d.subtotal)),
                         notas=d.notas or "",
                     ))
+                # Aplicación automática de la mejor promo vigente
+                items_promo = [
+                    ItemCobro(
+                        producto_id=d.producto_id,
+                        categoria_id=(
+                            productos[d.producto_id].categoria_id
+                            if d.producto_id in productos else 0
+                        ),
+                        cantidad=d.cantidad,
+                        precio_unitario=_to_decimal(d.precio_unitario),
+                    )
+                    for d in detalles
+                ]
+                promos_activas = session.exec(
+                    select(Promocion).where(
+                        Promocion.company_id == self._company_id(),
+                        Promocion.activa.is_(True),
+                    )
+                ).all()
+                promo_ganadora = mejor_promo(
+                    promos_activas, items_promo, ahora_local_pe(), solo_auto=True
+                )
         self.caja_cobro_items = items_ui
+        if promo_ganadora is not None:
+            promo, descuento = promo_ganadora
+            self.caja_cobro_descuento = f"{descuento:.2f}"
+            self.caja_promo_aplicada_nombre = promo.nombre
+            self.caja_promo_aplicada_texto = f"-{_money_text(descuento)}"
+        else:
+            self.caja_cobro_descuento = ""
 
     def cancelar_cobro(self) -> None:
         self.caja_cobro_mesa_id = 0
@@ -2851,6 +2938,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_pago_staged_metodo = "efectivo"
         self.caja_pago_staged_monto = ""
         self.caja_pagos_staged = []
+        self.caja_promo_aplicada_nombre = ""
+        self.caja_promo_aplicada_texto = ""
 
     def set_caja_cobro_metodo(self, v: str) -> None:
         self.caja_cobro_metodo = v
@@ -4159,10 +4248,23 @@ class FoodState(CajaTurnoMixin, rx.State):
             ).all()
             views: list[InsumoView] = []
             alertas: list[str] = []
+            alertas_venc: list[str] = []
+            hoy = ahora_local_pe().date()
             for ins in insumos_db:
                 stock = Decimal(str(ins.stock_actual))
                 minimo = Decimal(str(ins.stock_minimo))
                 bajo = ins.activo and minimo > 0 and stock <= minimo
+                venc_texto = ""
+                venc_estado = ""
+                if ins.fecha_vencimiento:
+                    venc_texto = ins.fecha_vencimiento.strftime("%d/%m/%Y")
+                    dias = (ins.fecha_vencimiento - hoy).days
+                    if ins.activo and dias < 0:
+                        venc_estado = "vencido"
+                        alertas_venc.append(f"{ins.nombre} (vencido)")
+                    elif ins.activo and dias <= 7:
+                        venc_estado = "por_vencer"
+                        alertas_venc.append(f"{ins.nombre} (vence en {dias} día{'s' if dias != 1 else ''})")
                 views.append(InsumoView(
                     id=ins.id or 0,
                     nombre=ins.nombre,
@@ -4173,11 +4275,14 @@ class FoodState(CajaTurnoMixin, rx.State):
                     bajo_stock=bajo,
                     stock_texto=f"{stock:.3f} {ins.unidad}".rstrip("0").rstrip(".").strip(),
                     stock_minimo_texto=f"{minimo:.3f} {ins.unidad}".rstrip("0").rstrip(".").strip(),
+                    vencimiento_texto=venc_texto,
+                    vencimiento_estado=venc_estado,
                 ))
                 if bajo:
                     alertas.append(ins.nombre)
             self.inv_insumos = views
             self.inv_alertas_bajo_stock = alertas
+            self.inv_alertas_vencimiento = alertas_venc
 
     def set_inv_form_nombre(self, v: str) -> None:
         self.inv_form_nombre = v
@@ -4190,6 +4295,139 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_inv_form_stock_minimo(self, v: str) -> None:
         self.inv_form_stock_minimo = v
+
+    def set_inv_form_vencimiento(self, v: str) -> None:
+        self.inv_form_vencimiento = v
+
+    # ─── Kardex de insumos ───────────────────────────────────────────────────
+
+    @rx.var
+    def inv_categorias_merma(self) -> list[str]:
+        return CATEGORIAS_MERMA
+
+    @rx.var
+    def inv_alertas_vencimiento_texto(self) -> str:
+        return " · ".join(self.inv_alertas_vencimiento)
+
+    def set_inv_mov_modal_visible(self, v: bool) -> None:
+        self.inv_mov_modal_visible = bool(v)
+
+    def set_inv_mov_tipo(self, v: str) -> None:
+        self.inv_mov_tipo = v
+        self.inv_mov_error = ""
+
+    def set_inv_mov_cantidad(self, v: str) -> None:
+        self.inv_mov_cantidad = v
+
+    def set_inv_mov_merma_categoria(self, v: str) -> None:
+        self.inv_mov_merma_categoria = v
+
+    def set_inv_mov_motivo(self, v: str) -> None:
+        self.inv_mov_motivo = v
+
+    def abrir_mov_insumo(self, insumo_id: int, tipo: str) -> None:
+        insumo = next((i for i in self.inv_insumos if i.id == insumo_id), None)
+        if insumo is None:
+            return
+        self.inv_mov_insumo_id = insumo_id
+        self.inv_mov_insumo_nombre = insumo.nombre
+        self.inv_mov_tipo = tipo
+        self.inv_mov_cantidad = ""
+        self.inv_mov_merma_categoria = "Vencido"
+        self.inv_mov_motivo = ""
+        self.inv_mov_error = ""
+        self.inv_mov_modal_visible = True
+
+    def guardar_mov_insumo(self) -> None:
+        self.inv_mov_error = ""
+        raw = (self.inv_mov_cantidad or "").replace(",", ".").strip()
+        try:
+            cantidad = Decimal(raw) if raw else Decimal("0")
+        except InvalidOperation:
+            self.inv_mov_error = "Cantidad inválida."
+            return
+        usuario_id = self.usuario_actual.id if self.usuario_actual else None
+        try:
+            with self._tenant_session() as session:
+                ins = session.get(Insumo, self.inv_mov_insumo_id)
+                if ins is None or ins.company_id != self._company_id():
+                    self.inv_mov_error = "Insumo no encontrado."
+                    return
+                if self.inv_mov_tipo == "entrada":
+                    registrar_entrada(
+                        session, ins, usuario_id, cantidad,
+                        self.inv_mov_motivo or "Compra de mercadería",
+                    )
+                elif self.inv_mov_tipo == "merma":
+                    motivo = self.inv_mov_merma_categoria
+                    if self.inv_mov_motivo.strip():
+                        motivo = f"{motivo}: {self.inv_mov_motivo.strip()}"
+                    registrar_merma(session, ins, usuario_id, cantidad, motivo)
+                elif self.inv_mov_tipo == "ajuste":
+                    registrar_ajuste(
+                        session, ins, usuario_id, cantidad,
+                        self.inv_mov_motivo or "Conteo físico",
+                    )
+                else:
+                    self.inv_mov_error = "Tipo de movimiento inválido."
+                    return
+                session.commit()
+        except ValueError as exc:
+            self.inv_mov_error = str(exc)
+            return
+        self.inv_mov_modal_visible = False
+        self.cargar_inventario()
+        self.mensaje = f"Movimiento registrado para '{self.inv_mov_insumo_nombre}'."
+
+    def set_inv_kardex_visible(self, v: bool) -> None:
+        self.inv_kardex_visible = bool(v)
+
+    def abrir_kardex_insumo(self, insumo_id: int) -> None:
+        tipo_labels = {
+            TipoMovimientoInsumo.ENTRADA.value: "Entrada",
+            TipoMovimientoInsumo.CONSUMO.value: "Consumo por venta",
+            TipoMovimientoInsumo.MERMA.value: "Merma",
+            TipoMovimientoInsumo.AJUSTE.value: "Ajuste de conteo",
+            TipoMovimientoInsumo.REPOSICION.value: "Reposición por anulación",
+        }
+        vistas: list[KardexView] = []
+        with self._tenant_session() as session:
+            ins = session.get(Insumo, insumo_id)
+            if ins is None or ins.company_id != self._company_id():
+                return
+            movimientos = session.exec(
+                select(MovimientoInsumo)
+                .where(
+                    MovimientoInsumo.company_id == self._company_id(),
+                    MovimientoInsumo.insumo_id == insumo_id,
+                )
+                .order_by(MovimientoInsumo.id.desc())
+                .limit(50)
+            ).all()
+            usuarios = {
+                u.id: u.nombre
+                for u in session.exec(
+                    select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())
+                ).all()
+            }
+            unidad = ins.unidad
+            for m in movimientos:
+                cantidad = Decimal(str(m.cantidad))
+                signo = "+" if cantidad >= 0 else ""
+                vistas.append(KardexView(
+                    id=m.id or 0,
+                    fecha_texto=format_local_datetime(m.created_at, "%d/%m %H:%M", "PE"),
+                    tipo=m.tipo,
+                    tipo_label=tipo_labels.get(m.tipo, m.tipo),
+                    cantidad_texto=f"{signo}{cantidad:.3f}".rstrip("0").rstrip(".") + f" {unidad}",
+                    es_entrada=cantidad >= 0,
+                    stock_resultante_texto=f"{Decimal(str(m.stock_resultante)):.3f}".rstrip("0").rstrip(".") + f" {unidad}",
+                    motivo=m.motivo or "",
+                    usuario=usuarios.get(m.usuario_id or 0, "Sistema"),
+                ))
+            self.inv_kardex_insumo_nombre = ins.nombre
+        self.inv_kardex_movimientos = vistas
+        self.inv_kardex_visible = True
 
     def guardar_insumo(self) -> None:
         nombre = self.inv_form_nombre.strip()
@@ -4205,6 +4443,13 @@ class FoodState(CajaTurnoMixin, rx.State):
         except (InvalidOperation, ValueError):
             self.mensaje = "Stock inválido. Ingresa números positivos."
             return
+        fecha_venc = None
+        if self.inv_form_vencimiento.strip():
+            try:
+                fecha_venc = datetime.strptime(self.inv_form_vencimiento.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                self.mensaje = "Fecha de vencimiento inválida."
+                return
         with self._tenant_session() as session:
             if self.inv_form_id == 0:
                 existente = session.exec(
@@ -4222,9 +4467,17 @@ class FoodState(CajaTurnoMixin, rx.State):
                     unidad=unidad,
                     stock_actual=stock_actual,
                     stock_minimo=stock_minimo,
+                    fecha_vencimiento=fecha_venc,
                     activo=True,
                 )
                 session.add(ins)
+                session.flush()
+                if stock_actual > 0:
+                    registrar_entrada(
+                        session, ins,
+                        self.usuario_actual.id if self.usuario_actual else None,
+                        stock_actual, "Stock inicial",
+                    )
                 self.mensaje = f"Insumo '{nombre}' creado."
             else:
                 ins = session.get(Insumo, self.inv_form_id)
@@ -4233,10 +4486,17 @@ class FoodState(CajaTurnoMixin, rx.State):
                     return
                 ins.nombre = nombre
                 ins.unidad = unidad
-                ins.stock_actual = stock_actual
                 ins.stock_minimo = stock_minimo
+                ins.fecha_vencimiento = fecha_venc
                 ins.updated_at = _utcnow()
                 session.add(ins)
+                # El stock no se pisa directo: la diferencia queda en el kardex
+                if stock_actual != Decimal(str(ins.stock_actual)):
+                    registrar_ajuste(
+                        session, ins,
+                        self.usuario_actual.id if self.usuario_actual else None,
+                        stock_actual, "Edición manual del insumo",
+                    )
                 self.mensaje = f"Insumo '{nombre}' actualizado."
             session.commit()
         self.inv_form_id = 0
@@ -4244,6 +4504,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.inv_form_unidad = "unidad"
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
+        self.inv_form_vencimiento = ""
         self.inv_form_editando = False
         self.inv_form_visible = False
         self.cargar_inventario()
@@ -4260,6 +4521,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             minimo = Decimal(str(ins.stock_minimo))
             self.inv_form_stock_actual = f"{stock:.3f}".rstrip("0").rstrip(".")
             self.inv_form_stock_minimo = f"{minimo:.3f}".rstrip("0").rstrip(".")
+            self.inv_form_vencimiento = (
+                ins.fecha_vencimiento.strftime("%Y-%m-%d") if ins.fecha_vencimiento else ""
+            )
         self.inv_form_editando = True
         self.inv_form_visible = True
 
@@ -4269,6 +4533,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.inv_form_unidad = "unidad"
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
+        self.inv_form_vencimiento = ""
         self.inv_form_editando = False
         self.inv_form_visible = False
 
@@ -4828,15 +5093,18 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def on_load_promociones(self) -> None:
         self.mensaje = ""
+        self.cargar_menu()  # productos/categorías para los selectores de alcance
         self.cargar_promociones()
 
     def cargar_promociones(self) -> None:
-        now = _utcnow()
-        hora_actual = now.strftime("%H:%M")
+        # Vigencia evaluada en hora local del país (no UTC): un happy hour de
+        # 18:00 configurado por el usuario es 18:00 en Perú.
+        ahora = ahora_local_pe()
         tipo_labels = {
             TipoPromocion.PORCENTAJE.value: "% Descuento",
             TipoPromocion.MONTO_FIJO.value: "Monto fijo",
             TipoPromocion.HAPPY_HOUR.value: "Happy Hour",
+            TipoPromocion.DOSXUNO.value: "2x1",
         }
         with self._tenant_session() as session:
             promos_db = session.exec(
@@ -4844,26 +5112,38 @@ class FoodState(CajaTurnoMixin, rx.State):
                 .where(Promocion.company_id == self._company_id())
                 .order_by(Promocion.activa.desc(), Promocion.nombre)
             ).all()
+            productos = {p.id: p.nombre for p in session.exec(
+                select(Producto).where(Producto.company_id == self._company_id())
+            ).all()}
+            categorias = {c.id: c.nombre for c in session.exec(
+                select(Categoria).where(Categoria.company_id == self._company_id())
+            ).all()}
         views: list[PromocionView] = []
         for p in promos_db:
-            aplica = p.activa
-            if aplica and p.hora_inicio and p.hora_fin:
-                if p.hora_inicio <= p.hora_fin:
-                    aplica = p.hora_inicio <= hora_actual <= p.hora_fin
-                else:
-                    # El horario cruza la medianoche (ej. 22:00 a 02:00):
-                    # esta comparado lexicografica simple nunca seria True
-                    # para ninguna hora si no se maneja este caso aparte.
-                    aplica = hora_actual >= p.hora_inicio or hora_actual <= p.hora_fin
             val = Decimal(str(p.valor))
             if p.tipo in (TipoPromocion.PORCENTAJE.value, TipoPromocion.HAPPY_HOUR.value):
                 desc_txt = f"{val:.0f}% off"
+            elif p.tipo == TipoPromocion.DOSXUNO.value:
+                desc_txt = "2x1"
             else:
                 desc_txt = f"- {_money_text(val)}"
             if p.hora_inicio and p.hora_fin:
                 horario = f"{p.hora_inicio} – {p.hora_fin}"
             else:
                 horario = "Todo el día"
+            mask = p.dias_semana_mask or 127
+            if mask >= 127:
+                dias_texto = "Todos los días"
+            else:
+                dias_texto = ", ".join(
+                    abrev.capitalize() for abrev, _nombre, bit in PROMO_DIAS if mask & bit
+                ) or "Todos los días"
+            if p.producto_id:
+                alcance = productos.get(p.producto_id, f"Producto #{p.producto_id}")
+            elif p.categoria_id:
+                alcance = "Cat. " + categorias.get(p.categoria_id, f"#{p.categoria_id}")
+            else:
+                alcance = "Toda la carta"
             views.append(PromocionView(
                 id=p.id or 0,
                 nombre=p.nombre,
@@ -4874,9 +5154,12 @@ class FoodState(CajaTurnoMixin, rx.State):
                 hora_inicio=p.hora_inicio or "",
                 hora_fin=p.hora_fin or "",
                 activa=p.activa,
-                aplica_ahora=aplica,
+                aplica_ahora=promo_vigente(p, ahora),
                 descuento_texto=desc_txt,
                 horario_texto=horario,
+                dias_texto=dias_texto,
+                alcance_texto=alcance,
+                auto_aplicar=p.auto_aplicar,
             ))
         self.promociones_lista = views
 
@@ -4898,17 +5181,96 @@ class FoodState(CajaTurnoMixin, rx.State):
     def set_promo_form_hora_fin(self, v: str) -> None:
         self.promo_form_hora_fin = v
 
+    def set_promo_form_alcance(self, v: str) -> None:
+        self.promo_form_alcance = v
+
+    def set_promo_form_categoria_nombre(self, v: str) -> None:
+        self.promo_form_categoria_nombre = v
+
+    def set_promo_form_producto_nombre(self, v: str) -> None:
+        self.promo_form_producto_nombre = v
+
+    def set_promo_form_auto(self, v: bool) -> None:
+        self.promo_form_auto = bool(v)
+
+    def toggle_promo_dia(self, bit: int) -> None:
+        self.promo_form_dias_mask ^= bit
+
+    @rx.var
+    def promo_form_dias_ui(self) -> list[dict]:
+        return [
+            {
+                "abrev": abrev.capitalize(),
+                "bit": bit,
+                "activo": bool(self.promo_form_dias_mask & bit),
+            }
+            for abrev, _nombre, bit in PROMO_DIAS
+        ]
+
+    @rx.var
+    def promo_categorias_nombres(self) -> list[str]:
+        return [c.nombre for c in self.categorias]
+
+    @rx.var
+    def promo_productos_nombres(self) -> list[str]:
+        return [p.nombre for p in self.productos]
+
+    def _reset_promo_form(self) -> None:
+        self.promo_form_id = 0
+        self.promo_form_nombre = ""
+        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
+        self.promo_form_valor = ""
+        self.promo_form_descripcion = ""
+        self.promo_form_hora_inicio = ""
+        self.promo_form_hora_fin = ""
+        self.promo_form_dias_mask = 127
+        self.promo_form_alcance = "todo"
+        self.promo_form_categoria_nombre = ""
+        self.promo_form_producto_nombre = ""
+        self.promo_form_auto = True
+        self.promo_form_editando = False
+
     def guardar_promocion(self) -> None:
         nombre = self.promo_form_nombre.strip()
         if not nombre:
             self.mensaje = "El nombre de la promoción es obligatorio."
             return
-        try:
-            valor = Decimal(self.promo_form_valor.replace(",", ".").strip() or "0")
-            if valor <= 0:
-                raise ValueError
-        except (InvalidOperation, ValueError):
-            self.mensaje = "Valor inválido. Ingresa un número mayor a 0."
+        es_dosxuno = self.promo_form_tipo == TipoPromocion.DOSXUNO.value
+        if es_dosxuno:
+            valor = Decimal("0.00")  # el 2x1 no usa valor: regala 1 de cada 2
+        else:
+            try:
+                valor = Decimal(self.promo_form_valor.replace(",", ".").strip() or "0")
+                if valor <= 0:
+                    raise ValueError
+            except (InvalidOperation, ValueError):
+                self.mensaje = "Valor inválido. Ingresa un número mayor a 0."
+                return
+        if self.promo_form_dias_mask == 0:
+            self.mensaje = "Selecciona al menos un día de la semana."
+            return
+        producto_id = None
+        categoria_id = None
+        if self.promo_form_alcance == "producto":
+            prod = next(
+                (p for p in self.productos if p.nombre == self.promo_form_producto_nombre),
+                None,
+            )
+            if prod is None:
+                self.mensaje = "Selecciona el producto para la promoción."
+                return
+            producto_id = prod.id
+        elif self.promo_form_alcance == "categoria":
+            cat = next(
+                (c for c in self.categorias if c.nombre == self.promo_form_categoria_nombre),
+                None,
+            )
+            if cat is None:
+                self.mensaje = "Selecciona la categoría para la promoción."
+                return
+            categoria_id = cat.id
+        if es_dosxuno and producto_id is None and categoria_id is None:
+            self.mensaje = "El 2x1 necesita un producto o una categoría como alcance."
             return
         hora_ini = self.promo_form_hora_inicio.strip() or None
         hora_fin = self.promo_form_hora_fin.strip() or None
@@ -4922,6 +5284,10 @@ class FoodState(CajaTurnoMixin, rx.State):
                     descripcion=self.promo_form_descripcion.strip() or None,
                     hora_inicio=hora_ini,
                     hora_fin=hora_fin,
+                    dias_semana_mask=self.promo_form_dias_mask,
+                    producto_id=producto_id,
+                    categoria_id=categoria_id,
+                    auto_aplicar=self.promo_form_auto,
                     activa=True,
                 )
                 session.add(p)
@@ -4937,30 +5303,20 @@ class FoodState(CajaTurnoMixin, rx.State):
                 p.descripcion = self.promo_form_descripcion.strip() or None
                 p.hora_inicio = hora_ini
                 p.hora_fin = hora_fin
+                p.dias_semana_mask = self.promo_form_dias_mask
+                p.producto_id = producto_id
+                p.categoria_id = categoria_id
+                p.auto_aplicar = self.promo_form_auto
                 p.updated_at = _utcnow()
                 session.add(p)
                 self.mensaje = f"Promoción '{nombre}' actualizada."
             session.commit()
-        self.promo_form_id = 0
-        self.promo_form_nombre = ""
-        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
-        self.promo_form_valor = ""
-        self.promo_form_descripcion = ""
-        self.promo_form_hora_inicio = ""
-        self.promo_form_hora_fin = ""
-        self.promo_form_editando = False
+        self._reset_promo_form()
         self.promo_form_visible = False
         self.cargar_promociones()
 
     def abrir_nueva_promo(self) -> None:
-        self.promo_form_id = 0
-        self.promo_form_nombre = ""
-        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
-        self.promo_form_valor = ""
-        self.promo_form_descripcion = ""
-        self.promo_form_hora_inicio = ""
-        self.promo_form_hora_fin = ""
-        self.promo_form_editando = False
+        self._reset_promo_form()
         self.promo_form_visible = True
 
     def set_promo_form_visible(self, v: bool) -> None:
@@ -4978,18 +5334,27 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.promo_form_descripcion = p.descripcion or ""
             self.promo_form_hora_inicio = p.hora_inicio or ""
             self.promo_form_hora_fin = p.hora_fin or ""
+            self.promo_form_dias_mask = p.dias_semana_mask or 127
+            self.promo_form_auto = p.auto_aplicar
+            if p.producto_id:
+                self.promo_form_alcance = "producto"
+                prod = session.get(Producto, p.producto_id)
+                self.promo_form_producto_nombre = prod.nombre if prod else ""
+                self.promo_form_categoria_nombre = ""
+            elif p.categoria_id:
+                self.promo_form_alcance = "categoria"
+                cat = session.get(Categoria, p.categoria_id)
+                self.promo_form_categoria_nombre = cat.nombre if cat else ""
+                self.promo_form_producto_nombre = ""
+            else:
+                self.promo_form_alcance = "todo"
+                self.promo_form_producto_nombre = ""
+                self.promo_form_categoria_nombre = ""
         self.promo_form_editando = True
         self.promo_form_visible = True
 
     def cancelar_promo_form(self) -> None:
-        self.promo_form_id = 0
-        self.promo_form_nombre = ""
-        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
-        self.promo_form_valor = ""
-        self.promo_form_descripcion = ""
-        self.promo_form_hora_inicio = ""
-        self.promo_form_hora_fin = ""
-        self.promo_form_editando = False
+        self._reset_promo_form()
         self.promo_form_visible = False
 
     def toggle_promo_activa(self, promo_id: int) -> None:
@@ -5007,6 +5372,11 @@ class FoodState(CajaTurnoMixin, rx.State):
         desc = self.promo_activa_descuento_sugerido
         if desc > 0:
             self.caja_cobro_descuento = str(round(desc, 2))
+
+    def quitar_promo_aplicada(self) -> None:
+        self.caja_cobro_descuento = ""
+        self.caja_promo_aplicada_nombre = ""
+        self.caja_promo_aplicada_texto = ""
 
     def refrescar_promos(self) -> None:
         self.cargar_promociones()

@@ -54,6 +54,14 @@ def _promo_card(p: PromocionView) -> rx.Component:
                 rx.text(p.horario_texto, font_size="11px", color="#94A3B8"),
                 rx.fragment(),
             ),
+            rx.text(p.dias_texto + " · " + p.alcance_texto, font_size="11px", color="#94A3B8"),
+            rx.cond(
+                p.auto_aplicar,
+                rx.badge("Auto en caja", background="#DCFCE7", color="#166534",
+                         border_radius="6px", font_size="10px", font_weight="700"),
+                rx.badge("Sugerencia manual", background="#F1F5F9", color="#64748B",
+                         border_radius="6px", font_size="10px", font_weight="700"),
+            ),
             rx.hstack(
                 rx.link(
                     "Editar",
@@ -183,6 +191,82 @@ def _promo_form() -> rx.Component:
                     _focus={"border": "1px solid #EA580C"},
                 ),
                 spacing="1", align="start", width="100%",
+            ),
+            # Días de la semana
+            rx.vstack(
+                rx.text("Días en que aplica", font_size="11px", font_weight="600", color="#64748B"),
+                rx.flex(
+                    rx.foreach(
+                        FoodState.promo_form_dias_ui,
+                        lambda d: rx.box(
+                            rx.text(d["abrev"].to_string(), font_size="12px", font_weight="700",
+                                    color=rx.cond(d["activo"], "#FFFFFF", "#64748B")),
+                            on_click=FoodState.toggle_promo_dia(d["bit"]),
+                            background=rx.cond(d["activo"], "#EA580C", "#FFFFFF"),
+                            border=rx.cond(d["activo"], "1px solid #EA580C", "1px solid #E2E8F0"),
+                            border_radius="8px", padding="6px 10px", cursor="pointer",
+                            _hover={"border_color": "#EA580C"},
+                        ),
+                    ),
+                    gap="6px", flex_wrap="wrap", width="100%",
+                ),
+                spacing="1", align="start", width="100%",
+            ),
+            # Alcance
+            rx.hstack(
+                rx.vstack(
+                    rx.text("Alcance", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.select(
+                        ["todo", "categoria", "producto"],
+                        value=FoodState.promo_form_alcance,
+                        on_change=FoodState.set_promo_form_alcance,
+                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        border_radius="7px", font_size="13px", width="100%",
+                    ),
+                    spacing="1", align="start", flex="1",
+                ),
+                rx.cond(
+                    FoodState.promo_form_alcance == "categoria",
+                    rx.vstack(
+                        rx.text("Categoría", font_size="11px", font_weight="600", color="#64748B"),
+                        rx.select(
+                            FoodState.promo_categorias_nombres,
+                            value=FoodState.promo_form_categoria_nombre,
+                            on_change=FoodState.set_promo_form_categoria_nombre,
+                            placeholder="— Elegir —",
+                            width="100%",
+                        ),
+                        spacing="1", align="start", flex="2",
+                    ),
+                    rx.cond(
+                        FoodState.promo_form_alcance == "producto",
+                        rx.vstack(
+                            rx.text("Producto", font_size="11px", font_weight="600", color="#64748B"),
+                            rx.select(
+                                FoodState.promo_productos_nombres,
+                                value=FoodState.promo_form_producto_nombre,
+                                on_change=FoodState.set_promo_form_producto_nombre,
+                                placeholder="— Elegir —",
+                                width="100%",
+                            ),
+                            spacing="1", align="start", flex="2",
+                        ),
+                        rx.fragment(),
+                    ),
+                ),
+                spacing="3", width="100%", align="end",
+            ),
+            # Auto-aplicación
+            rx.hstack(
+                rx.switch(
+                    checked=FoodState.promo_form_auto,
+                    on_change=FoodState.set_promo_form_auto,
+                    color_scheme="orange",
+                ),
+                rx.text("Aplicar automáticamente en caja", font_size="12px",
+                        font_weight="600", color="#334155"),
+                rx.text("(si no, queda como sugerencia)", font_size="11px", color="#94A3B8"),
+                spacing="2", align="center", width="100%",
             ),
             rx.hstack(
                 rx.button(

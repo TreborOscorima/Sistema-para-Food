@@ -46,11 +46,20 @@ class TipoPromocion(str, Enum):
     PORCENTAJE = "porcentaje"
     MONTO_FIJO = "monto_fijo"
     HAPPY_HOUR = "happy_hour"
+    DOSXUNO = "dosxuno"  # 2x1 sobre un producto o categoría
 
 
 class EstadoTurnoCaja(str, Enum):
     ABIERTO = "abierto"
     CERRADO = "cerrado"
+
+
+class TipoMovimientoInsumo(str, Enum):
+    ENTRADA = "entrada"          # compra / reposición de mercadería
+    CONSUMO = "consumo"          # descuento automático por venta (receta)
+    MERMA = "merma"              # pérdida: vencido, dañado, plato devuelto
+    AJUSTE = "ajuste"            # conteo físico (diferencia +/-)
+    REPOSICION = "reposicion"    # reverso automático por anulación de venta
 
 
 class TipoMovimientoCaja(str, Enum):
@@ -280,6 +289,13 @@ class Promocion(TimestampedModel, table=True):
     hora_fin: str | None = Field(default=None, max_length=5)
     activa: bool = Field(default=True, nullable=False)
 
+    # Motor de promos (réplica adaptada del engine de Sistema-de-Ventas)
+    # Bitmask lunes=1, martes=2, ... domingo=64; 127 = todos los días
+    dias_semana_mask: int = Field(default=127, nullable=False)
+    producto_id: int | None = Field(default=None, foreign_key="food_productos.id", index=True)
+    categoria_id: int | None = Field(default=None, foreign_key="food_categorias.id", index=True)
+    auto_aplicar: bool = Field(default=True, nullable=False)
+
 
 class ConfigImpresora(TimestampedModel, table=True):
     """Configuracion de impresoras por empresa (una fila por company)."""
@@ -326,9 +342,39 @@ class Insumo(TimestampedModel, table=True):
         default=Decimal("0.000"),
         sa_column=Column(Numeric(12, 3), nullable=False, server_default="0.000"),
     )
+    fecha_vencimiento: date | None = Field(
+        default=None,
+        sa_column=Column(Date, nullable=True),
+    )
     activo: bool = Field(default=True, nullable=False)
 
     receta_items: list["RecetaItem"] = Relationship(back_populates="insumo")
+
+
+class MovimientoInsumo(TimestampedModel, table=True):
+    """Kardex de insumos: cada entrada/salida de stock con su motivo y saldo.
+
+    Réplica adaptada de StockMovement de Sistema-de-Ventas. Las mermas son
+    el caso clave del rubro: registran qué se perdió y por qué.
+    """
+
+    __tablename__ = "food_movimientos_insumo"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    insumo_id: int = Field(foreign_key="food_insumos.id", index=True, nullable=False)
+    usuario_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
+    pedido_id: int | None = Field(default=None, foreign_key="food_pedidos.id", index=True)
+    tipo: str = Field(index=True, max_length=16, nullable=False)
+    cantidad: Decimal = Field(
+        default=Decimal("0.000"),
+        sa_column=Column(Numeric(12, 3), nullable=False),
+    )  # positiva entra, negativa sale
+    stock_resultante: Decimal = Field(
+        default=Decimal("0.000"),
+        sa_column=Column(Numeric(12, 3), nullable=False),
+    )
+    motivo: str | None = Field(default=None, max_length=240)
 
 
 class RecetaItem(TimestampedModel, table=True):

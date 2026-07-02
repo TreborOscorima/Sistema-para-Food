@@ -316,9 +316,43 @@ def _cobro_panel() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Banner de promo activa
+        # Banner de promo aplicada automáticamente
         rx.cond(
-            FoodState.hay_promo_activa,
+            FoodState.caja_promo_aplicada_nombre != "",
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="badge_percent", size=14, color="#16A34A"),
+                    rx.vstack(
+                        rx.text(
+                            "Promo aplicada: " + FoodState.caja_promo_aplicada_nombre,
+                            font_size="12px", font_weight="700", color="#0F172A",
+                        ),
+                        rx.text(
+                            FoodState.caja_promo_aplicada_texto + " ya descontado del total",
+                            font_size="11px", color="#166534",
+                        ),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.button(
+                        "Quitar",
+                        on_click=FoodState.quitar_promo_aplicada,
+                        background="#FFFFFF", color="#64748B",
+                        border="1px solid #E2E8F0", border_radius="6px",
+                        font_size="12px", font_weight="600",
+                        padding_x="12px", padding_y="6px", cursor="pointer",
+                        _hover={"border_color": "#DC2626", "color": "#DC2626"},
+                    ),
+                    width="100%", align="center", gap="8px",
+                ),
+                background="#F0FDF4", border="1px solid #BBF7D0",
+                border_radius="10px", padding="12px 14px", width="100%",
+            ),
+            rx.fragment(),
+        ),
+        # Banner de promo activa (sugerencia manual, si no hay auto aplicada)
+        rx.cond(
+            FoodState.hay_promo_activa & (FoodState.caja_promo_aplicada_nombre == ""),
             rx.box(
                 rx.hstack(
                     rx.icon(tag="zap", size=13, color="#EA580C"),

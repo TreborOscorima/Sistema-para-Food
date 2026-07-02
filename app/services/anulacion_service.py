@@ -21,6 +21,7 @@ from sqlmodel import select
 
 from tuwayki_core.utils.timezone import utc_now_naive
 
+from app.services.kardex_service import registrar_reposicion
 from app.models.food import (
     CuentaCorriente,
     DetallePedido,
@@ -96,13 +97,10 @@ def reponer_stock_por_pedido(session, pedido_id: int, company_id: int) -> None:
         for ri in receta_por_producto.get(d.producto_id, []):
             uso = Decimal(str(ri.cantidad)) * d.cantidad
             reposiciones[ri.insumo_id] = reposiciones.get(ri.insumo_id, Decimal("0")) + uso
-    now = utc_now_naive()
     for insumo_id, cantidad in reposiciones.items():
         ins = insumos.get(insumo_id)
         if ins:
-            ins.stock_actual = Decimal(str(ins.stock_actual)) + cantidad
-            ins.updated_at = now
-            session.add(ins)
+            registrar_reposicion(session, ins, cantidad, pedido_id)
 
 
 def revertir_fiado_pedido(session, pedido: Pedido) -> Decimal:
