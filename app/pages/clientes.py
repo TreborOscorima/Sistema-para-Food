@@ -273,7 +273,11 @@ def _cumpleanos_section() -> rx.Component:
                                 rx.text("🎁", font_size="14px"),
                                 rx.text(c.nombre, font_size="12px", color="#334155", flex="1"),
                                 rx.badge(
-                                    "en " + c.dias_para_cumple.to_string() + " días",
+                                    rx.cond(
+                                        c.dias_para_cumple == 1,
+                                        "mañana",
+                                        "en " + c.dias_para_cumple.to_string() + " días",
+                                    ),
                                     background="#DBEAFE", color="#1D4ED8",
                                     border_radius="5px", font_size="10px", padding="2px 6px",
                                 ),

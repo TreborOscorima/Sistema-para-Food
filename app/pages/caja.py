@@ -183,6 +183,11 @@ def _cobro_panel() -> rx.Component:
             ),
             rx.fragment(),
         ),
+        # En desktop el cobro va en 2 columnas (consumo | pago) para que
+        # entre en una pantalla sin scroll; en tablet/móvil apila.
+        rx.flex(
+        # ── Columna izquierda: consumo y totales ─────────────────────────
+        rx.vstack(
         # Items
         rx.box(
             rx.hstack(
@@ -207,7 +212,8 @@ def _cobro_panel() -> rx.Component:
                 ),
             ),
             background="#FFFFFF", border="1px solid #E2E8F0",
-            border_radius="14px", width="100%", overflow="hidden",
+            border_radius="14px", width="100%",
+            max_height="320px", overflow_y="auto",
         ),
         # Subtotal + descuento + total
         rx.box(
@@ -264,6 +270,10 @@ def _cobro_panel() -> rx.Component:
             background="#FFFFFF", border="1px solid #E2E8F0",
             border_radius="14px", padding="18px", width="100%",
         ),
+        spacing="4", flex="1", min_width="0", width="100%",
+        ),
+        # ── Columna derecha: pago y confirmación ─────────────────────────
+        rx.vstack(
         # Toggle cuenta dividida / pago mixto
         rx.hstack(
             rx.switch(
@@ -445,6 +455,11 @@ def _cobro_panel() -> rx.Component:
                 _hover={"background": "#C2410C"}, flex="2",
             ),
             spacing="3", width="100%",
+        ),
+        spacing="4", flex="1", min_width="0", width="100%",
+        ),
+        gap="16px", width="100%", align="start",
+        direction=rx.breakpoints(initial="column", lg="row"),
         ),
         spacing="4", width="100%",
     )

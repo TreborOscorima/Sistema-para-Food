@@ -309,19 +309,25 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
         rx.text(ins.stock_minimo_texto, font_size="13px", color="#64748B",
                 display=rx.breakpoints(initial="none", md="block")),
         rx.hstack(
-            rx.icon(
-                tag="circle_plus", size=15, color="#16A34A", cursor="pointer",
+            rx.button(
+                rx.icon(tag="circle_plus", size=15),
                 on_click=FoodState.abrir_mov_insumo(ins.id, "entrada"),
+                background="transparent", color="#16A34A",
+                border="none", padding="2px", cursor="pointer",
                 _hover={"opacity": "0.7"}, title="Registrar entrada / compra",
             ),
-            rx.icon(
-                tag="circle_minus", size=15, color="#DC2626", cursor="pointer",
+            rx.button(
+                rx.icon(tag="circle_minus", size=15),
                 on_click=FoodState.abrir_mov_insumo(ins.id, "merma"),
+                background="transparent", color="#DC2626",
+                border="none", padding="2px", cursor="pointer",
                 _hover={"opacity": "0.7"}, title="Registrar merma",
             ),
-            rx.icon(
-                tag="scroll_text", size=15, color="#64748B", cursor="pointer",
+            rx.button(
+                rx.icon(tag="scroll_text", size=15),
                 on_click=FoodState.abrir_kardex_insumo(ins.id),
+                background="transparent", color="#64748B",
+                border="none", padding="2px", cursor="pointer",
                 _hover={"color": "#EA580C"}, title="Ver kardex",
             ),
             rx.link(

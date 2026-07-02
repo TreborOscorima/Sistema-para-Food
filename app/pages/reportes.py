@@ -255,9 +255,11 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         rx.cond(
             venta.anulada,
             rx.fragment(),
-            rx.icon(
-                tag="ban", size=15, color="#CBD5E1", cursor="pointer",
+            rx.button(
+                rx.icon(tag="ban", size=15),
                 on_click=FoodState.abrir_anulacion_venta(venta.pedido_id).stop_propagation,
+                background="transparent", color="#CBD5E1",
+                border="none", padding="2px", cursor="pointer",
                 _hover={"color": "#DC2626"},
                 flex_shrink="0",
                 title="Anular venta",

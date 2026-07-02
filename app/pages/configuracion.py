@@ -660,7 +660,7 @@ def _content_local() -> rx.Component:
         ),
         rx.vstack(
             _resumen_widget("layout_grid", "Mesas y salones",
-                             FoodState.mesas.length(), "mesas"),
+                             FoodState.mesas_config.length(), "mesas"),
             _resumen_widget("printer", "Impresoras",
                              FoodState.config_ticket_paper_width_mm + "mm", "impresoras"),
             spacing="3", width="100%",
