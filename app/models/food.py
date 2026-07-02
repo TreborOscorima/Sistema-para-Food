@@ -439,6 +439,30 @@ class MovimientoCaja(TimestampedModel, table=True):
     turno: "TurnoCaja" = Relationship(back_populates="movimientos")
 
 
+class PagoPedido(TimestampedModel, table=True):
+    """Pago individual de un pedido — permite pago mixto y cuenta dividida.
+
+    Un pedido cobrado tiene 1..N pagos (efectivo + tarjeta, o un pago por
+    comensal). El monto de efectivo se guarda neto de vuelto: es lo que
+    queda en el cajón. Réplica adaptada de SalePayment de Sistema-de-Ventas.
+    """
+
+    __tablename__ = "food_pagos_pedido"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    pedido_id: int = Field(foreign_key="food_pedidos.id", index=True, nullable=False)
+    turno_caja_id: int | None = Field(
+        default=None, foreign_key="food_turnos_caja.id", index=True
+    )
+    usuario_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
+    metodo: str = Field(max_length=24, nullable=False)
+    monto: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+
+
 class DetallePedido(TimestampedModel, table=True):
     """Línea individual de producto dentro de un pedido."""
 

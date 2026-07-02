@@ -48,6 +48,12 @@ from app.services.receipt_service import (
     generate_cashier_ticket_html,
     generate_kitchen_ticket_html,
 )
+from app.models.food import PagoPedido
+from app.services.pago_service import (
+    metodo_pago_resumen,
+    registrar_pagos_pedido,
+    validar_pagos,
+)
 from app.states.caja_turno_mixin import CajaTurnoMixin, get_turno_abierto
 from app.utils.db import get_session
 from app.utils.tenant import set_tenant_context, tenant_bypass
@@ -460,6 +466,15 @@ class MesaView(BaseModel):
     items_listos_count: int
     items_total_count: int = 0
     tiempo_abierto_texto: str = ""
+
+
+class PagoStagedView(BaseModel):
+    """Pago agregado a la lista del cobro dividido/mixto (aún no persistido)."""
+
+    metodo: str
+    metodo_label: str
+    monto: float
+    monto_texto: str
 
 
 class CajaItemView(BaseModel):
@@ -889,6 +904,12 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_cobro_efectivo_recibido: str = ""
     caja_cobro_error: str = ""
     caja_cobro_items: list[CajaItemView] = []
+
+    # Caja — cobro dividido / pago mixto
+    caja_cobro_dividido: bool = False
+    caja_pago_staged_metodo: str = "efectivo"
+    caja_pago_staged_monto: str = ""
+    caja_pagos_staged: list[PagoStagedView] = []
 
     # Dashboard KPIs
     dashboard_ventas_hoy_texto: str = "S/ 0.00"
@@ -2812,6 +2833,10 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_cliente_id = 0
         self.caja_cobro_error = ""
         self.caja_cobro_items = []
+        self.caja_cobro_dividido = False
+        self.caja_pago_staged_metodo = "efectivo"
+        self.caja_pago_staged_monto = ""
+        self.caja_pagos_staged = []
 
     def set_caja_cobro_metodo(self, v: str) -> None:
         self.caja_cobro_metodo = v
@@ -2825,6 +2850,78 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_caja_cobro_efectivo_recibido(self, v: str) -> None:
         self.caja_cobro_efectivo_recibido = v
+
+    # ─── Caja — Cobro dividido / pago mixto ──────────────────────────────────
+
+    @rx.var
+    def caja_pagos_total(self) -> float:
+        return round(sum(p.monto for p in self.caja_pagos_staged), 2)
+
+    @rx.var
+    def caja_pagos_restante(self) -> float:
+        return round(max(self.caja_cobro_total_final - self.caja_pagos_total, 0.0), 2)
+
+    @rx.var
+    def caja_pagos_restante_texto(self) -> str:
+        return _money_text(self.caja_pagos_restante)
+
+    @rx.var
+    def caja_pagos_cubierto(self) -> bool:
+        return bool(self.caja_pagos_staged) and self.caja_pagos_total >= round(
+            self.caja_cobro_total_final, 2
+        )
+
+    @rx.var
+    def caja_pagos_vuelto_texto(self) -> str:
+        vuelto = round(self.caja_pagos_total - self.caja_cobro_total_final, 2)
+        return _money_text(vuelto) if vuelto > 0 else ""
+
+    @rx.var
+    def caja_pagos_tiene_fiado(self) -> bool:
+        return any(p.metodo == "fiado" for p in self.caja_pagos_staged)
+
+    def set_caja_cobro_dividido(self, v: bool) -> None:
+        self.caja_cobro_dividido = bool(v)
+        self.caja_pagos_staged = []
+        self.caja_pago_staged_metodo = "efectivo"
+        self.caja_pago_staged_monto = ""
+        self.caja_cobro_error = ""
+
+    def set_caja_pago_staged_metodo(self, v: str) -> None:
+        self.caja_pago_staged_metodo = v
+
+    def set_caja_pago_staged_monto(self, v: str) -> None:
+        self.caja_pago_staged_monto = v
+
+    def agregar_pago_staged(self) -> None:
+        self.caja_cobro_error = ""
+        raw = (self.caja_pago_staged_monto or "").replace(",", ".").strip()
+        if raw:
+            try:
+                monto = round(float(raw), 2)
+            except ValueError:
+                self.caja_cobro_error = "Monto de pago inválido."
+                return
+        else:
+            monto = self.caja_pagos_restante  # sin monto: completa lo que falta
+        if monto <= 0:
+            self.caja_cobro_error = "El pago debe ser mayor a cero."
+            return
+        labels = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "qr": "QR / Yape", "fiado": "Fiado / CC"}
+        metodo = self.caja_pago_staged_metodo or "efectivo"
+        self.caja_pagos_staged.append(PagoStagedView(
+            metodo=metodo,
+            metodo_label=labels.get(metodo, metodo),
+            monto=monto,
+            monto_texto=_money_text(monto),
+        ))
+        self.caja_pago_staged_monto = ""
+
+    def quitar_pago_staged(self, idx: int) -> None:
+        if 0 <= idx < len(self.caja_pagos_staged):
+            pagos = list(self.caja_pagos_staged)
+            pagos.pop(idx)
+            self.caja_pagos_staged = pagos
 
     def confirmar_cobro(self) -> None:
         self.caja_cobro_error = ""
@@ -2889,18 +2986,44 @@ class FoodState(CajaTurnoMixin, rx.State):
             if descuento > total_base:
                 self.caja_cobro_error = f"El descuento ({_money_text(descuento)}) no puede superar el total ({_money_text(total_base)})."
                 return
-            total_final = max(total_base - descuento + propina, Decimal("0.00"))
+            # Construir la lista de pagos: dividido/mixto usa la lista armada
+            # en la UI; el cobro simple se normaliza a un único pago para que
+            # todo quede registrado igual en food_pagos_pedido.
+            if self.caja_cobro_dividido:
+                if not self.caja_pagos_staged:
+                    self.caja_cobro_error = "Agrega al menos un pago."
+                    return
+                total_final = max(total_base - descuento + propina, Decimal("0.00"))
+                pagos_lista = [
+                    (p.metodo, Decimal(str(round(p.monto, 2))))
+                    for p in self.caja_pagos_staged
+                ]
+            else:
+                if metodo == "fiado":
+                    propina = Decimal("0.00")  # el fiado no registra propina
+                total_final = max(total_base - descuento + propina, Decimal("0.00"))
+                pagos_lista = [(metodo, total_final)] if total_final > 0 else []
+            resultado_pagos = None
+            if pagos_lista:
+                try:
+                    resultado_pagos = validar_pagos(total_final, pagos_lista)
+                except ValueError as exc:
+                    self.caja_cobro_error = str(exc)
+                    return
+            total_fiado = resultado_pagos.total_fiado if resultado_pagos else Decimal("0.00")
+            if total_fiado > 0 and self.caja_cobro_cliente_id <= 0:
+                self.caja_cobro_error = "Selecciona el cliente para registrar el fiado."
+                return
             now = _utcnow()
             if self.usuario_actual:
                 pedido.cajero_id = self.usuario_actual.id
-            es_fiado = metodo == "fiado"
-            pedido.pagado = not es_fiado
+            pedido.pagado = total_fiado == 0
             pedido.estado = EstadoPedido.COBRADO.value
             pedido.cerrado_en = now
             pedido.updated_at = now
-            pedido.metodo_pago = metodo
+            pedido.metodo_pago = metodo_pago_resumen(pagos_lista) if pagos_lista else metodo
             pedido.turno_caja_id = turno.id
-            pedido.propina = propina if not es_fiado else Decimal("0.00")
+            pedido.propina = propina
             pedido.descuento = descuento
             if self.caja_cobro_cliente_id > 0:
                 pedido.cliente_id = self.caja_cobro_cliente_id
@@ -2909,18 +3032,28 @@ class FoodState(CajaTurnoMixin, rx.State):
             mesa.updated_at = now
             session.add(mesa)
             _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
-            if es_fiado and self.caja_cobro_cliente_id > 0:
+            if total_fiado > 0:
                 try:
                     self._registrar_cargo_cc(
                         session,
                         self.caja_cobro_cliente_id,
-                        total_base - descuento,
+                        total_fiado,
                         pedido.id,
-                        f"Fiado mesa {mesa_label or mesa.nombre or str(mesa.numero)}",
+                        f"Fiado mesa {mesa.nombre or str(mesa.numero)}",
                     )
                 except ValueError as exc:
                     self.caja_cobro_error = str(exc)
                     return
+            if resultado_pagos is not None:
+                registrar_pagos_pedido(
+                    session,
+                    pedido,
+                    turno.id,
+                    self.usuario_actual.id if self.usuario_actual else None,
+                    pagos_lista,
+                    resultado_pagos,
+                )
+            metodo_final = pedido.metodo_pago or metodo
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -2944,7 +3077,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         )
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
-        self.mensaje = f"{mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
+        self.mensaje = f"{mesa_label} cobrada ({metodo_final}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
         return rx.call_script(build_print_script(html_ticket))
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
@@ -3009,6 +3142,15 @@ class FoodState(CajaTurnoMixin, rx.State):
             mesa.updated_at = now
             session.add(mesa)
             _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
+            if total > 0:
+                session.add(PagoPedido(
+                    company_id=self._company_id(),
+                    pedido_id=pedido.id or 0,
+                    turno_caja_id=turno.id,
+                    usuario_id=self.usuario_actual.id if self.usuario_actual else None,
+                    metodo="efectivo",
+                    monto=Decimal(str(round(total, 2))),
+                ))
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -3175,6 +3317,15 @@ class FoodState(CajaTurnoMixin, rx.State):
             _sync_order_status(session, pedido)
             session.add(pedido)
             _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
+            if total > 0:
+                session.add(PagoPedido(
+                    company_id=self._company_id(),
+                    pedido_id=pedido.id or 0,
+                    turno_caja_id=turno.id,
+                    usuario_id=self.usuario_actual.id,
+                    metodo=self.mostrador_metodo_pago or "efectivo",
+                    monto=Decimal(str(round(total, 2))),
+                ))
             session.commit()
             pedido_id = pedido.id or 0
         self.ultimo_pedido_id = pedido_id

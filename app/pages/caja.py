@@ -11,7 +11,7 @@ from app.states.caja_turno_mixin import (
     ResumenCierreRow,
     TurnoHistorialView,
 )
-from app.states.food_state import FoodState, MesaView, CajaItemView
+from app.states.food_state import FoodState, MesaView, CajaItemView, PagoStagedView
 
 _METODOS = [
     ("efectivo", "Efectivo", "💵"),
@@ -64,6 +64,93 @@ def _caja_item_row(item: CajaItemView) -> rx.Component:
         padding="12px 16px",
         border_bottom="1px solid #F8FAFC",
         width="100%",
+    )
+
+
+def _pago_staged_chip(pago: PagoStagedView, idx) -> rx.Component:
+    return rx.hstack(
+        rx.text(pago.metodo_label, font_size="12px", font_weight="700", color="#334155"),
+        rx.text(pago.monto_texto, font_size="12px", font_weight="800", color="#0F172A"),
+        rx.icon(
+            tag="x", size=13, color="#94A3B8", cursor="pointer",
+            on_click=FoodState.quitar_pago_staged(idx),
+        ),
+        spacing="2", align="center",
+        background="#F8FAFC", border="1px solid #E2E8F0",
+        border_radius="20px", padding="6px 12px",
+    )
+
+
+def _pagos_divididos_panel() -> rx.Component:
+    """Panel de pagos múltiples: cuenta dividida entre comensales o pago mixto."""
+    return rx.box(
+        rx.text("Pagos de la cuenta", font_size="12px", font_weight="700", color="#64748B",
+                text_transform="uppercase", letter_spacing="0.05em", margin_bottom="12px"),
+        rx.vstack(
+            rx.hstack(
+                rx.select(
+                    ["efectivo", "tarjeta", "qr", "fiado"],
+                    value=FoodState.caja_pago_staged_metodo,
+                    on_change=FoodState.set_caja_pago_staged_metodo,
+                    width="130px",
+                ),
+                rx.input(
+                    placeholder="Monto (vacío = restante)",
+                    value=FoodState.caja_pago_staged_monto,
+                    on_change=FoodState.set_caja_pago_staged_monto,
+                    type="number", min="0", step="0.50",
+                    flex="1",
+                    background="#F8FAFC", border="1px solid #E2E8F0",
+                    border_radius="8px", font_size="13px",
+                    padding_x="10px",
+                    _focus={"border_color": "#EA580C"},
+                ),
+                rx.button(
+                    "Agregar",
+                    on_click=FoodState.agregar_pago_staged,
+                    background="#EA580C", color="#FFFFFF",
+                    border_radius="8px", font_size="13px", font_weight="700",
+                    cursor="pointer", _hover={"background": "#C2410C"},
+                ),
+                spacing="2", width="100%", align="center",
+            ),
+            rx.cond(
+                FoodState.caja_pagos_staged.length() > 0,
+                rx.flex(
+                    rx.foreach(FoodState.caja_pagos_staged, _pago_staged_chip),
+                    gap="8px", width="100%", flex_wrap="wrap",
+                ),
+                rx.text("Agrega un pago por comensal o por método.",
+                        font_size="12px", color="#94A3B8"),
+            ),
+            rx.hstack(
+                rx.cond(
+                    FoodState.caja_pagos_cubierto,
+                    rx.badge(
+                        "Cuenta cubierta ✓", background="#DCFCE7", color="#166534",
+                        border_radius="8px", font_size="12px", font_weight="700",
+                        padding_x="10px", padding_y="4px",
+                    ),
+                    rx.badge(
+                        "Restante: " + FoodState.caja_pagos_restante_texto,
+                        background="#FEF3C7", color="#92400E",
+                        border_radius="8px", font_size="12px", font_weight="700",
+                        padding_x="10px", padding_y="4px",
+                    ),
+                ),
+                rx.spacer(),
+                rx.cond(
+                    FoodState.caja_pagos_vuelto_texto != "",
+                    rx.text("Vuelto: " + FoodState.caja_pagos_vuelto_texto,
+                            font_size="13px", font_weight="700", color="#15803D"),
+                    rx.fragment(),
+                ),
+                width="100%", align="center",
+            ),
+            spacing="3", width="100%",
+        ),
+        background="#FFFFFF", border="1px solid #E2E8F0",
+        border_radius="14px", padding="18px", width="100%",
     )
 
 
@@ -177,20 +264,36 @@ def _cobro_panel() -> rx.Component:
             background="#FFFFFF", border="1px solid #E2E8F0",
             border_radius="14px", padding="18px", width="100%",
         ),
-        # Método de pago
-        rx.box(
-            rx.text("Método de pago", font_size="12px", font_weight="700", color="#64748B",
-                    text_transform="uppercase", letter_spacing="0.05em", margin_bottom="12px"),
-            rx.grid(
-                *[_metodo_btn(v, l, i) for v, l, i in _METODOS],
-                columns="4", gap="8px", width="100%",
+        # Toggle cuenta dividida / pago mixto
+        rx.hstack(
+            rx.switch(
+                checked=FoodState.caja_cobro_dividido,
+                on_change=FoodState.set_caja_cobro_dividido,
+                color_scheme="orange",
             ),
-            background="#FFFFFF", border="1px solid #E2E8F0",
-            border_radius="14px", padding="18px", width="100%",
+            rx.text("Dividir cuenta / pago mixto", font_size="13px",
+                    font_weight="700", color="#334155"),
+            rx.text("(varios métodos o por comensal)", font_size="12px", color="#94A3B8"),
+            spacing="2", align="center", width="100%",
         ),
-        # Selector de cliente (solo fiado)
+        # Método de pago único (modo simple)
         rx.cond(
-            FoodState.caja_cobro_es_fiado,
+            FoodState.caja_cobro_dividido,
+            _pagos_divididos_panel(),
+            rx.box(
+                rx.text("Método de pago", font_size="12px", font_weight="700", color="#64748B",
+                        text_transform="uppercase", letter_spacing="0.05em", margin_bottom="12px"),
+                rx.grid(
+                    *[_metodo_btn(v, l, i) for v, l, i in _METODOS],
+                    columns="4", gap="8px", width="100%",
+                ),
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="14px", padding="18px", width="100%",
+            ),
+        ),
+        # Selector de cliente (fiado simple o fiado dentro del pago dividido)
+        rx.cond(
+            FoodState.caja_cobro_es_fiado | FoodState.caja_pagos_tiene_fiado,
             rx.vstack(
                 rx.hstack(
                     rx.text("Cliente", font_size="13px", font_weight="700", color="#334155"),
@@ -244,9 +347,9 @@ def _cobro_panel() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Monto recibido (solo efectivo)
+        # Monto recibido (solo efectivo en modo simple)
         rx.cond(
-            FoodState.caja_cobro_es_efectivo,
+            FoodState.caja_cobro_es_efectivo & ~FoodState.caja_cobro_dividido,
             rx.box(
                 rx.vstack(
                     rx.text("Efectivo recibido S/", font_size="13px", font_weight="700", color="#64748B"),

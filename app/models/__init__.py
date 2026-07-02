@@ -8,6 +8,7 @@ from app.models.food import (  # noqa: F401
     EstadoTurnoCaja,
     Mesa,
     MovimientoCaja,
+    PagoPedido,
     Pedido,
     Producto,
     RolUsuario,

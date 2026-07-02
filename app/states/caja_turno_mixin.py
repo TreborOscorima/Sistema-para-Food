@@ -25,6 +25,7 @@ from app.models.food import (
     EstadoPedido,
     EstadoTurnoCaja,
     MovimientoCaja,
+    PagoPedido,
     Pedido,
     TipoMovimientoCaja,
     TurnoCaja,
@@ -144,9 +145,10 @@ def registrar_movimiento_caja(
 def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
     """Totales del turno: ventas por método, propinas, movimientos y efectivo esperado.
 
-    El efectivo esperado incluye la propina de los cobros en efectivo (entra al
-    cajón junto con el pago); en tarjeta/QR la propina queda registrada pero no
-    suma al cajón. El fiado no mueve efectivo.
+    La fuente primaria son las filas de PagoPedido (soportan pago mixto y
+    cuenta dividida; el efectivo ya viene neto de vuelto). Los pedidos sin
+    filas de pago (cobrados antes de la migración 0019) se clasifican por
+    Pedido.metodo_pago como antes. El fiado no mueve efectivo.
     """
     pedidos = session.exec(
         select(Pedido).where(
@@ -155,6 +157,13 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
             Pedido.estado != EstadoPedido.CANCELADO.value,
         )
     ).all()
+    pagos = session.exec(
+        select(PagoPedido).where(
+            PagoPedido.company_id == turno.company_id,
+            PagoPedido.turno_caja_id == turno.id,
+        )
+    ).all()
+    pedidos_validos = {p.id for p in pedidos}
     resumen: dict[str, Decimal] = {
         "efectivo": Decimal("0.00"),
         "tarjeta": Decimal("0.00"),
@@ -162,11 +171,28 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         "fiado": Decimal("0.00"),
         "propinas": Decimal("0.00"),
     }
+    pedidos_con_pagos: set[int] = set()
+    for pago in pagos:
+        if pago.pedido_id not in pedidos_validos:
+            continue  # pago de un pedido cancelado
+        pedidos_con_pagos.add(pago.pedido_id)
+        metodo = (pago.metodo or "efectivo").lower()
+        monto = _dec(pago.monto)
+        if metodo == "fiado":
+            resumen["fiado"] += monto
+        elif metodo == "tarjeta":
+            resumen["tarjeta"] += monto
+        elif metodo == "qr":
+            resumen["qr"] += monto
+        else:
+            resumen["efectivo"] += monto
     for pedido in pedidos:
-        neto = _dec(pedido.total) - _dec(pedido.descuento)
         propina = _dec(pedido.propina)
-        metodo = (pedido.metodo_pago or "efectivo").lower()
         resumen["propinas"] += propina
+        if (pedido.id or 0) in pedidos_con_pagos:
+            continue
+        neto = _dec(pedido.total) - _dec(pedido.descuento)
+        metodo = (pedido.metodo_pago or "efectivo").lower()
         if metodo == "fiado":
             resumen["fiado"] += neto
         elif metodo == "tarjeta":
