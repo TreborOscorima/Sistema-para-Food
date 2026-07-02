@@ -13,6 +13,7 @@ _METODOS_FILTRO = [
     ("tarjeta", "Tarjeta"),
     ("qr", "QR / Yape"),
     ("fiado", "Fiado / CC"),
+    ("mixto", "Mixto"),
 ]
 
 
@@ -433,7 +434,10 @@ def _filtros_bar() -> rx.Component:
                                     FoodState.historial_filtro_metodo == "tarjeta", "Tarjeta",
                                     rx.cond(
                                         FoodState.historial_filtro_metodo == "qr", "QR / Yape",
-                                        "Fiado / CC",
+                                        rx.cond(
+                                            FoodState.historial_filtro_metodo == "fiado", "Fiado / CC",
+                                            "Mixto",
+                                        ),
                                     ),
                                 ),
                             ),
@@ -442,7 +446,8 @@ def _filtros_bar() -> rx.Component:
                             rx.cond(v == "Todos los métodos", "",
                             rx.cond(v == "Efectivo", "efectivo",
                             rx.cond(v == "Tarjeta", "tarjeta",
-                            rx.cond(v == "QR / Yape", "qr", "fiado"))))
+                            rx.cond(v == "QR / Yape", "qr",
+                            rx.cond(v == "Fiado / CC", "fiado", "mixto")))))
                         ),
                         background="#FFFFFF",
                         border="1px solid #E2E8F0",
