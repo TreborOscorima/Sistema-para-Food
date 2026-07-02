@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import app_shell
+from app.components.shared import app_shell, cumpleanos_banner
 from app.states.food_state import (
     CarritoItem,
     FoodState,
@@ -17,6 +17,18 @@ from app.states.food_state import (
 def _producto_card(producto: ProductoView) -> rx.Component:
     return rx.box(
         rx.vstack(
+            rx.hstack(
+                rx.text(producto.emoji, font_size="24px", line_height="1"),
+                rx.spacer(),
+                rx.box(
+                    rx.icon(tag="plus", size=13, color="#FFFFFF"),
+                    width="24px", height="24px", border_radius="7px",
+                    background="#EA580C", display="flex",
+                    align_items="center", justify_content="center",
+                    flex_shrink="0",
+                ),
+                width="100%", align="center",
+            ),
             rx.text(
                 producto.nombre,
                 font_size="13px",
@@ -25,24 +37,15 @@ def _producto_card(producto: ProductoView) -> rx.Component:
                 no_of_lines=2,
             ),
             rx.text(producto.precio_texto, font_size="14px", font_weight="700", color="#EA580C"),
-            rx.button(
-                "+",
-                on_click=FoodState.agregar_producto_mostrador(producto.id),
-                width="100%",
-                background="#EA580C",
-                color="#FFFFFF",
-                border_radius="6px",
-                font_size="16px",
-                cursor="pointer",
-                _hover={"background": "#C2410C"},
-            ),
             spacing="2",
             align="start",
         ),
+        on_click=FoodState.agregar_producto_mostrador(producto.id),
         background="#1E293B",
         border="2px solid #334155",
         border_radius="10px",
         padding="12px",
+        cursor="pointer",
         _hover={"border": "2px solid #EA580C"},
         transition="all 0.15s ease",
     )
@@ -159,7 +162,12 @@ def _entregado_card(pedido: MostradorEntregadoView) -> rx.Component:
 
 def _mostrador_content() -> rx.Component:
     return rx.vstack(
-        rx.text("Mostrador", font_size="22px", font_weight="800", color="#FFFFFF"),
+        cumpleanos_banner(),
+        rx.vstack(
+            rx.text("Mostrador", font_size="22px", font_weight="800", color="#FFFFFF"),
+            rx.text("Pedidos para llevar", font_size="13px", color="#94A3B8"),
+            spacing="0",
+        ),
         rx.flex(
             # ─── Panel izq: menu + carrito ────────────────────────────────
             rx.vstack(
@@ -180,7 +188,7 @@ def _mostrador_content() -> rx.Component:
                 ),
                 rx.hstack(
                     rx.button(
-                        "Todos",
+                        "🍖 Todos",
                         on_click=FoodState.seleccionar_mostrador_categoria(0),
                         background=rx.cond(FoodState.mostrador_categoria_activa_id == 0, "#EA580C", "#1E293B"),
                         color=rx.cond(FoodState.mostrador_categoria_activa_id == 0, "#FFFFFF", "#94A3B8"),
@@ -195,7 +203,7 @@ def _mostrador_content() -> rx.Component:
                     rx.foreach(
                         FoodState.categorias_activas,
                         lambda cat: rx.button(
-                            cat.nombre,
+                            cat.emoji + " " + cat.nombre,
                             on_click=FoodState.seleccionar_mostrador_categoria(cat.id),
                             background=rx.cond(FoodState.mostrador_categoria_activa_id == cat.id, "#EA580C", "#1E293B"),
                             color=rx.cond(FoodState.mostrador_categoria_activa_id == cat.id, "#FFFFFF", "#94A3B8"),
@@ -353,7 +361,8 @@ def _mostrador_content() -> rx.Component:
 
 @rx.page(
     route="/mostrador",
-    on_load=[FoodState.on_load_mostrador, FoodState.start_mostrador_polling],
+    on_load=[FoodState.on_load_mostrador, FoodState.start_mostrador_polling,
+             FoodState.cargar_clientes],
     title="TUWAYKIFOOD | Mostrador",
 )
 def mostrador_page() -> rx.Component:

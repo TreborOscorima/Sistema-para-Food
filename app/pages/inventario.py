@@ -40,7 +40,7 @@ def _alerta_bajo_stock() -> rx.Component:
         FoodState.inv_alertas_bajo_stock.length() > 0,
         rx.box(
             rx.hstack(
-                rx.icon(tag="triangle_alert", size=16, color="#B45309"),
+                rx.text("⚠️", font_size="20px", line_height="1"),
                 rx.vstack(
                     rx.text(
                         "Stock bajo — requiere reposición",
@@ -73,76 +73,77 @@ def _alerta_bajo_stock() -> rx.Component:
 
 # ── Tabla de insumos ─────────────────────────────────────────────────────────
 
+_INV_GRID_COLS = "2fr 1fr 1fr 1fr 90px"
+
+
+def _insumos_table_header() -> rx.Component:
+    return rx.grid(
+        rx.text("Producto", font_size="11px", font_weight="600", color="#94A3B8",
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("Stock actual", font_size="11px", font_weight="600", color="#94A3B8",
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("Unidad", font_size="11px", font_weight="600", color="#94A3B8",
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("Stock mínimo", font_size="11px", font_weight="600", color="#94A3B8",
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("Acción", font_size="11px", font_weight="600", color="#94A3B8",
+                text_transform="uppercase", letter_spacing="0.05em"),
+        columns=_INV_GRID_COLS,
+        gap="8px", width="100%",
+        padding="0 10px 8px", border_bottom="1px solid #F1F5F9",
+        display=rx.breakpoints(initial="none", md="grid"),
+    )
+
+
 def _insumo_row(ins: InsumoView) -> rx.Component:
-    return rx.hstack(
-        # Stock indicator dot
-        rx.box(
-            width="8px",
-            height="8px",
-            border_radius="full",
-            background=rx.cond(
-                ins.bajo_stock,
-                "#EF4444",
-                rx.cond(ins.activo, "#22C55E", "#94A3B8"),
-            ),
-            flex_shrink="0",
-        ),
-        rx.vstack(
-            rx.text(ins.nombre, font_size="13px", font_weight="600", color="#0F172A"),
-            rx.text(ins.unidad, font_size="11px", color="#94A3B8"),
-            spacing="0",
-            align="start",
-            flex="1",
-        ),
-        rx.vstack(
-            rx.text(
-                ins.stock_texto,
-                font_size="13px",
-                font_weight="700",
-                color=rx.cond(ins.bajo_stock, "#EF4444", "#0F172A"),
-            ),
-            rx.text(
-                "Mín: " + ins.stock_minimo_texto,
-                font_size="11px",
-                color="#94A3B8",
-            ),
-            spacing="0",
-            align="end",
-            min_width="100px",
-        ),
+    return rx.grid(
         rx.hstack(
-            rx.button(
-                rx.icon(tag="pencil", size=12),
-                on_click=FoodState.editar_insumo(ins.id),
-                background="#F1F5F9",
-                color="#475569",
-                border="1px solid #E2E8F0",
-                border_radius="6px",
-                padding="4px 8px",
-                cursor="pointer",
-                _hover={"background": "#E2E8F0"},
+            rx.box(
+                width="8px", height="8px", border_radius="full",
+                background=rx.cond(
+                    ins.bajo_stock, "#EF4444",
+                    rx.cond(ins.activo, "#22C55E", "#94A3B8"),
+                ),
+                flex_shrink="0",
             ),
-            rx.button(
-                rx.cond(ins.activo, rx.icon(tag="toggle_right", size=14), rx.icon(tag="toggle_left", size=14)),
-                on_click=FoodState.toggle_insumo_activo(ins.id),
-                background=rx.cond(ins.activo, "#FEF2F2", "#F0FDF4"),
-                color=rx.cond(ins.activo, "#B91C1C", "#15803D"),
-                border=rx.cond(ins.activo, "1px solid #FECACA", "1px solid #BBF7D0"),
-                border_radius="6px",
-                padding="4px 8px",
-                cursor="pointer",
-                _hover={"opacity": "0.8"},
-            ),
-            spacing="2",
-            flex_shrink="0",
+            rx.text(ins.nombre, font_size="13px", font_weight="600", color="#0F172A",
+                    overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
+            spacing="2", align="center", min_width="0",
         ),
-        width="100%",
-        align="center",
-        padding="8px 10px",
+        rx.badge(
+            ins.stock_texto,
+            background=rx.cond(ins.bajo_stock, "#FEE2E2", "#DCFCE7"),
+            color=rx.cond(ins.bajo_stock, "#DC2626", "#16A34A"),
+            border_radius="20px", font_size="12px", font_weight="700",
+            padding="3px 10px", width="fit-content",
+        ),
+        rx.text(ins.unidad, font_size="13px", color="#64748B",
+                display=rx.breakpoints(initial="none", md="block")),
+        rx.text(ins.stock_minimo_texto, font_size="13px", color="#64748B",
+                display=rx.breakpoints(initial="none", md="block")),
+        rx.hstack(
+            rx.link(
+                "Editar",
+                on_click=FoodState.editar_insumo(ins.id),
+                font_size="12px", font_weight="600", color="#64748B",
+                cursor="pointer", _hover={"color": "#EA580C"},
+            ),
+            rx.button(
+                rx.cond(ins.activo, rx.icon(tag="toggle_right", size=13),
+                        rx.icon(tag="toggle_left", size=13)),
+                on_click=FoodState.toggle_insumo_activo(ins.id),
+                background="transparent",
+                color=rx.cond(ins.activo, "#15803D", "#94A3B8"),
+                border="none", padding="0", cursor="pointer",
+                _hover={"opacity": "0.7"},
+            ),
+            spacing="2", align="center",
+        ),
+        columns=rx.breakpoints(initial="1fr auto auto", md=_INV_GRID_COLS),
+        gap="8px", width="100%", align_items="center",
+        padding="10px", border_radius="8px",
         background=rx.cond(ins.bajo_stock, "#FFFBEB", "#FFFFFF"),
-        border_radius="8px",
         border=rx.cond(ins.bajo_stock, "1px solid #FDE68A", "1px solid #F1F5F9"),
-        gap="10px",
         _hover={"background": rx.cond(ins.bajo_stock, "#FEF9E7", "#F8FAFC")},
     )
 
@@ -264,22 +265,18 @@ def _insumo_form() -> rx.Component:
                     cursor="pointer",
                     _hover={"background": "#C2410C"},
                 ),
-                rx.cond(
-                    FoodState.inv_form_editando,
-                    rx.button(
-                        "Cancelar",
-                        on_click=FoodState.cancelar_insumo_form,
-                        background="#F1F5F9",
-                        color="#64748B",
-                        border="1px solid #E2E8F0",
-                        border_radius="7px",
-                        font_size="13px",
-                        padding_x="16px",
-                        padding_y="8px",
-                        cursor="pointer",
-                        _hover={"background": "#E2E8F0"},
-                    ),
-                    rx.fragment(),
+                rx.button(
+                    "Cancelar",
+                    on_click=FoodState.cancelar_insumo_form,
+                    background="#F1F5F9",
+                    color="#64748B",
+                    border="1px solid #E2E8F0",
+                    border_radius="7px",
+                    font_size="13px",
+                    padding_x="16px",
+                    padding_y="8px",
+                    cursor="pointer",
+                    _hover={"background": "#E2E8F0"},
                 ),
                 spacing="2",
                 justify="end",
@@ -300,11 +297,41 @@ def _insumos_section() -> rx.Component:
     return _section_card(
         "Insumos / Ingredientes",
         "package",
-        _insumo_form(),
+        rx.hstack(
+            rx.input(
+                placeholder="Buscar insumo...",
+                value=FoodState.inv_search,
+                on_change=FoodState.set_inv_search,
+                background="#F8FAFC", border="1px solid #E2E8F0",
+                border_radius="8px", font_size="13px",
+                padding_x="10px", padding_y="7px",
+                width=rx.breakpoints(initial="100%", sm="240px"),
+                _focus={"border": "1px solid #EA580C"},
+            ),
+            rx.spacer(),
+            rx.dialog.root(
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="plus", size=13),
+                        rx.text("Agregar", font_size="13px", font_weight="700"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=FoodState.abrir_nuevo_insumo,
+                    background="#EA580C", color="#FFFFFF",
+                    border_radius="8px", padding_x="14px", padding_y="8px",
+                    cursor="pointer", _hover={"background": "#C2410C"},
+                ),
+                rx.dialog.content(_insumo_form(), class_name="light"),
+                open=FoodState.inv_form_visible,
+                on_open_change=FoodState.set_inv_form_visible,
+            ),
+            width="100%", align="center", wrap="wrap", gap="8px",
+        ),
+        _insumos_table_header(),
         rx.cond(
-            FoodState.inv_insumos.length() > 0,
+            FoodState.inv_insumos_filtrados.length() > 0,
             rx.vstack(
-                rx.foreach(FoodState.inv_insumos, _insumo_row),
+                rx.foreach(FoodState.inv_insumos_filtrados, _insumo_row),
                 spacing="1",
                 width="100%",
             ),
@@ -487,26 +514,35 @@ def _recetas_section() -> rx.Component:
 
 def _inventario_content() -> rx.Component:
     return rx.vstack(
-        rx.hstack(
-            rx.link(
-                rx.hstack(
-                    rx.icon(tag="arrow_left", size=13, color="#64748B"),
-                    rx.text("Panel del Dueño", font_size="12px", color="#64748B"),
-                    spacing="1",
-                    align="center",
+        rx.cond(
+            FoodState.es_pagina_standalone,
+            rx.hstack(
+                rx.link(
+                    rx.hstack(
+                        rx.icon(tag="arrow_left", size=13, color="#64748B"),
+                        rx.text("Panel Administrativo", font_size="12px", color="#64748B"),
+                        spacing="1",
+                        align="center",
+                    ),
+                    href="/admin",
+                    _hover={"opacity": "0.7"},
                 ),
-                href="/admin",
-                _hover={"opacity": "0.7"},
+                rx.spacer(),
+                width="100%",
+                align="center",
             ),
-            rx.spacer(),
-            width="100%",
-            align="center",
+            rx.fragment(),
         ),
-        rx.text(
-            "Inventario",
-            font_size="22px",
-            font_weight="800",
-            color="#0F172A",
+        rx.vstack(
+            rx.text(
+                "Inventario",
+                font_size="22px",
+                font_weight="800",
+                color="#0F172A",
+            ),
+            rx.text("Insumos, stock y alertas de reposición",
+                    font_size="13px", color="#64748B"),
+            spacing="0",
         ),
         rx.cond(
             FoodState.mensaje != "",

@@ -144,19 +144,38 @@ def _keypad() -> rx.Component:
 
 # ─── Selector de restaurante (paso previo al PIN) ─────────────────────────────
 
-def _restaurant_row(empresa: CompanyOptionView) -> rx.Component:
+def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
     return rx.box(
-        rx.text(empresa.name, font_size="14px", font_weight="600", color="#FFFFFF"),
+        rx.vstack(
+            rx.cond(
+                empresa.logo_url != "",
+                rx.image(
+                    src=empresa.logo_url,
+                    width="56px", height="56px",
+                    object_fit="cover",
+                    border_radius="12px",
+                ),
+                rx.box(
+                    rx.text(empresa.name[:1].upper(), font_size="22px",
+                            font_weight="800", color="#FFFFFF", line_height="1"),
+                    width="56px", height="56px", border_radius="12px",
+                    background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                    display="flex", align_items="center", justify_content="center",
+                ),
+            ),
+            rx.text(empresa.name, font_size="13px", font_weight="600",
+                    color="#FFFFFF", text_align="center", no_of_lines=2),
+            spacing="2", align="center",
+        ),
         on_click=FoodState.seleccionar_restaurante(empresa.id),
         background="#0F172A",
         border="2px solid #334155",
-        border_radius="12px",
-        padding="14px 16px",
-        width="100%",
+        border_radius="14px",
+        padding="16px 10px",
         cursor="pointer",
         transition="border-color 0.15s, transform 0.1s",
-        _hover={"border_color": "#EA580C", "transform": "scale(0.99)"},
-        _active={"transform": "scale(0.97)"},
+        _hover={"border_color": "#EA580C", "transform": "scale(0.98)"},
+        _active={"transform": "scale(0.95)"},
     )
 
 
@@ -173,9 +192,10 @@ def _restaurant_selector_card() -> rx.Component:
         ),
         rx.cond(
             FoodState.companies_activas.length() > 0,
-            rx.vstack(
-                rx.foreach(FoodState.companies_activas, _restaurant_row),
-                spacing="2",
+            rx.grid(
+                rx.foreach(FoodState.companies_activas, _restaurant_card),
+                columns="2",
+                gap="10px",
                 width="100%",
             ),
             rx.text(
@@ -307,6 +327,89 @@ def _login_card() -> rx.Component:
     )
 
 
+# ─── Logo de marca — caja apaisada (más ancha que alta), no todo el ancho ─────
+
+def _glow() -> rx.Component:
+    return rx.box(
+        position="absolute",
+        top="50%", left="50%",
+        transform="translate(-50%, -50%)",
+        width=rx.breakpoints(initial="280px", md="420px"),
+        height=rx.breakpoints(initial="280px", md="420px"),
+        background="radial-gradient(circle, rgba(234,88,12,0.35) 0%, rgba(234,88,12,0) 70%)",
+        pointer_events="none",
+        z_index="0",
+    )
+
+
+def _brand_logo_box_restaurant() -> rx.Component:
+    """Paso 1 (elegir empresa) — logo de marca TUWAYKIFOOD, tamaño grande."""
+    return rx.box(
+        _glow(),
+        rx.center(
+            rx.image(
+                src="/TUWAYKIFOOD.png",
+                height=rx.breakpoints(initial="122px", sm="150px", md="178px"),
+                width="auto",
+                alt="TUWAYKIFOOD",
+            ),
+            width="100%", height="100%",
+        ),
+        background="#FFFFFF",
+        border_radius="20px",
+        width=rx.breakpoints(initial="190px", sm="230px", md="270px"),
+        height=rx.breakpoints(initial="130px", sm="158px", md="186px"),
+        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        position="relative",
+        z_index="1",
+    )
+
+
+def _brand_logo_box_pin() -> rx.Component:
+    """Paso 2 (rol/PIN) — logo de la empresa elegida, un poco más chico."""
+    return rx.box(
+        _glow(),
+        rx.cond(
+            FoodState.login_selected_company_logo != "",
+            rx.center(
+                rx.image(
+                    src=FoodState.login_selected_company_logo,
+                    height=rx.breakpoints(initial="90px", sm="112px", md="132px"),
+                    width="auto",
+                    alt=FoodState.login_selected_company_name,
+                ),
+                width="100%", height="100%",
+            ),
+            rx.box(
+                rx.text(
+                    FoodState.login_selected_company_name[:1].upper(),
+                    font_size=rx.breakpoints(initial="38px", md="52px"),
+                    font_weight="800", color="#FFFFFF", line_height="1",
+                ),
+                width="100%", height="100%",
+                display="flex", align_items="center", justify_content="center",
+                background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                border_radius="20px",
+            ),
+        ),
+        background="#FFFFFF",
+        border_radius="20px",
+        width=rx.breakpoints(initial="155px", sm="190px", md="220px"),
+        height=rx.breakpoints(initial="105px", sm="128px", md="150px"),
+        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        position="relative",
+        z_index="1",
+    )
+
+
+def _brand_logo_box() -> rx.Component:
+    return rx.cond(
+        FoodState.login_step == "pin",
+        _brand_logo_box_pin(),
+        _brand_logo_box_restaurant(),
+    )
+
+
 # ─── Página de login ──────────────────────────────────────────────────────────
 
 @rx.page(route="/login", on_load=FoodState.on_load_login,
@@ -316,35 +419,26 @@ def login_page() -> rx.Component:
         rx.script(_CSS_SCRIPT),
         rx.center(
             rx.vstack(
-                # Logo completo (marca) — pantalla de login
-                rx.box(
-                    rx.image(
-                        src="/TUWAYKIFOOD.png",
-                        height="100px",
-                        width="auto",
-                        alt="TUWAYKIFOOD",
-                    ),
-                    background="#FFFFFF",
-                    border_radius="16px",
-                    padding="12px 20px",
-                    box_shadow="0 8px 28px rgba(0,0,0,0.35)",
-                    margin_bottom="8px",
-                ),
+                _brand_logo_box(),
                 # Card principal
                 rx.cond(
                     FoodState.login_step == "pin",
                     _login_card(),
                     _restaurant_selector_card(),
                 ),
-                # Link administrador
-                rx.link(
-                    "Acceso administrador →",
-                    href="/admin/login",
-                    font_size="13px",
-                    color="#475569",
-                    font_weight="500",
-                    text_decoration="none",
-                    _hover={"color": "#64748B"},
+                # Link administrador — solo visible tras elegir empresa
+                rx.cond(
+                    FoodState.login_step == "pin",
+                    rx.link(
+                        "Ingresar como Administrador →",
+                        href="/admin/login?empresa=" + FoodState.login_selected_company_slug,
+                        font_size="13px",
+                        color="#475569",
+                        font_weight="500",
+                        text_decoration="none",
+                        _hover={"color": "#64748B"},
+                    ),
+                    rx.fragment(),
                 ),
                 spacing="6",
                 align="center",

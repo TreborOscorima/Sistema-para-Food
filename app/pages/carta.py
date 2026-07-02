@@ -12,7 +12,12 @@ def _categoria_row(cat: CategoriaView) -> rx.Component:
     return rx.hstack(
         rx.vstack(
             rx.hstack(
-                rx.text(cat.nombre, font_size="14px", font_weight="600", color="#0F172A"),
+                rx.text(cat.emoji + " " + cat.nombre, font_size="14px", font_weight="600", color="#0F172A"),
+                rx.badge(
+                    cat.productos_count.to_string() + " items",
+                    background="#F1F5F9", color="#64748B",
+                    border_radius="5px", font_size="10px", font_weight="700",
+                ),
                 rx.cond(
                     cat.activa,
                     rx.badge("Activa", background="#DCFCE7", color="#15803D", border_radius="5px", font_size="10px"),
@@ -32,7 +37,7 @@ def _categoria_row(cat: CategoriaView) -> rx.Component:
         rx.spacer(),
         rx.text(f"Orden: {cat.orden}", font_size="11px", color="#94A3B8"),
         rx.button(
-            "Editar",
+            "✏️ Editar",
             on_click=FoodState.editar_categoria(cat.id),
             background="#FFF7ED",
             color="#EA580C",
@@ -164,16 +169,16 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                 flex_shrink="0",
             ),
             rx.box(
-                rx.icon(tag="utensils", size=16, color="#CBD5E1"),
+                rx.text(prod.emoji, font_size="18px", line_height="1"),
                 width="40px",
                 height="40px",
-                border_radius="6px",
-                background="#F8FAFC",
-                border="1px solid #E2E8F0",
+                border_radius="10px",
+                background="linear-gradient(135deg,#FDBA74,#EA580C)",
                 display="flex",
                 align_items="center",
                 justify_content="center",
                 flex_shrink="0",
+                box_shadow="0 2px 6px rgba(234,88,12,0.35)",
             ),
         ),
         rx.vstack(
@@ -202,7 +207,7 @@ def _producto_row(prod: ProductoView) -> rx.Component:
         ),
         rx.spacer(),
         rx.button(
-            "Editar",
+            "✏️ Editar",
             on_click=FoodState.editar_producto(prod.id),
             background="#FFF7ED",
             color="#EA580C",
@@ -298,6 +303,58 @@ def _producto_form() -> rx.Component:
             padding_y="8px",
             font_size="13px",
             width="100%",
+        ),
+        # ── Ícono / emoji (se usa si no hay foto) ───────────────────────
+        rx.vstack(
+            rx.hstack(
+                rx.text("Ícono", font_size="12px", font_weight="600", color="#64748B"),
+                rx.text("— se muestra solo si el producto no tiene foto",
+                        font_size="11px", color="#94A3B8"),
+                spacing="1", align="center",
+            ),
+            rx.hstack(
+                rx.box(
+                    rx.text(
+                        rx.cond(FoodState.producto_form_emoji != "",
+                                FoodState.producto_form_emoji,
+                                FoodState.producto_form_emoji_sugerido),
+                        font_size="20px", line_height="1",
+                    ),
+                    width="40px", height="40px", border_radius="10px",
+                    background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                    display="flex", align_items="center", justify_content="center",
+                    flex_shrink="0",
+                ),
+                rx.input(
+                    placeholder="Auto: " + FoodState.producto_form_emoji_sugerido,
+                    value=FoodState.producto_form_emoji,
+                    on_change=FoodState.set_producto_form_emoji,
+                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    color="#0F172A", border_radius="8px",
+                    padding_x="12px", padding_y="8px", font_size="13px",
+                    flex="1",
+                ),
+                spacing="3", align="center", width="100%",
+            ),
+            rx.flex(
+                *[
+                    rx.box(
+                        rx.text(e, font_size="16px", line_height="1"),
+                        on_click=FoodState.set_producto_form_emoji(e),
+                        cursor="pointer", padding="6px",
+                        border_radius="6px", border="1px solid #E2E8F0",
+                        background="#FFFFFF",
+                        _hover={"border_color": "#EA580C", "background": "#FFF7ED"},
+                    )
+                    for e in [
+                        "🍗", "🥩", "🍔", "🍕", "🍝", "🥗", "🍲", "🥔",
+                        "🍟", "🍚", "🥚", "🍰", "🍨", "☕", "🥤", "🍺",
+                        "🍷", "🥪", "🥟", "🫔", "🐟", "🍽️",
+                    ]
+                ],
+                gap="6px", flex_wrap="wrap", width="100%",
+            ),
+            spacing="2", width="100%",
         ),
         # ── Imagen del plato ──────────────────────────────────────────
         rx.vstack(
@@ -409,7 +466,11 @@ def _producto_form() -> rx.Component:
 
 def _carta_content() -> rx.Component:
     return rx.vstack(
-        rx.text("Carta / Admin", font_size="22px", font_weight="800", color="#0F172A"),
+        rx.vstack(
+            rx.text("Carta / Admin", font_size="22px", font_weight="800", color="#0F172A"),
+            rx.text("Categorías y productos de la carta", font_size="13px", color="#64748B"),
+            spacing="0",
+        ),
         rx.cond(
             FoodState.mensaje != "",
             rx.box(

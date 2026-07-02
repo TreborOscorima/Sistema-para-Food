@@ -32,7 +32,7 @@ def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
                         opacity="0.9",
                     ),
                     rx.text(
-                        "⏱ " + ticket.hora_texto,
+                        "⏱ " + ticket.minutos_texto,
                         font_size="12px",
                         color="#FFFFFF",
                         opacity="0.85",
@@ -149,6 +149,7 @@ def _column(titulo: str, count, tickets, empty_msg: str) -> rx.Component:
                 ),
             ),
             overflow_y="auto",
+            overflow_x="auto",
             max_height="72vh",
             width="100%",
             padding_right="4px",
@@ -162,13 +163,36 @@ def _column(titulo: str, count, tickets, empty_msg: str) -> rx.Component:
 def _cocina_content() -> rx.Component:
     return rx.vstack(
         rx.hstack(
-            rx.text(
-                "Cocina KDS",
-                font_size="22px",
-                font_weight="800",
-                color="#FFFFFF",
+            rx.vstack(
+                rx.text(
+                    "Cocina KDS",
+                    font_size="22px",
+                    font_weight="800",
+                    color="#FFFFFF",
+                ),
+                rx.text("Pedidos en preparación", font_size="13px", color="#94A3B8"),
+                spacing="0",
             ),
             rx.spacer(),
+            rx.hstack(
+                rx.hstack(
+                    rx.box(width="10px", height="10px", border_radius="3px", background="#F59E0B"),
+                    rx.text("Pendiente", font_size="13px", color="#94A3B8", font_weight="500"),
+                    spacing="2", align="center",
+                ),
+                rx.hstack(
+                    rx.box(width="10px", height="10px", border_radius="3px", background="#EA580C"),
+                    rx.text("En preparación", font_size="13px", color="#94A3B8", font_weight="500"),
+                    spacing="2", align="center",
+                ),
+                rx.hstack(
+                    rx.box(width="10px", height="10px", border_radius="3px", background="#DC2626"),
+                    rx.text("Demorado", font_size="13px", color="#94A3B8", font_weight="500"),
+                    spacing="2", align="center",
+                ),
+                spacing="4", align="center",
+                display=rx.breakpoints(initial="none", lg="flex"),
+            ),
             rx.button(
                 "Actualizar",
                 on_click=FoodState.cargar_cocina,
@@ -183,6 +207,7 @@ def _cocina_content() -> rx.Component:
             ),
             width="100%",
             align="center",
+            gap="16px",
         ),
         _column(
             "Pendiente", FoodState.cantidad_tickets_nuevos, FoodState.tickets_nuevos,

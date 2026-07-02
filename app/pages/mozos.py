@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import app_shell, section_card, surface_card
+from app.components.shared import app_shell, cumpleanos_banner, section_card, surface_card
 from app.states.food_state import CarritoItem, FoodState, HistorialItem, MesaView, ProductoView
 
 
@@ -55,14 +55,22 @@ def _mesa_card(mesa: MesaView) -> rx.Component:
                 color="#FFFFFF",
                 line_height="1",
             ),
-            # Total si tiene consumo
+            # Total y tiempo si tiene consumo
             rx.cond(
                 mesa.total_abierto > 0,
-                rx.text(
-                    mesa.total_abierto_texto,
-                    font_size="13px",
-                    font_weight="700",
-                    color=rx.cond(selected, "#FEF3C7", "#94A3B8"),
+                rx.hstack(
+                    rx.text(
+                        mesa.total_abierto_texto,
+                        font_size="13px",
+                        font_weight="700",
+                        color=rx.cond(selected, "#FEF3C7", "#94A3B8"),
+                    ),
+                    rx.text(
+                        "⏱ " + mesa.tiempo_abierto_texto,
+                        font_size="11px",
+                        color=rx.cond(selected, "#FED7AA", "#64748B"),
+                    ),
+                    spacing="2", align="center", wrap="wrap",
                 ),
                 rx.fragment(),
             ),
@@ -503,6 +511,18 @@ def _historial_section() -> rx.Component:
 def _producto_card(producto: ProductoView) -> rx.Component:
     return rx.box(
         rx.vstack(
+            rx.hstack(
+                rx.text(producto.emoji, font_size="24px", line_height="1"),
+                rx.spacer(),
+                rx.box(
+                    rx.icon(tag="plus", size=13, color="#FFFFFF"),
+                    width="24px", height="24px", border_radius="7px",
+                    background="#EA580C", display="flex",
+                    align_items="center", justify_content="center",
+                    flex_shrink="0",
+                ),
+                width="100%", align="center",
+            ),
             rx.text(
                 producto.nombre,
                 font_size="13px",
@@ -516,24 +536,15 @@ def _producto_card(producto: ProductoView) -> rx.Component:
                 font_weight="700",
                 color="#EA580C",
             ),
-            rx.button(
-                "+",
-                on_click=FoodState.agregar_producto(producto.id),
-                width="100%",
-                background="#EA580C",
-                color="#FFFFFF",
-                border_radius="6px",
-                font_size="16px",
-                cursor="pointer",
-                _hover={"background": "#C2410C"},
-            ),
             spacing="2",
             align="start",
         ),
+        on_click=FoodState.agregar_producto(producto.id),
         background="#1E293B",
         border="2px solid #334155",
         border_radius="10px",
         padding="12px",
+        cursor="pointer",
         _hover={"border": "2px solid #EA580C"},
         transition="all 0.15s ease",
     )
@@ -550,7 +561,7 @@ def _menu_section() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.button(
-                        "Todos",
+                        "🍖 Todos",
                         on_click=FoodState.seleccionar_categoria(0),
                         background=rx.cond(FoodState.categoria_activa_id == 0, "#EA580C", "#1E293B"),
                         color=rx.cond(FoodState.categoria_activa_id == 0, "#FFFFFF", "#94A3B8"),
@@ -566,7 +577,7 @@ def _menu_section() -> rx.Component:
                     rx.foreach(
                         FoodState.categorias_activas,
                         lambda cat: rx.button(
-                            cat.nombre,
+                            cat.emoji + " " + cat.nombre,
                             on_click=FoodState.seleccionar_categoria(cat.id),
                             background=rx.cond(FoodState.categoria_activa_id == cat.id, "#EA580C", "#1E293B"),
                             color=rx.cond(FoodState.categoria_activa_id == cat.id, "#FFFFFF", "#94A3B8"),
@@ -609,12 +620,17 @@ def _menu_section() -> rx.Component:
 
 def _mozos_content() -> rx.Component:
     return rx.vstack(
+        cumpleanos_banner(),
         rx.hstack(
-            rx.text(
-                "Salón",
-                font_size="22px",
-                font_weight="800",
-                color="#FFFFFF",
+            rx.vstack(
+                rx.text(
+                    "Salón",
+                    font_size="22px",
+                    font_weight="800",
+                    color="#FFFFFF",
+                ),
+                rx.text("Mesas y comandas en curso", font_size="13px", color="#94A3B8"),
+                spacing="0",
             ),
             rx.spacer(),
             rx.hstack(
@@ -704,7 +720,8 @@ def _mozos_content() -> rx.Component:
 
 @rx.page(
     route="/mozos",
-    on_load=[FoodState.on_load_mozos, FoodState.start_mozos_polling],
+    on_load=[FoodState.on_load_mozos, FoodState.start_mozos_polling,
+             FoodState.cargar_clientes],
     title="TUWAYKIFOOD | Salón",
 )
 def mozos_page() -> rx.Component:

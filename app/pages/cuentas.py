@@ -8,6 +8,26 @@ from app.states.food_state import FoodState, CuentaView, MovimientoView, AdminLo
 from app.pages.dono import _dono_shell
 
 
+def _cc_kpi_card(label: str, value, icon: str, accent: str, bg: str) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.box(
+                rx.icon(tag=icon, size=16, color=accent),
+                width="32px", height="32px", border_radius="8px",
+                background=bg, display="flex",
+                align_items="center", justify_content="center",
+            ),
+            rx.text(value, font_size="22px", font_weight="800", color="#0F172A", line_height="1"),
+            rx.text(label, font_size="11px", font_weight="600", color="#64748B",
+                    text_transform="uppercase", letter_spacing="0.06em"),
+            spacing="2", align="start", width="100%",
+        ),
+        background="#FFFFFF", border="1px solid #E2E8F0",
+        border_radius="12px", padding="14px 16px",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)", flex="1", min_width="0",
+    )
+
+
 def _movimiento_row(m: MovimientoView) -> rx.Component:
     es_cargo = m.tipo == "cargo"
     return rx.hstack(
@@ -64,6 +84,13 @@ def _cuenta_row(c: CuentaView) -> rx.Component:
                     font_size="14px", font_weight="800", color="#B91C1C"),
             rx.text("deuda", font_size="10px", color="#94A3B8"),
             spacing="0", align="end",
+        ),
+        rx.link(
+            "Cobrar",
+            on_click=FoodState.set_cc_cliente_sel_nombre(c.cliente_nombre),
+            font_size="12px", font_weight="700", color="#EA580C",
+            cursor="pointer", flex_shrink="0",
+            _hover={"color": "#C2410C"},
         ),
         width="100%", align="center", gap="10px",
         padding="10px 12px",
@@ -196,18 +223,51 @@ def _cuenta_detalle() -> rx.Component:
 
 def _cuentas_content() -> rx.Component:
     return rx.vstack(
-        rx.hstack(
-            rx.link(
-                rx.hstack(
-                    rx.icon(tag="arrow_left", size=13, color="#64748B"),
-                    rx.text("Panel del Dueño", font_size="12px", color="#64748B"),
-                    spacing="1", align="center",
+        rx.cond(
+            FoodState.es_pagina_standalone,
+            rx.hstack(
+                rx.link(
+                    rx.hstack(
+                        rx.icon(tag="arrow_left", size=13, color="#64748B"),
+                        rx.text("Panel Administrativo", font_size="12px", color="#64748B"),
+                        spacing="1", align="center",
+                    ),
+                    href="/admin", _hover={"opacity": "0.7"},
                 ),
-                href="/admin", _hover={"opacity": "0.7"},
+                rx.spacer(),
+            ),
+            rx.fragment(),
+        ),
+        rx.hstack(
+            rx.vstack(
+                rx.text("Cuentas Corrientes", font_size="22px", font_weight="800", color="#0F172A"),
+                rx.text("Fiado y créditos de clientes", font_size="13px", color="#64748B"),
+                spacing="0",
             ),
             rx.spacer(),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="download", size=13, color="#FFFFFF"),
+                    rx.text("Exportar Excel", font_size="13px", font_weight="700",
+                            color="#FFFFFF"),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.exportar_cuentas_excel,
+                background="#15803D",
+                border_radius="8px",
+                padding_x="14px", padding_y="7px",
+                cursor="pointer",
+                _hover={"background": "#166534"},
+            ),
+            width="100%", align="center",
         ),
-        rx.text("Cuentas Corrientes", font_size="22px", font_weight="800", color="#0F172A"),
+        rx.hstack(
+            _cc_kpi_card("Total a cobrar", FoodState.cuentas_total_deuda_texto,
+                         "credit_card", "#B91C1C", "#FEF2F2"),
+            _cc_kpi_card("Cuentas con deuda", FoodState.cuentas_con_deuda.length().to_string(),
+                         "users", "#EA580C", "#FFF7ED"),
+            gap="12px", width="100%", flex_wrap="wrap",
+        ),
         rx.cond(
             FoodState.mensaje != "",
             rx.box(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import app_shell
-from app.states.food_state import FoodState, TopPlatoView, VentaHistorialView
+from app.states.food_state import FoodState, TopPlatoView, VentaDetalleItemView, VentaHistorialView
 
 _METODOS_FILTRO = [
     ("", "Todos los métodos"),
@@ -166,7 +166,85 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         border_radius="8px",
         border="1px solid #E2E8F0",
         gap="8px",
+        cursor="pointer",
+        on_click=FoodState.abrir_detalle_venta(venta.pedido_id),
         _hover={"background": "#F8FAFC"},
+    )
+
+
+def _venta_detalle_item_row(item: VentaDetalleItemView) -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.text(item.cantidad.to_string() + "x", font_size="12px",
+                     color="#94A3B8", min_width="26px", flex_shrink="0"),
+            rx.text(item.nombre, font_size="13px", color="#0F172A", flex="1"),
+            rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
+                     color="#0F172A", flex_shrink="0"),
+            width="100%", align="center", gap="8px",
+        ),
+        rx.cond(
+            item.notas != "",
+            rx.text("Nota: " + item.notas, font_size="11px", color="#94A3B8",
+                     padding_left="34px"),
+            rx.fragment(),
+        ),
+        spacing="1", width="100%", padding="8px 0",
+        border_bottom="1px solid #F1F5F9",
+    )
+
+
+def _venta_detalle_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Pedido #" + FoodState.venta_detalle_pedido_id.to_string(),
+                                font_size="16px", font_weight="800", color="#0F172A"),
+                        rx.text(FoodState.venta_detalle_mesa_label, font_size="13px", color="#64748B"),
+                        spacing="0",
+                    ),
+                    rx.spacer(),
+                    rx.dialog.close(
+                        rx.icon(tag="x", size=16, color="#64748B", cursor="pointer"),
+                    ),
+                    width="100%", align="start",
+                ),
+                rx.hstack(
+                    _metodo_badge(FoodState.venta_detalle_metodo),
+                    rx.text("Mozo: " + FoodState.venta_detalle_mozo, font_size="12px", color="#64748B"),
+                    rx.text("Cajero: " + FoodState.venta_detalle_cajero, font_size="12px", color="#64748B"),
+                    spacing="3", align="center", wrap="wrap",
+                ),
+                rx.box(height="1px", width="100%", background="#E2E8F0"),
+                rx.vstack(
+                    rx.foreach(FoodState.venta_detalle_items, _venta_detalle_item_row),
+                    spacing="0", width="100%", max_height="280px", overflow_y="auto",
+                ),
+                rx.box(height="1px", width="100%", background="#E2E8F0"),
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Total", font_size="14px", font_weight="700", color="#0F172A"),
+                        rx.cond(
+                            FoodState.venta_detalle_propina_texto != "",
+                            rx.text("Incluye propina " + FoodState.venta_detalle_propina_texto,
+                                     font_size="11px", color="#B45309"),
+                            rx.fragment(),
+                        ),
+                        spacing="0",
+                    ),
+                    rx.spacer(),
+                    rx.text(FoodState.venta_detalle_total_texto, font_size="18px",
+                             font_weight="800", color="#15803D"),
+                    width="100%", align="center",
+                ),
+                spacing="3", width="100%",
+            ),
+            class_name="light",
+            max_width="420px",
+        ),
+        open=FoodState.venta_detalle_visible,
+        on_open_change=FoodState.set_venta_detalle_visible,
     )
 
 
@@ -281,7 +359,7 @@ def _filtros_bar() -> rx.Component:
                         rx.text("Buscar", font_size="13px", font_weight="600"),
                         spacing="1", align="center",
                     ),
-                    on_click=FoodState.aplicar_filtros_historial,
+                    on_click=FoodState.buscar_historial_manual,
                     background="#EA580C",
                     color="#FFFFFF",
                     border_radius="8px",
@@ -352,6 +430,7 @@ def _historial_header() -> rx.Component:
 
 def _reportes_content() -> rx.Component:
     return rx.vstack(
+        _venta_detalle_modal(),
         # Header
         rx.hstack(
             rx.vstack(
@@ -360,23 +439,68 @@ def _reportes_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
-            rx.button(
-                rx.hstack(
-                    rx.icon(tag="refresh_cw", size=13),
-                    rx.text("Actualizar", font_size="13px", font_weight="600"),
-                    spacing="1", align="center",
+            rx.hstack(
+                rx.button(
+                    "Hoy", on_click=FoodState.filtro_rapido_hoy,
+                    background=rx.cond(FoodState.historial_filtro_rapido == "hoy", "#EA580C", "#FFFFFF"),
+                    color=rx.cond(FoodState.historial_filtro_rapido == "hoy", "#FFFFFF", "#64748B"),
+                    border=rx.cond(FoodState.historial_filtro_rapido == "hoy", "1px solid #EA580C", "1px solid #E2E8F0"),
+                    border_radius="8px", font_size="12px", font_weight="700",
+                    padding_x="14px", padding_y="7px", cursor="pointer",
+                    _hover={"border_color": "#EA580C", "color": "#EA580C"},
                 ),
-                on_click=[FoodState.cargar_dashboard, FoodState.cargar_historial_ventas],
-                background="#FFF7ED",
-                color="#EA580C",
-                border="1px solid #FED7AA",
-                border_radius="8px",
-                font_size="13px",
-                cursor="pointer",
-                _hover={"opacity": "0.85"},
+                rx.button(
+                    "Semana", on_click=FoodState.filtro_rapido_semana,
+                    background=rx.cond(FoodState.historial_filtro_rapido == "semana", "#EA580C", "#FFFFFF"),
+                    color=rx.cond(FoodState.historial_filtro_rapido == "semana", "#FFFFFF", "#64748B"),
+                    border=rx.cond(FoodState.historial_filtro_rapido == "semana", "1px solid #EA580C", "1px solid #E2E8F0"),
+                    border_radius="8px", font_size="12px", font_weight="600",
+                    padding_x="14px", padding_y="7px", cursor="pointer",
+                    _hover={"border_color": "#EA580C", "color": "#EA580C"},
+                ),
+                rx.button(
+                    "Mes", on_click=FoodState.filtro_rapido_mes,
+                    background=rx.cond(FoodState.historial_filtro_rapido == "mes", "#EA580C", "#FFFFFF"),
+                    color=rx.cond(FoodState.historial_filtro_rapido == "mes", "#FFFFFF", "#64748B"),
+                    border=rx.cond(FoodState.historial_filtro_rapido == "mes", "1px solid #EA580C", "1px solid #E2E8F0"),
+                    border_radius="8px", font_size="12px", font_weight="600",
+                    padding_x="14px", padding_y="7px", cursor="pointer",
+                    _hover={"border_color": "#EA580C", "color": "#EA580C"},
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="refresh_cw", size=13),
+                        rx.text("Actualizar", font_size="13px", font_weight="600"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=[FoodState.cargar_dashboard, FoodState.cargar_historial_ventas],
+                    background="#FFF7ED",
+                    color="#EA580C",
+                    border="1px solid #FED7AA",
+                    border_radius="8px",
+                    font_size="13px",
+                    cursor="pointer",
+                    _hover={"opacity": "0.85"},
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="download", size=13, color="#FFFFFF"),
+                        rx.text("Exportar Excel", font_size="13px", font_weight="700",
+                                color="#FFFFFF"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=FoodState.exportar_ventas_excel,
+                    background="#15803D",
+                    border_radius="8px",
+                    padding_x="14px", padding_y="7px",
+                    cursor="pointer",
+                    _hover={"background": "#166534"},
+                ),
+                spacing="2", wrap="wrap",
             ),
             width="100%",
             align="center",
+            wrap="wrap", gap="8px",
         ),
 
         # ── KPI cards ────────────────────────────────────────────────────────
@@ -392,9 +516,9 @@ def _reportes_content() -> rx.Component:
                 "receipt_text", "#1D4ED8", "#EFF6FF", "#BFDBFE",
             ),
             _kpi_card(
-                "Mesas ocupadas",
-                FoodState.dashboard_mesas_ocupadas.to_string(),
-                "layout_grid", "#B45309", "#FFFBEB", "#FDE68A",
+                "Ticket promedio",
+                FoodState.dashboard_ticket_promedio_texto,
+                "calculator", "#7C3AED", "#F5F3FF", "#DDD6FE",
             ),
             _kpi_card(
                 "Propinas hoy",

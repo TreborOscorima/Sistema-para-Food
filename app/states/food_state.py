@@ -42,7 +42,13 @@ from app.models.food import (
     TipoPromocion,
     UsuarioFood,
 )
-from app.services.printer_service import SilentPrinterService, TicketLine
+from app.services.receipt_service import (
+    TicketLine,
+    build_print_script,
+    generate_cashier_ticket_html,
+    generate_kitchen_ticket_html,
+)
+from app.states.caja_turno_mixin import CajaTurnoMixin, get_turno_abierto
 from app.utils.db import get_session
 from app.utils.tenant import set_tenant_context, tenant_bypass
 
@@ -114,6 +120,9 @@ KITCHEN_CARD_BORDERS = {
     EstadoProduccion.PENDIENTE.value: "#F59E0B",
     EstadoProduccion.EN_PREPARACION.value: "#EA580C",
 }
+KITCHEN_DEMORADO_MINUTOS = 15
+KITCHEN_DEMORADO_COLOR = "#DC2626"
+CLIENTE_VIP_VISITAS_MIN = 15
 
 ROLE_HOME_ROUTES: dict[str, str] = {
     RolUsuario.MOZO.value: "/mozos",
@@ -216,6 +225,84 @@ def _to_decimal(value) -> Decimal:
 
 def _money_text(value) -> str:
     return f"{CURRENCY_SYMBOL} {_to_decimal(value):.2f}"
+
+
+_PRODUCTO_EMOJI_KEYWORDS: list[tuple[str, str]] = [
+    ("pizza", "🍕"),
+    ("hamburgues", "🍔"),
+    ("sandwich", "🥪"),
+    ("sanguche", "🥪"),
+    ("pan ", "🥪"),
+    ("pescado", "🐟"),
+    ("ceviche", "🐟"),
+    ("gallina", "🍗"),
+    ("pollo", "🍗"),
+    ("brasa", "🍗"),
+    ("carne", "🥩"),
+    ("lomo", "🥩"),
+    ("bife", "🥩"),
+    ("milanesa", "🥩"),
+    ("chancho", "🥩"),
+    ("cerdo", "🥩"),
+    ("pasta", "🍝"),
+    ("tallarin", "🍝"),
+    ("spaghetti", "🍝"),
+    ("fideos", "🍝"),
+    ("ensalada", "🥗"),
+    ("sopa", "🍲"),
+    ("caldo", "🍲"),
+    ("chupe", "🍲"),
+    ("causa", "🥔"),
+    ("papa", "🍟"),
+    ("arroz", "🍚"),
+    ("huevo", "🥚"),
+    ("torta", "🍰"),
+    ("mazamorra", "🍰"),
+    ("helado", "🍨"),
+    ("flan", "🍮"),
+    ("postre", "🍰"),
+    ("cafe", "☕"),
+    ("café", "☕"),
+    ("cerveza", "🍺"),
+    ("vino", "🍷"),
+    ("chicha", "🥤"),
+    ("agua", "💧"),
+    ("gaseosa", "🥤"),
+    ("cola", "🥤"),
+    ("kola", "🥤"),
+    ("jugo", "🥤"),
+    ("bebida", "🥤"),
+    ("empanada", "🥟"),
+    ("wrap", "🫔"),
+]
+
+_CATEGORIA_EMOJI_KEYWORDS: list[tuple[str, str]] = [
+    ("bebida", "🥤"),
+    ("postre", "🍰"),
+    ("entrada", "🥗"),
+    ("ensalada", "🥗"),
+    ("hamburgues", "🍔"),
+    ("pizza", "🍕"),
+    ("principal", "🍖"),
+    ("fondo", "🍖"),
+    ("carta", "🍽️"),
+]
+
+
+def _emoji_para_producto(nombre: str) -> str:
+    n = nombre.lower()
+    for kw, emoji in _PRODUCTO_EMOJI_KEYWORDS:
+        if kw in n:
+            return emoji
+    return "🍽️"
+
+
+def _emoji_para_categoria(nombre: str) -> str:
+    n = nombre.lower()
+    for kw, emoji in _CATEGORIA_EMOJI_KEYWORDS:
+        if kw in n:
+            return emoji
+    return "🍽️"
 
 
 def _parse_positive_price(raw: str) -> Decimal | None:
@@ -371,6 +458,16 @@ class MesaView(BaseModel):
     card_border: str
     tiene_items_listos: bool
     items_listos_count: int
+    items_total_count: int = 0
+    tiempo_abierto_texto: str = ""
+
+
+class CajaItemView(BaseModel):
+    producto_nombre: str = ""
+    cantidad: int = 0
+    precio_unitario_texto: str = ""
+    subtotal_texto: str = ""
+    notas: str = ""
 
 
 class MesaAdminView(BaseModel):
@@ -417,6 +514,10 @@ class ClienteView(BaseModel):
     cumple_hoy: bool = False
     cumple_pronto: bool = False
     dias_para_cumple: int = 999
+    visitas_count: int = 0
+    gastado_texto: str = "S/ 0.00"
+    ultima_visita_texto: str = "Sin visitas"
+    es_vip: bool = False
 
 
 class CuentaView(BaseModel):
@@ -465,6 +566,7 @@ class CompanyOptionView(BaseModel):
     id: int
     name: str
     slug: str
+    logo_url: str = ""
 
 
 class CategoriaView(BaseModel):
@@ -473,6 +575,8 @@ class CategoriaView(BaseModel):
     descripcion: str
     orden: int
     activa: bool
+    productos_count: int = 0
+    emoji: str = "🍽️"
 
 
 class ProductoView(BaseModel):
@@ -485,6 +589,7 @@ class ProductoView(BaseModel):
     precio_texto: str
     disponible: bool
     imagen_url: str
+    emoji: str = "🍽️"
 
 
 class CarritoItem(BaseModel):
@@ -528,6 +633,8 @@ class CocinaTicketView(BaseModel):
     accent_border: str
     detalle_ids_csv: str
     items_lines: list[str]
+    minutos_texto: str = ""
+    demorado: bool = False
 
 
 class VentaHistorialView(BaseModel):
@@ -542,6 +649,14 @@ class VentaHistorialView(BaseModel):
     metodo_pago: str
     mozo_nombre: str
     cajero_nombre: str
+
+
+class VentaDetalleItemView(BaseModel):
+    nombre: str
+    cantidad: int
+    precio_unitario_texto: str
+    subtotal_texto: str
+    notas: str = ""
 
 
 class TopPlatoView(BaseModel):
@@ -670,7 +785,7 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
 
 # ─── Estado principal ─────────────────────────────────────────────────────────
 
-class FoodState(rx.State):
+class FoodState(CajaTurnoMixin, rx.State):
     """Estado global de la app TUWAYKIFOOD."""
 
     mesas: list[MesaView] = []
@@ -702,6 +817,16 @@ class FoodState(rx.State):
     companies_activas: list[CompanyOptionView] = []
     login_selected_company_id: int = 0
     login_selected_company_slug: str = ""
+
+    @rx.var
+    def login_selected_company_name(self) -> str:
+        c = next((c for c in self.companies_activas if c.id == self.login_selected_company_id), None)
+        return c.name if c else ""
+
+    @rx.var
+    def login_selected_company_logo(self) -> str:
+        c = next((c for c in self.companies_activas if c.id == self.login_selected_company_id), None)
+        return c.logo_url if c else ""
 
     def _company_id(self) -> int:
         """company_id del tenant activo — de la sesión logueada, o del restaurante
@@ -736,6 +861,7 @@ class FoodState(rx.State):
     producto_form_precio: str = ""
     producto_form_disponible: bool = True
     producto_form_imagen_url: str = ""
+    producto_form_emoji: str = ""
 
     mozos_polling_enabled: bool = False
     cocina_polling_enabled: bool = False
@@ -749,6 +875,7 @@ class FoodState(rx.State):
     usuario_form_pin: str = ""
     usuario_form_pin_confirm: str = ""
     usuario_form_activo: bool = True
+    usuario_form_visible: bool = False
 
     mozos_tab_activa: str = "salon"
     nota_producto_activo_id: int = 0
@@ -761,39 +888,54 @@ class FoodState(rx.State):
     caja_cobro_descuento: str = ""
     caja_cobro_efectivo_recibido: str = ""
     caja_cobro_error: str = ""
+    caja_cobro_items: list[CajaItemView] = []
 
     # Dashboard KPIs
     dashboard_ventas_hoy_texto: str = "S/ 0.00"
     dashboard_pedidos_hoy: int = 0
     dashboard_mesas_ocupadas: int = 0
     dashboard_propina_hoy_texto: str = "S/ 0.00"
+    dashboard_ticket_promedio_texto: str = "S/ 0.00"
     dashboard_top_platos: list[TopPlatoView] = []
+    dashboard_ventas_trend_pct: int = 0
+    dashboard_pedidos_trend: int = 0
+    dashboard_ticket_trend_pct: int = 0
+    dashboard_propina_trend_pct: int = 0
 
     # Historial — filtros
     historial_filtro_fecha_desde: str = ""
     historial_filtro_fecha_hasta: str = ""
     historial_filtro_metodo: str = ""
+    historial_filtro_rapido: str = "hoy"
     historial_pagina: int = 0
     historial_total: int = 0
     _HISTORIAL_PAGE_SIZE: int = 50
+
+    # Historial — detalle de venta (modal)
+    venta_detalle_visible: bool = False
+    venta_detalle_pedido_id: int = 0
+    venta_detalle_mesa_label: str = ""
+    venta_detalle_metodo: str = ""
+    venta_detalle_mozo: str = ""
+    venta_detalle_cajero: str = ""
+    venta_detalle_total_texto: str = ""
+    venta_detalle_propina_texto: str = ""
+    venta_detalle_items: list[VentaDetalleItemView] = []
 
     # Nota global del pedido de mesa activo
     nota_pedido_mesa: str = ""
 
     # Configuración impresoras + carta digital
     config_nombre_local: str = "Mi Restaurante"
-    config_cocina_activa: bool = False
-    config_cocina_ip: str = "192.168.1.100"
-    config_cocina_puerto: str = "9100"
-    config_caja_activa: bool = False
-    config_caja_ip: str = ""
-    config_caja_puerto: str = "9100"
+    config_logo_url: str = ""
+    config_ticket_paper_width_mm: str = "80"
     config_slug: str = "mi-restaurante"
     config_menu_qr_base64: str = ""
     config_menu_url: str = ""
     config_admin_email: str = ""
     config_admin_password_nueva: str = ""
     config_admin_password_confirm: str = ""
+    config_admin_show_password: bool = False
 
     # CRUD mesas (admin)
     mesas_config: list[MesaAdminView] = []
@@ -811,6 +953,8 @@ class FoodState(rx.State):
     inv_form_stock_actual: str = ""
     inv_form_stock_minimo: str = ""
     inv_form_editando: bool = False
+    inv_form_visible: bool = False
+    inv_search: str = ""
     inv_producto_sel_nombre: str = ""
     inv_producto_sel_id: int = 0
     inv_receta_items: list[RecetaItemView] = []
@@ -827,6 +971,7 @@ class FoodState(rx.State):
     cli_form_fecha_nac: str = ""
     cli_form_notas: str = ""
     cli_form_editando: bool = False
+    cli_form_visible: bool = False
     caja_cobro_cliente_nombre: str = ""
     caja_cobro_cliente_id: int = 0
 
@@ -848,8 +993,35 @@ class FoodState(rx.State):
     promo_form_hora_inicio: str = ""
     promo_form_hora_fin: str = ""
     promo_form_editando: bool = False
+    promo_form_visible: bool = False
 
     # ─── Computed vars ────────────────────────────────────────────────────────
+
+    @rx.var
+    def historial_ventas_recientes(self) -> list[VentaHistorialView]:
+        return self.historial_ventas[:5]
+
+    @rx.var
+    def inv_insumos_filtrados(self) -> list[InsumoView]:
+        q = self.inv_search.strip().lower()
+        if not q:
+            return self.inv_insumos
+        return [i for i in self.inv_insumos if q in i.nombre.lower()]
+
+    def set_inv_search(self, v: str) -> None:
+        self.inv_search = v
+
+    def set_inv_form_visible(self, v: bool) -> None:
+        self.inv_form_visible = v
+
+    def abrir_nuevo_insumo(self) -> None:
+        self.inv_form_id = 0
+        self.inv_form_nombre = ""
+        self.inv_form_unidad = "unidad"
+        self.inv_form_stock_actual = ""
+        self.inv_form_stock_minimo = ""
+        self.inv_form_editando = False
+        self.inv_form_visible = True
 
     @rx.var
     def autenticado(self) -> bool:
@@ -910,6 +1082,19 @@ class FoodState(rx.State):
         if self.usuario_actual is None:
             return False
         return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["configuracion"]
+
+    @rx.var
+    def puede_ver_panel_admin(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value
+
+    @rx.var
+    def es_pagina_standalone(self) -> bool:
+        """True si esta página (Cuentas/Promociones/Clientes/Inventario) se
+        accede como ruta independiente — False si está embebida como pestaña
+        dentro de /admin, donde el link "Panel Administrativo" es redundante."""
+        return self.router.page.path != "/admin"
 
     @rx.var
     def historial_filtro_activo(self) -> bool:
@@ -977,6 +1162,10 @@ class FoodState(rx.State):
         return sum(1 for m in self.mesas if m.estado != EstadoMesa.LIBRE.value)
 
     @rx.var
+    def mesas_por_cobrar(self) -> list[MesaView]:
+        return [m for m in self.mesas if m.estado != EstadoMesa.LIBRE.value and m.total_abierto > 0]
+
+    @rx.var
     def tickets_nuevos(self) -> list[CocinaTicketView]:
         return [t for t in self.tickets_cocina if t.estado_produccion == EstadoProduccion.PENDIENTE.value]
 
@@ -1042,6 +1231,11 @@ class FoodState(rx.State):
     @rx.var
     def cuentas_con_deuda(self) -> list[CuentaView]:
         return [c for c in self.cuentas_lista if c.saldo_deuda > 0]
+
+    @rx.var
+    def cuentas_total_deuda_texto(self) -> str:
+        total = sum(Decimal(str(c.saldo_deuda)) for c in self.cuentas_lista)
+        return _money_text(total)
 
     @rx.var
     def cuenta_sel_nombre(self) -> str:
@@ -1242,9 +1436,6 @@ class FoodState(rx.State):
     def on_load_login(self):
         if self.usuario_actual is not None:
             return rx.redirect(self.usuario_home_route, replace=True)
-        self.login_step = "restaurant"
-        self.login_selected_company_id = 0
-        self.login_selected_company_slug = ""
         self.login_pin_input = ""
         self.login_error = ""
         with tenant_bypass():
@@ -1255,8 +1446,23 @@ class FoodState(rx.State):
                     .order_by(Company.name)
                 ).all()
         self.companies_activas = [
-            CompanyOptionView(id=c.id or 0, name=c.name, slug=c.slug) for c in empresas
+            CompanyOptionView(id=c.id or 0, name=c.name, slug=c.slug,
+                               logo_url=c.logo_url or "")
+            for c in empresas
         ]
+        # Si venimos de "Ingresar como Administrador" con el link "¿Sos
+        # empleado?", el slug en la URL nos devuelve directo al paso del PIN
+        # de esa misma empresa en vez de hacer elegir de nuevo.
+        slug = self.router.page.params.get("empresa", "")
+        empresa = next((c for c in self.companies_activas if c.slug == slug), None) if slug else None
+        if empresa is not None:
+            self.login_selected_company_id = empresa.id
+            self.login_selected_company_slug = empresa.slug
+            self.login_step = "pin"
+        else:
+            self.login_step = "restaurant"
+            self.login_selected_company_id = 0
+            self.login_selected_company_slug = ""
         return None
 
     def seleccionar_restaurante(self, company_id: int) -> None:
@@ -1283,7 +1489,11 @@ class FoodState(rx.State):
         self.stop_mozos_polling()
         self.stop_cocina_polling()
         self.stop_mostrador_polling()
-        return self._route_access_result("caja")
+        result = self._route_access_result("caja")
+        if result is not None:
+            return result
+        self.cargar_turno_caja()
+        return None
 
     def on_load_mostrador(self):
         self.stop_mozos_polling()
@@ -1292,6 +1502,7 @@ class FoodState(rx.State):
         result = self._route_access_result("mostrador")
         if result is not None:
             return result
+        self.cargar_turno_caja()
         self.cargar_pedidos_mostrador_listos()
         self.cargar_pedidos_mostrador_entregados()
         return None
@@ -1345,6 +1556,8 @@ class FoodState(rx.State):
         self.cargar_inventario()
         self.cargar_clientes()
         self.cargar_promociones()
+        self.cargar_cuentas()
+        self.cargar_usuarios_admin()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
@@ -1443,6 +1656,10 @@ class FoodState(rx.State):
         self.usuario_form_pin = ""
         self.usuario_form_pin_confirm = ""
         self.usuario_form_activo = True
+        self.usuario_form_visible = False
+
+    def set_usuario_form_visible(self, v: bool) -> None:
+        self.usuario_form_visible = v
 
     def cargar_usuarios_admin(self) -> None:
         mi_id = self.usuario_actual.id if self.usuario_actual else 0
@@ -1469,6 +1686,7 @@ class FoodState(rx.State):
 
     def nuevo_usuario_form(self) -> None:
         self._limpiar_usuario_form()
+        self.usuario_form_visible = True
         self.mensaje = ""
 
     def editar_usuario(self, user_id: int) -> None:
@@ -1483,6 +1701,7 @@ class FoodState(rx.State):
         self.usuario_form_pin = ""
         self.usuario_form_pin_confirm = ""
         self.usuario_form_activo = u.activo
+        self.usuario_form_visible = True
         self.mensaje = ""
 
     def guardar_usuario(self) -> None:
@@ -1599,17 +1818,14 @@ class FoodState(rx.State):
             ).first()
             if cfg:
                 self.config_nombre_local = cfg.nombre_local
-                self.config_cocina_activa = cfg.cocina_activa
-                self.config_cocina_ip = cfg.cocina_ip
-                self.config_cocina_puerto = str(cfg.cocina_puerto)
-                self.config_caja_activa = cfg.caja_activa
-                self.config_caja_ip = cfg.caja_ip or ""
-                self.config_caja_puerto = str(cfg.caja_puerto)
+                self.config_ticket_paper_width_mm = str(cfg.ticket_paper_width_mm)
                 self.config_slug = cfg.slug or "mi-restaurante"
                 self.config_admin_email = cfg.admin_email or ""
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
+            empresa = session.get(Company, self._company_id())
+            self.config_logo_url = (empresa.logo_url or "") if empresa else ""
 
     def guardar_config_impresora(self) -> None:
         with self._tenant_session() as session:
@@ -1619,22 +1835,19 @@ class FoodState(rx.State):
             if cfg is None:
                 cfg = ConfigImpresora(company_id=self._company_id())
             cfg.nombre_local = self.config_nombre_local.strip() or "Mi Restaurante"
-            cfg.cocina_activa = self.config_cocina_activa
-            cfg.cocina_ip = self.config_cocina_ip.strip()
             try:
-                cfg.cocina_puerto = int(self.config_cocina_puerto.strip())
+                ancho = int(self.config_ticket_paper_width_mm.strip())
+                cfg.ticket_paper_width_mm = ancho if ancho in (58, 80) else 80
             except (ValueError, AttributeError):
-                cfg.cocina_puerto = 9100
-            cfg.caja_activa = self.config_caja_activa
-            cfg.caja_ip = self.config_caja_ip.strip()
-            try:
-                cfg.caja_puerto = int(self.config_caja_puerto.strip())
-            except (ValueError, AttributeError):
-                cfg.caja_puerto = 9100
+                cfg.ticket_paper_width_mm = 80
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
             cfg.updated_at = _utcnow()
             session.add(cfg)
+            empresa = session.get(Company, self._company_id())
+            if empresa is not None:
+                empresa.logo_url = self.config_logo_url or None
+                session.add(empresa)
             session.commit()
         self.config_slug = slug
         url = f"{_FOOD_BASE_URL}/menu/{slug}"
@@ -1645,23 +1858,8 @@ class FoodState(rx.State):
     def set_config_nombre_local(self, v: str) -> None:
         self.config_nombre_local = v
 
-    def set_config_cocina_ip(self, v: str) -> None:
-        self.config_cocina_ip = v
-
-    def set_config_cocina_puerto(self, v: str) -> None:
-        self.config_cocina_puerto = v
-
-    def set_config_caja_ip(self, v: str) -> None:
-        self.config_caja_ip = v
-
-    def set_config_caja_puerto(self, v: str) -> None:
-        self.config_caja_puerto = v
-
-    def toggle_config_cocina_activa(self) -> None:
-        self.config_cocina_activa = not self.config_cocina_activa
-
-    def toggle_config_caja_activa(self) -> None:
-        self.config_caja_activa = not self.config_caja_activa
+    def set_config_ticket_paper_width_mm(self, v: str) -> None:
+        self.config_ticket_paper_width_mm = v
 
     def set_config_slug(self, v: str) -> None:
         self.config_slug = v
@@ -1674,6 +1872,9 @@ class FoodState(rx.State):
 
     def set_config_admin_password_confirm(self, v: str) -> None:
         self.config_admin_password_confirm = v
+
+    def toggle_config_admin_show_password(self) -> None:
+        self.config_admin_show_password = not self.config_admin_show_password
 
     def guardar_admin_cuenta(self) -> None:
         import hashlib
@@ -1822,17 +2023,17 @@ class FoodState(rx.State):
     def set_mesa_config_form_capacidad(self, v: str) -> None:
         self.mesa_config_form_capacidad = v
 
-    def _get_printer_service(self) -> "SilentPrinterService":
+    def _ticket_paper_width_mm(self) -> int:
         try:
             with self._tenant_session() as session:
                 cfg = session.exec(
                     select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
                 ).first()
                 if cfg is not None:
-                    return SilentPrinterService.from_db_config(cfg)
+                    return cfg.ticket_paper_width_mm
         except Exception:
             pass
-        return SilentPrinterService.from_env()
+        return 80
 
     # ─── Polling ──────────────────────────────────────────────────────────────
 
@@ -1930,6 +2131,16 @@ class FoodState(rx.State):
                 ready_details = _get_ready_details(session, pedido_abierto.id or 0) if pedido_abierto else []
                 items_listos_count = sum(d.cantidad for d in ready_details)
                 tiene_items_listos = items_listos_count > 0
+                items_total_count = 0
+                if pedido_abierto is not None:
+                    todos_los_detalles = session.exec(
+                        select(DetallePedido).where(DetallePedido.pedido_id == pedido_abierto.id)
+                    ).all()
+                    items_total_count = sum(d.cantidad for d in todos_los_detalles)
+                tiempo_abierto_texto = ""
+                if pedido_abierto is not None:
+                    elapsed_min = max(0, int((_utcnow() - pedido_abierto.created_at).total_seconds() // 60))
+                    tiempo_abierto_texto = f"{elapsed_min} min"
                 mesas_ui.append(MesaView(
                     id=mesa.id or 0,
                     numero=mesa.numero,
@@ -1949,6 +2160,8 @@ class FoodState(rx.State):
                     ),
                     tiene_items_listos=tiene_items_listos,
                     items_listos_count=items_listos_count,
+                    items_total_count=items_total_count,
+                    tiempo_abierto_texto=tiempo_abierto_texto,
                 ))
         self.mesas = mesas_ui
         if self.mesa_seleccionada_id and not any(m.id == self.mesa_seleccionada_id for m in self.mesas):
@@ -1967,6 +2180,9 @@ class FoodState(rx.State):
                 select(Producto).where(Producto.company_id == self._company_id()).order_by(Producto.nombre)
             ).all()
             categorias_map = {c.id: c.nombre for c in categorias_db}
+            conteo_por_categoria: dict[int, int] = {}
+            for p in productos_db:
+                conteo_por_categoria[p.categoria_id] = conteo_por_categoria.get(p.categoria_id, 0) + 1
             self.categorias = [
                 CategoriaView(
                     id=c.id or 0,
@@ -1974,6 +2190,8 @@ class FoodState(rx.State):
                     descripcion=c.descripcion or "",
                     orden=c.orden,
                     activa=c.activa,
+                    productos_count=conteo_por_categoria.get(c.id or 0, 0),
+                    emoji=_emoji_para_categoria(c.nombre),
                 )
                 for c in categorias_db
             ]
@@ -1988,6 +2206,7 @@ class FoodState(rx.State):
                     precio_texto=_money_text(p.precio),
                     disponible=p.disponible,
                     imagen_url=p.imagen_url or "",
+                    emoji=p.emoji or _emoji_para_producto(p.nombre),
                 )
                 for p in productos_db
             ]
@@ -2352,15 +2571,12 @@ class FoodState(rx.State):
         self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.cargar_mesas()
         self.cargar_cocina()
-        try:
-            self._get_printer_service().print_kitchen_ticket(
-                mesa_label=mesa_label, pedido_id=pedido_id, items=ticket_lines,
-                notes=self.nota_pedido_mesa,
-            )
-        except Exception as error:
-            self.mensaje = f"Pedido #{pedido_id} guardado. Fallo impresion cocina: {error}"
-            return
+        html_ticket = generate_kitchen_ticket_html(
+            mesa_label=mesa_label, pedido_id=pedido_id, items=ticket_lines,
+            notes=self.nota_pedido_mesa, paper_width_mm=self._ticket_paper_width_mm(),
+        )
         self.mensaje = f"Pedido #{pedido_id} enviado correctamente."
+        return rx.call_script(build_print_script(html_ticket))
 
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
 
@@ -2399,9 +2615,9 @@ class FoodState(rx.State):
                         "estado_color": PRODUCTION_BADGE_TEXTS.get(estado_produccion, "#334155"),
                         "mozo_nombre": _actor_name(mozo.nombre if mozo else ""),
                         "action_label": (
-                            "Empezar a Preparar"
+                            "▶ Iniciar preparación"
                             if estado_produccion == EstadoProduccion.PENDIENTE.value
-                            else "Marcar como Listo"
+                            else "✓ Todo listo"
                         ),
                         "accent_bg": KITCHEN_CARD_BACKGROUNDS.get(estado_produccion, "#FFF7ED"),
                         "accent_border": KITCHEN_CARD_BORDERS.get(estado_produccion, "#FCD34D"),
@@ -2414,6 +2630,22 @@ class FoodState(rx.State):
                     line = f"{line} · Nota: {d.notas}"
                 grupos[key]["items_lines"].append(line)
                 grupos[key]["detalle_ids"].append(str(d.id or 0))
+                grupos[key]["marca"] = marca
+            ahora = _utcnow()
+            for data in grupos.values():
+                elapsed_seg = max(0, int((ahora - data["marca"]).total_seconds()))
+                mins, segs = divmod(elapsed_seg, 60)
+                if mins >= 99:
+                    horas, mins_rest = divmod(mins, 60)
+                    data["minutos_texto"] = f"{horas}h {mins_rest}min"
+                else:
+                    data["minutos_texto"] = f"{mins:02d}:{segs:02d} min"
+                data["demorado"] = mins >= KITCHEN_DEMORADO_MINUTOS
+                if data["demorado"]:
+                    data["estado_label"] = "⚠ Demorado"
+                    data["accent_border"] = KITCHEN_DEMORADO_COLOR
+                    data["estado_bg"] = KITCHEN_DEMORADO_COLOR
+                    data["estado_color"] = "#FEE2E2"
             self.tickets_cocina = [
                 CocinaTicketView(
                     pedido_id=data["pedido_id"],
@@ -2429,6 +2661,8 @@ class FoodState(rx.State):
                     accent_border=data["accent_border"],
                     detalle_ids_csv=",".join(data["detalle_ids"]),
                     items_lines=data["items_lines"],
+                    minutos_texto=data["minutos_texto"],
+                    demorado=data["demorado"],
                 )
                 for _, data in grupos.items()
             ]
@@ -2542,6 +2776,31 @@ class FoodState(rx.State):
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.mensaje = ""
+        items_ui: list[CajaItemView] = []
+        with self._tenant_session() as session:
+            pedido_abierto = _get_open_order(session, mesa_id, self._company_id())
+            if pedido_abierto is not None:
+                detalles = session.exec(
+                    select(DetallePedido).where(
+                        DetallePedido.pedido_id == pedido_abierto.id
+                    ).order_by(DetallePedido.id)
+                ).all()
+                productos = {
+                    p.id: p
+                    for p in session.exec(
+                        select(Producto).where(Producto.company_id == self._company_id())
+                    ).all()
+                }
+                for d in detalles:
+                    prod = productos.get(d.producto_id)
+                    items_ui.append(CajaItemView(
+                        producto_nombre=prod.nombre if prod else f"Producto {d.producto_id}",
+                        cantidad=d.cantidad,
+                        precio_unitario_texto=_money_text(_to_decimal(d.precio_unitario)),
+                        subtotal_texto=_money_text(_to_decimal(d.subtotal)),
+                        notas=d.notas or "",
+                    ))
+        self.caja_cobro_items = items_ui
 
     def cancelar_cobro(self) -> None:
         self.caja_cobro_mesa_id = 0
@@ -2552,6 +2811,7 @@ class FoodState(rx.State):
         self.caja_cobro_cliente_nombre = ""
         self.caja_cobro_cliente_id = 0
         self.caja_cobro_error = ""
+        self.caja_cobro_items = []
 
     def set_caja_cobro_metodo(self, v: str) -> None:
         self.caja_cobro_metodo = v
@@ -2604,6 +2864,10 @@ class FoodState(rx.State):
             if _get_not_delivered_details(session, pedido.id or 0):
                 self.mensaje = "Todavia hay items en cocina o listos por entregar."
                 return
+            turno = get_turno_abierto(session, self._company_id())
+            if turno is None:
+                self.caja_cobro_error = "No hay turno de caja abierto. Abre el turno antes de cobrar."
+                return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
@@ -2635,6 +2899,7 @@ class FoodState(rx.State):
             pedido.cerrado_en = now
             pedido.updated_at = now
             pedido.metodo_pago = metodo
+            pedido.turno_caja_id = turno.id
             pedido.propina = propina if not es_fiado else Decimal("0.00")
             pedido.descuento = descuento
             if self.caja_cobro_cliente_id > 0:
@@ -2668,21 +2933,19 @@ class FoodState(rx.State):
         self.cargar_mesas()
         self.cargar_historial_ventas()
         total_final = max(total_base - descuento + propina, Decimal("0.00"))
-        try:
-            self._get_printer_service().print_cashier_ticket(
-                order_reference=mesa_label,
-                pedido_id=pedido_id,
-                items=ticket_lines,
-                total=float(total_final),
-                attended_by=attended_by,
-                company_name=self.config_nombre_local or "TUWAYKIFOOD",
-            )
-        except Exception as error:
-            self.mensaje = f"{mesa_label} cobrada. Fallo impresion caja: {error}"
-            return
+        html_ticket = generate_cashier_ticket_html(
+            order_reference=mesa_label,
+            pedido_id=pedido_id,
+            items=ticket_lines,
+            total=float(total_final),
+            attended_by=attended_by,
+            company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            paper_width_mm=self._ticket_paper_width_mm(),
+        )
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
         self.mensaje = f"{mesa_label} cobrada ({metodo}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
+        return rx.call_script(build_print_script(html_ticket))
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 
@@ -2711,6 +2974,10 @@ class FoodState(rx.State):
             if _get_not_delivered_details(session, pedido.id or 0):
                 self.mensaje = "Todavia hay items en cocina o listos por entregar."
                 return
+            turno = get_turno_abierto(session, self._company_id())
+            if turno is None:
+                self.mensaje = "No hay turno de caja abierto. Abre el turno antes de cobrar."
+                return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
@@ -2736,6 +3003,7 @@ class FoodState(rx.State):
             pedido.estado = EstadoPedido.COBRADO.value
             pedido.cerrado_en = now
             pedido.updated_at = now
+            pedido.turno_caja_id = turno.id
             session.add(pedido)
             mesa.estado = EstadoMesa.LIBRE.value
             mesa.updated_at = now
@@ -2750,19 +3018,17 @@ class FoodState(rx.State):
             self.historial_pedido = []
         self.cargar_mesas()
         self.cargar_historial_ventas()
-        try:
-            self._get_printer_service().print_cashier_ticket(
-                order_reference=mesa_label,
-                pedido_id=pedido_id,
-                items=ticket_lines,
-                total=total,
-                attended_by=attended_by,
-                company_name=self.config_nombre_local or "TUWAYKIFOOD",
-            )
-        except Exception as error:
-            self.mensaje = f"{mesa_label} cobrada. Fallo impresion caja: {error}"
-            return
+        html_ticket = generate_cashier_ticket_html(
+            order_reference=mesa_label,
+            pedido_id=pedido_id,
+            items=ticket_lines,
+            total=total,
+            attended_by=attended_by,
+            company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            paper_width_mm=self._ticket_paper_width_mm(),
+        )
         self.mensaje = f"{mesa_label} cobrada. Total: {_money_text(total)}."
+        return rx.call_script(build_print_script(html_ticket))
 
     # ─── Mostrador ────────────────────────────────────────────────────────────
 
@@ -2859,6 +3125,10 @@ class FoodState(rx.State):
             if errores_stock:
                 self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
                 return
+            turno = get_turno_abierto(session, self._company_id())
+            if turno is None:
+                self.mensaje = "No hay turno de caja abierto. Abre el turno antes de cobrar."
+                return
             now = _utcnow()
             pedido = Pedido(
                 company_id=self._company_id(),
@@ -2872,6 +3142,7 @@ class FoodState(rx.State):
                 total=Decimal("0.00"),
                 abierto_en=now,
                 cerrado_en=now,
+                turno_caja_id=turno.id,
             )
             session.add(pedido)
             session.commit()
@@ -2912,14 +3183,19 @@ class FoodState(rx.State):
         self.mostrador_metodo_pago = "efectivo"
         self.cargar_cocina()
         self.cargar_historial_ventas()
-        try:
-            svc = self._get_printer_service()
-            svc.print_kitchen_ticket(mesa_label=ticket_label, pedido_id=pedido_id, items=ticket_lines)
-            svc.print_cashier_ticket(order_reference=f"Cliente: {cliente_nombre}", pedido_id=pedido_id, items=ticket_lines, total=total, attended_by=attended_by, company_name=self.config_nombre_local or "TUWAYKIFOOD")
-        except Exception as error:
-            self.mensaje = f"Pedido de mostrador #{pedido_id} cobrado. Fallo impresion: {error}"
-            return
+        paper_width_mm = self._ticket_paper_width_mm()
+        html_cocina = generate_kitchen_ticket_html(
+            mesa_label=ticket_label, pedido_id=pedido_id, items=ticket_lines,
+            paper_width_mm=paper_width_mm,
+        )
+        html_caja = generate_cashier_ticket_html(
+            order_reference=f"Cliente: {cliente_nombre}", pedido_id=pedido_id,
+            items=ticket_lines, total=total, attended_by=attended_by,
+            company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            paper_width_mm=paper_width_mm,
+        )
         self.mensaje = f"Pedido de mostrador #{pedido_id} cobrado y enviado."
+        return rx.call_script(build_print_script(html_cocina) + build_print_script(html_caja))
 
     def cargar_pedidos_mostrador_listos(self) -> None:
         with self._tenant_session() as session:
@@ -3035,6 +3311,7 @@ class FoodState(rx.State):
         hoy = _utcnow().date()
         inicio_hoy = datetime(hoy.year, hoy.month, hoy.day)
         fin_hoy = inicio_hoy + timedelta(days=1)
+        inicio_ayer = inicio_hoy - timedelta(days=1)
         with self._tenant_session() as session:
             pedidos_hoy = session.exec(
                 select(Pedido).where(
@@ -3047,11 +3324,27 @@ class FoodState(rx.State):
                     Pedido.cerrado_en < fin_hoy,
                 )
             ).all()
+            pedidos_ayer = session.exec(
+                select(Pedido).where(
+                    Pedido.company_id == self._company_id(),
+                    or_(
+                        Pedido.pagado.is_(True),
+                        Pedido.estado == EstadoPedido.COBRADO.value,
+                    ),
+                    Pedido.cerrado_en >= inicio_ayer,
+                    Pedido.cerrado_en < inicio_hoy,
+                )
+            ).all()
             ventas = sum(
                 _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
                 for p in pedidos_hoy
             )
             propina_total = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_hoy)
+            ventas_ayer = sum(
+                _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
+                for p in pedidos_ayer
+            )
+            propina_ayer = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_ayer)
             mesas_no_libres = session.exec(
                 select(Mesa).where(
                     Mesa.company_id == self._company_id(),
@@ -3081,10 +3374,27 @@ class FoodState(rx.State):
                     top_data[pid]["cantidad"] += d.cantidad
                     top_data[pid]["total"] += _to_decimal(d.subtotal)
             top_sorted = sorted(top_data.values(), key=lambda x: x["cantidad"], reverse=True)[:5]
+
+        def _pct_change(hoy_val: Decimal, ayer_val: Decimal) -> int:
+            if ayer_val <= 0:
+                return 100 if hoy_val > 0 else 0
+            return int(round((hoy_val - ayer_val) / ayer_val * 100))
+
+        pedidos_count_hoy = len(pedidos_hoy)
+        pedidos_count_ayer = len(pedidos_ayer)
+        ticket_promedio = ventas / pedidos_count_hoy if pedidos_count_hoy else Decimal("0.00")
+        ticket_promedio_ayer = (
+            ventas_ayer / pedidos_count_ayer if pedidos_count_ayer else Decimal("0.00")
+        )
         self.dashboard_ventas_hoy_texto = _money_text(ventas)
-        self.dashboard_pedidos_hoy = len(pedidos_hoy)
+        self.dashboard_pedidos_hoy = pedidos_count_hoy
         self.dashboard_mesas_ocupadas = len(mesas_no_libres)
         self.dashboard_propina_hoy_texto = _money_text(propina_total)
+        self.dashboard_ticket_promedio_texto = _money_text(ticket_promedio)
+        self.dashboard_ventas_trend_pct = _pct_change(ventas, ventas_ayer)
+        self.dashboard_pedidos_trend = pedidos_count_hoy - pedidos_count_ayer
+        self.dashboard_ticket_trend_pct = _pct_change(ticket_promedio, ticket_promedio_ayer)
+        self.dashboard_propina_trend_pct = _pct_change(propina_total, propina_ayer)
         self.dashboard_top_platos = [
             TopPlatoView(
                 nombre=p["nombre"],
@@ -3164,12 +3474,78 @@ class FoodState(rx.State):
         self.historial_pagina = 0
         self.cargar_historial_ventas()
 
+    def buscar_historial_manual(self) -> None:
+        self.historial_filtro_rapido = "personalizado"
+        self.aplicar_filtros_historial()
+
     def limpiar_filtros_historial(self) -> None:
         self.historial_filtro_fecha_desde = ""
         self.historial_filtro_fecha_hasta = ""
         self.historial_filtro_metodo = ""
+        self.historial_filtro_rapido = ""
         self.historial_pagina = 0
         self.cargar_historial_ventas()
+
+    def filtro_rapido_hoy(self) -> None:
+        hoy = _utcnow().date().isoformat()
+        self.historial_filtro_fecha_desde = hoy
+        self.historial_filtro_fecha_hasta = hoy
+        self.historial_filtro_rapido = "hoy"
+        self.aplicar_filtros_historial()
+
+    def filtro_rapido_semana(self) -> None:
+        hoy = _utcnow().date()
+        inicio_semana = hoy - timedelta(days=hoy.weekday())
+        self.historial_filtro_fecha_desde = inicio_semana.isoformat()
+        self.historial_filtro_fecha_hasta = hoy.isoformat()
+        self.historial_filtro_rapido = "semana"
+        self.aplicar_filtros_historial()
+
+    def filtro_rapido_mes(self) -> None:
+        hoy = _utcnow().date()
+        inicio_mes = hoy.replace(day=1)
+        self.historial_filtro_fecha_desde = inicio_mes.isoformat()
+        self.historial_filtro_fecha_hasta = hoy.isoformat()
+        self.historial_filtro_rapido = "mes"
+        self.aplicar_filtros_historial()
+
+    def abrir_detalle_venta(self, pedido_id: int) -> None:
+        venta = next((v for v in self.historial_ventas if v.pedido_id == pedido_id), None)
+        if venta is None:
+            return
+        with self._tenant_session() as session:
+            detalles = session.exec(
+                select(DetallePedido).where(
+                    DetallePedido.company_id == self._company_id(),
+                    DetallePedido.pedido_id == pedido_id,
+                )
+            ).all()
+            productos = {
+                p.id: p for p in session.exec(
+                    select(Producto).where(Producto.company_id == self._company_id())
+                ).all()
+            }
+        self.venta_detalle_items = [
+            VentaDetalleItemView(
+                nombre=productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}",
+                cantidad=d.cantidad,
+                precio_unitario_texto=_money_text(d.precio_unitario),
+                subtotal_texto=_money_text(d.subtotal),
+                notas=d.notas or "",
+            )
+            for d in detalles
+        ]
+        self.venta_detalle_pedido_id = pedido_id
+        self.venta_detalle_mesa_label = venta.mesa_label
+        self.venta_detalle_metodo = venta.metodo_pago
+        self.venta_detalle_mozo = venta.mozo_nombre
+        self.venta_detalle_cajero = venta.cajero_nombre
+        self.venta_detalle_total_texto = venta.total_con_propina_texto
+        self.venta_detalle_propina_texto = venta.propina_texto
+        self.venta_detalle_visible = True
+
+    def set_venta_detalle_visible(self, v: bool) -> None:
+        self.venta_detalle_visible = v
 
     def historial_pagina_anterior(self) -> None:
         if self.historial_pagina > 0:
@@ -3180,6 +3556,117 @@ class FoodState(rx.State):
         if self.historial_tiene_siguiente:
             self.historial_pagina += 1
             self.cargar_historial_ventas()
+
+    def exportar_ventas_excel(self):
+        from openpyxl import Workbook
+        from openpyxl.utils import get_column_letter
+
+        with self._tenant_session() as session:
+            query = (
+                select(Pedido)
+                .where(
+                    Pedido.company_id == self._company_id(),
+                    or_(
+                        Pedido.pagado.is_(True),
+                        Pedido.estado == EstadoPedido.COBRADO.value,
+                    ),
+                )
+            )
+            if self.historial_filtro_fecha_desde:
+                try:
+                    desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
+                    query = query.where(Pedido.cerrado_en >= desde)
+                except ValueError:
+                    pass
+            if self.historial_filtro_fecha_hasta:
+                try:
+                    hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
+                    hasta = hasta.replace(hour=23, minute=59, second=59)
+                    query = query.where(Pedido.cerrado_en <= hasta)
+                except ValueError:
+                    pass
+            if self.historial_filtro_metodo:
+                query = query.where(Pedido.metodo_pago == self.historial_filtro_metodo)
+            query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
+            pedidos = session.exec(query).all()
+            mesas = {m.id: m for m in session.exec(
+                select(Mesa).where(Mesa.company_id == self._company_id())
+            ).all()}
+            usuarios = {u.id: u for u in session.exec(
+                select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())
+            ).all()}
+            pedido_ids = [p.id for p in pedidos if p.id is not None]
+            detalles_por_pedido: dict[int, list] = {}
+            productos_map: dict[int, Producto] = {}
+            if pedido_ids:
+                detalles = session.exec(
+                    select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids))
+                ).all()
+                for d in detalles:
+                    detalles_por_pedido.setdefault(d.pedido_id, []).append(d)
+                productos_map = {
+                    pr.id: pr for pr in session.exec(
+                        select(Producto).where(Producto.company_id == self._company_id())
+                    ).all()
+                }
+
+        if not pedidos:
+            self.mensaje = "No hay ventas para exportar con estos filtros."
+            return None
+
+        wb = Workbook()
+        ws1 = wb.active
+        ws1.title = "Ventas"
+        ws1.append([
+            "Fecha", "Hora", "Pedido #", "Mesa", "Método de pago",
+            "Mozo", "Cajero", "Subtotal", "Propina", "Total",
+        ])
+        for p in pedidos:
+            fecha = p.cerrado_en
+            subtotal = float(_to_decimal(p.total))
+            propina = float(_to_decimal(getattr(p, "propina", 0)))
+            mozo = usuarios.get(p.mozo_id)
+            cajero = usuarios.get(p.cajero_id)
+            ws1.append([
+                fecha.strftime("%Y-%m-%d") if fecha else "",
+                fecha.strftime("%H:%M") if fecha else "",
+                p.id,
+                _pedido_sales_label(p, mesas),
+                getattr(p, "metodo_pago", None) or "",
+                _actor_name(mozo.nombre) if mozo else "Sin asignar",
+                _actor_name(cajero.nombre) if cajero else "Sin asignar",
+                subtotal, propina, subtotal + propina,
+            ])
+
+        ws2 = wb.create_sheet("Detalle de items")
+        ws2.append(["Fecha", "Pedido #", "Mesa", "Producto", "Cantidad",
+                     "Precio unitario", "Subtotal"])
+        for p in pedidos:
+            fecha = p.cerrado_en
+            mesa_label = _pedido_sales_label(p, mesas)
+            for d in detalles_por_pedido.get(p.id or 0, []):
+                prod = productos_map.get(d.producto_id)
+                ws2.append([
+                    fecha.strftime("%Y-%m-%d") if fecha else "",
+                    p.id,
+                    mesa_label,
+                    prod.nombre if prod else f"Producto {d.producto_id}",
+                    d.cantidad,
+                    float(_to_decimal(d.precio_unitario)),
+                    float(_to_decimal(d.subtotal)),
+                ])
+
+        for ws in (ws1, ws2):
+            for i, col in enumerate(ws.columns, start=1):
+                max_len = max(
+                    (len(str(c.value)) if c.value is not None else 0) for c in col
+                )
+                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        filename = f"ventas_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+        return rx.download(data=buf.getvalue(), filename=filename)
 
     # ─── Admin Carta — Categorías ─────────────────────────────────────────────
 
@@ -3271,6 +3758,13 @@ class FoodState(rx.State):
     def set_producto_form_disponible(self, v: bool) -> None:
         self.producto_form_disponible = v
 
+    def set_producto_form_emoji(self, v: str) -> None:
+        self.producto_form_emoji = str(v)[:8]
+
+    @rx.var
+    def producto_form_emoji_sugerido(self) -> str:
+        return _emoji_para_producto(self.producto_form_nombre or "")
+
     def guardar_producto(self) -> None:
         nombre = self.producto_form_nombre.strip()
         if not nombre:
@@ -3301,6 +3795,7 @@ class FoodState(rx.State):
                 prod.categoria_id = cat.id or 0
                 prod.disponible = self.producto_form_disponible
                 prod.imagen_url = self.producto_form_imagen_url or None
+                prod.emoji = self.producto_form_emoji.strip() or None
                 prod.updated_at = _utcnow()
                 session.add(prod)
             else:
@@ -3312,6 +3807,7 @@ class FoodState(rx.State):
                     precio=precio,
                     disponible=self.producto_form_disponible,
                     imagen_url=self.producto_form_imagen_url or None,
+                    emoji=self.producto_form_emoji.strip() or None,
                 )
                 session.add(prod)
             session.commit()
@@ -3330,6 +3826,9 @@ class FoodState(rx.State):
         self.producto_form_categoria_nombre = prod.categoria_nombre
         self.producto_form_disponible = prod.disponible
         self.producto_form_imagen_url = prod.imagen_url
+        with self._tenant_session() as session:
+            prod_db = session.get(Producto, producto_id)
+            self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
 
     def toggle_producto_disponible(self, producto_id: int) -> None:
         with self._tenant_session() as session:
@@ -3349,6 +3848,7 @@ class FoodState(rx.State):
         self.producto_form_precio = ""
         self.producto_form_disponible = True
         self.producto_form_imagen_url = ""
+        self.producto_form_emoji = ""
         if self.categorias:
             self.producto_form_categoria_nombre = self.categorias[0].nombre
 
@@ -3368,6 +3868,20 @@ class FoodState(rx.State):
 
     def quitar_imagen_producto(self) -> None:
         self.producto_form_imagen_url = ""
+
+    async def handle_upload_logo_empresa(self, files: list[rx.UploadFile]) -> None:
+        for file in files:
+            data = await file.read()
+            ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
+            filename = f"food_logo_{uuid.uuid4().hex[:12]}{ext}"
+            upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_empresas"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            (upload_dir / filename).write_bytes(data)
+            self.config_logo_url = f"{_FOOD_API_URL}/_upload/food_empresas/{filename}"
+            break
+
+    def quitar_logo_empresa(self) -> None:
+        self.config_logo_url = ""
 
 
     # ─── Inventario ───────────────────────────────────────────────────────────
@@ -3472,6 +3986,7 @@ class FoodState(rx.State):
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
         self.inv_form_editando = False
+        self.inv_form_visible = False
         self.cargar_inventario()
 
     def editar_insumo(self, insumo_id: int) -> None:
@@ -3487,6 +4002,7 @@ class FoodState(rx.State):
             self.inv_form_stock_actual = f"{stock:.3f}".rstrip("0").rstrip(".")
             self.inv_form_stock_minimo = f"{minimo:.3f}".rstrip("0").rstrip(".")
         self.inv_form_editando = True
+        self.inv_form_visible = True
 
     def cancelar_insumo_form(self) -> None:
         self.inv_form_id = 0
@@ -3495,6 +4011,7 @@ class FoodState(rx.State):
         self.inv_form_stock_actual = ""
         self.inv_form_stock_minimo = ""
         self.inv_form_editando = False
+        self.inv_form_visible = False
 
     def toggle_insumo_activo(self, insumo_id: int) -> None:
         with self._tenant_session() as session:
@@ -3621,6 +4138,28 @@ class FoodState(rx.State):
                 .where(Cliente.company_id == self._company_id())
                 .order_by(Cliente.nombre)
             ).all()
+            pedidos_pagados = session.exec(
+                select(Pedido).where(
+                    Pedido.company_id == self._company_id(),
+                    Pedido.cliente_id.is_not(None),
+                    or_(
+                        Pedido.pagado.is_(True),
+                        Pedido.estado == EstadoPedido.COBRADO.value,
+                    ),
+                )
+            ).all()
+        stats_por_cliente: dict[int, dict] = {}
+        for p in pedidos_pagados:
+            cid = p.cliente_id
+            if cid is None:
+                continue
+            stats = stats_por_cliente.setdefault(cid, {"visitas": 0, "gastado": Decimal("0.00"), "ultima": None})
+            stats["visitas"] += 1
+            stats["gastado"] += _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
+            fecha = p.cerrado_en
+            if fecha and (stats["ultima"] is None or fecha > stats["ultima"]):
+                stats["ultima"] = fecha
+        hoy_fecha = hoy.date()
         views: list[ClienteView] = []
         for c in clientes_db:
             fn = c.fecha_nacimiento
@@ -3639,6 +4178,18 @@ class FoodState(rx.State):
                 dias = (cumple_este_anio - hoy.replace(hour=0, minute=0, second=0, microsecond=0)).days
                 cumple_hoy = dias == 0
                 cumple_pronto = 0 < dias <= 7
+            stats = stats_por_cliente.get(c.id or 0, {"visitas": 0, "gastado": Decimal("0.00"), "ultima": None})
+            ultima = stats["ultima"]
+            if ultima is None:
+                ultima_texto = "Sin visitas"
+            else:
+                dias_desde = (hoy_fecha - ultima.date()).days
+                if dias_desde <= 0:
+                    ultima_texto = "Hoy"
+                elif dias_desde == 1:
+                    ultima_texto = "Ayer"
+                else:
+                    ultima_texto = f"Hace {dias_desde} días"
             views.append(ClienteView(
                 id=c.id or 0,
                 nombre=c.nombre,
@@ -3652,6 +4203,10 @@ class FoodState(rx.State):
                 cumple_hoy=cumple_hoy,
                 cumple_pronto=cumple_pronto,
                 dias_para_cumple=dias,
+                visitas_count=stats["visitas"],
+                gastado_texto=_money_text(stats["gastado"]),
+                ultima_visita_texto=ultima_texto,
+                es_vip=stats["visitas"] >= CLIENTE_VIP_VISITAS_MIN,
             ))
         self.clientes_lista = views
 
@@ -3738,7 +4293,18 @@ class FoodState(rx.State):
         self.cli_form_fecha_nac = ""
         self.cli_form_notas = ""
         self.cli_form_editando = False
+        self.cli_form_visible = False
         self.cargar_clientes()
+
+    def abrir_nuevo_cliente(self) -> None:
+        self.cli_form_id = 0
+        self.cli_form_nombre = ""
+        self.cli_form_telefono = ""
+        self.cli_form_email = ""
+        self.cli_form_fecha_nac = ""
+        self.cli_form_notas = ""
+        self.cli_form_editando = False
+        self.cli_form_visible = True
 
     def editar_cliente(self, cliente_id: int) -> None:
         with self._tenant_session() as session:
@@ -3752,6 +4318,7 @@ class FoodState(rx.State):
             self.cli_form_fecha_nac = c.fecha_nacimiento.isoformat() if c.fecha_nacimiento else ""
             self.cli_form_notas = c.notas or ""
         self.cli_form_editando = True
+        self.cli_form_visible = True
 
     def cancelar_cli_form(self) -> None:
         self.cli_form_id = 0
@@ -3761,6 +4328,10 @@ class FoodState(rx.State):
         self.cli_form_fecha_nac = ""
         self.cli_form_notas = ""
         self.cli_form_editando = False
+        self.cli_form_visible = False
+
+    def set_cli_form_visible(self, v: bool) -> None:
+        self.cli_form_visible = v
 
     def toggle_cliente_activo(self, cliente_id: int) -> None:
         with self._tenant_session() as session:
@@ -3924,6 +4495,76 @@ class FoodState(rx.State):
         cc.updated_at = _utcnow()
         session.add(cc)
 
+    def exportar_cuentas_excel(self):
+        from openpyxl import Workbook
+        from openpyxl.utils import get_column_letter
+
+        with self._tenant_session() as session:
+            cuentas_db = session.exec(
+                select(CuentaCorriente)
+                .where(CuentaCorriente.company_id == self._company_id())
+                .order_by(CuentaCorriente.saldo_deuda.desc())
+            ).all()
+            clientes_map = {
+                c.id: c
+                for c in session.exec(
+                    select(Cliente).where(Cliente.company_id == self._company_id())
+                ).all()
+            }
+            cuenta_ids = [c.id for c in cuentas_db if c.id is not None]
+            movimientos: list = []
+            if cuenta_ids:
+                movimientos = session.exec(
+                    select(MovimientoCuenta)
+                    .where(MovimientoCuenta.cuenta_id.in_(cuenta_ids))
+                    .order_by(MovimientoCuenta.created_at.desc())
+                ).all()
+
+        if not cuentas_db and not movimientos:
+            self.mensaje = "No hay cuentas corrientes para exportar."
+            return None
+
+        cuentas_por_id = {c.id: c for c in cuentas_db}
+
+        wb = Workbook()
+        ws1 = wb.active
+        ws1.title = "Cuentas"
+        ws1.append(["Cliente", "Teléfono", "Saldo deuda", "Límite de crédito"])
+        for cc in cuentas_db:
+            cli = clientes_map.get(cc.cliente_id)
+            ws1.append([
+                cli.nombre if cli else "?",
+                (cli.telefono or "") if cli else "",
+                float(Decimal(str(cc.saldo_deuda))),
+                float(Decimal(str(cc.limite_credito))),
+            ])
+
+        ws2 = wb.create_sheet("Movimientos")
+        ws2.append(["Fecha", "Hora", "Cliente", "Tipo", "Monto", "Descripción"])
+        for m in movimientos:
+            cc = cuentas_por_id.get(m.cuenta_id)
+            cli = clientes_map.get(cc.cliente_id) if cc else None
+            ws2.append([
+                m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
+                m.created_at.strftime("%H:%M") if m.created_at else "",
+                cli.nombre if cli else "?",
+                "Cargo" if m.tipo == "cargo" else "Pago",
+                float(Decimal(str(m.monto))),
+                m.descripcion or "",
+            ])
+
+        for ws in (ws1, ws2):
+            for i, col in enumerate(ws.columns, start=1):
+                max_len = max(
+                    (len(str(c.value)) if c.value is not None else 0) for c in col
+                )
+                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        filename = f"cuentas_corrientes_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+        return rx.download(data=buf.getvalue(), filename=filename)
+
     # ─── Promociones ──────────────────────────────────────────────────────────
 
     def on_load_promociones(self) -> None:
@@ -4049,7 +4690,22 @@ class FoodState(rx.State):
         self.promo_form_hora_inicio = ""
         self.promo_form_hora_fin = ""
         self.promo_form_editando = False
+        self.promo_form_visible = False
         self.cargar_promociones()
+
+    def abrir_nueva_promo(self) -> None:
+        self.promo_form_id = 0
+        self.promo_form_nombre = ""
+        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
+        self.promo_form_valor = ""
+        self.promo_form_descripcion = ""
+        self.promo_form_hora_inicio = ""
+        self.promo_form_hora_fin = ""
+        self.promo_form_editando = False
+        self.promo_form_visible = True
+
+    def set_promo_form_visible(self, v: bool) -> None:
+        self.promo_form_visible = v
 
     def editar_promocion(self, promo_id: int) -> None:
         with self._tenant_session() as session:
@@ -4064,6 +4720,7 @@ class FoodState(rx.State):
             self.promo_form_hora_inicio = p.hora_inicio or ""
             self.promo_form_hora_fin = p.hora_fin or ""
         self.promo_form_editando = True
+        self.promo_form_visible = True
 
     def cancelar_promo_form(self) -> None:
         self.promo_form_id = 0
@@ -4074,6 +4731,7 @@ class FoodState(rx.State):
         self.promo_form_hora_inicio = ""
         self.promo_form_hora_fin = ""
         self.promo_form_editando = False
+        self.promo_form_visible = False
 
     def toggle_promo_activa(self, promo_id: int) -> None:
         with self._tenant_session() as session:
@@ -4102,11 +4760,13 @@ class ProductoPublicoView(BaseModel):
     descripcion: str
     precio_texto: str
     imagen_url: str
+    emoji: str = "🍽️"
 
 
 class CategoriaPublicaView(BaseModel):
     nombre: str
     productos: list[ProductoPublicoView]
+    emoji: str = "🍽️"
 
 
 class MenuPublicoState(rx.State):
@@ -4165,12 +4825,14 @@ class MenuPublicoState(rx.State):
                     result.append(
                         CategoriaPublicaView(
                             nombre=cat.nombre,
+                            emoji=_emoji_para_categoria(cat.nombre),
                             productos=[
                                 ProductoPublicoView(
                                     nombre=p.nombre,
                                     descripcion=p.descripcion or "",
                                     precio_texto=_money_text(p.precio),
                                     imagen_url=p.imagen_url or "",
+                                    emoji=p.emoji or _emoji_para_producto(p.nombre),
                                 )
                                 for p in prods
                             ],
@@ -4190,6 +4852,9 @@ class AdminLocalState(rx.State):
     password_input: str = ""
     error_msg: str = ""
     show_password: bool = False
+    login_empresa_nombre: str = ""
+    login_empresa_logo: str = ""
+    login_empresa_slug: str = ""
 
     def set_email_input(self, v: str) -> None:
         self.email_input = v
@@ -4202,6 +4867,20 @@ class AdminLocalState(rx.State):
 
     def on_load_dono_login(self):
         self.error_msg = ""
+        self.login_empresa_nombre = ""
+        self.login_empresa_logo = ""
+        self.login_empresa_slug = ""
+        slug = self.router.page.params.get("empresa", "")
+        if slug:
+            with tenant_bypass():
+                with get_session() as session:
+                    empresa = session.exec(
+                        select(Company).where(Company.slug == slug, Company.is_active.is_(True))
+                    ).first()
+            if empresa is not None:
+                self.login_empresa_nombre = empresa.name
+                self.login_empresa_logo = empresa.logo_url or ""
+                self.login_empresa_slug = empresa.slug
         if self.autenticado:
             return rx.redirect("/admin")
         return None

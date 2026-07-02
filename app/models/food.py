@@ -48,6 +48,16 @@ class TipoPromocion(str, Enum):
     HAPPY_HOUR = "happy_hour"
 
 
+class EstadoTurnoCaja(str, Enum):
+    ABIERTO = "abierto"
+    CERRADO = "cerrado"
+
+
+class TipoMovimientoCaja(str, Enum):
+    INGRESO = "ingreso"
+    EGRESO = "egreso"
+
+
 class TimestampedModel(SQLModel):
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
@@ -123,6 +133,7 @@ class Producto(TimestampedModel, table=True):
     )
     disponible: bool = Field(default=True, nullable=False)
     imagen_url: str | None = Field(default=None, max_length=500)
+    emoji: str | None = Field(default=None, max_length=16)
 
     categoria: Categoria | None = Relationship(back_populates="productos")
     detalles: list["DetallePedido"] = Relationship(back_populates="producto")
@@ -171,6 +182,7 @@ class Pedido(TimestampedModel, table=True):
     cerrado_en: datetime | None = Field(default=None)
 
     cliente_id: int | None = Field(default=None, foreign_key="food_clientes.id", index=True)
+    turno_caja_id: int | None = Field(default=None, foreign_key="food_turnos_caja.id", index=True)
 
     mesa: Mesa | None = Relationship(back_populates="pedidos")
     detalles: list["DetallePedido"] = Relationship(back_populates="pedido")
@@ -283,6 +295,7 @@ class ConfigImpresora(TimestampedModel, table=True):
     caja_activa: bool = Field(default=False, nullable=False)
     caja_ip: str = Field(default="", max_length=64, nullable=False)
     caja_puerto: int = Field(default=9100, nullable=False)
+    ticket_paper_width_mm: int = Field(default=80, nullable=False)
     slug: str = Field(default="mi-restaurante", max_length=80, nullable=False)
     admin_email: str = Field(default="", max_length=120, nullable=False)
     admin_password_hash: str = Field(default="", max_length=128, nullable=False)
@@ -335,6 +348,95 @@ class RecetaItem(TimestampedModel, table=True):
 
     producto: "Producto" = Relationship(back_populates="receta_items")
     insumo: "Insumo" = Relationship(back_populates="receta_items")
+
+
+class TurnoCaja(TimestampedModel, table=True):
+    """Turno de caja: apertura con fondo inicial, cierre con arqueo y descuadre."""
+
+    __tablename__ = "food_turnos_caja"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    abierto_por_id: int | None = Field(default=None, foreign_key="food_usuarios.id", index=True)
+    cerrado_por_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
+    estado: str = Field(
+        default=EstadoTurnoCaja.ABIERTO.value,
+        index=True,
+        max_length=16,
+        nullable=False,
+    )
+    monto_inicial: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    abierto_en: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    cerrado_en: datetime | None = Field(default=None)
+
+    # Snapshot congelado al cierre del turno
+    total_efectivo: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    total_tarjeta: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    total_qr: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    total_fiado: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    total_propinas: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    total_ingresos: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    total_egresos: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    esperado_efectivo: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    contado_efectivo: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    descuadre: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    arqueo_detalle: str | None = Field(default=None, max_length=1000)  # JSON denominaciones
+    notas_cierre: str | None = Field(default=None, max_length=500)
+
+    movimientos: list["MovimientoCaja"] = Relationship(back_populates="turno")
+
+
+class MovimientoCaja(TimestampedModel, table=True):
+    """Ingreso o egreso de efectivo registrado durante un turno de caja."""
+
+    __tablename__ = "food_movimientos_caja"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    turno_id: int = Field(foreign_key="food_turnos_caja.id", index=True, nullable=False)
+    usuario_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
+    tipo: str = Field(max_length=10, nullable=False)  # "ingreso" | "egreso"
+    categoria: str = Field(default="Otros", max_length=40, nullable=False)
+    monto: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    motivo: str = Field(max_length=240, nullable=False)
+
+    turno: "TurnoCaja" = Relationship(back_populates="movimientos")
 
 
 class DetallePedido(TimestampedModel, table=True):

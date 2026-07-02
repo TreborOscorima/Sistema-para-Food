@@ -34,119 +34,97 @@ from app.components.shared import (
 from app.states.food_state import FoodState, UsuarioAdminView
 
 
+_USR_GRID_COLS = "2fr 1fr 1fr 90px"
+
+
+def _usuarios_table_header() -> rx.Component:
+    return rx.grid(
+        rx.text("Usuario", font_size="11px", font_weight="600", color=TEXT_MUTED,
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("Rol", font_size="11px", font_weight="600", color=TEXT_MUTED,
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("Estado", font_size="11px", font_weight="600", color=TEXT_MUTED,
+                text_transform="uppercase", letter_spacing="0.05em"),
+        rx.text("", font_size="11px"),
+        columns=_USR_GRID_COLS,
+        gap="8px", width="100%",
+        padding="0 14px 8px", border_bottom=f"1px solid {BORDER_COLOR}",
+        display=rx.breakpoints(initial="none", md="grid"),
+    )
+
+
 def _usuario_row(u: UsuarioAdminView) -> rx.Component:
-    return rx.hstack(
-        rx.box(
-            rx.text(u.nombre, font_size="13px", font_weight="700", color=TEXT_PRIMARY),
-            rx.hstack(
-                rx.badge(
-                    u.rol_label,
-                    background=u.badge_bg,
-                    color=u.badge_text,
-                    border_radius="5px",
-                    font_size="10px",
-                    font_weight="700",
-                ),
-                rx.cond(
-                    u.es_yo,
-                    rx.badge(
-                        "Tú",
-                        background="#F3E8FF",
-                        color="#7C3AED",
-                        border_radius="5px",
-                        font_size="9px",
-                    ),
-                    rx.fragment(),
-                ),
-                rx.cond(
-                    u.activo,
-                    rx.badge(
-                        "Activo",
-                        background=SUCCESS_BG,
-                        color=SUCCESS_TEXT,
-                        border_radius="5px",
-                        font_size="10px",
-                    ),
-                    rx.badge(
-                        "Inactivo",
-                        background=DANGER_BG,
-                        color=DANGER_TEXT,
-                        border_radius="5px",
-                        font_size="10px",
-                    ),
-                ),
-                spacing="1",
-                align="center",
-                flex_wrap="wrap",
+    return rx.grid(
+        rx.hstack(
+            rx.box(
+                rx.text(u.nombre[:1].upper(), font_size="14px", font_weight="800",
+                        color="#FFFFFF"),
+                width="36px", height="36px", border_radius="full",
+                background=u.badge_text, display="flex",
+                align_items="center", justify_content="center", flex_shrink="0",
             ),
-            rx.text(
-                u.pin_masked,
-                font_size="11px",
-                color=TEXT_MUTED,
-                letter_spacing="0.06em",
+            rx.vstack(
+                rx.hstack(
+                    rx.text(u.nombre, font_size="13px", font_weight="700", color=TEXT_PRIMARY),
+                    rx.cond(
+                        u.es_yo,
+                        rx.badge("Tú", background="#F3E8FF", color="#7C3AED",
+                                 border_radius="5px", font_size="9px"),
+                        rx.fragment(),
+                    ),
+                    spacing="1", align="center",
+                ),
+                rx.text(u.pin_masked, font_size="11px", color=TEXT_MUTED,
+                        letter_spacing="0.06em"),
+                spacing="0", align="start",
             ),
-            display="flex",
-            flex_direction="column",
-            gap="4px",
-            flex="1",
-            min_width="0",
+            spacing="2", align="center", min_width="0",
+        ),
+        rx.badge(
+            u.rol_label, background=u.badge_bg, color=u.badge_text,
+            border_radius="20px", font_size="11px", font_weight="700",
+            padding="3px 10px", width="fit-content",
+        ),
+        rx.cond(
+            u.activo,
+            rx.badge("Activo", background=SUCCESS_BG, color=SUCCESS_TEXT,
+                     border_radius="20px", font_size="11px", font_weight="700",
+                     padding="3px 10px", width="fit-content"),
+            rx.badge("Inactivo", background=DANGER_BG, color=DANGER_TEXT,
+                     border_radius="20px", font_size="11px", font_weight="700",
+                     padding="3px 10px", width="fit-content"),
         ),
         rx.hstack(
-            rx.button(
-                "Editar",
+            rx.link(
+                "✏️ Editar",
                 on_click=FoodState.editar_usuario(u.id),
-                background=ACCENT_BG,
-                color=ACCENT,
-                border=f"1px solid {BORDER_ACCENT}",
-                border_radius="8px",
-                font_size="11px",
-                font_weight="600",
-                padding_x="10px",
-                padding_y="5px",
-                cursor="pointer",
-                _hover={"opacity": "0.85"},
+                font_size="12px", font_weight="600", color=ACCENT,
+                cursor="pointer", _hover={"color": ACCENT_HOVER},
             ),
             rx.cond(
                 u.es_yo,
                 rx.fragment(),
                 rx.button(
-                    rx.hstack(
-                        rx.cond(
-                            u.activo,
-                            rx.icon(tag="toggle_right", size=14),
-                            rx.icon(tag="toggle_left", size=14),
-                        ),
-                        rx.text(rx.cond(u.activo, "Desactivar", "Activar"), font_size="11px"),
-                        spacing="1", align="center",
+                    rx.cond(
+                        u.activo,
+                        rx.icon(tag="toggle_right", size=14),
+                        rx.icon(tag="toggle_left", size=14),
                     ),
                     on_click=FoodState.toggle_usuario_activo(u.id),
-                    background=rx.cond(u.activo, DANGER_BG, SUCCESS_BG),
-                    color=rx.cond(u.activo, DANGER_TEXT, SUCCESS_TEXT),
-                    border=rx.cond(
-                        u.activo,
-                        f"1px solid {DANGER_BORDER}",
-                        f"1px solid {SUCCESS_BORDER}",
-                    ),
-                    border_radius="8px",
-                    font_size="11px",
-                    font_weight="600",
-                    padding_x="10px",
-                    padding_y="5px",
-                    cursor="pointer",
-                    _hover={"opacity": "0.85"},
+                    background="transparent",
+                    color=rx.cond(u.activo, SUCCESS_TEXT, TEXT_MUTED),
+                    border="none", padding="0", cursor="pointer",
+                    _hover={"opacity": "0.7"},
                 ),
             ),
-            spacing="2",
-            align="center",
-            flex_shrink="0",
+            spacing="2", align="center",
         ),
-        width="100%",
-        align="center",
+        columns=rx.breakpoints(initial="1fr auto", md=_USR_GRID_COLS),
+        gap="8px", width="100%", align_items="center",
         padding="12px 14px",
         background="#FFFFFF",
         border_radius="10px",
         border=f"1px solid {BORDER_COLOR}",
-        gap="12px",
         box_shadow="0 1px 2px rgba(0,0,0,0.04)",
     )
 
@@ -296,9 +274,67 @@ def _usuario_form() -> rx.Component:
     )
 
 
+def _usuario_modal_content() -> rx.Component:
+    return rx.vstack(
+        _usuario_form(),
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="info", size=14, color=INFO_TEXT),
+                    rx.text("Roles disponibles", font_size="12px", font_weight="700", color=INFO_TEXT),
+                    spacing="2",
+                    align="center",
+                ),
+                rx.vstack(
+                    rx.text("Admin — acceso completo al sistema", font_size="11px", color=TEXT_MUTED),
+                    rx.text("Mozo — mesas y pedidos", font_size="11px", color=TEXT_MUTED),
+                    rx.text("Caja — cobros y mostrador", font_size="11px", color=TEXT_MUTED),
+                    rx.text("Cocina — KDS y produccion", font_size="11px", color=TEXT_MUTED),
+                    spacing="1",
+                    align="start",
+                ),
+                align="start",
+                spacing="2",
+                width="100%",
+            ),
+            padding="12px 14px",
+            background=INFO_BG,
+            border=f"1px solid {INFO_BORDER}",
+            border_radius="10px",
+            width="100%",
+            margin_top="12px",
+        ),
+        width="100%",
+    )
+
+
 def _usuarios_content() -> rx.Component:
     return rx.vstack(
-        rx.text("Usuarios del local", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
+        rx.hstack(
+            rx.vstack(
+                rx.text("Usuarios del sistema", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
+                rx.text("Empleados y roles", font_size="13px", color=TEXT_MUTED),
+                spacing="0", align="start",
+            ),
+            rx.spacer(),
+            rx.dialog.root(
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="user_plus", size=14),
+                        rx.text("Nuevo usuario", font_size="13px", font_weight="700"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=FoodState.nuevo_usuario_form,
+                    background=ACCENT, color="#FFFFFF", border_radius="9px",
+                    padding_x="16px", padding_y="9px", cursor="pointer",
+                    _hover={"background": ACCENT_HOVER},
+                ),
+                rx.dialog.content(_usuario_modal_content(), class_name="light"),
+                open=FoodState.usuario_form_visible,
+                on_open_change=FoodState.set_usuario_form_visible,
+            ),
+            width="100%", align="center",
+        ),
         rx.cond(
             FoodState.mensaje != "",
             rx.box(
@@ -311,102 +347,28 @@ def _usuarios_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        rx.flex(
-            rx.vstack(
-                rx.hstack(
-                    rx.text("Personal", font_size="15px", font_weight="700", color=TEXT_SECONDARY),
-                    rx.spacer(),
-                    rx.button(
-                        rx.hstack(
-                            rx.icon(tag="user_plus", size=14),
-                            rx.text("Nuevo usuario", font_size="12px", font_weight="700"),
-                            spacing="1",
-                            align="center",
-                        ),
-                        on_click=FoodState.nuevo_usuario_form,
-                        background=ACCENT,
-                        color="#FFFFFF",
-                        border_radius="8px",
-                        padding_x="10px",
-                        padding_y="6px",
-                        cursor="pointer",
-                        _hover={"background": ACCENT_HOVER},
-                    ),
-                    width="100%",
-                    align="center",
+        _usuarios_table_header(),
+        rx.cond(
+            FoodState.usuarios_admin.length() == 0,
+            rx.box(
+                rx.text(
+                    "No hay usuarios registrados.",
+                    font_size="13px",
+                    color=TEXT_MUTED,
                 ),
-                rx.cond(
-                    FoodState.usuarios_admin.length() == 0,
-                    rx.box(
-                        rx.text(
-                            "No hay usuarios registrados.",
-                            font_size="13px",
-                            color=TEXT_MUTED,
-                        ),
-                        padding="16px",
-                        background=SURFACE_MUTED,
-                        border_radius="8px",
-                        border=f"1px solid {BORDER_COLOR}",
-                        width="100%",
-                    ),
-                    rx.vstack(
-                        rx.foreach(FoodState.usuarios_admin, _usuario_row),
-                        spacing="2",
-                        width="100%",
-                    ),
-                ),
-                spacing="3",
-                flex="1",
-                min_width="0",
-                class_name="twk-panel",
-            ),
-            rx.divider(
-                orientation="vertical",
-                border_color=BORDER_COLOR,
-                height="auto",
-                class_name="twk-sep",
+                padding="16px",
+                background=SURFACE_MUTED,
+                border_radius="8px",
+                border=f"1px solid {BORDER_COLOR}",
+                width="100%",
             ),
             rx.vstack(
-                rx.text("Formulario", font_size="15px", font_weight="700", color=TEXT_SECONDARY),
-                _usuario_form(),
-                rx.box(
-                    rx.vstack(
-                        rx.hstack(
-                            rx.icon(tag="info", size=14, color=INFO_TEXT),
-                            rx.text("Roles disponibles", font_size="12px", font_weight="700", color=INFO_TEXT),
-                            spacing="2",
-                            align="center",
-                        ),
-                        rx.vstack(
-                            rx.text("Admin — acceso completo al sistema", font_size="11px", color=TEXT_MUTED),
-                            rx.text("Mozo — mesas y pedidos", font_size="11px", color=TEXT_MUTED),
-                            rx.text("Caja — cobros y mostrador", font_size="11px", color=TEXT_MUTED),
-                            rx.text("Cocina — KDS y produccion", font_size="11px", color=TEXT_MUTED),
-                            spacing="1",
-                            align="start",
-                        ),
-                        align="start",
-                        spacing="2",
-                        width="100%",
-                    ),
-                    padding="12px 14px",
-                    background=INFO_BG,
-                    border=f"1px solid {INFO_BORDER}",
-                    border_radius="10px",
-                    width="100%",
-                ),
-                spacing="3",
-                flex="1",
-                min_width="0",
-                max_width=rx.breakpoints(initial="100%", lg="420px"),
-                class_name="twk-panel",
+                rx.foreach(FoodState.usuarios_admin, _usuario_row),
+                spacing="2",
+                width="100%",
             ),
-            gap="5",
-            width="100%",
-            align="start",
-            class_name="twk-cols-lg",
         ),
-        spacing="5",
+        spacing="4",
         width="100%",
     )
 

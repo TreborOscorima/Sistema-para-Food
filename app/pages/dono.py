@@ -145,9 +145,12 @@ def _admin_sidebar() -> rx.Component:
                     letter_spacing="0.08em", padding_x="4px",
                     padding_bottom="4px"),
             _admin_nav_item("resumen",    "Resumen",      "layout_dashboard", "Vista general del día"),
-            _admin_nav_item("ventas",     "Ventas",       "trending_up",      "Historial de cobros"),
+            _admin_nav_item("ventas",     "Reportes",     "trending_up",      "Dashboard y ventas del día"),
             _admin_nav_item("clientes",   "Clientes",     "users",            "Fidelización y alertas"),
+            _admin_nav_item("cuentas",    "Cuentas",      "credit_card",      "Fiado y créditos"),
+            _admin_nav_item("promociones","Promociones",  "tag",              "Happy hour y descuentos"),
             _admin_nav_item("inventario", "Inventario",   "package",          "Stock y alertas"),
+            _admin_nav_item("usuarios",   "Usuarios",     "users_round",      "Personal y PINs"),
             _admin_nav_item("config",     "Configuración","settings",         "Ajustes del sistema"),
             spacing="1", width="100%", align="start",
         ),
@@ -163,7 +166,22 @@ def _admin_sidebar() -> rx.Component:
 
 # ── Componentes reutilizables ─────────────────────────────────────────────────
 
-def _kpi_card(label: str, value, icon: str, accent: str, bg: str) -> rx.Component:
+def _kpi_trend(value, suffix: str = "%") -> rx.Component:
+    """Indicador '↑ 12% vs ayer' / '↓ 3% vs ayer', color segun signo."""
+    return rx.hstack(
+        rx.text(
+            rx.cond(value >= 0, "↑ ", "↓ "),
+            rx.cond(value >= 0, value, -value),
+            suffix, " vs ayer",
+            font_size="12px", font_weight="600",
+        ),
+        color=rx.cond(value >= 0, _GREEN, "#DC2626"),
+        margin_top="4px",
+    )
+
+
+def _kpi_card(label: str, value, icon: str, accent: str, bg: str,
+              trend: rx.Component | None = None) -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
@@ -184,6 +202,7 @@ def _kpi_card(label: str, value, icon: str, accent: str, bg: str) -> rx.Componen
             rx.text(label, font_size="11px", font_weight="600",
                     color=_SLATE_500, text_transform="uppercase",
                     letter_spacing="0.05em"),
+            trend if trend is not None else rx.fragment(),
             spacing="2", align="start", width="100%",
         ),
         background=_WHITE, border=f"1px solid {_SLATE_200}",
@@ -224,47 +243,86 @@ def _venta_row(venta) -> rx.Component:
     )
 
 
+def _top_plato_row(plato, index: int) -> rx.Component:
+    max_cantidad = FoodState.dashboard_top_platos[0].cantidad
+    pct = rx.cond(
+        max_cantidad > 0,
+        (plato.cantidad * 100) / max_cantidad,
+        0,
+    )
+    return rx.hstack(
+        rx.box(
+            rx.text((index + 1).to_string(), font_size="11px",
+                    font_weight="800", color=_WHITE),
+            width="24px", height="24px", border_radius="6px",
+            background=rx.cond(
+                index == 0, _ORANGE,
+                rx.cond(index == 1, "#F97316",
+                rx.cond(index == 2, "#FB923C", "#CBD5E1"))),
+            display="flex", align_items="center", justify_content="center",
+            flex_shrink="0",
+        ),
+        rx.vstack(
+            rx.text(plato.nombre, font_size="13px", font_weight="600",
+                    color=_SLATE_900, width="100%", overflow="hidden",
+                    text_overflow="ellipsis", white_space="nowrap"),
+            rx.box(
+                rx.box(
+                    width=pct.to_string() + "%", height="100%",
+                    background=_ORANGE, border_radius="99px",
+                ),
+                width="100%", height="4px", background=_SLATE_200,
+                border_radius="99px", overflow="hidden", margin_top="4px",
+            ),
+            spacing="0", align="start", flex="1", min_width="0",
+        ),
+        rx.text(plato.cantidad.to_string(), font_size="12px",
+                font_weight="700", color=_SLATE_500, flex_shrink="0"),
+        width="100%", align="center", gap="10px",
+    )
+
+
 def _alerta_cumpleanos() -> rx.Component:
     return rx.cond(
         FoodState.clientes_cumpleanos_hoy.length() > 0,
         rx.box(
             rx.hstack(
                 rx.box(
-                    rx.icon(tag="cake", size=16, color=_AMBER),
+                    rx.text("🎂", font_size="16px", line_height="1"),
                     width="36px", height="36px",
                     border_radius="9px",
-                    background=_AMBER_LT,
-                    border=f"1px solid {_AMBER_BD}",
+                    background="#FEE2E2",
+                    border="1px solid #FCA5A5",
                     display="flex", align_items="center",
                     justify_content="center", flex_shrink="0",
                 ),
                 rx.vstack(
                     rx.text("Cumpleaños hoy", font_size="12px",
-                            font_weight="700", color=_SLATE_900),
+                            font_weight="700", color="#991B1B"),
                     rx.foreach(
                         FoodState.clientes_cumpleanos_hoy,
                         lambda c: rx.text(
                             c.nombre + rx.cond(c.telefono != "",
                                                " · " + c.telefono, ""),
-                            font_size="11px", color="#78350F",
+                            font_size="11px", color="#B91C1C",
                         ),
                     ),
                     spacing="0", align="start",
                 ),
                 rx.spacer(),
-                rx.link(
-                    rx.hstack(
-                        rx.text("Ver", font_size="11px",
-                                font_weight="700", color=_ORANGE),
-                        rx.icon(tag="arrow_right", size=11, color=_ORANGE),
-                        spacing="1", align="center",
-                    ),
-                    href="/clientes",
+                rx.hstack(
+                    rx.text("Ver", font_size="11px",
+                            font_weight="700", color=_ORANGE),
+                    rx.icon(tag="arrow_right", size=11, color=_ORANGE),
+                    spacing="1", align="center",
+                    on_click=AdminPanelState.ir_a("clientes"),
+                    cursor="pointer",
                 ),
                 width="100%", align="center", gap="12px",
             ),
-            background=_AMBER_LT, border=f"1px solid {_AMBER_BD}",
-            border_radius="12px", padding="14px 16px", width="100%",
+            background="#FEF2F2", border="1px solid #FCA5A5",
+            border_radius="12px", padding="14px 16px",
+            flex="1", min_width=rx.breakpoints(initial="100%", sm="260px"),
         ),
         rx.fragment(),
     )
@@ -276,7 +334,7 @@ def _alerta_stock() -> rx.Component:
         rx.box(
             rx.hstack(
                 rx.box(
-                    rx.icon(tag="triangle_alert", size=16, color=_AMBER),
+                    rx.text("⚠️", font_size="16px", line_height="1"),
                     width="36px", height="36px",
                     border_radius="9px",
                     background=_AMBER_LT,
@@ -292,29 +350,30 @@ def _alerta_stock() -> rx.Component:
                     spacing="0", align="start",
                 ),
                 rx.spacer(),
-                rx.link(
-                    rx.hstack(
-                        rx.text("Inventario", font_size="11px",
-                                font_weight="700", color=_ORANGE),
-                        rx.icon(tag="arrow_right", size=11, color=_ORANGE),
-                        spacing="1", align="center",
-                    ),
-                    href="/inventario",
+                rx.hstack(
+                    rx.text("Inventario", font_size="11px",
+                            font_weight="700", color=_ORANGE),
+                    rx.icon(tag="arrow_right", size=11, color=_ORANGE),
+                    spacing="1", align="center",
+                    on_click=AdminPanelState.ir_a("inventario"),
+                    cursor="pointer",
                 ),
                 width="100%", align="center", gap="12px",
             ),
             background=_AMBER_LT, border=f"1px solid {_AMBER_BD}",
-            border_radius="12px", padding="14px 16px", width="100%",
+            border_radius="12px", padding="14px 16px",
+            flex="1", min_width=rx.breakpoints(initial="100%", sm="260px"),
         ),
         rx.fragment(),
     )
 
 
-def _quick_link_card(label: str, desc: str, icon: str, href: str) -> rx.Component:
+def _quick_link_card(label: str, desc: str, icon: str, href: str, emoji: str = "") -> rx.Component:
     return rx.link(
         rx.hstack(
             rx.box(
-                rx.icon(tag=icon, size=16, color=_ORANGE),
+                rx.text(emoji, font_size="16px", line_height="1") if emoji
+                else rx.icon(tag=icon, size=16, color=_ORANGE),
                 width="36px", height="36px",
                 border_radius="9px",
                 background=_ORANGE_LT,
@@ -379,371 +438,168 @@ def _section_resumen() -> rx.Component:
         # KPIs
         rx.flex(
             _kpi_card("Ventas hoy", FoodState.dashboard_ventas_hoy_texto,
-                      "trending_up", _GREEN, _GREEN_LT),
+                      "trending_up", _GREEN, _GREEN_LT,
+                      trend=_kpi_trend(FoodState.dashboard_ventas_trend_pct)),
             _kpi_card("Pedidos cobrados",
                       FoodState.dashboard_pedidos_hoy.to_string(),
-                      "receipt_text", _BLUE, _BLUE_LT),
+                      "receipt_text", _BLUE, _BLUE_LT,
+                      trend=_kpi_trend(FoodState.dashboard_pedidos_trend, suffix="")),
+            _kpi_card("Ticket promedio",
+                      FoodState.dashboard_ticket_promedio_texto,
+                      "calculator", "#7C3AED", "#F5F3FF",
+                      trend=_kpi_trend(FoodState.dashboard_ticket_trend_pct)),
             _kpi_card("Propinas hoy",
                       FoodState.dashboard_propina_hoy_texto,
-                      "heart", "#9A3412", _ORANGE_LT),
+                      "heart", "#9A3412", _ORANGE_LT,
+                      trend=_kpi_trend(FoodState.dashboard_propina_trend_pct)),
             gap="12px", width="100%", flex_wrap="wrap",
         ),
         # Alertas
-        _alerta_cumpleanos(),
-        _alerta_stock(),
-        # Acceso rápido
-        rx.box(
-            rx.vstack(
-                rx.hstack(
-                    rx.icon(tag="layout_grid", size=14, color=_SLATE_500),
-                    rx.text("Acceso rápido", font_size="13px",
-                            font_weight="700", color=_SLATE_700),
-                    spacing="2", align="center",
-                ),
-                rx.grid(
-                    _quick_link_card("Clientes",
-                                     "Cumpleaños y fidelización",
-                                     "users", "/clientes"),
-                    _quick_link_card("Fiado",
-                                     "Cuentas corrientes",
-                                     "credit_card", "/cuentas"),
-                    _quick_link_card("Promociones",
-                                     "Happy hour y descuentos",
-                                     "tag", "/promociones"),
-                    _quick_link_card("Inventario",
-                                     "Insumos, recetas y stock",
-                                     "package", "/inventario"),
-                    columns=rx.breakpoints(initial="1", sm="2"),
-                    gap="10px", width="100%",
-                ),
-                spacing="3", width="100%",
-            ),
-            background=_WHITE, border=f"1px solid {_SLATE_200}",
-            border_radius="16px", padding="18px 20px",
-            width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
-        ),
-        spacing="4", width="100%",
-    )
-
-
-# ── SECCIÓN: VENTAS ───────────────────────────────────────────────────────────
-
-def _section_ventas() -> rx.Component:
-    return rx.vstack(
-        rx.hstack(
-            rx.vstack(
-                rx.text("Ventas del día", font_size="18px",
-                        font_weight="800", color=_SLATE_900, line_height="1"),
-                rx.text("Historial de cobros de hoy",
-                        font_size="13px", color=_SLATE_500),
-                spacing="1", align="start",
-            ),
-            rx.spacer(),
-            rx.button(
-                rx.hstack(
-                    rx.icon(tag="refresh_cw", size=13, color=_ORANGE),
-                    rx.text("Actualizar", font_size="12px",
-                            font_weight="600", color=_ORANGE),
-                    spacing="1", align="center",
-                ),
-                on_click=[FoodState.cargar_dashboard,
-                          FoodState.cargar_historial_ventas],
-                background=_ORANGE_LT, border=f"1px solid {_ORANGE_BD}",
-                border_radius="7px", padding_x="12px", padding_y="7px",
-                cursor="pointer", _hover={"opacity": "0.85"},
-            ),
-            width="100%", align="center",
-        ),
-        # KPIs
         rx.flex(
-            _kpi_card("Total recaudado", FoodState.dashboard_ventas_hoy_texto,
-                      "dollar_sign", _GREEN, _GREEN_LT),
-            _kpi_card("Pedidos cobrados",
-                      FoodState.dashboard_pedidos_hoy.to_string(),
-                      "receipt_text", _BLUE, _BLUE_LT),
-            _kpi_card("Propinas", FoodState.dashboard_propina_hoy_texto,
-                      "heart", "#9A3412", _ORANGE_LT),
+            _alerta_cumpleanos(),
+            _alerta_stock(),
             gap="12px", width="100%", flex_wrap="wrap",
         ),
-        # Lista de ventas
-        rx.box(
-            rx.vstack(
-                rx.hstack(
-                    rx.icon(tag="list", size=14, color=_SLATE_500),
-                    rx.text("Cobros realizados", font_size="13px",
-                            font_weight="700", color=_SLATE_700),
-                    rx.spacer(),
-                    rx.link(
-                        "Ver reportes completos →",
-                        href="/reportes",
-                        font_size="11px", color=_ORANGE,
-                        font_weight="600", _hover={"opacity": "0.8"},
-                    ),
-                    spacing="2", align="center", width="100%",
-                ),
-                rx.cond(
-                    FoodState.historial_ventas.length() > 0,
-                    rx.vstack(
-                        rx.foreach(FoodState.historial_ventas, _venta_row),
-                        spacing="1", width="100%",
-                    ),
-                    rx.center(
-                        rx.vstack(
-                            rx.icon(tag="receipt_text", size=32,
-                                    color=_SLATE_200),
-                            rx.text("Sin ventas registradas hoy.",
-                                    font_size="13px", color=_SLATE_500),
-                            spacing="2", align="center",
-                        ),
-                        padding_y="28px", width="100%",
-                    ),
-                ),
-                spacing="3", width="100%",
-            ),
-            background=_WHITE, border=f"1px solid {_SLATE_200}",
-            border_radius="16px", padding="20px",
-            width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
-        ),
-        spacing="4", width="100%",
-    )
-
-
-# ── SECCIÓN: CLIENTES ─────────────────────────────────────────────────────────
-
-def _section_clientes() -> rx.Component:
-    return rx.vstack(
-        rx.hstack(
-            rx.vstack(
-                rx.text("Clientes", font_size="18px",
-                        font_weight="800", color=_SLATE_900, line_height="1"),
-                rx.text("Fidelización y alertas del día",
-                        font_size="13px", color=_SLATE_500),
-                spacing="1", align="start",
-            ),
-            rx.spacer(),
-            rx.link(
-                rx.hstack(
-                    rx.icon(tag="arrow_right", size=14, color=_WHITE),
-                    rx.text("Ir a Clientes", font_size="13px",
-                            font_weight="700", color=_WHITE),
-                    spacing="2", align="center",
-                ),
-                href="/clientes",
-                background=_ORANGE, border_radius="8px",
-                padding="8px 14px", text_decoration="none",
-                _hover={"background": _ORANGE_DK},
-            ),
-            width="100%", align="center",
-        ),
-        # Alertas de cumpleaños
-        _alerta_cumpleanos(),
-        # Card de acceso
-        rx.box(
-            rx.vstack(
-                rx.hstack(
-                    rx.icon(tag="users", size=16, color=_ORANGE),
-                    rx.text("Gestión de clientes", font_size="14px",
-                            font_weight="700", color=_SLATE_900),
-                    spacing="2", align="center",
-                ),
-                rx.text(
-                    "Registra clientes frecuentes, lleva el historial de sus "
-                    "consumos, gestiona cuentas corrientes (fiado) y recibe "
-                    "alertas automáticas de cumpleaños.",
-                    font_size="13px", color=_SLATE_500, line_height="1.6",
-                ),
-                rx.grid(
-                    _quick_link_card("Todos los clientes",
-                                     "Lista completa",
-                                     "users", "/clientes"),
-                    _quick_link_card("Cuentas corrientes",
-                                     "Fiado y créditos",
-                                     "credit_card", "/cuentas"),
-                    columns=rx.breakpoints(initial="1", sm="2"),
-                    gap="10px", width="100%",
-                ),
-                spacing="3", width="100%",
-            ),
-            background=_WHITE, border=f"1px solid {_SLATE_200}",
-            border_radius="16px", padding="20px",
-            width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
-        ),
-        spacing="4", width="100%",
-    )
-
-
-# ── SECCIÓN: INVENTARIO ───────────────────────────────────────────────────────
-
-def _section_inventario() -> rx.Component:
-    return rx.vstack(
-        rx.hstack(
-            rx.vstack(
-                rx.text("Inventario", font_size="18px",
-                        font_weight="800", color=_SLATE_900, line_height="1"),
-                rx.text("Stock y alertas de insumos",
-                        font_size="13px", color=_SLATE_500),
-                spacing="1", align="start",
-            ),
-            rx.spacer(),
-            rx.link(
-                rx.hstack(
-                    rx.icon(tag="arrow_right", size=14, color=_WHITE),
-                    rx.text("Ir a Inventario", font_size="13px",
-                            font_weight="700", color=_WHITE),
-                    spacing="2", align="center",
-                ),
-                href="/inventario",
-                background=_ORANGE, border_radius="8px",
-                padding="8px 14px", text_decoration="none",
-                _hover={"background": _ORANGE_DK},
-            ),
-            width="100%", align="center",
-        ),
-        # Alerta stock bajo
-        _alerta_stock(),
-        # Card descriptiva
-        rx.box(
-            rx.vstack(
-                rx.hstack(
-                    rx.icon(tag="package", size=16, color=_ORANGE),
-                    rx.text("Control de insumos", font_size="14px",
-                            font_weight="700", color=_SLATE_900),
-                    spacing="2", align="center",
-                ),
-                rx.text(
-                    "Registra insumos, define niveles mínimos de stock y recibe "
-                    "alertas automáticas cuando un insumo está por agotarse. "
-                    "Asocia recetas a los platos para descuento automático de stock.",
-                    font_size="13px", color=_SLATE_500, line_height="1.6",
-                ),
-                rx.grid(
-                    _quick_link_card("Insumos y stock",
-                                     "Ver inventario completo",
-                                     "package", "/inventario"),
-                    _quick_link_card("Promociones",
-                                     "Happy hour y descuentos",
-                                     "tag", "/promociones"),
-                    columns=rx.breakpoints(initial="1", sm="2"),
-                    gap="10px", width="100%",
-                ),
-                spacing="3", width="100%",
-            ),
-            background=_WHITE, border=f"1px solid {_SLATE_200}",
-            border_radius="16px", padding="20px",
-            width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
-        ),
-        spacing="4", width="100%",
-    )
-
-
-# ── SECCIÓN: CONFIGURACIÓN ────────────────────────────────────────────────────
-
-def _config_shortcut(icon: str, label: str, desc: str, tab: str) -> rx.Component:
-    return rx.link(
-        rx.hstack(
+        # Últimas ventas + accesos operativos / top platos
+        rx.grid(
             rx.box(
-                rx.icon(tag=icon, size=15, color=_ORANGE),
-                width="36px", height="36px",
-                border_radius="9px",
-                background=_ORANGE_LT,
-                border=f"1px solid {_ORANGE_BD}",
-                display="flex", align_items="center",
-                justify_content="center", flex_shrink="0",
-            ),
-            rx.vstack(
-                rx.text(label, font_size="13px",
-                        font_weight="700", color=_SLATE_900),
-                rx.text(desc, font_size="11px", color=_SLATE_500),
-                spacing="0", align="start",
-            ),
-            rx.spacer(),
-            rx.icon(tag="arrow_right", size=13, color=_SLATE_200),
-            spacing="3", align="center", width="100%",
-        ),
-        href=f"/configuracion",
-        background=_WHITE, border=f"1px solid {_SLATE_200}",
-        border_radius="12px", padding="12px 14px",
-        text_decoration="none",
-        _hover={
-            "border": f"1px solid {_ORANGE_BD}",
-            "background": _ORANGE_LT,
-            "transform": "translateX(2px)",
-        },
-        transition="all 0.15s ease",
-        width="100%", display="block",
-    )
-
-
-def _section_config() -> rx.Component:
-    return rx.vstack(
-        rx.hstack(
-            rx.vstack(
-                rx.text("Configuración", font_size="18px",
-                        font_weight="800", color=_SLATE_900, line_height="1"),
-                rx.text("Ajustes del sistema y del restaurante",
-                        font_size="13px", color=_SLATE_500),
-                spacing="1", align="start",
-            ),
-            rx.spacer(),
-            rx.link(
-                rx.hstack(
-                    rx.icon(tag="settings", size=14, color=_WHITE),
-                    rx.text("Abrir configuración", font_size="13px",
-                            font_weight="700", color=_WHITE),
-                    spacing="2", align="center",
-                ),
-                href="/configuracion",
-                background=_ORANGE, border_radius="8px",
-                padding="8px 14px", text_decoration="none",
-                _hover={"background": _ORANGE_DK},
-            ),
-            width="100%", align="center",
-        ),
-        # Accesos directos a cada sub-módulo de /configuracion
-        rx.box(
-            rx.vstack(
-                rx.text("Sub-módulos disponibles", font_size="12px",
-                        font_weight="600", color=_SLATE_500,
-                        text_transform="uppercase", letter_spacing="0.06em"),
                 rx.vstack(
-                    _config_shortcut("store", "Local",
-                                     "Nombre del restaurante", "local"),
-                    _config_shortcut("qr_code", "Carta digital",
-                                     "Slug URL y código QR", "carta"),
-                    _config_shortcut("layout_grid", "Mesas",
-                                     "Salon y sectores", "mesas"),
-                    _config_shortcut("printer", "Impresoras",
-                                     "Cocina y caja ESC/POS", "impresoras"),
-                    _config_shortcut("key_round", "Cuenta Admin",
-                                     "Email y contraseña de acceso", "cuenta"),
-                    spacing="2", width="100%",
+                    rx.hstack(
+                        rx.text("Últimas ventas", font_size="13px",
+                                font_weight="700", color=_SLATE_700),
+                        rx.spacer(),
+                        rx.link(
+                            rx.hstack(
+                                rx.text("Ver todas", font_size="11px",
+                                        font_weight="700", color=_ORANGE),
+                                rx.icon(tag="arrow_right", size=11, color=_ORANGE),
+                                spacing="1", align="center",
+                            ),
+                            on_click=AdminPanelState.ir_a("ventas"),
+                            cursor="pointer",
+                        ),
+                        width="100%", align="center",
+                    ),
+                    rx.cond(
+                        FoodState.historial_ventas.length() == 0,
+                        rx.center(
+                            rx.text("Sin ventas todavía", font_size="12px",
+                                    color=_SLATE_500),
+                            padding_y="24px", width="100%",
+                        ),
+                        rx.vstack(
+                            rx.foreach(
+                                FoodState.historial_ventas_recientes,
+                                _venta_row,
+                            ),
+                            spacing="2", width="100%",
+                        ),
+                    ),
+                    spacing="3", width="100%",
                 ),
-                spacing="3", width="100%",
+                background=_WHITE, border=f"1px solid {_SLATE_200}",
+                border_radius="16px", padding="18px 20px",
+                width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
             ),
-            background=_WHITE, border=f"1px solid {_SLATE_200}",
-            border_radius="16px", padding="20px",
-            width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
+            rx.vstack(
+                # Accesos operativos
+                rx.box(
+                    rx.vstack(
+                        rx.text("Accesos operativos", font_size="13px",
+                                font_weight="700", color=_SLATE_700),
+                        rx.grid(
+                            _quick_link_card("Mozos", "Mesas y comanda",
+                                             "utensils", "/mozos", "🧑‍🍳"),
+                            _quick_link_card("Cocina", "KDS / Producción",
+                                             "chef_hat", "/cocina", "🍳"),
+                            _quick_link_card("Caja", "Cobro y tickets",
+                                             "landmark", "/caja", "🖥️"),
+                            _quick_link_card("Mostrador", "Takeaway rápido",
+                                             "shopping_bag", "/mostrador", "🛍️"),
+                            columns="1", gap="8px", width="100%",
+                        ),
+                        spacing="3", width="100%",
+                    ),
+                    background=_WHITE, border=f"1px solid {_SLATE_200}",
+                    border_radius="16px", padding="18px 20px",
+                    width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
+                ),
+                # Top platos hoy
+                rx.box(
+                    rx.vstack(
+                        rx.text("Top platos hoy", font_size="13px",
+                                font_weight="700", color=_SLATE_700),
+                        rx.cond(
+                            FoodState.dashboard_top_platos.length() == 0,
+                            rx.center(
+                                rx.text("Sin datos todavía", font_size="12px",
+                                        color=_SLATE_500),
+                                padding_y="16px", width="100%",
+                            ),
+                            rx.vstack(
+                                rx.foreach(
+                                    FoodState.dashboard_top_platos,
+                                    _top_plato_row,
+                                ),
+                                spacing="2", width="100%",
+                            ),
+                        ),
+                        spacing="3", width="100%",
+                    ),
+                    background=_WHITE, border=f"1px solid {_SLATE_200}",
+                    border_radius="16px", padding="18px 20px",
+                    width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
+                ),
+                spacing="4", width="100%",
+            ),
+            columns=rx.breakpoints(initial="1", lg="2fr 1fr"),
+            gap="16px", width="100%",
         ),
         spacing="4", width="100%",
     )
+
+
 
 
 # ── Área de contenido dinámico ────────────────────────────────────────────────
 
 def _content_area() -> rx.Component:
+    # Import diferido: cuentas.py/promociones.py/clientes.py/inventario.py
+    # importan _dono_shell de este módulo, así que importarlos a nivel de
+    # módulo aquí generaría un ciclo.
+    from app.pages.cuentas import _cuentas_content
+    from app.pages.promociones import _promociones_content
+    from app.pages.reportes import _reportes_content
+    from app.pages.clientes import _clientes_content
+    from app.pages.inventario import _inventario_content
+    from app.pages.configuracion import _configuracion_content
+    from app.pages.usuarios import _usuarios_content
+
     return rx.cond(
         AdminPanelState.seccion == "resumen",
         _section_resumen(),
         rx.cond(
             AdminPanelState.seccion == "ventas",
-            _section_ventas(),
+            _reportes_content(),
             rx.cond(
                 AdminPanelState.seccion == "clientes",
-                _section_clientes(),
+                _clientes_content(),
                 rx.cond(
-                    AdminPanelState.seccion == "inventario",
-                    _section_inventario(),
-                    _section_config(),
+                    AdminPanelState.seccion == "cuentas",
+                    _cuentas_content(),
+                    rx.cond(
+                        AdminPanelState.seccion == "promociones",
+                        _promociones_content(),
+                        rx.cond(
+                            AdminPanelState.seccion == "inventario",
+                            _inventario_content(),
+                            rx.cond(
+                                AdminPanelState.seccion == "usuarios",
+                                _usuarios_content(),
+                                _configuracion_content(),
+                            ),
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -805,10 +661,94 @@ def _dono_shell(content: rx.Component) -> rx.Component:
         ),
         background=_SLATE_50,
         min_height="100vh",
+        class_name="light",
     )
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────
+
+def _admin_glow() -> rx.Component:
+    return rx.box(
+        position="absolute",
+        top="50%", left="50%",
+        transform="translate(-50%, -50%)",
+        width=rx.breakpoints(initial="280px", md="420px"),
+        height=rx.breakpoints(initial="280px", md="420px"),
+        background="radial-gradient(circle, rgba(234,88,12,0.35) 0%, rgba(234,88,12,0) 70%)",
+        pointer_events="none",
+        z_index="0",
+    )
+
+
+def _brand_banner_generico() -> rx.Component:
+    """Sin empresa en la URL — logo de marca TUWAYKIFOOD, tamaño grande."""
+    return rx.box(
+        _admin_glow(),
+        rx.center(
+            rx.image(
+                src="/TUWAYKIFOOD.png",
+                height=rx.breakpoints(initial="122px", sm="150px", md="178px"),
+                width="auto",
+                alt="TUWAYKIFOOD",
+            ),
+            width="100%", height="100%",
+        ),
+        background=_WHITE,
+        border_radius="20px",
+        width=rx.breakpoints(initial="190px", sm="230px", md="270px"),
+        height=rx.breakpoints(initial="130px", sm="158px", md="186px"),
+        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        position="relative",
+        z_index="1",
+    )
+
+
+def _brand_banner_empresa() -> rx.Component:
+    """Con ?empresa= en la URL — logo de esa empresa, un poco más chico."""
+    return rx.box(
+        _admin_glow(),
+        rx.cond(
+            AdminLocalState.login_empresa_logo != "",
+            rx.center(
+                rx.image(
+                    src=AdminLocalState.login_empresa_logo,
+                    height=rx.breakpoints(initial="90px", sm="112px", md="132px"),
+                    width="auto",
+                    alt=AdminLocalState.login_empresa_nombre,
+                ),
+                width="100%", height="100%",
+            ),
+            rx.box(
+                rx.text(
+                    AdminLocalState.login_empresa_nombre[:1].upper(),
+                    font_size=rx.breakpoints(initial="38px", md="52px"),
+                    font_weight="800", color=_WHITE, line_height="1",
+                ),
+                width="100%", height="100%",
+                display="flex", align_items="center", justify_content="center",
+                background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                border_radius="20px",
+            ),
+        ),
+        background=_WHITE,
+        border_radius="20px",
+        width=rx.breakpoints(initial="155px", sm="190px", md="220px"),
+        height=rx.breakpoints(initial="105px", sm="128px", md="150px"),
+        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        position="relative",
+        z_index="1",
+    )
+
+
+def _brand_banner() -> rx.Component:
+    """Logo de marca — usado en los dos puntos de entrada (login PIN y login
+    admin) para que se vea prominente sin cubrir todo el ancho de la pantalla."""
+    return rx.cond(
+        AdminLocalState.login_empresa_nombre != "",
+        _brand_banner_empresa(),
+        _brand_banner_generico(),
+    )
+
 
 @rx.page(route="/admin/login",
          on_load=AdminLocalState.on_load_dono_login,
@@ -818,28 +758,15 @@ def dono_login_page() -> rx.Component:
         rx.script(_CSS_SCRIPT),
         rx.center(
             rx.vstack(
+                _brand_banner(),
                 rx.vstack(
-                    rx.box(
-                        rx.image(src="/TUWAYKIFOOD.png", height="90px",
-                                 width="auto", alt="TUWAYKIFOOD"),
-                        background=_WHITE,
-                        border_radius="16px",
-                        padding="12px 20px",
-                        box_shadow="0 8px 28px rgba(0,0,0,0.35)",
-                        display="flex",
-                        align_items="center",
-                        justify_content="center",
-                    ),
-                    rx.vstack(
-                        rx.text("Panel Administrativo", font_size="22px",
-                                font_weight="800", color=_WHITE,
-                                text_align="center"),
-                        rx.text("Ingresa con tu email y contraseña",
-                                font_size="13px", color="#475569",
-                                text_align="center"),
-                        spacing="1", align="center",
-                    ),
-                    spacing="4", align="center",
+                    rx.text("Panel Administrativo", font_size="22px",
+                            font_weight="800", color=_WHITE,
+                            text_align="center"),
+                    rx.text("Ingresa con tu email y contraseña",
+                            font_size="13px", color="#475569",
+                            text_align="center"),
+                    spacing="1", align="center",
                 ),
                 rx.box(
                     rx.vstack(
@@ -939,15 +866,6 @@ def dono_login_page() -> rx.Component:
                             box_shadow="0 4px 14px rgba(234,88,12,0.35)",
                             transition="all 0.15s",
                         ),
-                        rx.center(
-                            rx.link(
-                                "← Volver al login con PIN",
-                                href="/login",
-                                font_size="12px", color="#64748B",
-                                _hover={"color": _ORANGE},
-                            ),
-                            width="100%",
-                        ),
                         spacing="4", width="100%",
                     ),
                     background="#1E293B",
@@ -955,6 +873,19 @@ def dono_login_page() -> rx.Component:
                     border_radius="20px",
                     padding="32px 28px",
                     box_shadow="0 20px 60px rgba(0,0,0,0.4)",
+                    width="100%",
+                ),
+                rx.center(
+                    rx.hstack(
+                        rx.text("¿Sos empleado?", font_size="12px", color="#475569"),
+                        rx.link(
+                            "Ingresar con PIN",
+                            href="/login?empresa=" + AdminLocalState.login_empresa_slug,
+                            font_size="12px", color=_ORANGE, font_weight="600",
+                            _hover={"color": _ORANGE_DK},
+                        ),
+                        spacing="1",
+                    ),
                     width="100%",
                 ),
                 spacing="6", align="center",

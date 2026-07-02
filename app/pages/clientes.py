@@ -7,6 +7,22 @@ import reflex as rx
 from app.states.food_state import FoodState, ClienteView, AdminLocalState
 from app.pages.dono import _dono_shell
 
+_AVATAR_COLORS = ["#EA580C", "#3B82F6", "#8B5CF6", "#0D9488"]
+
+
+def _avatar_color(c: ClienteView) -> rx.Var:
+    idx = c.id % len(_AVATAR_COLORS)
+    return rx.cond(
+        c.cumple_hoy, "#F59E0B",
+        rx.cond(
+            idx == 0, _AVATAR_COLORS[0],
+            rx.cond(
+                idx == 1, _AVATAR_COLORS[1],
+                rx.cond(idx == 2, _AVATAR_COLORS[2], _AVATAR_COLORS[3]),
+            ),
+        ),
+    )
+
 
 def _birthday_badge(c: ClienteView) -> rx.Component:
     return rx.cond(
@@ -25,80 +41,79 @@ def _birthday_badge(c: ClienteView) -> rx.Component:
     )
 
 
-def _cliente_row(c: ClienteView) -> rx.Component:
-    return rx.hstack(
-        rx.box(
-            rx.text(c.nombre[:1].upper(), font_size="14px", font_weight="800", color="#FFFFFF"),
-            width="34px",
-            height="34px",
-            border_radius="full",
-            background=rx.cond(c.cumple_hoy, "#F59E0B", "#EA580C"),
-            display="flex",
-            align_items="center",
-            justify_content="center",
-            flex_shrink="0",
+def _cliente_card(c: ClienteView) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.hstack(
+                rx.box(
+                    rx.text(c.nombre[:1].upper(), font_size="18px", font_weight="800", color="#FFFFFF"),
+                    width="44px", height="44px", border_radius="full",
+                    background=_avatar_color(c),
+                    display="flex", align_items="center", justify_content="center",
+                    flex_shrink="0",
+                ),
+                rx.vstack(
+                    rx.hstack(
+                        rx.text(c.nombre, font_size="15px", font_weight="700", color="#0F172A"),
+                        _birthday_badge(c),
+                        spacing="1", align="center", flex_wrap="wrap",
+                    ),
+                    rx.text(
+                        rx.cond(c.email != "", c.email + " · ", "") + c.telefono,
+                        font_size="12px", color="#94A3B8",
+                    ),
+                    spacing="0", align="start", min_width="0",
+                ),
+                spacing="3", align="center", min_width="0", flex="1",
+            ),
+            rx.hstack(
+                rx.icon(
+                    tag="pencil", size=13, color="#94A3B8", cursor="pointer",
+                    on_click=FoodState.editar_cliente(c.id),
+                ),
+                rx.icon(
+                    tag=rx.cond(c.activo, "toggle_right", "toggle_left"),
+                    size=15,
+                    color=rx.cond(c.activo, "#16A34A", "#CBD5E1"),
+                    cursor="pointer",
+                    on_click=FoodState.toggle_cliente_activo(c.id),
+                ),
+                spacing="2", align="center", flex_shrink="0",
+            ),
+            width="100%", align="start", margin_bottom="14px",
         ),
-        rx.vstack(
-            rx.hstack(
-                rx.text(c.nombre, font_size="13px", font_weight="700", color="#0F172A"),
-                _birthday_badge(c),
-                spacing="2",
-                align="center",
+        rx.grid(
+            rx.box(
+                rx.text("Visitas", font_size="11px", color="#94A3B8", font_weight="600",
+                        text_transform="uppercase", letter_spacing="0.05em"),
+                rx.text(c.visitas_count.to_string(), font_size="18px", font_weight="800",
+                        color="#0F172A", margin_top="2px"),
+                background="#F8FAFC", border_radius="8px", padding="10px", text_align="center",
             ),
-            rx.hstack(
-                rx.cond(
-                    c.telefono != "",
-                    rx.hstack(
-                        rx.icon(tag="phone", size=10, color="#94A3B8"),
-                        rx.text(c.telefono, font_size="11px", color="#64748B"),
-                        spacing="1", align="center",
-                    ),
-                    rx.fragment(),
-                ),
-                rx.cond(
-                    c.fecha_nac_texto != "",
-                    rx.hstack(
-                        rx.icon(tag="cake", size=10, color="#94A3B8"),
-                        rx.text(c.fecha_nac_texto, font_size="11px", color="#64748B"),
-                        spacing="1", align="center",
-                    ),
-                    rx.fragment(),
-                ),
-                spacing="3",
-                align="center",
+            rx.box(
+                rx.text("Gastado", font_size="11px", color="#94A3B8", font_weight="600",
+                        text_transform="uppercase", letter_spacing="0.05em"),
+                rx.text(c.gastado_texto, font_size="18px", font_weight="800",
+                        color="#EA580C", margin_top="2px"),
+                background="#F8FAFC", border_radius="8px", padding="10px", text_align="center",
             ),
-            spacing="0",
-            align="start",
-            flex="1",
+            columns="2", gap="8px", width="100%",
         ),
         rx.hstack(
-            rx.button(
-                rx.icon(tag="pencil", size=12),
-                on_click=FoodState.editar_cliente(c.id),
-                background="#F1F5F9", color="#475569",
-                border="1px solid #E2E8F0", border_radius="6px",
-                padding="4px 8px", cursor="pointer",
-                _hover={"background": "#E2E8F0"},
+            rx.text("Última visita: " + c.ultima_visita_texto, font_size="12px", color="#64748B"),
+            rx.cond(
+                c.es_vip,
+                rx.badge("VIP ⭐", background="#FEF9C3", color="#A16207",
+                         border_radius="20px", font_size="11px", font_weight="700",
+                         padding_x="8px", padding_y="2px"),
+                rx.fragment(),
             ),
-            rx.button(
-                rx.cond(c.activo, rx.icon(tag="toggle_right", size=14), rx.icon(tag="toggle_left", size=14)),
-                on_click=FoodState.toggle_cliente_activo(c.id),
-                background=rx.cond(c.activo, "#FEF2F2", "#F0FDF4"),
-                color=rx.cond(c.activo, "#B91C1C", "#15803D"),
-                border=rx.cond(c.activo, "1px solid #FECACA", "1px solid #BBF7D0"),
-                border_radius="6px", padding="4px 8px", cursor="pointer",
-                _hover={"opacity": "0.8"},
-            ),
-            spacing="2", flex_shrink="0",
+            spacing="2", align="center", margin_top="12px",
         ),
-        width="100%",
-        align="center",
-        padding="10px 12px",
         background=rx.cond(c.cumple_hoy, "#FFFBEB", "#FFFFFF"),
-        border_radius="9px",
-        border=rx.cond(c.cumple_hoy, "1px solid #FDE68A", "1px solid #F1F5F9"),
-        gap="10px",
-        _hover={"background": rx.cond(c.cumple_hoy, "#FEF9E7", "#F8FAFC")},
+        border=rx.cond(c.cumple_hoy, "1px solid #FDE68A", "1px solid #E2E8F0"),
+        border_radius="14px", padding="18px", width="100%",
+        opacity=rx.cond(c.activo, "1", "0.6"),
     )
 
 
@@ -191,6 +206,14 @@ def _cli_form() -> rx.Component:
             ),
             rx.hstack(
                 rx.button(
+                    "Cancelar",
+                    on_click=FoodState.cancelar_cli_form,
+                    background="#F1F5F9", color="#64748B",
+                    border="1px solid #E2E8F0", border_radius="7px",
+                    font_size="13px", padding_x="16px", padding_y="8px",
+                    cursor="pointer", _hover={"background": "#E2E8F0"},
+                ),
+                rx.button(
                     rx.cond(FoodState.cli_form_editando, "Actualizar", "Registrar"),
                     on_click=FoodState.guardar_cliente,
                     background="#EA580C", color="#FFFFFF",
@@ -198,24 +221,11 @@ def _cli_form() -> rx.Component:
                     padding_x="16px", padding_y="8px", cursor="pointer",
                     _hover={"background": "#C2410C"},
                 ),
-                rx.cond(
-                    FoodState.cli_form_editando,
-                    rx.button(
-                        "Cancelar",
-                        on_click=FoodState.cancelar_cli_form,
-                        background="#F1F5F9", color="#64748B",
-                        border="1px solid #E2E8F0", border_radius="7px",
-                        font_size="13px", padding_x="16px", padding_y="8px",
-                        cursor="pointer", _hover={"background": "#E2E8F0"},
-                    ),
-                    rx.fragment(),
-                ),
                 spacing="2", justify="end", width="100%",
             ),
             spacing="3", width="100%",
         ),
-        background="#F8FAFC", border="1px solid #E2E8F0",
-        border_radius="8px", padding="12px 14px", width="100%",
+        background="#FFFFFF", padding="4px", width="100%",
     )
 
 
@@ -287,18 +297,61 @@ def _cumpleanos_section() -> rx.Component:
 
 def _clientes_content() -> rx.Component:
     return rx.vstack(
-        rx.hstack(
-            rx.link(
-                rx.hstack(
-                    rx.icon(tag="arrow_left", size=13, color="#64748B"),
-                    rx.text("Panel del Dueño", font_size="12px", color="#64748B"),
-                    spacing="1", align="center",
+        rx.cond(
+            FoodState.es_pagina_standalone,
+            rx.hstack(
+                rx.link(
+                    rx.hstack(
+                        rx.icon(tag="arrow_left", size=13, color="#64748B"),
+                        rx.text("Panel Administrativo", font_size="12px", color="#64748B"),
+                        spacing="1", align="center",
+                    ),
+                    href="/admin", _hover={"opacity": "0.7"},
                 ),
-                href="/admin", _hover={"opacity": "0.7"},
+                rx.spacer(),
+                width="100%",
+            ),
+            rx.fragment(),
+        ),
+        rx.hstack(
+            rx.vstack(
+                rx.text("Clientes", font_size="22px", font_weight="800", color="#0F172A"),
+                rx.text("Base de clientes del local", font_size="13px", color="#64748B"),
+                spacing="0",
             ),
             rx.spacer(),
+            rx.input(
+                placeholder="Buscar cliente...",
+                value=FoodState.cli_busqueda,
+                on_change=FoodState.set_cli_busqueda,
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="9px", font_size="13px",
+                padding_x="14px", padding_y="8px",
+                width=rx.breakpoints(initial="100%", sm="220px"),
+                _focus={"border": "1px solid #EA580C"},
+            ),
+            rx.dialog.root(
+                rx.dialog.trigger(
+                    rx.button(
+                        "+ Nuevo",
+                        on_click=FoodState.abrir_nuevo_cliente,
+                        background="#EA580C", color="#FFFFFF",
+                        border_radius="9px", font_size="13px", font_weight="700",
+                        padding_x="18px", padding_y="9px", cursor="pointer",
+                        _hover={"background": "#C2410C"},
+                        flex_shrink="0",
+                    ),
+                ),
+                rx.dialog.content(
+                    _cli_form(),
+                    class_name="light",
+                    max_width="560px",
+                ),
+                open=FoodState.cli_form_visible,
+                on_open_change=FoodState.set_cli_form_visible,
+            ),
+            width="100%", align="center", gap="10px", flex_wrap="wrap",
         ),
-        rx.text("Clientes", font_size="22px", font_weight="800", color="#0F172A"),
         rx.cond(
             FoodState.mensaje != "",
             rx.box(
@@ -309,64 +362,17 @@ def _clientes_content() -> rx.Component:
             rx.fragment(),
         ),
         _cumpleanos_section(),
-        rx.box(
-            rx.vstack(
-                rx.hstack(
-                    rx.icon(tag="user_plus", size=14, color="#EA580C"),
-                    rx.text(
-                        rx.cond(FoodState.cli_form_editando, "Editar cliente", "Registrar cliente"),
-                        font_size="14px", font_weight="700", color="#0F172A",
-                    ),
-                    spacing="2", align="center",
-                ),
-                _cli_form(),
-                spacing="3", width="100%",
+        rx.cond(
+            FoodState.clientes_filtrados.length() > 0,
+            rx.grid(
+                rx.foreach(FoodState.clientes_filtrados, _cliente_card),
+                columns=rx.breakpoints(initial="1", sm="2", lg="3"),
+                gap="14px", width="100%",
             ),
-            background="#FFFFFF", border="1px solid #E2E8F0",
-            border_radius="12px", padding="16px 18px", width="100%",
-            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
-        ),
-        rx.box(
-            rx.vstack(
-                rx.hstack(
-                    rx.icon(tag="users", size=14, color="#EA580C"),
-                    rx.text("Lista de clientes", font_size="14px", font_weight="700", color="#0F172A"),
-                    rx.spacer(),
-                    rx.button(
-                        rx.icon(tag="refresh_cw", size=12),
-                        on_click=FoodState.cargar_clientes,
-                        background="#F1F5F9", color="#64748B",
-                        border="1px solid #E2E8F0", border_radius="6px",
-                        padding="4px 8px", cursor="pointer",
-                        _hover={"background": "#E2E8F0"},
-                    ),
-                    width="100%", align="center",
-                ),
-                rx.input(
-                    placeholder="Buscar por nombre o teléfono…",
-                    value=FoodState.cli_busqueda,
-                    on_change=FoodState.set_cli_busqueda,
-                    background="#F8FAFC", border="1px solid #E2E8F0",
-                    border_radius="8px", font_size="13px",
-                    padding_x="12px", padding_y="8px", width="100%",
-                    _focus={"border": "1px solid #EA580C"},
-                ),
-                rx.cond(
-                    FoodState.clientes_filtrados.length() > 0,
-                    rx.vstack(
-                        rx.foreach(FoodState.clientes_filtrados, _cliente_row),
-                        spacing="1", width="100%",
-                    ),
-                    rx.center(
-                        rx.text("Sin clientes registrados.", font_size="13px", color="#94A3B8"),
-                        padding_y="20px", width="100%",
-                    ),
-                ),
-                spacing="3", width="100%",
+            rx.center(
+                rx.text("Sin clientes registrados.", font_size="13px", color="#94A3B8"),
+                padding_y="40px", width="100%",
             ),
-            background="#FFFFFF", border="1px solid #E2E8F0",
-            border_radius="12px", padding="16px 18px", width="100%",
-            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
         spacing="4", width="100%",
     )

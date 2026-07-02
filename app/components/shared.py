@@ -50,6 +50,17 @@ _TWK_CSS = (
     "::-webkit-scrollbar-thumb:hover{background:#94A3B8}"
     "[data-radix-select-viewport]{font-size:14px!important}"
 
+    # ── Fix tema claro anidado ───────────────────────────────────────────────────
+    # El tema raiz de la app es appearance="dark" (rxconfig.py), pero la mayoria
+    # de paginas usan colores custom claros. Radix define sus tokens de color
+    # ("surface", "panel", etc.) via selector :root — un div anidado con clase
+    # "light" NO recalcula esos tokens (:root solo matchea el elemento raiz real
+    # del documento), asi que quedan heredados del tema oscuro. Se fuerzan los
+    # tokens usados por componentes Radix nativos sin estilo custom completo
+    # (rx.select, rx.checkbox, etc.) dentro de las paginas marcadas con .light.
+    ".light{--color-surface:#FFFFFF;--gray-surface:#FFFFFF;"
+    "--color-panel-solid:#FFFFFF;--color-panel-translucent:#FFFFFFEE}"
+
     # ── Layout utils ──────────────────────────────────────────────────────────
     ".twk-cols-lg,.twk-cols-md{display:flex!important;flex-wrap:wrap!important;gap:20px;width:100%;align-items:flex-start}"
     ".twk-panel{flex:0 0 100%!important;min-width:0!important}"
@@ -642,6 +653,29 @@ def _desktop_sidebar(active: str) -> rx.Component:
                 flex="1",
                 overflow_y="auto",
             ),
+            # ── Volver al Panel Administrativo (solo Admin) ──────────────────
+            rx.cond(
+                FoodState.puede_ver_panel_admin,
+                rx.link(
+                    rx.hstack(
+                        rx.icon(tag="arrow_left", size=13, color="rgba(255,255,255,0.6)"),
+                        rx.cond(
+                            FoodState.sidebar_collapsed,
+                            rx.fragment(),
+                            rx.text("Panel Administrativo", font_size="12px",
+                                    color="rgba(255,255,255,0.6)", font_weight="600"),
+                        ),
+                        spacing="2", align="center",
+                    ),
+                    href="/admin",
+                    width="100%",
+                    padding="8px 10px",
+                    border_radius="8px",
+                    text_decoration="none",
+                    _hover={"background": "rgba(255,255,255,0.06)"},
+                ),
+                rx.fragment(),
+            ),
             # ── Info LAN ──────────────────────────────────────────────────────
             rx.cond(
                 FoodState.sidebar_collapsed,
@@ -730,6 +764,24 @@ def _mobile_nav_drawer(active: str) -> rx.Component:
                             rx.box(height="1px", width="100%",
                                    background=BORDER_COLOR),
                             _nav_stack(active, mobile=True),
+                            rx.cond(
+                                FoodState.puede_ver_panel_admin,
+                                rx.link(
+                                    rx.hstack(
+                                        rx.icon(tag="arrow_left", size=14, color=TEXT_SECONDARY),
+                                        rx.text("Panel Administrativo", font_size="13px",
+                                                color=TEXT_SECONDARY, font_weight="600"),
+                                        spacing="2", align="center",
+                                    ),
+                                    href="/admin",
+                                    width="100%",
+                                    padding="0.6rem 0.9rem",
+                                    border_radius="8px",
+                                    text_decoration="none",
+                                    _hover={"background": SURFACE_HOVER},
+                                ),
+                                rx.fragment(),
+                            ),
                             rx.box(height="1px", width="100%",
                                    background=BORDER_COLOR),
                             user_session_badge(),
@@ -834,6 +886,38 @@ def _mobile_topbar(active: str) -> rx.Component:
     )
 
 
+# ─── Aviso de cumpleaños (uso en Mozos/Caja/Mostrador) ─────────────────────────────
+
+def cumpleanos_banner() -> rx.Component:
+    """Aviso informativo de clientes que cumplen años hoy, para que el staff
+    pueda reconocerlos y ofrecer una cortesía. No está atado a un pedido
+    puntual — hoy los pedidos normales no se vinculan a un cliente registrado
+    (solo el pago fiado en Caja lo hace)."""
+    return rx.cond(
+        FoodState.clientes_cumpleanos_hoy.length() > 0,
+        rx.box(
+            rx.hstack(
+                rx.text("🎂", font_size="16px", line_height="1"),
+                rx.text("Hoy cumplen años:", font_size="12px", font_weight="700",
+                        color="#991B1B", flex_shrink="0"),
+                rx.foreach(
+                    FoodState.clientes_cumpleanos_hoy,
+                    lambda c: rx.badge(
+                        c.nombre,
+                        background="#FFFFFF", color="#991B1B",
+                        border="1px solid #FCA5A5", border_radius="6px",
+                        font_size="11px", font_weight="600",
+                    ),
+                ),
+                spacing="2", align="center", wrap="wrap",
+            ),
+            background="#FEF2F2", border="1px solid #FCA5A5",
+            border_radius="10px", padding="10px 14px", width="100%",
+        ),
+        rx.fragment(),
+    )
+
+
 # ─── APP SHELL ────────────────────────────────────────────────────────────────────
 
 def app_shell(
@@ -874,4 +958,5 @@ def app_shell(
         width="100%",
         background=_bg,
         color=_text,
+        class_name="" if dark else "light",
     )

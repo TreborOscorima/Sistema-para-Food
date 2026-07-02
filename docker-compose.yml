@@ -61,6 +61,7 @@ services:
       DB_HOST: food_mysql
     volumes:
       - food_web:/app/.web
+      - food_uploads:/app/uploaded_files
     networks:
       - food_internal
     healthcheck:
@@ -73,6 +74,7 @@ services:
 volumes:
   food_mysql_data:
   food_web:
+  food_uploads:
 
 networks:
   food_internal:
