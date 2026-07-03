@@ -1,4 +1,4 @@
-"""Login PIN — diseño Claude Design: pantalla única, selector de rol + teclado rectangular."""
+"""Login PIN — diseño Claude Design: pantalla única, selector de rol + teclado estilo iPhone."""
 
 from __future__ import annotations
 
@@ -44,13 +44,13 @@ def _rol_card(emoji: str, label: str, rol_value: str) -> rx.Component:
 
 def _pin_dot(filled: bool) -> rx.Component:
     return rx.box(
-        width="16px",
-        height="16px",
+        width="14px",
+        height="14px",
         border_radius="50%",
-        background=rx.cond(filled, "#EA580C", "transparent"),
-        border=rx.cond(filled, "2px solid #EA580C", "2px solid #334155"),
+        background=rx.cond(filled, "#FFFFFF", "transparent"),
+        border=rx.cond(filled, "2px solid #FFFFFF", "2px solid #475569"),
         transition="all 0.12s ease",
-        box_shadow=rx.cond(filled, "0 0 8px rgba(234,88,12,0.5)", "none"),
+        box_shadow=rx.cond(filled, "0 0 6px rgba(255,255,255,0.4)", "none"),
     )
 
 
@@ -69,76 +69,86 @@ def _pin_display() -> rx.Component:
     )
 
 
-# ─── Teclas rectangulares ─────────────────────────────────────────────────────
+# ─── Teclas estilo iPhone ─────────────────────────────────────────────────────
 
-def _key_rect(content: rx.Component, on_click, aria_label: str,
-              bg: str = "#0F172A", border_color: str = "#334155") -> rx.Component:
+def _key_iphone(num: str, letters: str, on_click) -> rx.Component:
     return rx.button(
-        content,
+        rx.vstack(
+            rx.text(num, font_size="26px", font_weight="300", color="#FFFFFF",
+                    line_height="1"),
+            rx.text(letters, font_size="9px", font_weight="600", color="#94A3B8",
+                    letter_spacing="0.12em", line_height="1"),
+            spacing="0",
+            align="center",
+        ),
         on_click=on_click,
-        aria_label=aria_label,
-        background=bg,
-        border=f"1px solid {border_color}",
-        border_radius="12px",
-        padding="18px 0",
-        width="100%",
+        aria_label=f"Dígito {num}",
+        width="68px",
+        height="68px",
+        border_radius="50%",
+        background="rgba(255,255,255,0.13)",
+        border="1px solid rgba(255,255,255,0.18)",
+        padding="0",
+        min_width="0",
         display="flex",
         align_items="center",
         justify_content="center",
         cursor="pointer",
-        transition="all 0.1s",
-        _hover={"background": "#1E293B", "border_color": "#475569"},
-        _active={"transform": "scale(0.95)"},
+        transition="background 0.1s ease, transform 0.1s ease",
+        _hover={"background": "rgba(255,255,255,0.22)"},
+        _active={"transform": "scale(0.88)", "background": "rgba(255,255,255,0.32)"},
     )
 
 
-def _key_digit(digit: str, on_click) -> rx.Component:
-    return _key_rect(
-        rx.text(digit, font_size="22px", font_weight="600", color="#FFFFFF",
-                line_height="1"),
-        on_click,
-        aria_label=f"Dígito {digit}",
-    )
-
-
-def _key_clear_btn(on_click) -> rx.Component:
-    return _key_rect(
-        rx.text("C", font_size="14px", font_weight="700", color="#64748B",
-                line_height="1"),
-        on_click,
-        aria_label="Borrar PIN completo",
-        bg="#1E293B",
-        border_color="#334155",
-    )
-
-
-def _key_backspace_btn(on_click) -> rx.Component:
-    return _key_rect(
-        rx.icon(tag="delete", size=18, color="#94A3B8"),
-        on_click,
-        aria_label="Borrar último dígito",
-        bg="#1E293B",
-        border_color="#334155",
+def _key_iphone_ghost(content: rx.Component, on_click, aria_label: str) -> rx.Component:
+    return rx.button(
+        content,
+        on_click=on_click,
+        aria_label=aria_label,
+        width="68px",
+        height="68px",
+        border_radius="50%",
+        background="transparent",
+        border="none",
+        padding="0",
+        min_width="0",
+        display="flex",
+        align_items="center",
+        justify_content="center",
+        cursor="pointer",
+        transition="background 0.1s ease, transform 0.1s ease",
+        _hover={"background": "rgba(255,255,255,0.1)"},
+        _active={"transform": "scale(0.88)"},
     )
 
 
 def _keypad() -> rx.Component:
     return rx.grid(
-        _key_digit("1", FoodState.append_login_digit("1")),
-        _key_digit("2", FoodState.append_login_digit("2")),
-        _key_digit("3", FoodState.append_login_digit("3")),
-        _key_digit("4", FoodState.append_login_digit("4")),
-        _key_digit("5", FoodState.append_login_digit("5")),
-        _key_digit("6", FoodState.append_login_digit("6")),
-        _key_digit("7", FoodState.append_login_digit("7")),
-        _key_digit("8", FoodState.append_login_digit("8")),
-        _key_digit("9", FoodState.append_login_digit("9")),
-        _key_clear_btn(FoodState.clear_login_pin),
-        _key_digit("0", FoodState.append_login_digit("0")),
-        _key_backspace_btn(FoodState.backspace_login_pin),
+        _key_iphone("1", "", FoodState.append_login_digit("1")),
+        _key_iphone("2", "ABC", FoodState.append_login_digit("2")),
+        _key_iphone("3", "DEF", FoodState.append_login_digit("3")),
+        _key_iphone("4", "GHI", FoodState.append_login_digit("4")),
+        _key_iphone("5", "JKL", FoodState.append_login_digit("5")),
+        _key_iphone("6", "MNO", FoodState.append_login_digit("6")),
+        _key_iphone("7", "PQRS", FoodState.append_login_digit("7")),
+        _key_iphone("8", "TUV", FoodState.append_login_digit("8")),
+        _key_iphone("9", "WXYZ", FoodState.append_login_digit("9")),
+        _key_iphone_ghost(
+            rx.text("C", font_size="20px", font_weight="400", color="#64748B",
+                    line_height="1"),
+            FoodState.clear_login_pin,
+            "Borrar PIN completo",
+        ),
+        _key_iphone("0", "+", FoodState.append_login_digit("0")),
+        _key_iphone_ghost(
+            rx.icon(tag="delete", size=20, color="#94A3B8"),
+            FoodState.backspace_login_pin,
+            "Borrar último dígito",
+        ),
         columns="3",
-        gap="10px",
+        gap="14px",
         width="100%",
+        justify_items="center",
     )
 
 
@@ -159,7 +169,7 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
                     rx.text(empresa.name[:1].upper(), font_size="22px",
                             font_weight="800", color="#FFFFFF", line_height="1"),
                     width="56px", height="56px", border_radius="12px",
-                    background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                    background="#334155",
                     display="flex", align_items="center", justify_content="center",
                 ),
             ),
@@ -174,7 +184,7 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
         padding="16px 10px",
         cursor="pointer",
         transition="border-color 0.15s, transform 0.1s",
-        _hover={"border_color": "#EA580C", "transform": "scale(0.98)"},
+        _hover={"border_color": "#64748B", "transform": "scale(0.98)"},
         _active={"transform": "scale(0.95)"},
     )
 
@@ -299,7 +309,7 @@ def _login_card() -> rx.Component:
             align_items="center",
             justify_content="center",
         ),
-        # Teclado
+        # Teclado iPhone
         _keypad(),
         # Botón Ingresar
         rx.button(
@@ -336,7 +346,7 @@ def _glow() -> rx.Component:
         transform="translate(-50%, -50%)",
         width=rx.breakpoints(initial="280px", md="420px"),
         height=rx.breakpoints(initial="280px", md="420px"),
-        background="radial-gradient(circle, rgba(234,88,12,0.35) 0%, rgba(234,88,12,0) 70%)",
+        background="radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 70%)",
         pointer_events="none",
         z_index="0",
     )
@@ -359,7 +369,7 @@ def _brand_logo_box_restaurant() -> rx.Component:
         border_radius="20px",
         width=rx.breakpoints(initial="190px", sm="230px", md="270px"),
         height=rx.breakpoints(initial="130px", sm="158px", md="186px"),
-        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        box_shadow="0 12px 40px rgba(0,0,0,0.5)",
         position="relative",
         z_index="1",
     )
@@ -388,7 +398,7 @@ def _brand_logo_box_pin() -> rx.Component:
                 ),
                 width="100%", height="100%",
                 display="flex", align_items="center", justify_content="center",
-                background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                background="#334155",
                 border_radius="20px",
             ),
         ),
@@ -396,7 +406,7 @@ def _brand_logo_box_pin() -> rx.Component:
         border_radius="20px",
         width=rx.breakpoints(initial="155px", sm="190px", md="220px"),
         height=rx.breakpoints(initial="105px", sm="128px", md="150px"),
-        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        box_shadow="0 12px 40px rgba(0,0,0,0.5)",
         position="relative",
         z_index="1",
     )
