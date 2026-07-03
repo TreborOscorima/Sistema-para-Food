@@ -92,6 +92,36 @@ html { scroll-behavior: smooth; }
   .twk-field-row > *:last-child  { flex: 1 !important; min-width: 0; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   POS LAYOUT — panel izquierdo con scroll interno en desktop
+   twk-pos-col   : columna POS con altura fija, overflow hidden
+   twk-pos-scroll: zona scrolleable (grilla de productos)
+   twk-pos-foot  : zona siempre visible abajo (carrito + cobro)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.twk-pos-col {
+  display: flex !important;
+  flex-direction: column !important;
+}
+@media (min-width: 768px) {
+  .twk-pos-col {
+    height: calc(100vh - 175px) !important;
+    overflow: hidden !important;
+  }
+}
+.twk-pos-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 4px;
+}
+.twk-pos-foot {
+  flex-shrink: 0;
+  border-top: 1px solid #334155;
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
 /* ─── Scrollbar sutil ──────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #F1F5F9; }
