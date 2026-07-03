@@ -540,9 +540,58 @@ def _config_left_sidebar() -> rx.Component:
         background="#F8FAFC",
         border="1px solid #E2E8F0",
         border_radius="14px",
-        min_width=rx.breakpoints(initial="100%", md="210px"),
-        width=rx.breakpoints(initial="100%", md="210px"),
+        width="210px",
         flex_shrink="0",
+    )
+
+
+def _tab_pill(key: str, label: str, icon: str) -> rx.Component:
+    active = ConfigSeccionState.seccion == key
+    return rx.box(
+        rx.hstack(
+            rx.icon(
+                tag=icon, size=14,
+                color=rx.cond(active, "#EA580C", "#64748B"),
+            ),
+            rx.text(
+                label,
+                font_size="12px",
+                font_weight=rx.cond(active, "700", "500"),
+                color=rx.cond(active, "#0F172A", "#64748B"),
+                white_space="nowrap",
+            ),
+            spacing="2", align="center",
+        ),
+        on_click=ConfigSeccionState.ir_a(key),
+        padding="8px 14px",
+        border_radius="20px",
+        background=rx.cond(active, "#FFFFFF", "transparent"),
+        border=rx.cond(active, "1px solid #FED7AA", "1px solid transparent"),
+        box_shadow=rx.cond(active, "0 1px 4px rgba(234,88,12,0.12)", "none"),
+        cursor="pointer",
+        flex_shrink="0",
+        transition="all 0.12s ease",
+        _hover={"background": rx.cond(active, "#FFFFFF", "#F1F5F9")},
+    )
+
+
+def _config_nav_tabs() -> rx.Component:
+    """Barra horizontal de tabs para mobile/tablet — desplazable en X."""
+    return rx.box(
+        rx.hstack(
+            _tab_pill("local",      "Local",      "store"),
+            _tab_pill("carta",      "Carta",      "qr_code"),
+            _tab_pill("mesas",      "Mesas",      "layout_grid"),
+            _tab_pill("impresoras", "Impresoras", "printer"),
+            _tab_pill("cuenta",     "Cuenta",     "key_round"),
+            spacing="1",
+            padding="4px",
+        ),
+        overflow_x="auto",
+        background="#F8FAFC",
+        border="1px solid #E2E8F0",
+        border_radius="12px",
+        width="100%",
     )
 
 
@@ -920,22 +969,32 @@ def _configuracion_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Cuerpo: sidebar + contenido
+        # Mobile/tablet: tabs horizontales (hidden en desktop via CSS)
+        rx.box(
+            _config_nav_tabs(),
+            display=rx.breakpoints(initial="block", md="none"),
+            width="100%",
+        ),
+        # Cuerpo: sidebar (desktop) + contenido
         rx.flex(
-            # Sidebar de sub-módulos
-            _config_left_sidebar(),
+            # Sidebar de sub-módulos — solo visible en desktop
+            rx.box(
+                _config_left_sidebar(),
+                display=rx.breakpoints(initial="none", md="block"),
+                flex_shrink="0",
+            ),
             # Área de contenido dinámico
             rx.box(
                 _content_area(),
                 flex="1",
                 min_width="0",
             ),
-            direction=rx.breakpoints(initial="column", md="row"),
+            direction="row",
             gap="16px",
             width="100%",
             align="start",
         ),
-        spacing="5",
+        spacing="4",
         width="100%",
     )
 
