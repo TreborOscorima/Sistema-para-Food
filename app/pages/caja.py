@@ -11,7 +11,7 @@ from app.states.caja_turno_mixin import (
     ResumenCierreRow,
     TurnoHistorialView,
 )
-from app.states.food_state import FoodState, MesaView, CajaItemView, PagoStagedView
+from app.states.food_state import FoodState, MesaView, CajaItemView, MostradorPendienteView, PagoStagedView
 
 _METODOS = [
     ("efectivo", "Efectivo", "💵"),
@@ -490,14 +490,18 @@ def _cobro_panel() -> rx.Component:
         ),
         # Botones
         rx.hstack(
-            rx.button(
-                rx.hstack(rx.icon(tag="ban", size=14), rx.text("Anular"),
-                          spacing="1", align="center"),
-                on_click=FoodState.abrir_anulacion_pedido_abierto(FoodState.caja_cobro_mesa_id),
-                background="#FFFFFF", color="#DC2626",
-                border="1px solid #FECACA", border_radius="12px",
-                font_size="14px", font_weight="600", padding_y="14px",
-                cursor="pointer", _hover={"background": "#FEF2F2"}, flex="1",
+            rx.cond(
+                FoodState.caja_cobro_pedido_id == 0,
+                rx.button(
+                    rx.hstack(rx.icon(tag="ban", size=14), rx.text("Anular"),
+                              spacing="1", align="center"),
+                    on_click=FoodState.abrir_anulacion_pedido_abierto(FoodState.caja_cobro_mesa_id),
+                    background="#FFFFFF", color="#DC2626",
+                    border="1px solid #FECACA", border_radius="12px",
+                    font_size="14px", font_weight="600", padding_y="14px",
+                    cursor="pointer", _hover={"background": "#FEF2F2"}, flex="1",
+                ),
+                rx.fragment(),
             ),
             rx.button(
                 "Cancelar",
@@ -527,6 +531,44 @@ def _cobro_panel() -> rx.Component:
         direction=rx.breakpoints(initial="column", lg="row"),
         ),
         spacing="4", width="100%",
+    )
+
+
+def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
+    seleccionado = FoodState.caja_cobro_pedido_id == pedido.pedido_id
+    return rx.box(
+        rx.hstack(
+            rx.vstack(
+                rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700",
+                        color=rx.cond(seleccionado, "#EA580C", "#334155")),
+                rx.text(pedido.items_resumen, font_size="11px", color="#64748B", no_of_lines=2),
+                spacing="0", align="start",
+            ),
+            rx.spacer(),
+            rx.vstack(
+                rx.text(pedido.total_texto, font_size="16px", font_weight="800",
+                        color=rx.cond(seleccionado, "#0F172A", "#334155")),
+                rx.cond(
+                    pedido.en_cocina,
+                    rx.badge("En cocina", background="#FEF3C7", color="#92400E",
+                             border_radius="20px", font_size="10px", font_weight="700",
+                             padding_x="8px", padding_y="2px"),
+                    rx.badge("Listo", background="#DCFCE7", color="#166534",
+                             border_radius="20px", font_size="10px", font_weight="700",
+                             padding_x="8px", padding_y="2px"),
+                ),
+                align="end", spacing="1",
+            ),
+            width="100%", align="center",
+        ),
+        on_click=FoodState.abrir_cobro_pedido_mostrador(pedido.pedido_id),
+        padding="14px 16px",
+        background=rx.cond(seleccionado, "#FFF7ED", "#FFFFFF"),
+        border_left=rx.cond(seleccionado, "3px solid #EA580C", "3px solid transparent"),
+        border_bottom="1px solid #F1F5F9",
+        cursor="pointer",
+        width="100%",
+        _hover={"background": rx.cond(seleccionado, "#FFF7ED", "#F8FAFC")},
     )
 
 
@@ -566,6 +608,7 @@ def _mesa_sidebar_row(mesa: MesaView) -> rx.Component:
 def _mesas_sidebar() -> rx.Component:
     mesas_cobrables = FoodState.mesas_por_cobrar
     return rx.box(
+        # Mesas por cobrar
         rx.box(
             rx.text("Mesas por cobrar", font_size="11px", font_weight="700", color="#94A3B8",
                     text_transform="uppercase", letter_spacing="0.05em"),
@@ -579,7 +622,28 @@ def _mesas_sidebar() -> rx.Component:
             ),
             rx.center(
                 rx.text("No hay mesas abiertas.", font_size="13px", color="#94A3B8"),
-                padding_y="30px", width="100%",
+                padding_y="20px", width="100%",
+            ),
+        ),
+        # Para llevar — pedidos de Mostrador pendientes de cobro
+        rx.box(
+            rx.hstack(
+                rx.icon(tag="package", size=12, color="#EA580C"),
+                rx.text("Para llevar", font_size="11px", font_weight="700", color="#EA580C",
+                        text_transform="uppercase", letter_spacing="0.05em"),
+                spacing="1", align="center",
+            ),
+            padding="12px 16px", border_top="1px solid #F1F5F9", border_bottom="1px solid #F1F5F9",
+        ),
+        rx.cond(
+            FoodState.pedidos_mostrador_pendientes.length() > 0,
+            rx.vstack(
+                rx.foreach(FoodState.pedidos_mostrador_pendientes, _para_llevar_card),
+                spacing="0", width="100%",
+            ),
+            rx.center(
+                rx.text("Sin pedidos para llevar.", font_size="13px", color="#94A3B8"),
+                padding_y="20px", width="100%",
             ),
         ),
         background="#FFFFFF",

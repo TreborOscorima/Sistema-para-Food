@@ -795,6 +795,17 @@ class MostradorEntregadoView(BaseModel):
     total_texto: str
 
 
+class MostradorPendienteView(BaseModel):
+    """Orden de mostrador pendiente de cobro — usada en panel derecho de Mostrador y sidebar de Caja."""
+    pedido_id: int = 0
+    cliente_nombre: str = ""
+    hora_texto: str = ""
+    items_resumen: str = ""
+    total_texto: str = ""
+    total: float = 0.0
+    en_cocina: bool = False
+
+
 class UsuarioAdminView(BaseModel):
     id: int
     nombre: str
@@ -906,7 +917,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     historial_pedido: list[HistorialItem] = []
     tickets_cocina: list[CocinaTicketView] = []
     historial_ventas: list[VentaHistorialView] = []
-    pedidos_mostrador_listos: list[MostradorEntregaView] = []
+    pedidos_mostrador_pendientes: list[MostradorPendienteView] = []
     pedidos_mostrador_entregados: list[MostradorEntregadoView] = []
 
     mesa_seleccionada_id: int = 0
@@ -1002,6 +1013,10 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_cobro_efectivo_recibido: str = ""
     caja_cobro_error: str = ""
     caja_cobro_items: list[CajaItemView] = []
+    # Cobro de pedidos para llevar desde Mostrador
+    caja_cobro_pedido_id: int = 0
+    caja_cobro_pedido_label: str = ""
+    caja_cobro_total_override: float = 0.0
 
     # Caja — cobro dividido / pago mixto
     caja_cobro_dividido: bool = False
@@ -1506,15 +1521,19 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     @rx.var
     def caja_cobro_activo(self) -> bool:
-        return self.caja_cobro_mesa_id > 0
+        return self.caja_cobro_mesa_id > 0 or self.caja_cobro_pedido_id > 0
 
     @rx.var
     def caja_cobro_mesa_nombre(self) -> str:
+        if self.caja_cobro_pedido_id > 0:
+            return self.caja_cobro_pedido_label
         mesa = next((m for m in self.mesas if m.id == self.caja_cobro_mesa_id), None)
         return mesa.nombre if mesa else ""
 
     @rx.var
     def caja_cobro_total_base(self) -> float:
+        if self.caja_cobro_pedido_id > 0:
+            return self.caja_cobro_total_override
         mesa = next((m for m in self.mesas if m.id == self.caja_cobro_mesa_id), None)
         return mesa.total_abierto if mesa else 0.0
 
@@ -1583,7 +1602,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def refrescar(self) -> None:
         self.cargar_datos_iniciales()
-        self.cargar_pedidos_mostrador_listos()
+        self.cargar_pedidos_mostrador_pendientes()
         self.cargar_pedidos_mostrador_entregados()
         self.mensaje = "Datos actualizados."
 
@@ -1596,7 +1615,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.historial_pedido = []
         self.tickets_cocina = []
         self.historial_ventas = []
-        self.pedidos_mostrador_listos = []
+        self.pedidos_mostrador_pendientes = []
         self.pedidos_mostrador_entregados = []
         self.mesa_seleccionada_id = 0
         self.mesa_atendida_por_nombre = ""
@@ -1710,6 +1729,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         if result is not None:
             return result
         self.cargar_turno_caja()
+        self.cargar_pedidos_mostrador_pendientes()
         return None
 
     def on_load_mostrador(self):
@@ -1720,7 +1740,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         if result is not None:
             return result
         self.cargar_turno_caja()
-        self.cargar_pedidos_mostrador_listos()
+        self.cargar_pedidos_mostrador_pendientes()
         self.cargar_pedidos_mostrador_entregados()
         return None
 
@@ -2278,13 +2298,14 @@ class FoodState(CajaTurnoMixin, rx.State):
         if self.usuario_actual is None:
             return
         self.cargar_mesas()
+        self.cargar_pedidos_mostrador_pendientes()
         if self.mesa_seleccionada_id:
             self._cargar_historial_mesa(self.mesa_seleccionada_id)
 
     def _refresh_mostrador_slice(self) -> None:
         if self.usuario_actual is None:
             return
-        self.cargar_pedidos_mostrador_listos()
+        self.cargar_pedidos_mostrador_pendientes()
         self.cargar_pedidos_mostrador_entregados()
 
     async def _run_polling_loop(self, flag_name: str, interval_seconds: int, refresh_callback) -> None:
@@ -3034,6 +3055,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.mensaje = "Esa mesa no tiene consumo pendiente."
             return
         self.caja_cobro_mesa_id = mesa_id
+        self.caja_cobro_pedido_id = 0
+        self.caja_cobro_pedido_label = ""
+        self.caja_cobro_total_override = 0.0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_efectivo_recibido = ""
@@ -3099,6 +3123,9 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def cancelar_cobro(self) -> None:
         self.caja_cobro_mesa_id = 0
+        self.caja_cobro_pedido_id = 0
+        self.caja_cobro_pedido_label = ""
+        self.caja_cobro_total_override = 0.0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_descuento = ""
@@ -3281,10 +3308,14 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def confirmar_cobro(self) -> None:
         self.caja_cobro_error = ""
-        objetivo = self.caja_cobro_mesa_id
-        if objetivo == 0:
+        es_mostrador = self.caja_cobro_pedido_id > 0
+        objetivo_mesa = self.caja_cobro_mesa_id
+        objetivo_pedido = self.caja_cobro_pedido_id
+
+        if not es_mostrador and objetivo_mesa == 0:
             self.caja_cobro_error = "No hay mesa seleccionada para cobrar."
             return
+
         metodo = self.caja_cobro_metodo or "efectivo"
         try:
             propina_raw = float(self.caja_cobro_propina.replace(",", ".").strip())
@@ -3303,27 +3334,37 @@ class FoodState(CajaTurnoMixin, rx.State):
         total_base = Decimal("0.00")
         ticket_lines: list[TicketLine] = []
         with self._tenant_session() as session:
-            mesa = session.get(Mesa, objetivo)
-            if mesa is None:
-                self.mensaje = "La mesa indicada ya no existe."
-                return
-            pedido = _get_open_order(session, mesa.id or 0, self._company_id())
-            if pedido is None:
-                self.mensaje = "No hay pedido abierto para esa mesa."
-                return
-            if _get_unsent_details(session, pedido.id or 0):
-                self.mensaje = "Todavia hay items pendientes de enviar a cocina."
-                return
-            if _get_not_delivered_details(session, pedido.id or 0):
-                self.mensaje = "Todavia hay items en cocina o listos por entregar."
-                return
+            if es_mostrador:
+                mesa = None
+                pedido = session.get(Pedido, objetivo_pedido)
+                if pedido is None:
+                    self.mensaje = "El pedido ya no existe."
+                    return
+                if pedido.pagado:
+                    self.mensaje = "Este pedido ya fue cobrado."
+                    return
+            else:
+                mesa = session.get(Mesa, objetivo_mesa)
+                if mesa is None:
+                    self.mensaje = "La mesa indicada ya no existe."
+                    return
+                pedido = _get_open_order(session, mesa.id or 0, self._company_id())
+                if pedido is None:
+                    self.mensaje = "No hay pedido abierto para esa mesa."
+                    return
+                if _get_unsent_details(session, pedido.id or 0):
+                    self.mensaje = "Todavia hay items pendientes de enviar a cocina."
+                    return
+                if _get_not_delivered_details(session, pedido.id or 0):
+                    self.mensaje = "Todavia hay items en cocina o listos por entregar."
+                    return
+
             turno = get_turno_abierto(session, self._company_id())
             if turno is None:
                 self.caja_cobro_error = "No hay turno de caja abierto. Abre el turno antes de cobrar."
                 return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             ticket_lines = [
                 TicketLine(
                     name=(productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"),
@@ -3334,10 +3375,17 @@ class FoodState(CajaTurnoMixin, rx.State):
                 )
                 for d in detalles
             ]
-            mozo = usuarios.get(pedido.mozo_id)
-            attended_by = _actor_name(
-                mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
-            ) or "Sin asignar"
+            if es_mostrador:
+                attended_by = _actor_name(
+                    self.usuario_actual.nombre if self.usuario_actual else ""
+                ) or "Sin asignar"
+            else:
+                usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
+                mozo = usuarios.get(pedido.mozo_id)
+                attended_by = _actor_name(
+                    mozo.nombre if mozo else (self.usuario_actual.nombre if self.usuario_actual else "")
+                ) or "Sin asignar"
+
             total_base = _to_decimal(pedido.total)
             if descuento > total_base:
                 self.caja_cobro_error = f"El descuento ({_money_text(descuento)}) no puede superar el total ({_money_text(total_base)})."
@@ -3384,18 +3432,24 @@ class FoodState(CajaTurnoMixin, rx.State):
             if self.caja_cobro_cliente_id > 0:
                 pedido.cliente_id = self.caja_cobro_cliente_id
             session.add(pedido)
-            mesa.estado = EstadoMesa.LIBRE.value
-            mesa.updated_at = now
-            session.add(mesa)
+            if mesa is not None:
+                mesa.estado = EstadoMesa.LIBRE.value
+                mesa.updated_at = now
+                session.add(mesa)
             _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
             if total_fiado > 0:
+                fiado_label = (
+                    f"Fiado pedido #{pedido.id}"
+                    if es_mostrador
+                    else f"Fiado mesa {mesa.nombre or str(mesa.numero)}"
+                )
                 try:
                     self._registrar_cargo_cc(
                         session,
                         self.caja_cobro_cliente_id,
                         total_fiado,
                         pedido.id,
-                        f"Fiado mesa {mesa.nombre or str(mesa.numero)}",
+                        fiado_label,
                     )
                 except ValueError as exc:
                     self.caja_cobro_error = str(exc)
@@ -3412,7 +3466,11 @@ class FoodState(CajaTurnoMixin, rx.State):
             metodo_final = pedido.metodo_pago or metodo
             session.commit()
             pedido_id = pedido.id or 0
-            mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
+            if es_mostrador:
+                cliente_n = _actor_name(pedido.nombre_cliente) or "Sin nombre"
+                mesa_label = f"Para llevar — {cliente_n}"
+            else:
+                mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
 
         # Redimir cupón si se aplicó uno
         cupon_id_a_redimir = self.caja_cupon_id_aplicado
@@ -3424,7 +3482,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             except Exception:
                 pass  # la venta ya ocurrió; no bloqueamos por esto
 
-        if self.mesa_seleccionada_id == objetivo:
+        if not es_mostrador and self.mesa_seleccionada_id == objetivo_mesa:
             self.mesa_seleccionada_id = 0
             self.carrito = []
             self.historial_pedido = []
@@ -3432,6 +3490,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cancelar_cobro()
         self.cargar_mesas()
         self.cargar_historial_ventas()
+        if es_mostrador:
+            self.cargar_pedidos_mostrador_pendientes()
         total_final = max(total_base - descuento + propina, Decimal("0.00"))
         html_ticket = generate_cashier_ticket_html(
             order_reference=mesa_label,
@@ -3444,7 +3504,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         )
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
-        self.mensaje = f"{mesa_label} cobrada ({metodo_final}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
+        self.mensaje = f"{mesa_label} cobrado ({metodo_final}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
         return rx.call_script(build_print_script(html_ticket))
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
@@ -3453,6 +3513,55 @@ class FoodState(CajaTurnoMixin, rx.State):
         """Redirige al panel de cobro completo (método, descuento, propina, turno).
         El cobro directo sin panel quedó deprecado — siempre pasa por abrir_cobro_mesa."""
         return self.abrir_cobro_mesa(mesa_id or self.mesa_seleccionada_id)
+
+    def abrir_cobro_pedido_mostrador(self, pedido_id: int) -> None:
+        """Abre el panel de cobro para una orden de mostrador pendiente de pago."""
+        items_ui: list[CajaItemView] = []
+        total_override = 0.0
+        cliente_nombre = ""
+        with self._tenant_session() as session:
+            pedido = session.get(Pedido, pedido_id)
+            if pedido is None or pedido.company_id != self._company_id():
+                self.mensaje = "El pedido no existe."
+                return
+            if pedido.pagado:
+                self.mensaje = "Este pedido ya fue cobrado."
+                return
+            detalles = session.exec(
+                select(DetallePedido).where(
+                    DetallePedido.pedido_id == pedido_id
+                ).order_by(DetallePedido.id)
+            ).all()
+            productos = {
+                p.id: p
+                for p in session.exec(
+                    select(Producto).where(Producto.company_id == self._company_id())
+                ).all()
+            }
+            for d in detalles:
+                prod = productos.get(d.producto_id)
+                items_ui.append(CajaItemView(
+                    producto_nombre=prod.nombre if prod else f"Producto {d.producto_id}",
+                    cantidad=d.cantidad,
+                    precio_unitario_texto=_money_text(_to_decimal(d.precio_unitario)),
+                    subtotal_texto=_money_text(_to_decimal(d.subtotal)),
+                    notas=d.notas or "",
+                ))
+            total_override = float(_to_decimal(pedido.total))
+            cliente_nombre = _actor_name(pedido.nombre_cliente) or "Sin nombre"
+        self.caja_cobro_pedido_id = pedido_id
+        self.caja_cobro_pedido_label = f"Para llevar — {cliente_nombre}"
+        self.caja_cobro_total_override = total_override
+        self.caja_cobro_mesa_id = 0
+        self.caja_cobro_metodo = "efectivo"
+        self.caja_cobro_propina = ""
+        self.caja_cobro_descuento = ""
+        self.caja_cobro_efectivo_recibido = ""
+        self.caja_cobro_error = ""
+        self.mensaje = ""
+        self.caja_promo_aplicada_nombre = ""
+        self.caja_promo_aplicada_texto = ""
+        self.caja_cobro_items = items_ui
 
     # ─── Mostrador ────────────────────────────────────────────────────────────
 
@@ -3524,18 +3633,17 @@ class FoodState(CajaTurnoMixin, rx.State):
     def seleccionar_mostrador_metodo(self, metodo: str) -> None:
         self.mostrador_metodo_pago = metodo
 
-    def cobrar_y_enviar_mostrador(self) -> None:
+    def enviar_pedido_mostrador(self) -> None:
+        """Crea el pedido de mostrador y lo manda a cocina. El cobro se realiza en Caja."""
         if not self.mostrador_carrito:
-            self.mensaje = "Agrega productos antes de cobrar en mostrador."
+            self.mensaje = "Agrega productos antes de enviar a cocina."
             return
         if self.usuario_actual is None:
-            self.mensaje = "Inicia sesion para registrar la venta de mostrador."
+            self.mensaje = "Inicia sesion para registrar el pedido."
             return
         pedido_id = 0
-        total = 0.0
         cliente_nombre = _actor_name(self.mostrador_cliente_nombre) or "Sin nombre"
-        ticket_label = f"Para Llevar - Cliente: {cliente_nombre}"
-        attended_by = _actor_name(self.usuario_actual.nombre if self.usuario_actual else "") or "Sin asignar"
+        ticket_label = f"Para Llevar - {cliente_nombre}"
         ticket_lines: list[TicketLine] = []
         with self._tenant_session() as session:
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
@@ -3549,10 +3657,6 @@ class FoodState(CajaTurnoMixin, rx.State):
             if errores_stock:
                 self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
                 return
-            turno = get_turno_abierto(session, self._company_id())
-            if turno is None:
-                self.mensaje = "No hay turno de caja abierto. Abre el turno antes de cobrar."
-                return
             now = _utcnow()
             pedido = Pedido(
                 company_id=self._company_id(),
@@ -3560,13 +3664,13 @@ class FoodState(CajaTurnoMixin, rx.State):
                 cajero_id=self.usuario_actual.id or None,
                 tipo_pedido=TipoPedido.MOSTRADOR.value,
                 nombre_cliente=_actor_name(self.mostrador_cliente_nombre) or None,
-                pagado=True,
+                pagado=False,
                 estado=EstadoPedido.ENVIADO.value,
-                metodo_pago=self.mostrador_metodo_pago,
+                metodo_pago=None,
                 total=Decimal("0.00"),
                 abierto_en=now,
-                cerrado_en=now,
-                turno_caja_id=turno.id,
+                cerrado_en=None,
+                turno_caja_id=None,
             )
             session.add(pedido)
             session.commit()
@@ -3595,103 +3699,61 @@ class FoodState(CajaTurnoMixin, rx.State):
                     subtotal=float(subtotal),
                     note="",
                 ))
-            total_bruto = float(_recalculate_order_total(session, pedido))
-            # Aplicar descuento de cupón al total final
-            cupon_desc = Decimal("0.00")
-            if self.mostrador_cupon_descuento_aplicado:
-                try:
-                    cupon_desc = Decimal(self.mostrador_cupon_descuento_aplicado)
-                except (ValueError, Exception):
-                    pass
-            total_neto = max(Decimal(str(round(total_bruto, 2))) - cupon_desc, Decimal("0.00"))
-            pedido.descuento = cupon_desc
-            pedido.total = total_neto
-            pedido.updated_at = _utcnow()
-            session.add(pedido)
-            total = float(total_neto)
+            _recalculate_order_total(session, pedido)
             _sync_order_status(session, pedido)
-            _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
-            if total > 0:
-                session.add(PagoPedido(
-                    company_id=self._company_id(),
-                    pedido_id=pedido.id or 0,
-                    turno_caja_id=turno.id,
-                    usuario_id=self.usuario_actual.id or None,
-                    metodo=self.mostrador_metodo_pago or "efectivo",
-                    monto=Decimal(str(round(total, 2))),
-                ))
             session.commit()
             pedido_id = pedido.id or 0
-        # Redimir cupón mostrador si se aplicó uno
-        cupon_id_mdr = self.mostrador_cupon_id_aplicado
-        if cupon_id_mdr > 0:
-            try:
-                with self._tenant_session() as session:
-                    redimir_cupon(session, cupon_id_mdr)
-                    session.commit()
-            except Exception:
-                pass
 
         self.ultimo_pedido_id = pedido_id
         self.mostrador_carrito = []
         self.mostrador_cliente_nombre = ""
-        self.mostrador_metodo_pago = "efectivo"
-        self.quitar_cupon_mostrador()
         self.cargar_cocina()
-        self.cargar_historial_ventas()
-        paper_width_mm = self._ticket_paper_width_mm()
+        self.cargar_pedidos_mostrador_pendientes()
         html_cocina = generate_kitchen_ticket_html(
             mesa_label=ticket_label, pedido_id=pedido_id, items=ticket_lines,
-            paper_width_mm=paper_width_mm,
+            paper_width_mm=self._ticket_paper_width_mm(),
         )
-        html_caja = generate_cashier_ticket_html(
-            order_reference=f"Cliente: {cliente_nombre}", pedido_id=pedido_id,
-            items=ticket_lines, total=total, attended_by=attended_by,
-            company_name=self.config_nombre_local or "TUWAYKIFOOD",
-            paper_width_mm=paper_width_mm,
-        )
-        self.mensaje = f"Pedido de mostrador #{pedido_id} cobrado y enviado."
-        return rx.call_script(build_print_script(html_cocina) + build_print_script(html_caja))
+        self.mensaje = f"Pedido #{pedido_id} enviado a cocina. Cobrar en Caja."
+        return rx.call_script(build_print_script(html_cocina))
 
-    def cargar_pedidos_mostrador_listos(self) -> None:
+    def cargar_pedidos_mostrador_pendientes(self) -> None:
+        """Carga órdenes de mostrador sin cobrar (pagado=False) — usada en Mostrador y Caja."""
         with self._tenant_session() as session:
-            detalles = session.exec(
-                select(DetallePedido).where(
-                    DetallePedido.company_id == self._company_id(),
-                    DetallePedido.impreso_cocina.is_(True),
-                    DetallePedido.estado_produccion == EstadoProduccion.LISTO_PARA_ENTREGAR.value,
-                ).order_by(DetallePedido.enviado_cocina_at, DetallePedido.id)
+            pedidos = session.exec(
+                select(Pedido).where(
+                    Pedido.company_id == self._company_id(),
+                    Pedido.tipo_pedido == TipoPedido.MOSTRADOR.value,
+                    Pedido.pagado.is_(False),
+                ).order_by(Pedido.abierto_en.desc(), Pedido.id.desc())
             ).all()
-            if not detalles:
-                self.pedidos_mostrador_listos = []
+            if not pedidos:
+                self.pedidos_mostrador_pendientes = []
                 return
-            pedido_ids = {d.pedido_id for d in detalles}
-            pedidos = {
-                p.id: p
-                for p in session.exec(select(Pedido).where(Pedido.id.in_(pedido_ids))).all()
-                if p.tipo_pedido == TipoPedido.MOSTRADOR.value
-            }
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            grupos: dict = {}
-            for d in detalles:
-                pedido = pedidos.get(d.pedido_id)
-                if pedido is None:
-                    continue
-                marca = d.updated_at or d.enviado_cocina_at or d.created_at
-                if pedido.id not in grupos:
-                    grupos[pedido.id] = {
-                        "pedido_id": pedido.id or 0,
-                        "cliente_nombre": _actor_name(pedido.nombre_cliente) or "Sin nombre",
-                        "hora_texto": marca.strftime("%H:%M"),
-                        "items_lines": [],
-                        "items_count": 0,
-                    }
-                producto = productos.get(d.producto_id)
-                grupos[pedido.id]["items_lines"].append(f"{d.cantidad} x {producto.nombre if producto else f'Producto {d.producto_id}'}")
-                grupos[pedido.id]["items_count"] += d.cantidad
-            self.pedidos_mostrador_listos = [
-                MostradorEntregaView(**data) for data in grupos.values()
-            ]
+            result: list[MostradorPendienteView] = []
+            for pedido in pedidos:
+                detalles = session.exec(
+                    select(DetallePedido).where(DetallePedido.pedido_id == pedido.id).order_by(DetallePedido.id)
+                ).all()
+                resumen = " · ".join(
+                    f"{d.cantidad}x {productos[d.producto_id].nombre if d.producto_id in productos else f'Producto {d.producto_id}'}"
+                    for d in detalles
+                )
+                hora = pedido.abierto_en or pedido.created_at
+                en_cocina = any(
+                    d.estado_produccion in (EstadoProduccion.PENDIENTE.value, EstadoProduccion.EN_PREPARACION.value)
+                    for d in detalles
+                )
+                result.append(MostradorPendienteView(
+                    pedido_id=pedido.id or 0,
+                    cliente_nombre=_actor_name(pedido.nombre_cliente) or "Sin nombre",
+                    hora_texto=hora.strftime("%H:%M") if hora else "",
+                    items_resumen=resumen,
+                    total_texto=_money_text(pedido.total),
+                    total=float(_to_decimal(pedido.total)),
+                    en_cocina=en_cocina,
+                ))
+            self.pedidos_mostrador_pendientes = result
 
     def cargar_pedidos_mostrador_entregados(self) -> None:
         with self._tenant_session() as session:
@@ -3711,19 +3773,17 @@ class FoodState(CajaTurnoMixin, rx.State):
                 detalles = session.exec(
                     select(DetallePedido).where(DetallePedido.pedido_id == pedido.id).order_by(DetallePedido.id)
                 ).all()
-                if not detalles or any(d.estado_produccion != EstadoProduccion.ENTREGADO_AL_CLIENTE.value for d in detalles):
-                    continue
-                entregado_en = max(d.updated_at for d in detalles)
+                cobrado_en = pedido.cerrado_en or pedido.updated_at or pedido.created_at
                 resumen = " · ".join(
                     f"{d.cantidad}x {productos[d.producto_id].nombre if d.producto_id in productos else f'Producto {d.producto_id}'}"
                     for d in detalles
                 )
                 historial.append((
-                    entregado_en,
+                    cobrado_en,
                     MostradorEntregadoView(
                         pedido_id=pedido.id or 0,
                         cliente_nombre=_actor_name(pedido.nombre_cliente) or "Sin nombre",
-                        hora_texto=entregado_en.strftime("%H:%M"),
+                        hora_texto=cobrado_en.strftime("%H:%M") if cobrado_en else "",
                         items_resumen=resumen,
                         total_texto=_money_text(pedido.total),
                     ),
@@ -3756,7 +3816,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.add(pedido)
             session.commit()
         self.cargar_cocina()
-        self.cargar_pedidos_mostrador_listos()
+        self.cargar_pedidos_mostrador_pendientes()
         self.cargar_pedidos_mostrador_entregados()
         self.cargar_historial_ventas()
         self.mensaje = "Pedido de mostrador entregado al cliente."

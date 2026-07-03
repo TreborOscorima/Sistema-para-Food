@@ -8,8 +8,8 @@ from app.components.shared import app_shell, cumpleanos_banner
 from app.states.food_state import (
     CarritoItem,
     FoodState,
-    MostradorEntregaView,
     MostradorEntregadoView,
+    MostradorPendienteView,
     ProductoView,
 )
 
@@ -93,44 +93,37 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
     )
 
 
-def _listo_card(pedido: MostradorEntregaView) -> rx.Component:
+def _pendiente_card(pedido: MostradorPendienteView) -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700", color="#FFFFFF"),
+                rx.text(pedido.cliente_nombre, font_size="13px", font_weight="700", color="#FFFFFF"),
+                rx.spacer(),
+                rx.cond(
+                    pedido.en_cocina,
+                    rx.badge("En cocina", background="#0F172A", color="#FCD34D",
+                             border="1px solid #FCD34D", border_radius="20px",
+                             font_size="10px", font_weight="700", padding_x="8px"),
+                    rx.badge("Listo", background="#052E16", color="#4ADE80",
+                             border="1px solid #4ADE80", border_radius="20px",
+                             font_size="10px", font_weight="700", padding_x="8px"),
+                ),
+                width="100%", align="center",
+            ),
+            rx.text(pedido.items_resumen, font_size="11px", color="#94A3B8", no_of_lines=2),
+            rx.hstack(
+                rx.text(pedido.total_texto, font_size="13px", font_weight="800", color="#EA580C"),
                 rx.spacer(),
                 rx.text(pedido.hora_texto, font_size="11px", color="#64748B"),
-                width="100%",
+                width="100%", align="center",
             ),
-            rx.vstack(
-                rx.foreach(
-                    pedido.items_lines,
-                    lambda line: rx.text(line, font_size="12px", color="#94A3B8"),
-                ),
-                spacing="0",
-                align="start",
-                width="100%",
-            ),
-            rx.button(
-                "Entregar al cliente",
-                on_click=FoodState.entregar_pedido_mostrador(pedido.pedido_id),
-                width="100%",
-                background="#16A34A",
-                color="#FFFFFF",
-                border_radius="8px",
-                font_size="13px",
-                font_weight="700",
-                cursor="pointer",
-                padding_y="8px",
-                _hover={"background": "#166534"},
-            ),
-            spacing="2",
+            spacing="1",
             width="100%",
         ),
         background="#0F172A",
-        border="2px solid #16A34A",
-        border_radius="12px",
-        padding="14px",
+        border="1px solid #334155",
+        border_radius="10px",
+        padding="12px",
     )
 
 
@@ -269,84 +262,6 @@ def _mostrador_content() -> rx.Component:
                                 overflow_y="auto",
                             ),
                         ),
-                        # ── Cupón de descuento ──────────────────────────────
-                        rx.cond(
-                            FoodState.mostrador_cupon_id_aplicado > 0,
-                            rx.hstack(
-                                rx.icon(tag="ticket_percent", size=13, color="#4ADE80"),
-                                rx.text(FoodState.mostrador_cupon_nombre_aplicado,
-                                        font_size="12px", font_weight="700", color="#4ADE80"),
-                                rx.spacer(),
-                                rx.text("-S/ " + FoodState.mostrador_cupon_descuento_aplicado,
-                                        font_size="12px", font_weight="700", color="#4ADE80"),
-                                rx.icon_button(
-                                    rx.icon(tag="x", size=11),
-                                    on_click=FoodState.quitar_cupon_mostrador,
-                                    background="#1E293B", color="#FCA5A5",
-                                    border="1px solid #334155", border_radius="4px",
-                                    width="20px", height="20px", cursor="pointer",
-                                ),
-                                width="100%", align="center", spacing="2",
-                            ),
-                            rx.vstack(
-                                rx.hstack(
-                                    rx.input(
-                                        placeholder="Código cupón",
-                                        value=FoodState.mostrador_cupon_codigo,
-                                        on_change=FoodState.set_mostrador_cupon_codigo,
-                                        background="#0F172A", border="1px solid #334155",
-                                        color="#F1F5F9", border_radius="7px",
-                                        font_size="12px", padding_x="9px", padding_y="5px",
-                                        flex="1", _focus={"border_color": "#EA580C"},
-                                    ),
-                                    rx.button(
-                                        "Aplicar",
-                                        on_click=FoodState.aplicar_cupon_mostrador,
-                                        background="#334155", color="#F1F5F9",
-                                        border_radius="7px", font_size="11px",
-                                        font_weight="700", padding_x="10px", padding_y="5px",
-                                        cursor="pointer", _hover={"background": "#EA580C"},
-                                    ),
-                                    spacing="2", width="100%",
-                                ),
-                                rx.cond(
-                                    FoodState.mostrador_cupon_error != "",
-                                    rx.text(FoodState.mostrador_cupon_error,
-                                            font_size="11px", color="#FCA5A5"),
-                                    rx.fragment(),
-                                ),
-                                spacing="1", width="100%",
-                            ),
-                        ),
-                        rx.hstack(
-                            *[
-                                rx.button(
-                                    rx.hstack(
-                                        rx.icon(tag=icon, size=14,
-                                                color=rx.cond(FoodState.mostrador_metodo_pago == val, "#FFFFFF", "#94A3B8")),
-                                        rx.text(label, font_size="12px", font_weight="700",
-                                                color=rx.cond(FoodState.mostrador_metodo_pago == val, "#FFFFFF", "#94A3B8")),
-                                        spacing="1", align="center",
-                                    ),
-                                    on_click=FoodState.seleccionar_mostrador_metodo(val),
-                                    background=rx.cond(FoodState.mostrador_metodo_pago == val, "#EA580C", "#0F172A"),
-                                    border=rx.cond(FoodState.mostrador_metodo_pago == val, "2px solid #EA580C", "2px solid #334155"),
-                                    border_radius="8px",
-                                    padding="6px 0",
-                                    cursor="pointer",
-                                    flex="1",
-                                    _hover={"border": "2px solid #EA580C"},
-                                )
-                                for val, label, icon in [
-                                    ("efectivo", "Efectivo", "banknote"),
-                                    ("tarjeta", "Tarjeta", "credit_card"),
-                                    ("qr", "QR / Yape", "qr_code"),
-                                ]
-                            ],
-                            spacing="2",
-                            width="100%",
-                            max_width="520px",
-                        ),
                         rx.hstack(
                             rx.button(
                                 "Limpiar",
@@ -360,13 +275,15 @@ def _mostrador_content() -> rx.Component:
                                 _hover={"border_color": "#DC2626"},
                             ),
                             rx.button(
-                                "Cobrar y Enviar a Cocina",
-                                on_click=FoodState.cobrar_y_enviar_mostrador,
+                                rx.hstack(
+                                    rx.icon(tag="send", size=14, color="#FFFFFF"),
+                                    rx.text("Enviar a cocina", font_size="13px", font_weight="700", color="#FFFFFF"),
+                                    spacing="2", align="center",
+                                ),
+                                on_click=FoodState.enviar_pedido_mostrador,
                                 background="#EA580C",
                                 color="#FFFFFF",
                                 border_radius="8px",
-                                font_size="13px",
-                                font_weight="700",
                                 cursor="pointer",
                                 _hover={"background": "#C2410C"},
                                 flex="1",
@@ -384,23 +301,27 @@ def _mostrador_content() -> rx.Component:
             ),
             rx.divider(orientation="vertical", border_color="#334155", height="auto",
                        class_name="twk-sep"),
-            # ─── Panel der: listos + historial ───────────────────────────
+            # ─── Panel der: pendientes + cobrados ────────────────────────
             rx.vstack(
-                rx.text("Listos para entrega", font_size="14px", font_weight="700", color="#4ADE80"),
+                rx.hstack(
+                    rx.icon(tag="clock", size=13, color="#FCD34D"),
+                    rx.text("Pendientes de cobro", font_size="14px", font_weight="700", color="#FCD34D"),
+                    spacing="2", align="center",
+                ),
                 rx.cond(
-                    FoodState.pedidos_mostrador_listos.length() == 0,
+                    FoodState.pedidos_mostrador_pendientes.length() == 0,
                     rx.center(
-                        rx.text("Sin pedidos listos", font_size="12px", color="#64748B"),
+                        rx.text("Sin pedidos en espera", font_size="12px", color="#64748B"),
                         padding_y="16px",
                     ),
                     rx.vstack(
-                        rx.foreach(FoodState.pedidos_mostrador_listos, _listo_card),
-                        spacing="3",
+                        rx.foreach(FoodState.pedidos_mostrador_pendientes, _pendiente_card),
+                        spacing="2",
                         width="100%",
                     ),
                 ),
                 rx.divider(border_color="#334155"),
-                rx.text("Entregados hoy", font_size="13px", font_weight="700", color="#94A3B8"),
+                rx.text("Cobrados hoy", font_size="13px", font_weight="700", color="#94A3B8"),
                 rx.cond(
                     FoodState.pedidos_mostrador_entregados.length() == 0,
                     rx.center(
