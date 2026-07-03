@@ -173,78 +173,94 @@ def _cobro_panel() -> rx.Component:
         ),
         # 2 columnas: recibo | terminal de pago
         rx.flex(
-            # ── Columna izquierda: recibo unificado ──────────────────────
+            # ── Columna izquierda: recibo + footer opcionales ────────────
             rx.vstack(
-                # Encabezado de tabla
-                rx.hstack(
-                    rx.text("PRODUCTO", flex="1", font_size="9px", font_weight="600",
-                            color="#94A3B8", text_transform="uppercase", letter_spacing="0.06em"),
-                    rx.text("CANT.", width="50px", text_align="center", font_size="9px",
-                            font_weight="600", color="#94A3B8", text_transform="uppercase"),
-                    rx.text("TOTAL", width="80px", text_align="right", font_size="9px",
-                            font_weight="600", color="#94A3B8", text_transform="uppercase"),
-                    padding="9px 16px", border_bottom="0.5px solid #F1F5F9", width="100%",
-                ),
-                # Filas de items
-                rx.cond(
-                    FoodState.caja_cobro_items.length() > 0,
-                    rx.box(
-                        rx.foreach(FoodState.caja_cobro_items, _caja_item_row),
-                        width="100%", overflow_y="auto", flex="1",
-                    ),
-                    rx.center(
-                        rx.text("Sin items registrados.", font_size="13px", color="#94A3B8"),
-                        padding_y="20px", width="100%",
-                    ),
-                ),
-                # Banner promo aplicada
-                rx.cond(
-                    FoodState.caja_promo_aplicada_nombre != "",
+                # Card del recibo (solo items + promos + total)
+                rx.vstack(
+                    # Encabezado de tabla
                     rx.hstack(
-                        rx.icon(tag="badge_percent", size=12, color="#16A34A"),
-                        rx.text(
-                            "Promo: " + FoodState.caja_promo_aplicada_nombre
-                            + " · " + FoodState.caja_promo_aplicada_texto + " descontado",
-                            font_size="11px", color="#166534", font_weight="600",
-                        ),
-                        rx.spacer(),
-                        rx.button(
-                            "Quitar", on_click=FoodState.quitar_promo_aplicada,
-                            background="transparent", color="#94A3B8", border="none",
-                            font_size="10px", cursor="pointer", padding="0",
-                        ),
-                        width="100%", align="center", gap="6px",
-                        padding="5px 14px",
-                        background="#F0FDF4", border_top="0.5px solid #BBF7D0",
+                        rx.text("PRODUCTO", flex="1", font_size="9px", font_weight="600",
+                                color="#94A3B8", text_transform="uppercase", letter_spacing="0.06em"),
+                        rx.text("CANT.", width="50px", text_align="center", font_size="9px",
+                                font_weight="600", color="#94A3B8", text_transform="uppercase"),
+                        rx.text("TOTAL", width="80px", text_align="right", font_size="9px",
+                                font_weight="600", color="#94A3B8", text_transform="uppercase"),
+                        padding="9px 16px", border_bottom="0.5px solid #F1F5F9", width="100%",
                     ),
-                    rx.fragment(),
-                ),
-                # Banner promo disponible
-                rx.cond(
-                    FoodState.hay_promo_activa & (FoodState.caja_promo_aplicada_nombre == ""),
+                    # Filas de items
+                    rx.cond(
+                        FoodState.caja_cobro_items.length() > 0,
+                        rx.box(
+                            rx.foreach(FoodState.caja_cobro_items, _caja_item_row),
+                            width="100%", overflow_y="auto", flex="1",
+                        ),
+                        rx.center(
+                            rx.text("Sin items registrados.", font_size="13px", color="#94A3B8"),
+                            padding_y="20px", width="100%",
+                        ),
+                    ),
+                    # Banner promo aplicada
+                    rx.cond(
+                        FoodState.caja_promo_aplicada_nombre != "",
+                        rx.hstack(
+                            rx.icon(tag="badge_percent", size=12, color="#16A34A"),
+                            rx.text(
+                                "Promo: " + FoodState.caja_promo_aplicada_nombre
+                                + " · " + FoodState.caja_promo_aplicada_texto + " descontado",
+                                font_size="11px", color="#166534", font_weight="600",
+                            ),
+                            rx.spacer(),
+                            rx.button(
+                                "Quitar", on_click=FoodState.quitar_promo_aplicada,
+                                background="transparent", color="#94A3B8", border="none",
+                                font_size="10px", cursor="pointer", padding="0",
+                            ),
+                            width="100%", align="center", gap="6px",
+                            padding="5px 14px",
+                            background="#F0FDF4", border_top="0.5px solid #BBF7D0",
+                        ),
+                        rx.fragment(),
+                    ),
+                    # Banner promo disponible
+                    rx.cond(
+                        FoodState.hay_promo_activa & (FoodState.caja_promo_aplicada_nombre == ""),
+                        rx.hstack(
+                            rx.icon(tag="zap", size=12, color="#EA580C"),
+                            rx.text(
+                                "Promo: " + FoodState.promo_activa_nombre
+                                + " · " + FoodState.promo_activa_descuento_texto,
+                                font_size="11px", color="#C2410C", font_weight="600",
+                            ),
+                            rx.spacer(),
+                            rx.button(
+                                "Aplicar", on_click=FoodState.aplicar_promo_al_cobro,
+                                background="#EA580C", color="#FFFFFF",
+                                border_radius="5px", font_size="10px", font_weight="700",
+                                padding_x="8px", padding_y="3px", cursor="pointer",
+                            ),
+                            width="100%", align="center", gap="6px",
+                            padding="5px 14px",
+                            background="#FFF7ED", border_top="0.5px solid #FED7AA",
+                        ),
+                        rx.fragment(),
+                    ),
+                    # Total a pagar
                     rx.hstack(
-                        rx.icon(tag="zap", size=12, color="#EA580C"),
-                        rx.text(
-                            "Promo: " + FoodState.promo_activa_nombre
-                            + " · " + FoodState.promo_activa_descuento_texto,
-                            font_size="11px", color="#C2410C", font_weight="600",
-                        ),
+                        rx.text("Total a pagar", font_size="14px", font_weight="600", color="#334155"),
                         rx.spacer(),
-                        rx.button(
-                            "Aplicar", on_click=FoodState.aplicar_promo_al_cobro,
-                            background="#EA580C", color="#FFFFFF",
-                            border_radius="5px", font_size="10px", font_weight="700",
-                            padding_x="8px", padding_y="3px", cursor="pointer",
-                        ),
-                        width="100%", align="center", gap="6px",
-                        padding="5px 14px",
-                        background="#FFF7ED", border_top="0.5px solid #FED7AA",
+                        rx.text(FoodState.caja_cobro_total_final_texto, font_size="28px",
+                                font_weight="800", color="#EA580C", letter_spacing="-0.8px"),
+                        align="center", padding="10px 16px", width="100%",
+                        border_top="1px solid #E2E8F0",
                     ),
-                    rx.fragment(),
+                    spacing="0",
+                    border="1px solid #E2E8F0", border_radius="12px",
+                    background="#FFFFFF", overflow="hidden",
+                    flex="1", min_width="0", width="100%",
                 ),
-                # Fila de campos opcionales — discreta, una sola línea
+                # ── Footer opcional: desc / propina / cupón ──────────────
                 rx.hstack(
-                    rx.text("Desc. S/", font_size="9px", color="#94A3B8", white_space="nowrap", flex_shrink="0"),
+                    rx.text("Desc. S/", font_size="10px", color="#94A3B8", white_space="nowrap", flex_shrink="0"),
                     rx.input(
                         placeholder="0.00",
                         value=FoodState.caja_cobro_descuento,
@@ -255,8 +271,8 @@ def _cobro_panel() -> rx.Component:
                         width="62px", text_align="right",
                         _focus={"border_color": "#EA580C"},
                     ),
-                    rx.box(width="0.5px", height="14px", background="#E2E8F0", flex_shrink="0"),
-                    rx.text("Propina S/", font_size="9px", color="#94A3B8", white_space="nowrap", flex_shrink="0"),
+                    rx.box(width="0.5px", height="14px", background="#CBD5E1", flex_shrink="0"),
+                    rx.text("Propina S/", font_size="10px", color="#94A3B8", white_space="nowrap", flex_shrink="0"),
                     rx.input(
                         placeholder="0.00",
                         value=FoodState.caja_cobro_propina,
@@ -267,15 +283,15 @@ def _cobro_panel() -> rx.Component:
                         width="62px", text_align="right",
                         _focus={"border_color": "#EA580C"},
                     ),
-                    rx.box(width="0.5px", height="14px", background="#E2E8F0", flex_shrink="0"),
+                    rx.box(width="0.5px", height="14px", background="#CBD5E1", flex_shrink="0"),
                     rx.cond(
                         FoodState.caja_cupon_id_aplicado > 0,
                         rx.hstack(
                             rx.icon(tag="ticket_percent", size=11, color="#16A34A"),
                             rx.text(FoodState.caja_cupon_nombre_aplicado,
-                                    font_size="9px", color="#15803D", font_weight="600", no_of_lines=1),
+                                    font_size="10px", color="#15803D", font_weight="600", no_of_lines=1),
                             rx.text("-" + FoodState.caja_cupon_descuento_aplicado,
-                                    font_size="9px", color="#15803D"),
+                                    font_size="10px", color="#15803D"),
                             rx.icon(tag="x", size=11, color="#94A3B8", cursor="pointer",
                                     on_click=FoodState.quitar_cupon_caja),
                             spacing="1", align="center",
@@ -299,33 +315,17 @@ def _cobro_panel() -> rx.Component:
                             spacing="1", align="center",
                         ),
                     ),
+                    rx.cond(
+                        FoodState.caja_cupon_error != "",
+                        rx.text(FoodState.caja_cupon_error, font_size="10px", color="#DC2626",
+                                margin_left="4px"),
+                        rx.fragment(),
+                    ),
                     spacing="2", align="center",
-                    padding="5px 14px", width="100%",
-                    background="#F8FAFC",
-                    border_top="0.5px solid #F1F5F9",
-                    border_bottom="0.5px solid #F1F5F9",
+                    padding="5px 4px", width="100%",
                     flex_wrap="nowrap", overflow_x="auto",
                 ),
-                # Error cupón
-                rx.cond(
-                    FoodState.caja_cupon_error != "",
-                    rx.text(FoodState.caja_cupon_error, font_size="10px", color="#DC2626",
-                            padding="2px 14px"),
-                    rx.fragment(),
-                ),
-                # Total a pagar
-                rx.hstack(
-                    rx.text("Total a pagar", font_size="14px", font_weight="600", color="#334155"),
-                    rx.spacer(),
-                    rx.text(FoodState.caja_cobro_total_final_texto, font_size="28px",
-                            font_weight="800", color="#EA580C", letter_spacing="-0.8px"),
-                    align="center", padding="10px 16px", width="100%",
-                    border_top="1px solid #E2E8F0",
-                ),
-                spacing="0",
-                border="1px solid #E2E8F0", border_radius="12px",
-                background="#FFFFFF", overflow="hidden",
-                flex="1", min_width="0",
+                spacing="2", flex="1", min_width="0", width="100%",
             ),
             # ── Columna derecha: terminal de pago ────────────────────────
             rx.vstack(
@@ -423,18 +423,13 @@ def _cobro_panel() -> rx.Component:
                 ),
                 # Botón confirmar — héroe visual
                 rx.button(
-                    rx.vstack(
-                        rx.text("Confirmar cobro", font_size="11px", font_weight="600",
-                                color="rgba(255,255,255,0.85)",
-                                text_transform="uppercase", letter_spacing="0.04em"),
-                        rx.text(FoodState.caja_cobro_total_final_texto, font_size="22px",
-                                font_weight="800", color="#FFFFFF", letter_spacing="-0.5px"),
-                        spacing="0", align="center",
-                    ),
+                    "Confirmar cobro",
                     on_click=FoodState.confirmar_cobro,
+                    font_size="15px", font_weight="700",
+                    text_transform="uppercase", letter_spacing="0.05em",
                     background="#EA580C", color="#FFFFFF",
                     border_radius="10px", border="none",
-                    padding="14px 12px", cursor="pointer", width="100%",
+                    padding="16px 12px", cursor="pointer", width="100%",
                     _hover={"background": "#C2410C"},
                 ),
                 # Acciones secundarias
