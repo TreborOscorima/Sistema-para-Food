@@ -5,7 +5,7 @@
 # Uso:
 #   bash scripts/smoke_deploy.sh                          # Local (port 3003)
 #   bash scripts/smoke_deploy.sh http://IP:3003           # Test server
-#   bash scripts/smoke_deploy.sh https://food.tuwayki.com # Producción
+#   bash scripts/smoke_deploy.sh https://food.tuwayki.app # Producción
 # =============================================================================
 set -euo pipefail
 

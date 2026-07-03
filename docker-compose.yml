@@ -1,17 +1,20 @@
 version: "3.9"
 # =============================================================================
-# docker-compose.yml — TUWAYKIFOOD stack de producción (food.tuwayki.com)
+# docker-compose.yml — TUWAYKIFOOD producción (food.tuwayki.app)
 #
 # Stack 100% independiente de Sistema-de-Ventas — DB, red y proceso propios.
 #
 # PRIMERA VEZ:
 #   1. cp .env.example .env && editar (DB_PASSWORD, MYSQL_ROOT_PASSWORD, AUTH_SECRET_KEY)
-#   2. TEST_IP=<IP> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+#   2. Crear red NPM si no existe: docker network create nginx-proxy-manager_default
+#   3. bash scripts/deploy-prod.sh
 #
-# En producción nginx (host) hace el proxy food.tuwayki.com → 127.0.0.1:3003.
+# NPM (Proxy Host):
+#   Domain: food.tuwayki.app | Forward: tuwayki_food:3000 | WebSockets ON
+#
+# Uso normal: bash scripts/deploy-prod.sh
 # Para local: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 # Para test:  TEST_IP=<IP-EC2> docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
-# Re-deploy:  git pull origin docker-deploy-prod && mismo comando de arriba
 # =============================================================================
 
 services:
@@ -39,6 +42,15 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     networks:
       - food_internal
 
@@ -48,28 +60,39 @@ services:
       dockerfile: Dockerfile
     image: tuwayki_food:latest
     container_name: tuwayki_food
-    restart: unless-stopped
+    restart: on-failure:10
     depends_on:
       food_mysql:
         condition: service_healthy
-    ports:
-      - "3003:3000"
     env_file:
       - .env
     environment:
       ENV: prod
       DB_HOST: food_mysql
+      PUBLIC_API_URL: https://food.tuwayki.app
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
     volumes:
       - food_web:/app/.web
       - food_uploads:/app/uploaded_files
-    networks:
-      - food_internal
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/ping"]
       interval: 30s
       timeout: 5s
       start_period: 300s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+    networks:
+      - food_internal
+      - food_npm_network
 
 volumes:
   food_mysql_data:
@@ -79,3 +102,7 @@ volumes:
 networks:
   food_internal:
     driver: bridge
+
+  food_npm_network:
+    external: true
+    name: nginx-proxy-manager_default

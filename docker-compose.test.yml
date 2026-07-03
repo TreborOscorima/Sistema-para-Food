@@ -21,6 +21,8 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
 
   tuwayki_food:
+    ports:
+      - "3003:3000"
     environment:
       PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3003"
       ENV: prod
