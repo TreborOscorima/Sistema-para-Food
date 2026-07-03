@@ -325,7 +325,7 @@ def _cobro_panel() -> rx.Component:
                     padding="5px 4px", width="100%",
                     flex_wrap="nowrap", overflow_x="auto",
                 ),
-                spacing="2", flex="1", min_width="0", width="100%",
+                justify="between", flex="1", min_width="0", width="100%",
             ),
             # ── Columna derecha: terminal de pago ────────────────────────
             rx.vstack(
@@ -472,7 +472,7 @@ def _cobro_panel() -> rx.Component:
                 min_width=rx.breakpoints(initial="100%", lg="220px"),
                 flex_shrink="0",
             ),
-            gap="16px", width="100%", align="start",
+            gap="16px", width="100%", align="stretch",
             direction=rx.breakpoints(initial="column", lg="row"),
         ),
         spacing="3", width="100%",
