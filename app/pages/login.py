@@ -9,7 +9,7 @@ from app.states.food_state import CompanyOptionView, FoodState
 
 
 # ─── Tarjeta de rol ───────────────────────────────────────────────────────────
-# El rol seleccionado se valida contra el rol real del usuario dueño del PIN
+# El rol seleccionado se valida contra el rol real del usuario dueño del PIN de 4 a 6 Digitos
 # (ver FoodState._authenticate_with_pin) — no es solo decorativo.
 
 def _rol_card(emoji: str, label: str, rol_value: str) -> rx.Component:
@@ -186,7 +186,7 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
 def _restaurant_selector_card() -> rx.Component:
     return rx.box(
         rx.text(
-            "Elegí tu restaurante",
+            "ELEGI TU RESTAURANTE",
             font_size="11px",
             font_weight="700",
             color="#64748B",
@@ -225,7 +225,7 @@ def _login_card() -> rx.Component:
         # Selector de rol
         rx.hstack(
             rx.text(
-                "Seleccioná tu rol",
+                "SELECCIONA TU ROL EL QUE SE TE FUE ASIGNADO",
                 font_size="11px",
                 font_weight="700",
                 color="#64748B",
