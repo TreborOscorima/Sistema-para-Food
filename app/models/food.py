@@ -82,6 +82,9 @@ class UsuarioFood(TimestampedModel, table=True):
     pin: str = Field(max_length=72, nullable=False)
     rol: str = Field(index=True, max_length=32, nullable=False)
     activo: bool = Field(default=True, nullable=False)
+    perm_descuento: bool = Field(default=True, nullable=False)
+    perm_anular: bool = Field(default=False, nullable=False)
+    perm_reportes: bool = Field(default=False, nullable=False)
 
 
 class Mesa(TimestampedModel, table=True):

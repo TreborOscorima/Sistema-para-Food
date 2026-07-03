@@ -193,6 +193,12 @@ _ROL_BADGE_TEXT: dict[str, str] = {
     RolUsuario.CAJA.value: "#15803D",
     RolUsuario.COCINA.value: "#B45309",
 }
+_ROL_PERM_DEFAULTS: dict[str, dict[str, bool]] = {
+    RolUsuario.ADMIN.value:  {"descuento": True,  "anular": True,  "reportes": True},
+    RolUsuario.CAJA.value:   {"descuento": True,  "anular": False, "reportes": False},
+    RolUsuario.MOZO.value:   {"descuento": False, "anular": False, "reportes": False},
+    RolUsuario.COCINA.value: {"descuento": False, "anular": False, "reportes": False},
+}
 
 # Base URLs leídas del entorno en tiempo de importación. El company_id ya no es
 # fijo: FoodState._company_id() lo resuelve por sesión (ver clase FoodState).
@@ -671,6 +677,9 @@ class UsuarioSesion(BaseModel):
     nombre: str
     rol: str
     company_id: int
+    perm_descuento: bool = True
+    perm_anular: bool = False
+    perm_reportes: bool = False
 
 
 class CompanyOptionView(BaseModel):
@@ -816,6 +825,9 @@ class UsuarioAdminView(BaseModel):
     badge_bg: str
     badge_text: str
     es_yo: bool
+    perm_descuento: bool = True
+    perm_anular: bool = False
+    perm_reportes: bool = False
 
 
 # ─── Helpers de inventario ───────────────────────────────────────────────────
@@ -1000,6 +1012,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     usuario_form_pin_confirm: str = ""
     usuario_form_activo: bool = True
     usuario_form_visible: bool = False
+    usuario_form_perm_descuento: bool = False
+    usuario_form_perm_anular: bool = False
+    usuario_form_perm_reportes: bool = False
 
     mozos_tab_activa: str = "salon"
     nota_producto_activo_id: int = 0
@@ -1652,10 +1667,10 @@ class FoodState(CajaTurnoMixin, rx.State):
     def toggle_sidebar(self) -> None:
         self.sidebar_collapsed = not self.sidebar_collapsed
 
-    def _route_access_result(self, route_key: str):
+    def _route_access_result(self, route_key: str, also_allowed: bool = False):
         if self.usuario_actual is None:
             return rx.redirect("/login", replace=True)
-        if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES[route_key]:
+        if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES[route_key] and not also_allowed:
             return [
                 rx.window_alert("No tienes permisos para este modulo."),
                 rx.redirect(self.usuario_home_route, replace=True),
@@ -1762,7 +1777,10 @@ class FoodState(CajaTurnoMixin, rx.State):
         return self._route_access_result("carta")
 
     def on_load_reportes(self):
-        result = self._route_access_result("reportes")
+        result = self._route_access_result(
+            "reportes",
+            also_allowed=self.usuario_actual is not None and self.usuario_actual.perm_reportes,
+        )
         if result is not None:
             return result
         self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
@@ -1867,6 +1885,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             nombre=usuario.nombre,
             rol=usuario.rol,
             company_id=usuario.company_id,
+            perm_descuento=usuario.perm_descuento,
+            perm_anular=usuario.perm_anular,
+            perm_reportes=usuario.perm_reportes,
         )
         self.login_pin_input = ""
         self.mensaje = f"Sesion iniciada como {usuario.nombre}."
@@ -1890,6 +1911,19 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def on_change_uf_rol(self, value: str) -> None:
         self.usuario_form_rol = value
+        _defs = _ROL_PERM_DEFAULTS.get(value, {})
+        self.usuario_form_perm_descuento = _defs.get("descuento", False)
+        self.usuario_form_perm_anular = _defs.get("anular", False)
+        self.usuario_form_perm_reportes = _defs.get("reportes", False)
+
+    def toggle_uf_perm_descuento(self) -> None:
+        self.usuario_form_perm_descuento = not self.usuario_form_perm_descuento
+
+    def toggle_uf_perm_anular(self) -> None:
+        self.usuario_form_perm_anular = not self.usuario_form_perm_anular
+
+    def toggle_uf_perm_reportes(self) -> None:
+        self.usuario_form_perm_reportes = not self.usuario_form_perm_reportes
 
     def on_change_uf_pin(self, value: str) -> None:
         self.usuario_form_pin = value
@@ -1908,6 +1942,10 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.usuario_form_pin_confirm = ""
         self.usuario_form_activo = True
         self.usuario_form_visible = False
+        _defs = _ROL_PERM_DEFAULTS[RolUsuario.MOZO.value]
+        self.usuario_form_perm_descuento = _defs["descuento"]
+        self.usuario_form_perm_anular = _defs["anular"]
+        self.usuario_form_perm_reportes = _defs["reportes"]
 
     def set_usuario_form_visible(self, v: bool) -> None:
         self.usuario_form_visible = v
@@ -1931,6 +1969,9 @@ class FoodState(CajaTurnoMixin, rx.State):
                 badge_bg=_ROL_BADGE_BG.get(u.rol, "rgba(100,116,139,0.16)"),
                 badge_text=_ROL_BADGE_TEXT.get(u.rol, "#94A3B8"),
                 es_yo=u.id == mi_id,
+                perm_descuento=u.perm_descuento,
+                perm_anular=u.perm_anular,
+                perm_reportes=u.perm_reportes,
             )
             for u in rows
         ]
@@ -1952,6 +1993,9 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.usuario_form_pin = ""
         self.usuario_form_pin_confirm = ""
         self.usuario_form_activo = u.activo
+        self.usuario_form_perm_descuento = u.perm_descuento
+        self.usuario_form_perm_anular = u.perm_anular
+        self.usuario_form_perm_reportes = u.perm_reportes
         self.usuario_form_visible = True
         self.mensaje = ""
 
@@ -2004,6 +2048,9 @@ class FoodState(CajaTurnoMixin, rx.State):
                 u.nombre = nombre
                 u.rol = rol
                 u.activo = self.usuario_form_activo
+                u.perm_descuento = self.usuario_form_perm_descuento
+                u.perm_anular = self.usuario_form_perm_anular
+                u.perm_reportes = self.usuario_form_perm_reportes
                 u.updated_at = _utcnow()
                 session.add(u)
                 session.commit()
@@ -2019,6 +2066,9 @@ class FoodState(CajaTurnoMixin, rx.State):
                     pin=_hash_pin(nuevo_pin),
                     rol=rol,
                     activo=True,
+                    perm_descuento=self.usuario_form_perm_descuento,
+                    perm_anular=self.usuario_form_perm_anular,
+                    perm_reportes=self.usuario_form_perm_reportes,
                 )
                 session.add(u)
                 session.commit()
@@ -3289,6 +3339,12 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def abrir_anulacion_pedido_abierto(self, mesa_id: int) -> None:
         """Anular el pedido abierto de una mesa (desde Caja) — libera la mesa."""
+        if self.usuario_actual is None or (
+            self.usuario_actual.rol != RolUsuario.ADMIN.value
+            and not self.usuario_actual.perm_anular
+        ):
+            self.mensaje = "No tienes permiso para anular pedidos. Solicitalo al administrador."
+            return
         with self._tenant_session() as session:
             pedido = _get_open_order(session, mesa_id, self._company_id())
             if pedido is None:
@@ -6282,10 +6338,19 @@ class AdminLocalState(rx.State):
                 nombre=admin_usuario.nombre,
                 rol=admin_usuario.rol,
                 company_id=company_id,
+                perm_descuento=True,
+                perm_anular=True,
+                perm_reportes=True,
             )
         else:
             food_state.usuario_actual = UsuarioSesion(
-                id=0, nombre=email, rol=RolUsuario.ADMIN.value, company_id=company_id,
+                id=0,
+                nombre=email,
+                rol=RolUsuario.ADMIN.value,
+                company_id=company_id,
+                perm_descuento=True,
+                perm_anular=True,
+                perm_reportes=True,
             )
         return rx.redirect("/admin")
 

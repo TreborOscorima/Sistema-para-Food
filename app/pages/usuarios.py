@@ -129,6 +129,113 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
     )
 
 
+def _perm_toggle(
+    label: str,
+    hint: str,
+    value: rx.Var,
+    on_click,
+) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.text(label, font_size="12px", font_weight="600", color=TEXT_PRIMARY),
+            rx.text(hint, font_size="11px", color=TEXT_MUTED),
+            spacing="0",
+            align="start",
+            flex="1",
+        ),
+        rx.button(
+            rx.hstack(
+                rx.icon(tag=rx.cond(value, "check", "x"), size=11),
+                rx.text(rx.cond(value, "Sí", "No"), font_size="11px", font_weight="700"),
+                spacing="1",
+                align="center",
+            ),
+            on_click=on_click,
+            background=rx.cond(value, SUCCESS_BG, SURFACE_MUTED),
+            color=rx.cond(value, SUCCESS_TEXT, TEXT_MUTED),
+            border=rx.cond(
+                value,
+                f"1px solid {SUCCESS_BORDER}",
+                f"1px solid {BORDER_COLOR}",
+            ),
+            border_radius="20px",
+            padding="4px 12px",
+            cursor="pointer",
+            flex_shrink="0",
+            _hover={"opacity": "0.8"},
+        ),
+        width="100%",
+        align="center",
+        padding_y="6px",
+    )
+
+
+def _permisos_section() -> rx.Component:
+    return rx.cond(
+        FoodState.usuario_form_rol == "Admin",
+        rx.hstack(
+            rx.icon(tag="shield_check", size=14, color=SUCCESS_TEXT),
+            rx.text(
+                "Acceso total — sin restricciones",
+                font_size="12px",
+                font_weight="600",
+                color=SUCCESS_TEXT,
+            ),
+            spacing="2",
+            align="center",
+            background=SUCCESS_BG,
+            border=f"1px solid {SUCCESS_BORDER}",
+            border_radius="8px",
+            padding="8px 12px",
+            width="100%",
+        ),
+        rx.vstack(
+            rx.hstack(
+                rx.icon(tag="lock", size=13, color=TEXT_MUTED),
+                rx.text(
+                    "Permisos adicionales",
+                    font_size="11px",
+                    font_weight="700",
+                    color=TEXT_MUTED,
+                    text_transform="uppercase",
+                    letter_spacing="0.05em",
+                ),
+                spacing="2",
+                align="center",
+            ),
+            _perm_toggle(
+                "Aplicar descuentos",
+                "Puede ingresar descuentos al cobrar",
+                FoodState.usuario_form_perm_descuento,
+                FoodState.toggle_uf_perm_descuento,
+            ),
+            _perm_toggle(
+                "Ver reportes",
+                "Acceso al módulo de reportes",
+                FoodState.usuario_form_perm_reportes,
+                FoodState.toggle_uf_perm_reportes,
+            ),
+            rx.cond(
+                FoodState.usuario_form_rol == "Caja",
+                _perm_toggle(
+                    "Anular pedidos",
+                    "Puede anular pedidos desde Caja",
+                    FoodState.usuario_form_perm_anular,
+                    FoodState.toggle_uf_perm_anular,
+                ),
+                rx.fragment(),
+            ),
+            spacing="0",
+            align="start",
+            width="100%",
+            padding="10px 12px",
+            background=SURFACE_MUTED,
+            border=f"1px solid {BORDER_COLOR}",
+            border_radius="10px",
+        ),
+    )
+
+
 def _usuario_form() -> rx.Component:
     return rx.vstack(
         rx.text(
@@ -238,6 +345,7 @@ def _usuario_form() -> rx.Component:
             ),
             rx.fragment(),
         ),
+        _permisos_section(),
         rx.hstack(
             rx.button(
                 "Cancelar",
