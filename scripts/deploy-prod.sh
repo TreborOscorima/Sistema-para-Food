@@ -7,6 +7,7 @@
 #   bash scripts/deploy-prod.sh --skip-backup      # Sin backup de MySQL
 #   bash scripts/deploy-prod.sh --skip-build       # Solo recreate (sin rebuild)
 #   bash scripts/deploy-prod.sh --skip-npm         # Sin reiniciar NPM al final
+#   bash scripts/deploy-prod.sh --skip-public-check  # Sin verificar https://food.tuwayki.app (primer deploy / NPM pendiente)
 #
 # Variables de entorno opcionales:
 #   APP_DIR              Directorio del proyecto (default: padre de scripts/)
@@ -48,12 +49,14 @@ PUBLIC_URL="${PUBLIC_URL:-https://food.tuwayki.app}"
 SKIP_BACKUP=false
 SKIP_BUILD=false
 SKIP_NPM=false
+SKIP_PUBLIC_CHECK=false
 
 for arg in "$@"; do
     case "$arg" in
         --skip-backup) SKIP_BACKUP=true ;;
         --skip-build)  SKIP_BUILD=true ;;
         --skip-npm)    SKIP_NPM=true ;;
+        --skip-public-check) SKIP_PUBLIC_CHECK=true ;;
         -h|--help)
             sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -192,10 +195,28 @@ if ! $SKIP_NPM; then
 fi
 
 info "Verificando endpoint público..."
-HEALTH_URL="${PUBLIC_URL%/}/api/health"
-surface="$(curl -sf --max-time 15 "$HEALTH_URL" | grep -o '"surface":"[^"]*"' || true)"
-[[ -n "$surface" ]] || fail "Health externo falló: $HEALTH_URL"
-ok "food → $surface"
+if $SKIP_PUBLIC_CHECK; then
+    warn "Health externo omitido (--skip-public-check)"
+else
+    HEALTH_URL="${PUBLIC_URL%/}/api/health"
+    surface="$(curl -sf --max-time 15 "$HEALTH_URL" | grep -o '"surface":"[^"]*"' || true)"
+    if [[ -z "$surface" ]]; then
+        warn "Health externo falló: $HEALTH_URL"
+        echo ""
+        echo "  El contenedor está OK internamente. Si es el primer deploy, configurá NPM:"
+        echo "    Domain: food.tuwayki.app"
+        echo "    Forward Hostname: tuwayki_food"
+        echo "    Forward Port: 3000"
+        echo "    Websockets: ON"
+        echo "    Red: nginx-proxy-manager_default (misma que tuwayki_sys)"
+        echo ""
+        echo "  Verificá red del contenedor:"
+        echo "    docker inspect tuwayki_food --format '{{range \$k,\$v := .NetworkSettings.Networks}}{{printf \"%s \" \$k}}{{end}}'"
+        echo ""
+        fail "Configurá NPM y reintentá, o usá --skip-public-check en el primer deploy"
+    fi
+    ok "food → $surface"
+fi
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
