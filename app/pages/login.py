@@ -9,7 +9,7 @@ from app.states.food_state import CompanyOptionView, FoodState
 
 
 # ─── Tarjeta de rol ───────────────────────────────────────────────────────────
-# El rol seleccionado se valida contra el rol real del usuario dueño del PIN
+# El rol seleccionado se valida contra el rol real del usuario dueño del PIN de 4 a 6 Digitos
 # (ver FoodState._authenticate_with_pin) — no es solo decorativo.
 
 def _rol_card(emoji: str, label: str, rol_value: str) -> rx.Component:

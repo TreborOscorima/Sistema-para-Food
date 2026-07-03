@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tuwaykifood-docker",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["start", "tuwayki_food"],
+      "port": 3003
+    }
+  ]
+}
