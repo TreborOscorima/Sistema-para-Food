@@ -1079,6 +1079,14 @@ class FoodState(CajaTurnoMixin, rx.State):
     config_slug: str = "mi-restaurante"
     config_menu_qr_base64: str = ""
     config_menu_url: str = ""
+    # Datos fiscales del ticket
+    config_ruc: str = ""
+    config_sucursal: str = ""
+    config_direccion: str = ""
+    config_telefono: str = ""
+    config_mensaje_ticket: str = "¡Gracias por su preferencia!"
+    config_mostrar_iva: bool = False
+    config_porcentaje_iva: str = "18.0"
     config_admin_email: str = ""
     config_admin_password_nueva: str = ""
     config_admin_password_confirm: str = ""
@@ -2064,6 +2072,13 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.config_ticket_paper_width_mm = str(cfg.ticket_paper_width_mm)
                 self.config_slug = cfg.slug or "mi-restaurante"
                 self.config_admin_email = cfg.admin_email or ""
+                self.config_ruc = cfg.ruc or ""
+                self.config_sucursal = cfg.sucursal or ""
+                self.config_direccion = cfg.direccion or ""
+                self.config_telefono = cfg.telefono or ""
+                self.config_mensaje_ticket = cfg.mensaje_ticket or "¡Gracias por su preferencia!"
+                self.config_mostrar_iva = cfg.mostrar_iva
+                self.config_porcentaje_iva = str(cfg.porcentaje_iva)
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
@@ -2083,6 +2098,17 @@ class FoodState(CajaTurnoMixin, rx.State):
                 cfg.ticket_paper_width_mm = ancho if ancho in (58, 80) else 80
             except (ValueError, AttributeError):
                 cfg.ticket_paper_width_mm = 80
+            cfg.ruc = self.config_ruc.strip()
+            cfg.sucursal = self.config_sucursal.strip()
+            cfg.direccion = self.config_direccion.strip()
+            cfg.telefono = self.config_telefono.strip()
+            cfg.mensaje_ticket = self.config_mensaje_ticket.strip() or "¡Gracias por su preferencia!"
+            cfg.mostrar_iva = self.config_mostrar_iva
+            try:
+                pct = float(self.config_porcentaje_iva.strip())
+                cfg.porcentaje_iva = pct if 0 < pct <= 100 else 18.0
+            except (ValueError, AttributeError):
+                cfg.porcentaje_iva = 18.0
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
             cfg.updated_at = _utcnow()
@@ -2104,6 +2130,27 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_config_ticket_paper_width_mm(self, v: str) -> None:
         self.config_ticket_paper_width_mm = v
+
+    def set_config_ruc(self, v: str) -> None:
+        self.config_ruc = v
+
+    def set_config_sucursal(self, v: str) -> None:
+        self.config_sucursal = v
+
+    def set_config_direccion(self, v: str) -> None:
+        self.config_direccion = v
+
+    def set_config_telefono(self, v: str) -> None:
+        self.config_telefono = v
+
+    def set_config_mensaje_ticket(self, v: str) -> None:
+        self.config_mensaje_ticket = v
+
+    def toggle_config_mostrar_iva(self) -> None:
+        self.config_mostrar_iva = not self.config_mostrar_iva
+
+    def set_config_porcentaje_iva(self, v: str) -> None:
+        self.config_porcentaje_iva = v
 
     def set_config_slug(self, v: str) -> None:
         self.config_slug = v
@@ -3493,6 +3540,10 @@ class FoodState(CajaTurnoMixin, rx.State):
         if es_mostrador:
             self.cargar_pedidos_mostrador_pendientes()
         total_final = max(total_base - descuento + propina, Decimal("0.00"))
+        try:
+            _pct_iva = float(self.config_porcentaje_iva or "18.0")
+        except (ValueError, AttributeError):
+            _pct_iva = 18.0
         html_ticket = generate_cashier_ticket_html(
             order_reference=mesa_label,
             pedido_id=pedido_id,
@@ -3500,6 +3551,15 @@ class FoodState(CajaTurnoMixin, rx.State):
             total=float(total_final),
             attended_by=attended_by,
             company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            company_ruc=self.config_ruc,
+            company_sucursal=self.config_sucursal,
+            company_direccion=self.config_direccion,
+            company_telefono=self.config_telefono,
+            descuento=float(descuento),
+            metodo_pago=metodo_final,
+            mensaje_footer=self.config_mensaje_ticket,
+            mostrar_iva=self.config_mostrar_iva,
+            porcentaje_iva=_pct_iva,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""

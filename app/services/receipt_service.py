@@ -113,14 +113,35 @@ def generate_cashier_ticket_html(
     total: float,
     attended_by: str = "",
     company_name: str = "TUWAYKIFOOD",
+    company_ruc: str = "",
+    company_sucursal: str = "",
+    company_direccion: str = "",
+    company_telefono: str = "",
+    descuento: float = 0.0,
+    metodo_pago: str = "",
+    mensaje_footer: str = "",
+    mostrar_iva: bool = False,
+    porcentaje_iva: float = 18.0,
     paper_width_mm: int = 80,
     width: int = TICKET_WIDTH,
 ) -> str:
     now = datetime.now()
     lines: list[str] = [
-        _center(company_name, width),
-        _center("Ticket de Venta", width),
-        _center(f"{now:%Y-%m-%d %H:%M}", width),
+        _center(company_name.upper(), width),
+    ]
+    if company_sucursal:
+        lines.append(_center(company_sucursal.upper(), width))
+    if company_ruc:
+        lines.append(_center(f"RUC: {company_ruc}", width))
+    if company_direccion:
+        for dl in _wrap(company_direccion, width):
+            lines.append(_center(dl, width))
+    if company_telefono:
+        lines.append(_center(f"Tel.: {company_telefono}", width))
+    lines += [
+        "",
+        _center("COMPROBANTE DE PAGO", width),
+        _center(f"{now:%Y-%m-%d  %H:%M}", width),
         _line(width),
         order_reference,
         f"Pedido: #{pedido_id}",
@@ -134,10 +155,27 @@ def generate_cashier_ticket_html(
             for note_line in _wrap(f"* {item.note}", width - 2):
                 lines.append(f"  {note_line}")
     lines.append(_line(width))
-    lines.append(_row("TOTAL", _money(total), width))
-    lines.append("")
-    lines.append(_center("¡Gracias por su preferencia!", width))
-    return _render_html("Comprobante de Venta", lines, paper_width_mm)
+    if descuento > 0:
+        lines.append(_row("Descuento:", "-" + _money(descuento), width))
+        lines.append(_line(width))
+    if mostrar_iva and porcentaje_iva > 0:
+        iva_amount = total * porcentaje_iva / (100 + porcentaje_iva)
+        net_subtotal = total - iva_amount
+        pct_label = f"{porcentaje_iva:.4g}".rstrip("0").rstrip(".")
+        lines.append(_row("Subtotal:", _money(net_subtotal), width))
+        lines.append(_row(f"IVA ({pct_label}%):", _money(iva_amount), width))
+    lines.append(_row("TOTAL A PAGAR:", _money(total), width))
+    if metodo_pago:
+        lines += [
+            _line(width),
+            _row("Método de pago:", metodo_pago.capitalize(), width),
+        ]
+    footer = mensaje_footer.strip() or "¡Gracias por su preferencia!"
+    lines += [
+        _line(width),
+        _center(footer, width),
+    ]
+    return _render_html("Comprobante de Pago", lines, paper_width_mm)
 
 
 def generate_cash_close_ticket_html(

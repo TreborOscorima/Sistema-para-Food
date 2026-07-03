@@ -320,6 +320,13 @@ class ConfigImpresora(TimestampedModel, table=True):
     slug: str = Field(default="mi-restaurante", max_length=80, nullable=False)
     admin_email: str = Field(default="", max_length=120, nullable=False)
     admin_password_hash: str = Field(default="", max_length=128, nullable=False)
+    ruc: str = Field(default="", max_length=30, nullable=False)
+    sucursal: str = Field(default="", max_length=80, nullable=False)
+    direccion: str = Field(default="", max_length=160, nullable=False)
+    telefono: str = Field(default="", max_length=40, nullable=False)
+    mensaje_ticket: str = Field(default="¡Gracias por su preferencia!", max_length=200, nullable=False)
+    mostrar_iva: bool = Field(default=False, nullable=False)
+    porcentaje_iva: float = Field(default=18.0, nullable=False)
 
 
 class Insumo(TimestampedModel, table=True):

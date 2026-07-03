@@ -576,87 +576,178 @@ def _resumen_widget(icon: str, label: str, value, href: str) -> rx.Component:
 
 def _content_local() -> rx.Component:
     return rx.grid(
-        rx.box(
-            rx.vstack(
-                _section_header("Nombre del restaurante", "store", "🏪"),
-                rx.text("Este nombre aparece en la carta digital y en los tickets.",
-                        font_size="12px", color="#64748B"),
-                _field_row("Nombre", FoodState.config_nombre_local,
-                           FoodState.set_config_nombre_local, "Mi Restaurante"),
+        rx.vstack(
+            # ── Card 1: Identificación del local ─────────────────────────────
+            rx.box(
                 rx.vstack(
-                    rx.text("Logo de la empresa", font_size="12px", font_weight="600", color="#64748B"),
-                    rx.text("Se muestra como tarjeta en la pantalla de inicio de sesión.",
-                            font_size="11px", color="#94A3B8"),
-                    rx.cond(
-                        FoodState.config_logo_url != "",
-                        rx.hstack(
-                            rx.image(
-                                src=FoodState.config_logo_url,
-                                width="72px", height="72px",
-                                object_fit="cover",
-                                border_radius="10px",
-                                border="1px solid #E2E8F0",
-                            ),
-                            rx.vstack(
-                                rx.text("Logo cargado", font_size="11px", color="#15803D", font_weight="600"),
-                                rx.button(
-                                    "Quitar logo",
-                                    on_click=FoodState.quitar_logo_empresa,
-                                    background="#FEF2F2", color="#B91C1C",
-                                    border="1px solid #FECACA", border_radius="6px",
-                                    font_size="11px", cursor="pointer",
-                                    padding_x="8px", padding_y="3px",
-                                    _hover={"opacity": "0.85"},
+                    _section_header("Identificación del local", "store", "🏪"),
+                    rx.text(
+                        "Estos datos aparecen en el encabezado del comprobante de pago.",
+                        font_size="12px", color="#64748B",
+                    ),
+                    _field_row("Nombre del local", FoodState.config_nombre_local,
+                               FoodState.set_config_nombre_local, "Mi Restaurante"),
+                    _field_row("Sucursal", FoodState.config_sucursal,
+                               FoodState.set_config_sucursal, "Casa Matriz"),
+                    _field_row("RUC / CUIT", FoodState.config_ruc,
+                               FoodState.set_config_ruc, "20XXXXXXXXX"),
+                    _field_row("Dirección", FoodState.config_direccion,
+                               FoodState.set_config_direccion, "Av. Principal 123"),
+                    _field_row("Teléfono", FoodState.config_telefono,
+                               FoodState.set_config_telefono, "999-999-999"),
+                    rx.vstack(
+                        rx.text("Logo de la empresa", font_size="12px",
+                                font_weight="600", color="#64748B"),
+                        rx.text("Se muestra como tarjeta en la pantalla de inicio de sesión.",
+                                font_size="11px", color="#94A3B8"),
+                        rx.cond(
+                            FoodState.config_logo_url != "",
+                            rx.hstack(
+                                rx.image(
+                                    src=FoodState.config_logo_url,
+                                    width="72px", height="72px",
+                                    object_fit="cover",
+                                    border_radius="10px",
+                                    border="1px solid #E2E8F0",
                                 ),
-                                spacing="2", align="start",
+                                rx.vstack(
+                                    rx.text("Logo cargado", font_size="11px",
+                                            color="#15803D", font_weight="600"),
+                                    rx.button(
+                                        "Quitar logo",
+                                        on_click=FoodState.quitar_logo_empresa,
+                                        background="#FEF2F2", color="#B91C1C",
+                                        border="1px solid #FECACA", border_radius="6px",
+                                        font_size="11px", cursor="pointer",
+                                        padding_x="8px", padding_y="3px",
+                                        _hover={"opacity": "0.85"},
+                                    ),
+                                    spacing="2", align="start",
+                                ),
+                                spacing="3", align="center",
                             ),
-                            spacing="3", align="center",
+                            rx.upload(
+                                rx.vstack(
+                                    rx.icon(tag="image_plus", size=20, color="#94A3B8"),
+                                    rx.text("Arrastra o haz click", font_size="11px",
+                                            color="#64748B"),
+                                    rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px",
+                                            color="#94A3B8"),
+                                    spacing="1", align="center",
+                                ),
+                                id="upload_logo_empresa",
+                                on_drop=FoodState.handle_upload_logo_empresa(
+                                    rx.upload_files(upload_id="upload_logo_empresa")
+                                ),
+                                accept={
+                                    "image/jpeg": [".jpg", ".jpeg"],
+                                    "image/png": [".png"],
+                                    "image/webp": [".webp"],
+                                },
+                                max_files=1,
+                                border="2px dashed #E2E8F0",
+                                border_radius="8px",
+                                padding="16px",
+                                width="100%",
+                                background="#FAFAFA",
+                                cursor="pointer",
+                                _hover={"border_color": "#EA580C", "background": "#FFF7ED"},
+                            ),
                         ),
-                        rx.upload(
-                            rx.vstack(
-                                rx.icon(tag="image_plus", size=20, color="#94A3B8"),
-                                rx.text("Arrastra o haz click", font_size="11px", color="#64748B"),
-                                rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px", color="#94A3B8"),
-                                spacing="1", align="center",
-                            ),
-                            id="upload_logo_empresa",
-                            on_drop=FoodState.handle_upload_logo_empresa(
-                                rx.upload_files(upload_id="upload_logo_empresa")
-                            ),
-                            accept={"image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"]},
-                            max_files=1,
-                            border="2px dashed #E2E8F0",
-                            border_radius="8px",
-                            padding="16px",
-                            width="100%",
-                            background="#FAFAFA",
-                            cursor="pointer",
-                            _hover={"border_color": "#EA580C", "background": "#FFF7ED"},
+                        spacing="2", width="100%",
+                    ),
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="save", size=14, color="#FFFFFF"),
+                            rx.text("Guardar información", font_size="13px",
+                                    font_weight="700", color="#FFFFFF"),
+                            spacing="2", align="center",
                         ),
+                        on_click=FoodState.guardar_config_impresora,
+                        background="#EA580C", border_radius="8px",
+                        padding_x="16px", padding_y="9px", cursor="pointer",
+                        _hover={"background": "#C2410C"}, align_self="end",
                     ),
-                    spacing="2", width="100%",
+                    spacing="4", width="100%",
                 ),
-                rx.button(
-                    rx.hstack(
-                        rx.icon(tag="save", size=14, color="#FFFFFF"),
-                        rx.text("Guardar nombre", font_size="13px",
-                                font_weight="700", color="#FFFFFF"),
-                        spacing="2", align="center",
-                    ),
-                    on_click=FoodState.guardar_config_impresora,
-                    background="#EA580C",
-                    border_radius="8px",
-                    padding_x="16px",
-                    padding_y="9px",
-                    cursor="pointer",
-                    _hover={"background": "#C2410C"},
-                    align_self="end",
-                ),
-                spacing="4", width="100%",
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="12px", padding="20px",
+                width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
             ),
-            background="#FFFFFF", border="1px solid #E2E8F0",
-            border_radius="12px", padding="20px",
-            width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+            # ── Card 2: Ticket y comprobante ─────────────────────────────────
+            rx.box(
+                rx.vstack(
+                    _section_header("Ticket y comprobante", "receipt", "🧾"),
+                    rx.text(
+                        "Personaliza el pie del ticket y la configuración fiscal.",
+                        font_size="12px", color="#64748B",
+                    ),
+                    # Mensaje al pie
+                    rx.vstack(
+                        rx.text("Mensaje al pie del ticket", font_size="13px",
+                                font_weight="600", color="#334155"),
+                        rx.text_area(
+                            placeholder="¡Gracias por su preferencia!",
+                            value=FoodState.config_mensaje_ticket,
+                            on_change=FoodState.set_config_mensaje_ticket,
+                            background="#FFFFFF", border="1px solid #E2E8F0",
+                            color="#0F172A", border_radius="8px",
+                            padding_x="12px", padding_y="8px",
+                            font_size="13px", width="100%", rows="2",
+                            _focus={"border": "1px solid #EA580C",
+                                    "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
+                        ),
+                        spacing="2", width="100%",
+                    ),
+                    # IVA toggle + porcentaje
+                    rx.vstack(
+                        rx.hstack(
+                            rx.vstack(
+                                rx.text("Mostrar IVA en el ticket", font_size="13px",
+                                        font_weight="600", color="#334155"),
+                                rx.text("Muestra el desglose subtotal + IVA + Total.",
+                                        font_size="11px", color="#94A3B8"),
+                                spacing="0", align="start",
+                            ),
+                            rx.spacer(),
+                            _toggle_btn(
+                                FoodState.config_mostrar_iva,
+                                FoodState.toggle_config_mostrar_iva,
+                            ),
+                            width="100%", align="center",
+                        ),
+                        rx.cond(
+                            FoodState.config_mostrar_iva,
+                            _field_row(
+                                "% de IVA",
+                                FoodState.config_porcentaje_iva,
+                                FoodState.set_config_porcentaje_iva,
+                                "18",
+                                "number",
+                            ),
+                            rx.fragment(),
+                        ),
+                        spacing="3", width="100%",
+                    ),
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="save", size=14, color="#FFFFFF"),
+                            rx.text("Guardar ticket", font_size="13px",
+                                    font_weight="700", color="#FFFFFF"),
+                            spacing="2", align="center",
+                        ),
+                        on_click=FoodState.guardar_config_impresora,
+                        background="#EA580C", border_radius="8px",
+                        padding_x="16px", padding_y="9px", cursor="pointer",
+                        _hover={"background": "#C2410C"}, align_self="end",
+                    ),
+                    spacing="4", width="100%",
+                ),
+                background="#FFFFFF", border="1px solid #E2E8F0",
+                border_radius="12px", padding="20px",
+                width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+            ),
+            spacing="4", width="100%",
         ),
         rx.vstack(
             _resumen_widget("layout_grid", "Mesas y salones",
