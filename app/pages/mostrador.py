@@ -279,6 +279,7 @@ def _mostrador_content() -> rx.Component:
                     ),
                     spacing="1",
                     width="100%",
+                    max_width="520px",
                 ),
                 rx.hstack(
                     rx.button(
@@ -306,6 +307,7 @@ def _mostrador_content() -> rx.Component:
                     ),
                     spacing="2",
                     width="100%",
+                    max_width="520px",
                 ),
                 spacing="3",
                 flex="1",

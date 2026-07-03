@@ -272,6 +272,7 @@ def _carrito_section() -> rx.Component:
                 ),
                 spacing="2",
                 width="100%",
+                max_width="480px",
             ),
             spacing="3",
             width="100%",

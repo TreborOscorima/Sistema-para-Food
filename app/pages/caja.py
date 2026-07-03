@@ -448,11 +448,15 @@ def _cobro_panel() -> rx.Component:
                 cursor="pointer", _hover={"background": "#F8FAFC"}, flex="1",
             ),
             rx.button(
-                "Confirmar cobro · " + FoodState.caja_cobro_total_final_texto,
+                rx.vstack(
+                    rx.text("Confirmar cobro", font_size="13px", font_weight="700", color="#FFFFFF"),
+                    rx.text(FoodState.caja_cobro_total_final_texto, font_size="17px", font_weight="900", color="#FFFFFF"),
+                    spacing="0", align="center",
+                ),
                 on_click=FoodState.confirmar_cobro,
                 background="#EA580C", color="#FFFFFF",
-                border_radius="12px", font_size="15px", font_weight="800",
-                padding_y="14px", cursor="pointer",
+                border_radius="12px",
+                padding_y="10px", cursor="pointer",
                 _hover={"background": "#C2410C"}, flex="2",
             ),
             spacing="3", width="100%",
