@@ -985,6 +985,8 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     carta_cat_modal: bool = False
     carta_prod_modal: bool = False
+    carta_busqueda_productos: str = ""
+    carta_productos_pagina: int = 1
 
     categoria_form_id: int = 0
     categoria_form_nombre: str = ""
@@ -1532,6 +1534,41 @@ class FoodState(CajaTurnoMixin, rx.State):
         if q:
             disponibles = [p for p in disponibles if q in p.nombre.lower()]
         return disponibles
+
+    @rx.var
+    def carta_productos_filtrados_count(self) -> int:
+        q = self.carta_busqueda_productos.strip().lower()
+        if not q:
+            return len(self.productos)
+        return sum(
+            1 for p in self.productos
+            if q in p.nombre.lower() or q in p.categoria_nombre.lower()
+        )
+
+    @rx.var
+    def carta_productos_total_paginas(self) -> int:
+        q = self.carta_busqueda_productos.strip().lower()
+        if q:
+            total = sum(
+                1 for p in self.productos
+                if q in p.nombre.lower() or q in p.categoria_nombre.lower()
+            )
+        else:
+            total = len(self.productos)
+        return max(1, (total + 19) // 20)
+
+    @rx.var
+    def carta_productos_paginados(self) -> list[ProductoView]:
+        q = self.carta_busqueda_productos.strip().lower()
+        if q:
+            base: list[ProductoView] = [
+                p for p in self.productos
+                if q in p.nombre.lower() or q in p.categoria_nombre.lower()
+            ]
+        else:
+            base = list(self.productos)
+        inicio = (self.carta_productos_pagina - 1) * 20
+        return base[inicio:inicio + 20]
 
     @rx.var
     def mostrador_productos_filtrados(self) -> list[ProductoView]:
@@ -4458,6 +4495,18 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_categoria_form_orden(self, v: str) -> None:
         self.categoria_form_orden = v
+
+    def set_carta_busqueda_productos(self, v: str) -> None:
+        self.carta_busqueda_productos = v
+        self.carta_productos_pagina = 1
+
+    def carta_pagina_anterior(self) -> None:
+        if self.carta_productos_pagina > 1:
+            self.carta_productos_pagina -= 1
+
+    def carta_pagina_siguiente(self) -> None:
+        if self.carta_productos_pagina < self.carta_productos_total_paginas:
+            self.carta_productos_pagina += 1
 
     def set_carta_cat_modal(self, v: bool) -> None:
         self.carta_cat_modal = bool(v)

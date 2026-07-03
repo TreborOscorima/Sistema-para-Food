@@ -1,0 +1,73 @@
+# =============================================================================
+# Seed de carta Black Cat — GitHub Actions (manual via workflow_dispatch)
+#
+# Carga masiva de 12 categorías + 92 productos para la empresa cat-black
+# en la base de datos de producción (food.tuwayki.app).
+#
+# Mismos secrets que deploy-prod.yml:
+#   DEPLOY_SSH_HOST         IP o hostname EC2
+#   DEPLOY_SSH_USER         Usuario SSH (ej. ubuntu)
+#   DEPLOY_SSH_PRIVATE_KEY  Clave privada OpenSSH
+#   DEPLOY_APP_DIR          Ruta del proyecto (ej. /home/ubuntu/sist-food-trebor)
+#   DEPLOY_SSH_PORT         Puerto SSH (default 22)
+# =============================================================================
+name: seed-carta-blackcat
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: food-seed-carta-blackcat
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Cargar carta Black Cat en produccion
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Ejecutar SQL en food_mysql via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_APP_DIR: ${{ secrets.DEPLOY_APP_DIR }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          command_timeout: 5m
+          envs: DEPLOY_APP_DIR
+          script: |
+            set -euo pipefail
+            APP_DIR="${DEPLOY_APP_DIR:-/home/ubuntu/sist-food-trebor}"
+            cd "$APP_DIR"
+
+            echo "=== Obteniendo SQL del repositorio ==="
+            git fetch origin main --quiet
+            git show origin/main:scripts/data/blackcat_carta.sql > /tmp/bc_carta.sql
+            echo "SQL listo: $(wc -l < /tmp/bc_carta.sql) lineas"
+
+            echo "=== Leyendo credenciales de .env ==="
+            MYSQL_ROOT_PW="$(grep -E '^MYSQL_ROOT_PASSWORD=' .env | head -1 | cut -d= -f2-)"
+            if [ -z "$MYSQL_ROOT_PW" ]; then
+              echo "ERROR: MYSQL_ROOT_PASSWORD no encontrado en .env"
+              rm -f /tmp/bc_carta.sql
+              exit 1
+            fi
+            echo "Credenciales OK"
+
+            echo "=== Ejecutando migracion en food_mysql ==="
+            docker exec -i food_mysql \
+              mysql -u root -p"$MYSQL_ROOT_PW" \
+              --default-character-set=utf8mb4 \
+              food_db < /tmp/bc_carta.sql
+
+            echo "=== Limpiando archivo temporal ==="
+            rm -f /tmp/bc_carta.sql
+
+            echo ""
+            echo "============================================="
+            echo "  SEED CARTA BLACK CAT COMPLETADO"
+            echo "  Verificar en: https://food.tuwayki.app/carta"
+            echo "============================================="

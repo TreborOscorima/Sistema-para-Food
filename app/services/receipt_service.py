@@ -15,7 +15,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-TICKET_WIDTH = 32
+TICKET_WIDTH = 32  # chars para papel 58mm
+
+
+def _chars_for_mm(mm: int) -> int:
+    """Columnas de texto para fuente monospace 12px según ancho de papel."""
+    if mm <= 58:
+        return 32
+    return 42  # 80 mm
 
 
 @dataclass(slots=True)
@@ -86,8 +93,10 @@ def generate_kitchen_ticket_html(
     items: Iterable[TicketLine],
     notes: str = "",
     paper_width_mm: int = 80,
-    width: int = TICKET_WIDTH,
+    width: int = 0,
 ) -> str:
+    if width == 0:
+        width = _chars_for_mm(paper_width_mm)
     lines: list[str] = [_center("COCINA", width), ""]
     lines.append(mesa_label)
     lines.append(f"Pedido: #{pedido_id}")
@@ -124,8 +133,10 @@ def generate_cashier_ticket_html(
     nombre_impuesto: str = "IGV",
     porcentaje_iva: float = 18.0,
     paper_width_mm: int = 80,
-    width: int = TICKET_WIDTH,
+    width: int = 0,
 ) -> str:
+    if width == 0:
+        width = _chars_for_mm(paper_width_mm)
     now = datetime.now()
     lines: list[str] = [
         _center(company_name.upper(), width),
@@ -192,9 +203,11 @@ def generate_cash_close_ticket_html(
     descuadre_texto: str,
     notas: str = "",
     paper_width_mm: int = 80,
-    width: int = TICKET_WIDTH,
+    width: int = 0,
 ) -> str:
     """Ticket de cierre de turno de caja (arqueo) para impresora térmica."""
+    if width == 0:
+        width = _chars_for_mm(paper_width_mm)
     lines: list[str] = [
         _center(company_name, width),
         _center("CIERRE DE CAJA", width),
@@ -222,14 +235,33 @@ def generate_cash_close_ticket_html(
 def build_print_script(html_content: str) -> str:
     """JS que abre el comprobante en una ventana nueva y dispara el diálogo
     de impresión del navegador — imprime en la impresora ya instalada en el
-    sistema operativo local (USB o red, da igual)."""
+    sistema operativo local (USB o red, da igual).
+
+    Usa Blob + URL.createObjectURL para evitar problemas de document.write
+    en browsers modernos (Chrome 120+ restringe document.write en popups).
+    El setTimeout de 400ms espera a que el navegador termine de renderizar;
+    sin él los trabajos llegan al buffer de la impresora térmica antes de que
+    se complete el render y los tickets se mezclan en el mismo papel.
+    El afterprint cierra la ventana automáticamente al terminar.
+    """
     return f"""
     (function() {{
-        const w = window.open('', '_blank');
-        if (!w) {{ return; }}
-        w.document.write({json.dumps(html_content)});
-        w.document.close();
+        var blob = new Blob([{json.dumps(html_content)}], {{type: 'text/html; charset=utf-8'}});
+        var url = URL.createObjectURL(blob);
+        var w = window.open(url, '_blank');
+        if (!w) {{ URL.revokeObjectURL(url); return; }}
         w.focus();
-        w.print();
+        w.addEventListener('afterprint', function() {{
+            w.close();
+            URL.revokeObjectURL(url);
+        }});
+        function doPrint() {{
+            setTimeout(function() {{ w.print(); }}, 400);
+        }}
+        if (w.document.readyState === 'complete') {{
+            doPrint();
+        }} else {{
+            w.onload = doPrint;
+        }}
     }})();
     """

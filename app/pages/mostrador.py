@@ -397,14 +397,9 @@ def _mostrador_content() -> rx.Component:
                             rx.text("Sin pedidos en espera", font_size="12px", color="#64748B"),
                             padding_y="10px",
                         ),
-                        rx.box(
-                            rx.vstack(
-                                rx.foreach(FoodState.pedidos_mostrador_pendientes, _pendiente_card),
-                                spacing="2",
-                                width="100%",
-                            ),
-                            overflow_y="auto",
-                            max_height="18vh",
+                        rx.vstack(
+                            rx.foreach(FoodState.pedidos_mostrador_pendientes, _pendiente_card),
+                            spacing="2",
                             width="100%",
                         ),
                     ),
@@ -419,14 +414,9 @@ def _mostrador_content() -> rx.Component:
                             rx.text("Sin historial", font_size="12px", color="#64748B"),
                             padding_y="10px",
                         ),
-                        rx.box(
-                            rx.vstack(
-                                rx.foreach(FoodState.pedidos_mostrador_entregados, _entregado_card),
-                                spacing="2",
-                                width="100%",
-                            ),
-                            overflow_y="auto",
-                            max_height="18vh",
+                        rx.vstack(
+                            rx.foreach(FoodState.pedidos_mostrador_entregados, _entregado_card),
+                            spacing="2",
                             width="100%",
                         ),
                     ),
