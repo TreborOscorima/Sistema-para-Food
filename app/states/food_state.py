@@ -937,6 +937,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     categoria_activa_id: int = 0
     mostrador_categoria_activa_id: int = 0
     mostrador_cliente_nombre: str = ""
+    busqueda_producto_mostrador: str = ""
     mostrador_metodo_pago: str = "efectivo"
     ultimo_pedido_id: int = 0
     mensaje: str = ""
@@ -1017,6 +1018,8 @@ class FoodState(CajaTurnoMixin, rx.State):
     usuario_form_perm_reportes: bool = False
 
     mozos_tab_activa: str = "salon"
+    modal_agregar_abierto: bool = False
+    busqueda_producto_modal: str = ""
     nota_producto_activo_id: int = 0
     nota_input_temporal: str = ""
 
@@ -1101,6 +1104,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     config_telefono: str = ""
     config_mensaje_ticket: str = "¡Gracias por su preferencia!"
     config_mostrar_iva: bool = False
+    config_nombre_impuesto: str = "IGV"
     config_porcentaje_iva: str = "18.0"
     config_admin_email: str = ""
     config_admin_password_nueva: str = ""
@@ -1520,10 +1524,24 @@ class FoodState(CajaTurnoMixin, rx.State):
         return [p for p in self.productos if p.disponible and p.categoria_id == self.categoria_activa_id]
 
     @rx.var
+    def productos_modal_filtrados(self) -> list[ProductoView]:
+        disponibles = [p for p in self.productos if p.disponible]
+        if self.categoria_activa_id != 0:
+            disponibles = [p for p in disponibles if p.categoria_id == self.categoria_activa_id]
+        q = self.busqueda_producto_modal.strip().lower()
+        if q:
+            disponibles = [p for p in disponibles if q in p.nombre.lower()]
+        return disponibles
+
+    @rx.var
     def mostrador_productos_filtrados(self) -> list[ProductoView]:
-        if self.mostrador_categoria_activa_id == 0:
-            return [p for p in self.productos if p.disponible]
-        return [p for p in self.productos if p.disponible and p.categoria_id == self.mostrador_categoria_activa_id]
+        disponibles = [p for p in self.productos if p.disponible]
+        if self.mostrador_categoria_activa_id != 0:
+            disponibles = [p for p in disponibles if p.categoria_id == self.mostrador_categoria_activa_id]
+        q = self.busqueda_producto_mostrador.strip().lower()
+        if q:
+            disponibles = [p for p in disponibles if q in p.nombre.lower()]
+        return disponibles
 
     @rx.var
     def total_mostrador_texto(self) -> str:
@@ -1645,6 +1663,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.categoria_activa_id = 0
         self.mostrador_categoria_activa_id = 0
         self.mostrador_cliente_nombre = ""
+        self.busqueda_producto_mostrador = ""
         self.mostrador_metodo_pago = "efectivo"
         self.ultimo_pedido_id = 0
         self.mensaje = ""
@@ -2128,6 +2147,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.config_telefono = cfg.telefono or ""
                 self.config_mensaje_ticket = cfg.mensaje_ticket or "¡Gracias por su preferencia!"
                 self.config_mostrar_iva = cfg.mostrar_iva
+                self.config_nombre_impuesto = cfg.nombre_impuesto or "IGV"
                 self.config_porcentaje_iva = str(cfg.porcentaje_iva)
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
@@ -2154,6 +2174,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             cfg.telefono = self.config_telefono.strip()
             cfg.mensaje_ticket = self.config_mensaje_ticket.strip() or "¡Gracias por su preferencia!"
             cfg.mostrar_iva = self.config_mostrar_iva
+            cfg.nombre_impuesto = self.config_nombre_impuesto.strip() or "IGV"
             try:
                 pct = float(self.config_porcentaje_iva.strip())
                 cfg.porcentaje_iva = pct if 0 < pct <= 100 else 18.0
@@ -2198,6 +2219,9 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def toggle_config_mostrar_iva(self) -> None:
         self.config_mostrar_iva = not self.config_mostrar_iva
+
+    def set_config_nombre_impuesto(self, v: str) -> None:
+        self.config_nombre_impuesto = v
 
     def set_config_porcentaje_iva(self, v: str) -> None:
         self.config_porcentaje_iva = v
@@ -2610,6 +2634,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             if mesa and mesa.tiene_items_listos else ""
         )
         self.mensaje = f"{self.mesa_seleccionada_label} seleccionada. {self.cantidad_items_carrito} items pendientes.{alerta}"
+        self.busqueda_producto_modal = ""
+        self.categoria_activa_id = 0
+        self.modal_agregar_abierto = True
 
     def _cargar_carrito_mesa(self, mesa_id: int) -> None:
         with self._tenant_session() as session:
@@ -2805,6 +2832,18 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_mozos_tab(self, tab: str) -> None:
         self.mozos_tab_activa = tab
+
+    def set_modal_agregar_abierto(self, value: bool) -> None:
+        self.modal_agregar_abierto = value
+        if not value:
+            self.busqueda_producto_modal = ""
+
+    def cerrar_modal_agregar(self) -> None:
+        self.modal_agregar_abierto = False
+        self.busqueda_producto_modal = ""
+
+    def set_busqueda_producto_modal(self, value: str) -> None:
+        self.busqueda_producto_modal = value
 
     def abrir_nota_item(self, producto_id: int) -> None:
         item = next((i for i in self.carrito if i.producto_id == producto_id), None)
@@ -3615,6 +3654,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             metodo_pago=metodo_final,
             mensaje_footer=self.config_mensaje_ticket,
             mostrar_iva=self.config_mostrar_iva,
+            nombre_impuesto=self.config_nombre_impuesto or "IGV",
             porcentaje_iva=_pct_iva,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
@@ -3684,6 +3724,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     def set_mostrador_cliente_nombre(self, value: str) -> None:
         self.mostrador_cliente_nombre = str(value)[:120]
 
+    def set_busqueda_producto_mostrador(self, value: str) -> None:
+        self.busqueda_producto_mostrador = value
+
     def agregar_producto_mostrador(self, producto_id: int) -> None:
         producto = next((p for p in self.productos if p.id == producto_id and p.disponible), None)
         if producto is None:
@@ -3744,6 +3787,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     def limpiar_carrito_mostrador(self) -> None:
         self.mostrador_carrito = []
         self.mostrador_metodo_pago = "efectivo"
+        self.busqueda_producto_mostrador = ""
         self.mensaje = "Carrito de mostrador limpio."
 
     def seleccionar_mostrador_metodo(self, metodo: str) -> None:
@@ -3823,6 +3867,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.ultimo_pedido_id = pedido_id
         self.mostrador_carrito = []
         self.mostrador_cliente_nombre = ""
+        self.busqueda_producto_mostrador = ""
         self.cargar_cocina()
         self.cargar_pedidos_mostrador_pendientes()
         html_cocina = generate_kitchen_ticket_html(

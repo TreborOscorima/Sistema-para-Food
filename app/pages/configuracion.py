@@ -272,78 +272,93 @@ def _mesas_section() -> rx.Component:
     return rx.box(
         rx.vstack(
             _section_header("Gestión de Mesas", "layout_grid", "🍽️"),
-            rx.vstack(
-                rx.text(
-                    rx.cond(FoodState.mesa_config_form_id > 0,
-                            "Editar Mesa", "Nueva Mesa"),
-                    font_size="12px", font_weight="700", color="#EA580C",
+            # Formulario compacto
+            rx.hstack(
+                rx.input(
+                    placeholder="N°",
+                    value=FoodState.mesa_config_form_numero,
+                    on_change=FoodState.set_mesa_config_form_numero,
+                    type="number", min="1", width="60px",
+                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    color="#0F172A", border_radius="8px",
+                    padding_x="8px", padding_y="7px", font_size="13px",
+                    _focus={"border_color": "#EA580C",
+                            "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
                 ),
-                rx.hstack(
-                    rx.input(
-                        placeholder="N° *",
-                        value=FoodState.mesa_config_form_numero,
-                        on_change=FoodState.set_mesa_config_form_numero,
-                        type="number", min="1", width="70px",
-                        background="#FFFFFF", border="1px solid #E2E8F0",
-                        color="#0F172A", border_radius="8px",
-                        padding_x="10px", padding_y="8px", font_size="13px",
-                    ),
-                    rx.input(
-                        placeholder="Nombre (ej: Terraza 1)",
-                        value=FoodState.mesa_config_form_nombre,
-                        on_change=FoodState.set_mesa_config_form_nombre,
-                        flex="1", background="#FFFFFF", border="1px solid #E2E8F0",
-                        color="#0F172A", border_radius="8px",
-                        padding_x="10px", padding_y="8px", font_size="13px",
-                    ),
-                    rx.input(
-                        placeholder="Cap.",
-                        value=FoodState.mesa_config_form_capacidad,
-                        on_change=FoodState.set_mesa_config_form_capacidad,
-                        type="number", min="1", width="62px",
-                        background="#FFFFFF", border="1px solid #E2E8F0",
-                        color="#0F172A", border_radius="8px",
-                        padding_x="10px", padding_y="8px", font_size="13px",
-                    ),
-                    spacing="2", width="100%",
+                rx.input(
+                    placeholder="Nombre (ej: Terraza 1)",
+                    value=FoodState.mesa_config_form_nombre,
+                    on_change=FoodState.set_mesa_config_form_nombre,
+                    flex="1", min_width="120px",
+                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    color="#0F172A", border_radius="8px",
+                    padding_x="10px", padding_y="7px", font_size="13px",
+                    _focus={"border_color": "#EA580C",
+                            "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
                 ),
-                rx.hstack(
+                rx.input(
+                    placeholder="Cap.",
+                    value=FoodState.mesa_config_form_capacidad,
+                    on_change=FoodState.set_mesa_config_form_capacidad,
+                    type="number", min="1", width="58px",
+                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    color="#0F172A", border_radius="8px",
+                    padding_x="8px", padding_y="7px", font_size="13px",
+                    _focus={"border_color": "#EA580C",
+                            "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="plus", size=14, color="#FFFFFF"),
+                        rx.text(
+                            rx.cond(FoodState.mesa_config_form_id > 0,
+                                    "Actualizar", "Agregar"),
+                            font_size="12px", font_weight="700", color="#FFFFFF",
+                        ),
+                        spacing="1", align="center",
+                    ),
+                    on_click=FoodState.guardar_mesa_config,
+                    background="#EA580C", color="#FFFFFF",
+                    border_radius="8px", cursor="pointer",
+                    padding_x="12px", padding_y="7px",
+                    _hover={"background": "#C2410C"},
+                    white_space="nowrap",
+                ),
+                rx.cond(
+                    FoodState.mesa_config_form_id > 0,
                     rx.button(
-                        "Cancelar",
+                        rx.icon(tag="x", size=14, color="#64748B"),
                         on_click=FoodState.cancelar_mesa_config_form,
-                        background="#F1F5F9", color="#64748B",
-                        border="1px solid #E2E8F0", border_radius="7px",
-                        font_size="12px", cursor="pointer",
-                        _hover={"opacity": "0.85"},
+                        background="#F1F5F9", border="1px solid #E2E8F0",
+                        border_radius="8px", cursor="pointer",
+                        padding="7px",
+                        _hover={"background": "#E2E8F0"},
                     ),
-                    rx.button(
-                        rx.cond(FoodState.mesa_config_form_id > 0,
-                                "Actualizar Mesa", "Agregar Mesa"),
-                        on_click=FoodState.guardar_mesa_config,
-                        background="#EA580C", color="#FFFFFF",
-                        border_radius="7px", font_size="12px",
-                        font_weight="700", cursor="pointer", flex="1",
-                        _hover={"background": "#C2410C"},
-                    ),
-                    spacing="2", width="100%",
+                    rx.fragment(),
                 ),
-                spacing="2", padding="12px",
-                background="#FFF7ED", border="1px solid #FED7AA",
-                border_radius="10px", width="100%",
+                spacing="2", width="100%", align="center",
+                flex_wrap="wrap",
             ),
+            # Lista de mesas
             rx.cond(
                 FoodState.mesas_config.length() == 0,
                 rx.center(
-                    rx.text("Sin mesas configuradas.", font_size="12px",
-                            color="#94A3B8", font_style="italic"),
-                    padding_y="12px", width="100%",
+                    rx.vstack(
+                        rx.icon(tag="layout_grid", size=28, color="#CBD5E1"),
+                        rx.text("Sin mesas configuradas", font_size="13px",
+                                color="#94A3B8"),
+                        rx.text("Agregá mesas usando el formulario de arriba.",
+                                font_size="11px", color="#CBD5E1"),
+                        spacing="1", align="center",
+                    ),
+                    padding_y="24px", width="100%",
                 ),
                 rx.vstack(
                     rx.foreach(FoodState.mesas_config, _mesa_row),
                     spacing="2", width="100%",
                 ),
             ),
-            spacing="3", width="100%",
+            spacing="4", width="100%",
         ),
         background="#FFFFFF",
         border="1px solid #E2E8F0",
@@ -748,13 +763,13 @@ def _content_local() -> rx.Component:
                         ),
                         spacing="2", width="100%",
                     ),
-                    # IVA toggle + porcentaje
+                    # Impuesto toggle + nombre + porcentaje
                     rx.vstack(
                         rx.hstack(
                             rx.vstack(
-                                rx.text("Mostrar IVA en el ticket", font_size="13px",
+                                rx.text("Mostrar impuesto en el ticket", font_size="13px",
                                         font_weight="600", color="#334155"),
-                                rx.text("Muestra el desglose subtotal + IVA + Total.",
+                                rx.text("Muestra el desglose subtotal + impuesto + Total.",
                                         font_size="11px", color="#94A3B8"),
                                 spacing="0", align="start",
                             ),
@@ -767,12 +782,21 @@ def _content_local() -> rx.Component:
                         ),
                         rx.cond(
                             FoodState.config_mostrar_iva,
-                            _field_row(
-                                "% de IVA",
-                                FoodState.config_porcentaje_iva,
-                                FoodState.set_config_porcentaje_iva,
-                                "18",
-                                "number",
+                            rx.vstack(
+                                _field_row(
+                                    "Nombre del impuesto",
+                                    FoodState.config_nombre_impuesto,
+                                    FoodState.set_config_nombre_impuesto,
+                                    "IGV, IVA, VAT...",
+                                ),
+                                _field_row(
+                                    "Porcentaje (%)",
+                                    FoodState.config_porcentaje_iva,
+                                    FoodState.set_config_porcentaje_iva,
+                                    "18",
+                                    "number",
+                                ),
+                                spacing="3", width="100%",
                             ),
                             rx.fragment(),
                         ),
@@ -955,19 +979,6 @@ def _configuracion_content() -> rx.Component:
             ),
             rx.spacer(),
             width="100%", align="center",
-        ),
-        # Mensaje global
-        rx.cond(
-            FoodState.mensaje != "",
-            rx.hstack(
-                rx.icon(tag="circle_check", size=14, color="#15803D"),
-                rx.text(FoodState.mensaje, font_size="13px", color="#15803D",
-                        font_weight="600"),
-                spacing="2", align="center",
-                background="#F0FDF4", border="1px solid #BBF7D0",
-                border_radius="8px", padding="10px 14px", width="100%",
-            ),
-            rx.fragment(),
         ),
         # Mobile/tablet: tabs horizontales (hidden en desktop via CSS)
         rx.box(

@@ -329,6 +329,7 @@ class ConfigImpresora(TimestampedModel, table=True):
     telefono: str = Field(default="", max_length=40, nullable=False)
     mensaje_ticket: str = Field(default="¡Gracias por su preferencia!", max_length=200, nullable=False)
     mostrar_iva: bool = Field(default=False, nullable=False)
+    nombre_impuesto: str = Field(default="IGV", max_length=20, nullable=False)
     porcentaje_iva: float = Field(default=18.0, nullable=False)
 
 

@@ -121,6 +121,7 @@ def generate_cashier_ticket_html(
     metodo_pago: str = "",
     mensaje_footer: str = "",
     mostrar_iva: bool = False,
+    nombre_impuesto: str = "IGV",
     porcentaje_iva: float = 18.0,
     paper_width_mm: int = 80,
     width: int = TICKET_WIDTH,
@@ -163,7 +164,8 @@ def generate_cashier_ticket_html(
         net_subtotal = total - iva_amount
         pct_label = f"{porcentaje_iva:.4g}".rstrip("0").rstrip(".")
         lines.append(_row("Subtotal:", _money(net_subtotal), width))
-        lines.append(_row(f"IVA ({pct_label}%):", _money(iva_amount), width))
+        tax_label = nombre_impuesto or "IGV"
+        lines.append(_row(f"{tax_label} ({pct_label}%):", _money(iva_amount), width))
     lines.append(_row("TOTAL A PAGAR:", _money(total), width))
     if metodo_pago:
         lines += [

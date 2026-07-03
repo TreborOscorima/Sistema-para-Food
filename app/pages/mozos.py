@@ -617,6 +617,432 @@ def _menu_section() -> rx.Component:
     )
 
 
+# ─── Modal de agregar productos a mesa ────────────────────────────────────────
+
+def _producto_card_compact(producto: ProductoView) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(producto.emoji, font_size="18px", line_height="1", flex_shrink="0"),
+            rx.vstack(
+                rx.text(
+                    producto.nombre,
+                    font_size="12px",
+                    font_weight="600",
+                    color="#F1F5F9",
+                    no_of_lines=1,
+                ),
+                rx.text(
+                    producto.precio_texto,
+                    font_size="12px",
+                    font_weight="700",
+                    color="#EA580C",
+                ),
+                spacing="0",
+                align="start",
+                flex="1",
+                min_width="0",
+            ),
+            rx.box(
+                rx.icon(tag="plus", size=12, color="#FFFFFF"),
+                width="22px",
+                height="22px",
+                border_radius="6px",
+                background="#EA580C",
+                display="flex",
+                align_items="center",
+                justify_content="center",
+                flex_shrink="0",
+            ),
+            spacing="2",
+            align="center",
+            width="100%",
+        ),
+        on_click=FoodState.agregar_producto(producto.id),
+        background="#1E293B",
+        border="1.5px solid #334155",
+        border_radius="8px",
+        padding="8px 10px",
+        cursor="pointer",
+        _hover={"border": "1.5px solid #EA580C", "background": "#1E293B"},
+        transition="all 0.12s ease",
+    )
+
+
+def _modal_carrito_item(item: CarritoItem) -> rx.Component:
+    editing_nota = FoodState.nota_producto_activo_id == item.producto_id
+    return rx.vstack(
+        rx.hstack(
+            rx.text(
+                item.nombre,
+                font_size="12px",
+                font_weight="600",
+                color="#F1F5F9",
+                flex="1",
+                min_width="0",
+                no_of_lines=1,
+            ),
+            rx.hstack(
+                rx.button(
+                    "-",
+                    on_click=FoodState.restar_producto(item.producto_id),
+                    width="22px", height="22px",
+                    background="#FEF2F2", color="#B91C1C",
+                    border="1px solid #FECACA", border_radius="5px",
+                    font_size="13px", cursor="pointer", padding="0",
+                    _hover={"opacity": "0.8"},
+                ),
+                rx.text(
+                    item.cantidad.to_string(),
+                    font_size="12px", font_weight="700", color="#EA580C",
+                    min_width="16px", text_align="center",
+                ),
+                rx.button(
+                    "+",
+                    on_click=FoodState.agregar_producto(item.producto_id),
+                    width="22px", height="22px",
+                    background="#F0FDF4", color="#15803D",
+                    border="1px solid #BBF7D0", border_radius="5px",
+                    font_size="13px", cursor="pointer", padding="0",
+                    _hover={"opacity": "0.8"},
+                ),
+                spacing="1", align="center",
+            ),
+            rx.text(
+                item.subtotal_texto,
+                font_size="11px", font_weight="600", color="#94A3B8",
+                min_width="52px", text_align="right",
+            ),
+            width="100%", align="center", spacing="2",
+        ),
+        # Nota inline
+        rx.cond(
+            editing_nota,
+            rx.hstack(
+                rx.input(
+                    value=FoodState.nota_input_temporal,
+                    on_change=FoodState.set_nota_input_temporal,
+                    placeholder="Ej: sin azúcar, extra picante...",
+                    background="#0F172A", border="1px solid #475569",
+                    color="#F1F5F9", border_radius="6px",
+                    font_size="11px", padding_x="8px", padding_y="4px",
+                    width="100%", height="28px",
+                    _focus={"border": "1px solid #EA580C"},
+                    _placeholder={"color": "#64748B"},
+                ),
+                rx.button(
+                    rx.icon(tag="check", size=11),
+                    on_click=FoodState.guardar_nota_carrito_item(item.producto_id),
+                    width="28px", height="28px",
+                    background="#1E293B", color="#22C55E",
+                    border="1px solid #334155", border_radius="6px",
+                    cursor="pointer", padding="0",
+                    _hover={"opacity": "0.8"},
+                ),
+                spacing="1", width="100%",
+            ),
+            rx.hstack(
+                rx.cond(
+                    item.nota != "",
+                    rx.text(
+                        "📝 " + item.nota,
+                        font_size="10px", color="#94A3B8",
+                        no_of_lines=1, flex="1", min_width="0",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.text(
+                    rx.cond(item.nota != "", "editar", "+ nota"),
+                    font_size="10px", color="#64748B", cursor="pointer",
+                    _hover={"color": "#EA580C"},
+                    on_click=FoodState.abrir_nota_item(item.producto_id),
+                ),
+                width="100%", align="center", spacing="1",
+            ),
+        ),
+        spacing="1", width="100%",
+        padding="6px 0",
+        border_bottom="1px solid #1E293B",
+    )
+
+
+def _modal_historial_item(item: HistorialItem) -> rx.Component:
+    return rx.hstack(
+        rx.text(
+            item.cantidad.to_string() + "x " + item.nombre,
+            font_size="11px", font_weight="500", color="#CBD5E1",
+            flex="1", min_width="0", no_of_lines=1,
+        ),
+        rx.cond(
+            item.nota != "",
+            rx.text(
+                "📝 " + item.nota,
+                font_size="10px", color="#64748B",
+                no_of_lines=1, max_width="100px",
+            ),
+            rx.fragment(),
+        ),
+        rx.badge(
+            item.estado_label,
+            background=item.estado_bg,
+            color=item.estado_color,
+            font_size="9px",
+            padding_x="6px", padding_y="1px",
+            border_radius="4px",
+        ),
+        width="100%", align="center", spacing="2",
+        padding="4px 0",
+        border_bottom="1px solid #1E293B",
+    )
+
+
+def _modal_agregar_productos() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                # Header
+                rx.hstack(
+                    rx.text(
+                        FoodState.mesa_seleccionada_label,
+                        font_size="16px",
+                        font_weight="700",
+                        color="#FFFFFF",
+                    ),
+                    rx.spacer(),
+                    rx.dialog.close(
+                        rx.box(
+                            rx.icon(tag="x", size=16, color="#94A3B8"),
+                            cursor="pointer",
+                            padding="4px",
+                            border_radius="6px",
+                            _hover={"background": "#334155"},
+                        ),
+                    ),
+                    width="100%",
+                    align="center",
+                ),
+                # Contenido: 2 columnas en desktop, stacked en mobile
+                rx.flex(
+                    # ─── Columna izquierda: productos ───
+                    rx.vstack(
+                        # Buscador
+                        rx.box(
+                            rx.hstack(
+                                rx.icon(tag="search", size=14, color="#64748B", flex_shrink="0"),
+                                rx.input(
+                                    value=FoodState.busqueda_producto_modal,
+                                    on_change=FoodState.set_busqueda_producto_modal,
+                                    placeholder="Buscar producto...",
+                                    background="transparent",
+                                    border="none",
+                                    color="#F1F5F9",
+                                    font_size="13px",
+                                    outline="none",
+                                    width="100%",
+                                    _focus={"outline": "none", "box_shadow": "none"},
+                                    _placeholder={"color": "#64748B"},
+                                ),
+                                rx.cond(
+                                    FoodState.busqueda_producto_modal != "",
+                                    rx.box(
+                                        rx.icon(tag="x", size=12, color="#94A3B8"),
+                                        cursor="pointer",
+                                        on_click=FoodState.set_busqueda_producto_modal(""),
+                                        _hover={"opacity": "0.7"},
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                spacing="2",
+                                align="center",
+                                width="100%",
+                            ),
+                            background="#0F172A",
+                            border="1px solid #334155",
+                            border_radius="8px",
+                            padding="6px 10px",
+                            width="100%",
+                        ),
+                        # Filtros de categoría
+                        rx.hstack(
+                            rx.button(
+                                "Todos",
+                                on_click=FoodState.seleccionar_categoria(0),
+                                background=rx.cond(FoodState.categoria_activa_id == 0, "#EA580C", "transparent"),
+                                color=rx.cond(FoodState.categoria_activa_id == 0, "#FFFFFF", "#94A3B8"),
+                                border=rx.cond(FoodState.categoria_activa_id == 0, "1px solid #EA580C", "1px solid #334155"),
+                                border_radius="6px",
+                                font_size="11px",
+                                font_weight=rx.cond(FoodState.categoria_activa_id == 0, "700", "500"),
+                                cursor="pointer",
+                                padding_x="8px", padding_y="4px", height="auto",
+                                _hover={"opacity": "0.85"},
+                            ),
+                            rx.foreach(
+                                FoodState.categorias_activas,
+                                lambda cat: rx.button(
+                                    cat.emoji + " " + cat.nombre,
+                                    on_click=FoodState.seleccionar_categoria(cat.id),
+                                    background=rx.cond(FoodState.categoria_activa_id == cat.id, "#EA580C", "transparent"),
+                                    color=rx.cond(FoodState.categoria_activa_id == cat.id, "#FFFFFF", "#94A3B8"),
+                                    border=rx.cond(FoodState.categoria_activa_id == cat.id, "1px solid #EA580C", "1px solid #334155"),
+                                    border_radius="6px",
+                                    font_size="11px",
+                                    cursor="pointer",
+                                    padding_x="8px", padding_y="4px", height="auto",
+                                    _hover={"opacity": "0.85"},
+                                ),
+                            ),
+                            flex_wrap="wrap",
+                            gap="4px",
+                            width="100%",
+                        ),
+                        # Grid de productos
+                        rx.box(
+                            rx.cond(
+                                FoodState.productos_modal_filtrados.length() == 0,
+                                rx.center(
+                                    rx.vstack(
+                                        rx.icon(tag="search_x", size=28, color="#475569"),
+                                        rx.text("Sin resultados", font_size="13px", color="#64748B"),
+                                        spacing="2", align="center",
+                                    ),
+                                    padding_y="24px",
+                                ),
+                                rx.grid(
+                                    rx.foreach(FoodState.productos_modal_filtrados, _producto_card_compact),
+                                    columns=rx.breakpoints(initial="1", sm="2"),
+                                    gap="6px",
+                                    width="100%",
+                                ),
+                            ),
+                            overflow_y="auto",
+                            max_height="45vh",
+                            width="100%",
+                        ),
+                        spacing="2",
+                        flex="3",
+                        min_width="0",
+                    ),
+                    # ─── Columna derecha: historial + carrito ───
+                    rx.vstack(
+                        # Sección: Pedidos enviados a cocina
+                        rx.cond(
+                            FoodState.historial_pedido.length() > 0,
+                            rx.vstack(
+                                rx.hstack(
+                                    rx.icon(tag="chef_hat", size=14, color="#38BDF8"),
+                                    rx.text("Enviado a cocina", font_size="12px", font_weight="700", color="#38BDF8"),
+                                    width="100%", align="center",
+                                ),
+                                rx.box(
+                                    rx.vstack(
+                                        rx.foreach(FoodState.historial_pedido, _modal_historial_item),
+                                        width="100%", spacing="0",
+                                    ),
+                                    overflow_y="auto",
+                                    max_height="20vh",
+                                    width="100%",
+                                ),
+                                spacing="2", width="100%",
+                                background="#0F172A",
+                                border="1px solid #1E3A5F",
+                                border_radius="8px",
+                                padding="8px 10px",
+                            ),
+                            rx.fragment(),
+                        ),
+                        # Sección: Nuevo pedido (carrito)
+                        rx.hstack(
+                            rx.icon(tag="shopping_cart", size=14, color="#EA580C"),
+                            rx.text(
+                                rx.cond(
+                                    FoodState.historial_pedido.length() > 0,
+                                    "Nuevo pedido",
+                                    "Pedido",
+                                ),
+                                font_size="13px", font_weight="700", color="#EA580C",
+                            ),
+                            rx.spacer(),
+                            rx.text(
+                                FoodState.total_carrito_texto,
+                                font_size="13px", font_weight="700", color="#FFFFFF",
+                            ),
+                            width="100%", align="center",
+                        ),
+                        rx.box(
+                            rx.cond(
+                                FoodState.carrito.length() == 0,
+                                rx.center(
+                                    rx.vstack(
+                                        rx.icon(tag="clipboard_list", size=24, color="#334155"),
+                                        rx.text("Agrega productos", font_size="11px", color="#64748B"),
+                                        spacing="1", align="center",
+                                    ),
+                                    padding_y="20px",
+                                ),
+                                rx.vstack(
+                                    rx.foreach(FoodState.carrito, _modal_carrito_item),
+                                    width="100%",
+                                    spacing="0",
+                                ),
+                            ),
+                            overflow_y="auto",
+                            max_height=rx.cond(
+                                FoodState.historial_pedido.length() > 0,
+                                "18vh",
+                                "38vh",
+                            ),
+                            width="100%",
+                            flex="1",
+                        ),
+                        # Botón Enviar a Cocina
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="send", size=13),
+                                rx.text("Enviar a Cocina"),
+                                spacing="2", align="center",
+                            ),
+                            on_click=[FoodState.enviar_pedido, FoodState.cerrar_modal_agregar],
+                            background="#EA580C",
+                            color="#FFFFFF",
+                            border_radius="8px",
+                            font_size="13px",
+                            font_weight="700",
+                            width="100%",
+                            cursor="pointer",
+                            _hover={"background": "#C2410C"},
+                            is_disabled=FoodState.cantidad_items_carrito == 0,
+                        ),
+                        spacing="2",
+                        flex="2",
+                        min_width="0",
+                        background="#1E293B",
+                        border="1px solid #334155",
+                        border_radius="10px",
+                        padding="12px",
+                    ),
+                    direction=rx.breakpoints(initial="column", md="row"),
+                    gap="12px",
+                    width="100%",
+                    flex="1",
+                    min_height="0",
+                ),
+                spacing="3",
+                width="100%",
+                height="75vh",
+                max_height="75vh",
+            ),
+            background="#0F172A",
+            border="1px solid #334155",
+            border_radius="16px",
+            padding="20px",
+            max_width="900px",
+            width="95vw",
+        ),
+        open=FoodState.modal_agregar_abierto,
+        on_open_change=FoodState.set_modal_agregar_abierto,
+    )
+
+
 # ─── Layout principal (tabs) ──────────────────────────────────────────────────
 
 def _mozos_content() -> rx.Component:
@@ -632,52 +1058,6 @@ def _mozos_content() -> rx.Component:
                 ),
                 rx.text("Mesas y comandas en curso", font_size="13px", color="#94A3B8"),
                 spacing="0",
-            ),
-            rx.spacer(),
-            rx.hstack(
-                rx.button(
-                    "Salón",
-                    on_click=FoodState.set_mozos_tab("salon"),
-                    background=rx.cond(FoodState.mozos_tab_activa == "salon", "#EA580C", "#1E293B"),
-                    color=rx.cond(FoodState.mozos_tab_activa == "salon", "#FFFFFF", "#94A3B8"),
-                    border=rx.cond(FoodState.mozos_tab_activa == "salon", "1px solid #EA580C", "1px solid #334155"),
-                    border_radius="8px",
-                    font_size="13px",
-                    font_weight=rx.cond(FoodState.mozos_tab_activa == "salon", "700", "500"),
-                    cursor="pointer",
-                    padding_x="14px",
-                    transition="all 0.15s ease",
-                    _hover={"border": "1px solid #EA580C"},
-                ),
-                rx.button(
-                    "Agregar",
-                    on_click=FoodState.set_mozos_tab("menu"),
-                    background=rx.cond(FoodState.mozos_tab_activa == "menu", "#EA580C", "#1E293B"),
-                    color=rx.cond(FoodState.mozos_tab_activa == "menu", "#FFFFFF", "#94A3B8"),
-                    border=rx.cond(FoodState.mozos_tab_activa == "menu", "1px solid #EA580C", "1px solid #334155"),
-                    border_radius="8px",
-                    font_size="13px",
-                    font_weight=rx.cond(FoodState.mozos_tab_activa == "menu", "700", "500"),
-                    cursor="pointer",
-                    padding_x="14px",
-                    transition="all 0.15s ease",
-                    _hover={"border": "1px solid #EA580C"},
-                ),
-                rx.button(
-                    "Historial",
-                    on_click=FoodState.set_mozos_tab("historial"),
-                    background=rx.cond(FoodState.mozos_tab_activa == "historial", "#EA580C", "#1E293B"),
-                    color=rx.cond(FoodState.mozos_tab_activa == "historial", "#FFFFFF", "#94A3B8"),
-                    border=rx.cond(FoodState.mozos_tab_activa == "historial", "1px solid #EA580C", "1px solid #334155"),
-                    border_radius="8px",
-                    font_size="13px",
-                    font_weight=rx.cond(FoodState.mozos_tab_activa == "historial", "700", "500"),
-                    cursor="pointer",
-                    padding_x="14px",
-                    transition="all 0.15s ease",
-                    _hover={"border": "1px solid #EA580C"},
-                ),
-                spacing="1",
             ),
             width="100%",
             align="center",
@@ -696,24 +1076,8 @@ def _mozos_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        rx.cond(
-            FoodState.mozos_tab_activa == "salon",
-            _salon_content(),
-            rx.cond(
-                FoodState.mozos_tab_activa == "menu",
-                _menu_section(),
-                rx.cond(
-                    FoodState.mozos_tab_activa == "historial",
-                    rx.vstack(
-                        _carrito_section(),
-                        _historial_section(),
-                        spacing="4",
-                        width="100%",
-                    ),
-                    rx.fragment(),
-                ),
-            ),
-        ),
+        _salon_content(),
+        _modal_agregar_productos(),
         spacing="4",
         width="100%",
     )
