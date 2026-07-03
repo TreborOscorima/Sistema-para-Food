@@ -71,23 +71,17 @@ def _pin_display() -> rx.Component:
 
 # ─── Teclas estilo iPhone ─────────────────────────────────────────────────────
 
-def _key_iphone(num: str, letters: str, on_click) -> rx.Component:
+def _key_iphone(num: str, on_click) -> rx.Component:
     return rx.button(
-        rx.vstack(
-            rx.text(num, font_size="26px", font_weight="300", color="#FFFFFF",
-                    line_height="1"),
-            rx.text(letters, font_size="9px", font_weight="600", color="#94A3B8",
-                    letter_spacing="0.12em", line_height="1"),
-            spacing="0",
-            align="center",
-        ),
+        rx.text(num, font_size="28px", font_weight="300", color="#FFFFFF",
+                line_height="1"),
         on_click=on_click,
         aria_label=f"Dígito {num}",
-        width="68px",
-        height="68px",
+        width="64px",
+        height="64px",
         border_radius="50%",
         background="rgba(255,255,255,0.13)",
-        border="1px solid rgba(255,255,255,0.18)",
+        border="none",
         padding="0",
         min_width="0",
         display="flex",
@@ -124,22 +118,22 @@ def _key_iphone_ghost(content: rx.Component, on_click, aria_label: str) -> rx.Co
 
 def _keypad() -> rx.Component:
     return rx.grid(
-        _key_iphone("1", "", FoodState.append_login_digit("1")),
-        _key_iphone("2", "ABC", FoodState.append_login_digit("2")),
-        _key_iphone("3", "DEF", FoodState.append_login_digit("3")),
-        _key_iphone("4", "GHI", FoodState.append_login_digit("4")),
-        _key_iphone("5", "JKL", FoodState.append_login_digit("5")),
-        _key_iphone("6", "MNO", FoodState.append_login_digit("6")),
-        _key_iphone("7", "PQRS", FoodState.append_login_digit("7")),
-        _key_iphone("8", "TUV", FoodState.append_login_digit("8")),
-        _key_iphone("9", "WXYZ", FoodState.append_login_digit("9")),
+        _key_iphone("1", FoodState.append_login_digit("1")),
+        _key_iphone("2", FoodState.append_login_digit("2")),
+        _key_iphone("3", FoodState.append_login_digit("3")),
+        _key_iphone("4", FoodState.append_login_digit("4")),
+        _key_iphone("5", FoodState.append_login_digit("5")),
+        _key_iphone("6", FoodState.append_login_digit("6")),
+        _key_iphone("7", FoodState.append_login_digit("7")),
+        _key_iphone("8", FoodState.append_login_digit("8")),
+        _key_iphone("9", FoodState.append_login_digit("9")),
         _key_iphone_ghost(
             rx.text("C", font_size="20px", font_weight="400", color="#64748B",
                     line_height="1"),
             FoodState.clear_login_pin,
             "Borrar PIN completo",
         ),
-        _key_iphone("0", "+", FoodState.append_login_digit("0")),
+        _key_iphone("0", FoodState.append_login_digit("0")),
         _key_iphone_ghost(
             rx.icon(tag="delete", size=20, color="#94A3B8"),
             FoodState.backspace_login_pin,
