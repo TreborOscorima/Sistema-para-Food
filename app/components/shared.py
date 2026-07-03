@@ -192,6 +192,21 @@ _TWK_CSS = (
     ".twk-login-input:focus{border-color:#EA580C!important;"
     "box-shadow:0 0 0 3px rgba(234,88,12,0.15)!important}"
     ".twk-login-input::placeholder{color:#475569!important}"
+
+    # ── Admin sidebar — overlay en mobile, sticky colapsable en desktop ──────────
+    ".twk-admin-sb{position:fixed;top:60px;left:-280px;height:calc(100vh - 60px);"
+    "width:260px;z-index:30;transition:left 0.25s ease;overflow-y:auto;"
+    "overflow-x:hidden;background:#F8FAFC;border-right:1px solid #E2E8F0}"
+    ".twk-admin-sb.open{left:0;box-shadow:4px 0 20px rgba(0,0,0,0.12)}"
+    ".twk-admin-bd{display:none;position:fixed;top:60px;left:0;right:0;bottom:0;"
+    "background:rgba(0,0,0,0.42);z-index:29;cursor:pointer}"
+    ".twk-admin-bd.open{display:block}"
+    "@media(min-width:768px){"
+    ".twk-admin-sb{position:sticky;top:60px;left:auto;z-index:auto;"
+    "transition:width 0.22s ease;flex-shrink:0;box-shadow:none;overflow-y:auto}"
+    ".twk-admin-sb.open{left:auto;width:224px}"
+    ".twk-admin-sb:not(.open){width:56px}"
+    ".twk-admin-bd,.twk-admin-bd.open{display:none!important}}"
 )
 
 _FONT_JS = (

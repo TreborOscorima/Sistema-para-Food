@@ -225,7 +225,7 @@ def _login_card() -> rx.Component:
         # Selector de rol
         rx.hstack(
             rx.text(
-                "SELECCIONA TU ROL EL QUE SE TE FUE ASIGNADO",
+                "SELECCIONA TU ROL",
                 font_size="11px",
                 font_weight="700",
                 color="#64748B",

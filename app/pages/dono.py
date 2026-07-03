@@ -33,15 +33,34 @@ _AMBER_BD  = "#FDE68A"
 
 class AdminPanelState(rx.State):
     seccion: str = "resumen"
+    sidebar_open: bool = True
 
     def ir_a(self, s: str) -> None:
         self.seccion = s
 
+    def toggle_sidebar(self) -> None:
+        self.sidebar_open = not self.sidebar_open
+
+    def cerrar_sidebar(self) -> None:
+        self.sidebar_open = False
+
 
 # ── Topbar del shell ──────────────────────────────────────────────────────────
 
-def _dono_topbar() -> rx.Component:
+def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
     return rx.hstack(
+        rx.button(
+            rx.icon(tag="panel_left", size=18, color=_SLATE_700),
+            on_click=AdminPanelState.toggle_sidebar,
+            background="transparent",
+            border="none",
+            border_radius="8px",
+            padding="6px",
+            min_width="0",
+            cursor="pointer",
+            _hover={"background": _SLATE_100},
+            aria_label="Abrir/cerrar menú",
+        ) if show_hamburger else rx.fragment(),
         rx.hstack(
             rx.image(src="/TUWAYKIFOODFAVICON.png", height="36px", width="36px",
                      border_radius="9px", alt="TUWAYKIFOOD"),
@@ -107,19 +126,27 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                 display="flex", align_items="center",
                 justify_content="center", flex_shrink="0",
             ),
-            rx.vstack(
-                rx.text(label, font_size="13px",
-                        font_weight=rx.cond(active, "700", "500"),
-                        color=rx.cond(active, _SLATE_900, _SLATE_700),
-                        line_height="1"),
-                rx.text(desc, font_size="11px",
-                        color=rx.cond(active, _SLATE_500, "#94A3B8"),
-                        line_height="1"),
-                spacing="1", align="start",
+            # Texto — se oculta cuando el sidebar está colapsado
+            rx.cond(
+                AdminPanelState.sidebar_open,
+                rx.vstack(
+                    rx.text(label, font_size="13px",
+                            font_weight=rx.cond(active, "700", "500"),
+                            color=rx.cond(active, _SLATE_900, _SLATE_700),
+                            line_height="1"),
+                    rx.text(desc, font_size="11px",
+                            color=rx.cond(active, _SLATE_500, "#94A3B8"),
+                            line_height="1"),
+                    spacing="1", align="start",
+                ),
+                rx.fragment(),
             ),
-            spacing="3", align="center", width="100%",
+            spacing="3",
+            align="center",
+            width="100%",
+            justify_content=rx.cond(AdminPanelState.sidebar_open, "flex-start", "center"),
         ),
-        padding="10px 12px",
+        padding=rx.cond(AdminPanelState.sidebar_open, "10px 12px", "10px 4px"),
         border_radius="10px",
         background=rx.cond(active, _WHITE, "transparent"),
         border=rx.cond(active, f"1px solid {_ORANGE_BD}",
@@ -127,7 +154,9 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
         box_shadow=rx.cond(active, "0 1px 4px rgba(234,88,12,0.1)", "none"),
         cursor="pointer",
         on_click=AdminPanelState.ir_a(key),
+        title=label,
         width="100%",
+        overflow="hidden",
         transition="all 0.12s ease",
         _hover={
             "background": rx.cond(active, _WHITE, _SLATE_50),
@@ -140,10 +169,15 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
 def _admin_sidebar() -> rx.Component:
     return rx.box(
         rx.vstack(
-            rx.text("Menú", font_size="10px", font_weight="700",
-                    color="#94A3B8", text_transform="uppercase",
-                    letter_spacing="0.08em", padding_x="4px",
-                    padding_bottom="4px"),
+            # Etiqueta "Menú" — solo visible cuando está expandido
+            rx.cond(
+                AdminPanelState.sidebar_open,
+                rx.text("Menú", font_size="10px", font_weight="700",
+                        color="#94A3B8", text_transform="uppercase",
+                        letter_spacing="0.08em", padding_x="4px",
+                        padding_bottom="4px"),
+                rx.fragment(),
+            ),
             _admin_nav_item("resumen",    "Resumen",      "layout_dashboard", "Vista general del día"),
             _admin_nav_item("ventas",     "Reportes",     "trending_up",      "Dashboard y ventas del día"),
             _admin_nav_item("clientes",   "Clientes",     "users",            "Fidelización y alertas"),
@@ -155,13 +189,8 @@ def _admin_sidebar() -> rx.Component:
             _admin_nav_item("config",     "Configuración","settings",         "Ajustes del sistema"),
             spacing="1", width="100%", align="start",
         ),
-        padding="12px",
-        background=_SLATE_50,
-        border="1px solid #E2E8F0",
-        border_radius="14px",
-        min_width=rx.breakpoints(initial="100%", md="210px"),
-        width=rx.breakpoints(initial="100%", md="210px"),
-        flex_shrink="0",
+        padding=rx.cond(AdminPanelState.sidebar_open, "12px", "8px 6px"),
+        class_name=rx.cond(AdminPanelState.sidebar_open, "twk-admin-sb open", "twk-admin-sb"),
     )
 
 
@@ -627,15 +656,7 @@ def _dono_dashboard() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Layout: sidebar + contenido
-        rx.flex(
-            _admin_sidebar(),
-            rx.box(_content_area(), flex="1", min_width="0"),
-            direction=rx.breakpoints(initial="column", md="row"),
-            gap="16px",
-            width="100%",
-            align="start",
-        ),
+        _content_area(),
         spacing="4",
         width="100%",
     )
@@ -643,19 +664,51 @@ def _dono_dashboard() -> rx.Component:
 
 # ── Shell del panel ───────────────────────────────────────────────────────────
 
-def _dono_shell(content: rx.Component) -> rx.Component:
+def _dono_shell(content: rx.Component, with_sidebar: bool = False) -> rx.Component:
+    if with_sidebar:
+        # Layout con sidebar: topbar fijo + fila (sidebar + contenido)
+        body = rx.box(
+            # Backdrop (mobile) — click cierra el drawer
+            rx.box(
+                on_click=AdminPanelState.cerrar_sidebar,
+                class_name=rx.cond(
+                    AdminPanelState.sidebar_open,
+                    "twk-admin-bd open",
+                    "twk-admin-bd",
+                ),
+            ),
+            # Fila: sidebar + área de contenido
+            rx.box(
+                _admin_sidebar(),
+                rx.box(
+                    content,
+                    padding=rx.breakpoints(initial="16px", sm="20px", lg="24px 28px"),
+                    flex="1",
+                    min_width="0",
+                    overflow="hidden",
+                ),
+                display="flex",
+                align_items="start",
+                width="100%",
+                min_height="calc(100vh - 60px)",
+            ),
+            position="relative",
+            width="100%",
+        )
+    else:
+        body = rx.box(
+            content,
+            padding=rx.breakpoints(initial="16px", sm="20px", lg="28px 32px"),
+            max_width="1400px",
+            margin="0 auto",
+            width="100%",
+        )
+
     return rx.box(
         rx.script(_CSS_SCRIPT),
         rx.vstack(
-            _dono_topbar(),
-            rx.box(
-                content,
-                padding=rx.breakpoints(
-                    initial="16px", sm="20px", lg="28px 32px"),
-                max_width="1400px",
-                margin="0 auto",
-                width="100%",
-            ),
+            _dono_topbar(show_hamburger=with_sidebar),
+            body,
             spacing="0",
             width="100%",
             min_height="100vh",
@@ -907,4 +960,4 @@ def dono_login_page() -> rx.Component:
     title="TUWAYKIFOOD | Panel Administrativo",
 )
 def dono_page() -> rx.Component:
-    return _dono_shell(_dono_dashboard())
+    return _dono_shell(_dono_dashboard(), with_sidebar=True)
