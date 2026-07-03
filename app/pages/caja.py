@@ -241,6 +241,66 @@ def _cobro_panel() -> rx.Component:
                     ),
                     width="100%", align="center",
                 ),
+                # ── Cupón de descuento ──────────────────────────────────────
+                rx.cond(
+                    FoodState.caja_cupon_id_aplicado > 0,
+                    # Cupón aplicado — mostrar badge + quitar
+                    rx.hstack(
+                        rx.icon(tag="ticket_percent", size=14, color="#16A34A"),
+                        rx.vstack(
+                            rx.text(FoodState.caja_cupon_nombre_aplicado,
+                                    font_size="12px", font_weight="700", color="#15803D"),
+                            rx.text("Código: " + FoodState.caja_cupon_codigo,
+                                    font_size="11px", color="#64748B"),
+                            spacing="0", align="start",
+                        ),
+                        rx.spacer(),
+                        rx.text(
+                            "-S/ " + FoodState.caja_cupon_descuento_aplicado,
+                            font_size="13px", font_weight="700", color="#16A34A",
+                        ),
+                        rx.icon_button(
+                            rx.icon(tag="x", size=12),
+                            on_click=FoodState.quitar_cupon_caja,
+                            background="#FEE2E2", color="#DC2626",
+                            border_radius="5px", width="22px", height="22px",
+                            border="none", cursor="pointer",
+                        ),
+                        width="100%", align="center", spacing="2",
+                        background="#F0FDF4", border="1px solid #BBF7D0",
+                        border_radius="8px", padding="8px 10px",
+                    ),
+                    # Cupón no aplicado — campo de ingreso
+                    rx.vstack(
+                        rx.hstack(
+                            rx.input(
+                                placeholder="Código de cupón",
+                                value=FoodState.caja_cupon_codigo,
+                                on_change=FoodState.set_caja_cupon_codigo,
+                                background="#F8FAFC", border="1px solid #E2E8F0",
+                                border_radius="7px", font_size="13px",
+                                padding_x="10px", padding_y="6px", flex="1",
+                                _focus={"border_color": "#EA580C"},
+                            ),
+                            rx.button(
+                                "Aplicar",
+                                on_click=FoodState.aplicar_cupon_caja,
+                                background="#EA580C", color="#FFFFFF",
+                                border_radius="7px", font_size="12px",
+                                font_weight="700", padding_x="12px", padding_y="6px",
+                                cursor="pointer", _hover={"background": "#C2410C"},
+                            ),
+                            spacing="2", width="100%",
+                        ),
+                        rx.cond(
+                            FoodState.caja_cupon_error != "",
+                            rx.text(FoodState.caja_cupon_error, font_size="11px",
+                                    color="#DC2626"),
+                            rx.fragment(),
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                ),
                 rx.hstack(
                     rx.text("Propina (opcional) S/", font_size="14px", color="#64748B"),
                     rx.spacer(),

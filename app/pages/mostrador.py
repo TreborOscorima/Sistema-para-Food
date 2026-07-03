@@ -240,7 +240,18 @@ def _mostrador_content() -> rx.Component:
                         rx.hstack(
                             rx.text("Carrito", font_size="13px", font_weight="700", color="#94A3B8"),
                             rx.spacer(),
-                            rx.text(FoodState.total_mostrador_texto, font_size="16px", font_weight="800", color="#FFFFFF"),
+                            rx.vstack(
+                                rx.cond(
+                                    FoodState.mostrador_cupon_id_aplicado > 0,
+                                    rx.text(FoodState.total_mostrador_texto,
+                                            font_size="12px", color="#64748B",
+                                            text_decoration="line-through"),
+                                    rx.fragment(),
+                                ),
+                                rx.text(FoodState.total_mostrador_neto_texto,
+                                        font_size="16px", font_weight="800", color="#FFFFFF"),
+                                spacing="0", align="end",
+                            ),
                             width="100%",
                             align="center",
                         ),
@@ -256,6 +267,55 @@ def _mostrador_content() -> rx.Component:
                                 width="100%",
                                 max_height="120px",
                                 overflow_y="auto",
+                            ),
+                        ),
+                        # ── Cupón de descuento ──────────────────────────────
+                        rx.cond(
+                            FoodState.mostrador_cupon_id_aplicado > 0,
+                            rx.hstack(
+                                rx.icon(tag="ticket_percent", size=13, color="#4ADE80"),
+                                rx.text(FoodState.mostrador_cupon_nombre_aplicado,
+                                        font_size="12px", font_weight="700", color="#4ADE80"),
+                                rx.spacer(),
+                                rx.text("-S/ " + FoodState.mostrador_cupon_descuento_aplicado,
+                                        font_size="12px", font_weight="700", color="#4ADE80"),
+                                rx.icon_button(
+                                    rx.icon(tag="x", size=11),
+                                    on_click=FoodState.quitar_cupon_mostrador,
+                                    background="#1E293B", color="#FCA5A5",
+                                    border="1px solid #334155", border_radius="4px",
+                                    width="20px", height="20px", cursor="pointer",
+                                ),
+                                width="100%", align="center", spacing="2",
+                            ),
+                            rx.vstack(
+                                rx.hstack(
+                                    rx.input(
+                                        placeholder="Código cupón",
+                                        value=FoodState.mostrador_cupon_codigo,
+                                        on_change=FoodState.set_mostrador_cupon_codigo,
+                                        background="#0F172A", border="1px solid #334155",
+                                        color="#F1F5F9", border_radius="7px",
+                                        font_size="12px", padding_x="9px", padding_y="5px",
+                                        flex="1", _focus={"border_color": "#EA580C"},
+                                    ),
+                                    rx.button(
+                                        "Aplicar",
+                                        on_click=FoodState.aplicar_cupon_mostrador,
+                                        background="#334155", color="#F1F5F9",
+                                        border_radius="7px", font_size="11px",
+                                        font_weight="700", padding_x="10px", padding_y="5px",
+                                        cursor="pointer", _hover={"background": "#EA580C"},
+                                    ),
+                                    spacing="2", width="100%",
+                                ),
+                                rx.cond(
+                                    FoodState.mostrador_cupon_error != "",
+                                    rx.text(FoodState.mostrador_cupon_error,
+                                            font_size="11px", color="#FCA5A5"),
+                                    rx.fragment(),
+                                ),
+                                spacing="1", width="100%",
                             ),
                         ),
                         rx.hstack(

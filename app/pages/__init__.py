@@ -13,3 +13,4 @@ from app.pages.inventario import inventario_page  # noqa: F401
 from app.pages.clientes import clientes_page  # noqa: F401
 from app.pages.cuentas import cuentas_page  # noqa: F401
 from app.pages.promociones import promociones_page  # noqa: F401
+from app.pages.cupones import cupones_page  # noqa: F401

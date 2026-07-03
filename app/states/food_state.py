@@ -25,6 +25,7 @@ from app.models.food import (
     Categoria,
     Cliente,
     ConfigImpresora,
+    CuponLote,
     CuentaCorriente,
     DetallePedido,
     EstadoMesa,
@@ -80,6 +81,7 @@ from app.services.promo_service import (
     mejor_promo,
     promo_vigente,
 )
+from app.services.cupon_service import redimir_cupon, validar_cupon
 from app.states.caja_turno_mixin import CajaTurnoMixin, get_turno_abierto
 from app.utils.db import get_session
 from app.utils.tenant import set_tenant_context, tenant_bypass
@@ -649,6 +651,21 @@ class PromocionView(BaseModel):
     auto_aplicar: bool = True
 
 
+class CuponLoteView(BaseModel):
+    id: int = 0
+    nombre: str = ""
+    codigo: str = ""
+    tipo: str = ""
+    valor_texto: str = ""
+    fecha_inicio_texto: str = ""
+    fecha_fin_texto: str = ""
+    usos_actuales: int = 0
+    usos_max_texto: str = "Ilimitado"
+    usos_texto: str = ""
+    activo: bool = True
+    vencido: bool = False
+
+
 class UsuarioSesion(BaseModel):
     id: int
     nombre: str
@@ -1138,6 +1155,33 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_promo_aplicada_nombre: str = ""
     caja_promo_aplicada_texto: str = ""
 
+    # Cupones — Caja (mesas)
+    caja_cupon_codigo: str = ""
+    caja_cupon_id_aplicado: int = 0      # 0 = ninguno
+    caja_cupon_nombre_aplicado: str = ""
+    caja_cupon_descuento_aplicado: str = ""   # valor decimal como string "10.00"
+    caja_cupon_error: str = ""
+
+    # Cupones — Mostrador
+    mostrador_cupon_codigo: str = ""
+    mostrador_cupon_id_aplicado: int = 0
+    mostrador_cupon_nombre_aplicado: str = ""
+    mostrador_cupon_descuento_aplicado: str = ""
+    mostrador_cupon_error: str = ""
+
+    # Cupones — gestión admin
+    cupones_lista: list[CuponLoteView] = []
+    cupon_form_visible: bool = False
+    cupon_form_editando: bool = False
+    cupon_form_id: int = 0
+    cupon_form_nombre: str = ""
+    cupon_form_codigo: str = ""
+    cupon_form_tipo: str = "porcentaje"
+    cupon_form_valor: str = ""
+    cupon_form_fecha_inicio: str = ""
+    cupon_form_fecha_fin: str = ""
+    cupon_form_usos_max: str = ""
+
     # ─── Computed vars ────────────────────────────────────────────────────────
 
     @rx.var
@@ -1446,6 +1490,18 @@ class FoodState(CajaTurnoMixin, rx.State):
     @rx.var
     def total_mostrador_texto(self) -> str:
         total = sum(_to_decimal(item.subtotal) for item in self.mostrador_carrito)
+        return _money_text(total)
+
+    @rx.var
+    def total_mostrador_neto_texto(self) -> str:
+        """Total del carrito de mostrador menos cupón aplicado."""
+        total = sum(_to_decimal(item.subtotal) for item in self.mostrador_carrito)
+        if self.mostrador_cupon_descuento_aplicado:
+            try:
+                dcto = Decimal(self.mostrador_cupon_descuento_aplicado)
+                total = max(total - dcto, Decimal("0.00"))
+            except (ValueError, Exception):
+                pass
         return _money_text(total)
 
     @rx.var
@@ -3358,10 +3414,21 @@ class FoodState(CajaTurnoMixin, rx.State):
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
 
+        # Redimir cupón si se aplicó uno
+        cupon_id_a_redimir = self.caja_cupon_id_aplicado
+        if cupon_id_a_redimir > 0:
+            try:
+                with self._tenant_session() as session:
+                    redimir_cupon(session, cupon_id_a_redimir)
+                    session.commit()
+            except Exception:
+                pass  # la venta ya ocurrió; no bloqueamos por esto
+
         if self.mesa_seleccionada_id == objetivo:
             self.mesa_seleccionada_id = 0
             self.carrito = []
             self.historial_pedido = []
+        self.quitar_cupon_caja()
         self.cancelar_cobro()
         self.cargar_mesas()
         self.cargar_historial_ventas()
@@ -3528,9 +3595,21 @@ class FoodState(CajaTurnoMixin, rx.State):
                     subtotal=float(subtotal),
                     note="",
                 ))
-            total = float(_recalculate_order_total(session, pedido))
-            _sync_order_status(session, pedido)
+            total_bruto = float(_recalculate_order_total(session, pedido))
+            # Aplicar descuento de cupón al total final
+            cupon_desc = Decimal("0.00")
+            if self.mostrador_cupon_descuento_aplicado:
+                try:
+                    cupon_desc = Decimal(self.mostrador_cupon_descuento_aplicado)
+                except (ValueError, Exception):
+                    pass
+            total_neto = max(Decimal(str(round(total_bruto, 2))) - cupon_desc, Decimal("0.00"))
+            pedido.descuento = cupon_desc
+            pedido.total = total_neto
+            pedido.updated_at = _utcnow()
             session.add(pedido)
+            total = float(total_neto)
+            _sync_order_status(session, pedido)
             _descontar_stock_por_pedido(session, pedido.id or 0, self._company_id())
             if total > 0:
                 session.add(PagoPedido(
@@ -3543,10 +3622,21 @@ class FoodState(CajaTurnoMixin, rx.State):
                 ))
             session.commit()
             pedido_id = pedido.id or 0
+        # Redimir cupón mostrador si se aplicó uno
+        cupon_id_mdr = self.mostrador_cupon_id_aplicado
+        if cupon_id_mdr > 0:
+            try:
+                with self._tenant_session() as session:
+                    redimir_cupon(session, cupon_id_mdr)
+                    session.commit()
+            except Exception:
+                pass
+
         self.ultimo_pedido_id = pedido_id
         self.mostrador_carrito = []
         self.mostrador_cliente_nombre = ""
         self.mostrador_metodo_pago = "efectivo"
+        self.quitar_cupon_mostrador()
         self.cargar_cocina()
         self.cargar_historial_ventas()
         paper_width_mm = self._ticket_paper_width_mm()
@@ -5598,6 +5688,258 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def refrescar_promos(self) -> None:
         self.cargar_promociones()
+
+    # ─── Cupones — Caja (mesas) ────────────────────────────────────────────────
+
+    def set_caja_cupon_codigo(self, v: str) -> None:
+        self.caja_cupon_codigo = v.upper()
+        self.caja_cupon_error = ""
+
+    def aplicar_cupon_caja(self) -> None:
+        """Valida el código de cupón y aplica el descuento al cobro de caja."""
+        self.caja_cupon_error = ""
+        try:
+            total_base = Decimal(str(self.caja_cobro_total_base))
+            with self._tenant_session() as session:
+                cupon, descuento = validar_cupon(
+                    session, self.caja_cupon_codigo, self._company_id(), total_base
+                )
+            self.caja_cupon_id_aplicado = cupon.id or 0
+            self.caja_cupon_nombre_aplicado = cupon.nombre
+            self.caja_cupon_descuento_aplicado = str(round(float(descuento), 2))
+            self.caja_cobro_descuento = self.caja_cupon_descuento_aplicado
+        except ValueError as exc:
+            self.caja_cupon_error = str(exc)
+
+    def quitar_cupon_caja(self) -> None:
+        self.caja_cupon_codigo = ""
+        self.caja_cupon_id_aplicado = 0
+        self.caja_cupon_nombre_aplicado = ""
+        self.caja_cupon_descuento_aplicado = ""
+        self.caja_cupon_error = ""
+        self.caja_cobro_descuento = ""
+
+    # ─── Cupones — Mostrador ───────────────────────────────────────────────────
+
+    def set_mostrador_cupon_codigo(self, v: str) -> None:
+        self.mostrador_cupon_codigo = v.upper()
+        self.mostrador_cupon_error = ""
+
+    def aplicar_cupon_mostrador(self) -> None:
+        """Valida el código de cupón para el carrito de mostrador."""
+        self.mostrador_cupon_error = ""
+        try:
+            total_base = sum(_to_decimal(item.subtotal) for item in self.mostrador_carrito)
+            if total_base <= 0:
+                self.mostrador_cupon_error = "Agrega productos antes de aplicar un cupón."
+                return
+            with self._tenant_session() as session:
+                cupon, descuento = validar_cupon(
+                    session, self.mostrador_cupon_codigo, self._company_id(), total_base
+                )
+            self.mostrador_cupon_id_aplicado = cupon.id or 0
+            self.mostrador_cupon_nombre_aplicado = cupon.nombre
+            self.mostrador_cupon_descuento_aplicado = str(round(float(descuento), 2))
+        except ValueError as exc:
+            self.mostrador_cupon_error = str(exc)
+
+    def quitar_cupon_mostrador(self) -> None:
+        self.mostrador_cupon_codigo = ""
+        self.mostrador_cupon_id_aplicado = 0
+        self.mostrador_cupon_nombre_aplicado = ""
+        self.mostrador_cupon_descuento_aplicado = ""
+        self.mostrador_cupon_error = ""
+
+    # ─── Cupones — Gestión admin ───────────────────────────────────────────────
+
+    def on_load_cupones(self) -> None:
+        self.mensaje = ""
+        self.cargar_cupones()
+
+    def cargar_cupones(self) -> None:
+        from datetime import date as _date
+        hoy = _date.today()
+        with self._tenant_session() as session:
+            lotes = session.exec(
+                select(CuponLote)
+                .where(CuponLote.company_id == self._company_id())
+                .order_by(CuponLote.activo.desc(), CuponLote.nombre)
+            ).all()
+        views: list[CuponLoteView] = []
+        for c in lotes:
+            tipo_label = "% Porcentaje" if c.tipo == "porcentaje" else "S/ Monto fijo"
+            valor_txt = f"{Decimal(str(c.valor)):.0f}%" if c.tipo == "porcentaje" else _money_text(Decimal(str(c.valor)))
+            fi = c.fecha_inicio.strftime("%d/%m/%Y") if c.fecha_inicio else "Sin inicio"
+            ff = c.fecha_fin.strftime("%d/%m/%Y") if c.fecha_fin else "Sin vence"
+            usos_max_txt = str(c.usos_max) if c.usos_max is not None else "Ilimitado"
+            usos_txt = f"{c.usos_actuales} / {c.usos_max}" if c.usos_max is not None else f"{c.usos_actuales} usos"
+            vencido = bool(c.fecha_fin and hoy > c.fecha_fin)
+            views.append(CuponLoteView(
+                id=c.id or 0,
+                nombre=c.nombre,
+                codigo=c.codigo,
+                tipo=tipo_label,
+                valor_texto=valor_txt,
+                fecha_inicio_texto=fi,
+                fecha_fin_texto=ff,
+                usos_actuales=c.usos_actuales,
+                usos_max_texto=usos_max_txt,
+                usos_texto=usos_txt,
+                activo=c.activo,
+                vencido=vencido,
+            ))
+        self.cupones_lista = views
+
+    def set_cupon_form_nombre(self, v: str) -> None:
+        self.cupon_form_nombre = v
+
+    def set_cupon_form_codigo(self, v: str) -> None:
+        self.cupon_form_codigo = v.upper().strip()
+
+    def set_cupon_form_tipo(self, v: str) -> None:
+        self.cupon_form_tipo = v
+
+    def set_cupon_form_valor(self, v: str) -> None:
+        self.cupon_form_valor = v
+
+    def set_cupon_form_fecha_inicio(self, v: str) -> None:
+        self.cupon_form_fecha_inicio = v
+
+    def set_cupon_form_fecha_fin(self, v: str) -> None:
+        self.cupon_form_fecha_fin = v
+
+    def set_cupon_form_usos_max(self, v: str) -> None:
+        self.cupon_form_usos_max = v
+
+    def set_cupon_form_visible(self, v: bool) -> None:
+        self.cupon_form_visible = bool(v)
+        if not v:
+            self._reset_cupon_form()
+
+    def abrir_nuevo_cupon(self) -> None:
+        self._reset_cupon_form()
+        self.cupon_form_visible = True
+
+    def _reset_cupon_form(self) -> None:
+        self.cupon_form_id = 0
+        self.cupon_form_nombre = ""
+        self.cupon_form_codigo = ""
+        self.cupon_form_tipo = "porcentaje"
+        self.cupon_form_valor = ""
+        self.cupon_form_fecha_inicio = ""
+        self.cupon_form_fecha_fin = ""
+        self.cupon_form_usos_max = ""
+        self.cupon_form_editando = False
+
+    def editar_cupon(self, cupon_id: int) -> None:
+        with self._tenant_session() as session:
+            c = session.get(CuponLote, cupon_id)
+            if c is None or c.company_id != self._company_id():
+                return
+        self.cupon_form_id = c.id or 0
+        self.cupon_form_nombre = c.nombre
+        self.cupon_form_codigo = c.codigo
+        self.cupon_form_tipo = c.tipo
+        self.cupon_form_valor = str(Decimal(str(c.valor)))
+        self.cupon_form_fecha_inicio = c.fecha_inicio.strftime("%Y-%m-%d") if c.fecha_inicio else ""
+        self.cupon_form_fecha_fin = c.fecha_fin.strftime("%Y-%m-%d") if c.fecha_fin else ""
+        self.cupon_form_usos_max = str(c.usos_max) if c.usos_max is not None else ""
+        self.cupon_form_editando = True
+        self.cupon_form_visible = True
+
+    def guardar_cupon(self) -> None:
+        from datetime import date as _date
+        nombre = self.cupon_form_nombre.strip()
+        codigo = self.cupon_form_codigo.strip().upper()
+        if not nombre:
+            self.mensaje = "El nombre es obligatorio."
+            return
+        if not codigo:
+            self.mensaje = "El código es obligatorio."
+            return
+        try:
+            valor = Decimal(str(self.cupon_form_valor.replace(",", ".")))
+            if valor <= 0:
+                raise ValueError
+        except (ValueError, InvalidOperation):
+            self.mensaje = "Valor inválido. Ingresa un número mayor a cero."
+            return
+        if self.cupon_form_tipo == "porcentaje" and valor > 100:
+            self.mensaje = "El porcentaje no puede superar 100%."
+            return
+        usos_max: int | None = None
+        if self.cupon_form_usos_max.strip():
+            try:
+                usos_max = int(self.cupon_form_usos_max.strip())
+                if usos_max <= 0:
+                    raise ValueError
+            except ValueError:
+                self.mensaje = "Usos máximos debe ser un número entero positivo."
+                return
+        fecha_inicio: _date | None = None
+        fecha_fin: _date | None = None
+        try:
+            if self.cupon_form_fecha_inicio:
+                fecha_inicio = _date.fromisoformat(self.cupon_form_fecha_inicio)
+            if self.cupon_form_fecha_fin:
+                fecha_fin = _date.fromisoformat(self.cupon_form_fecha_fin)
+        except ValueError:
+            self.mensaje = "Fechas inválidas."
+            return
+        with self._tenant_session() as session:
+            if self.cupon_form_editando and self.cupon_form_id:
+                c = session.get(CuponLote, self.cupon_form_id)
+                if c is None or c.company_id != self._company_id():
+                    self.mensaje = "Cupón no encontrado."
+                    return
+                c.nombre = nombre
+                c.codigo = codigo
+                c.tipo = self.cupon_form_tipo
+                c.valor = valor
+                c.fecha_inicio = fecha_inicio
+                c.fecha_fin = fecha_fin
+                c.usos_max = usos_max
+                c.updated_at = _utcnow()
+                session.add(c)
+            else:
+                c = CuponLote(
+                    company_id=self._company_id(),
+                    nombre=nombre,
+                    codigo=codigo,
+                    tipo=self.cupon_form_tipo,
+                    valor=valor,
+                    fecha_inicio=fecha_inicio,
+                    fecha_fin=fecha_fin,
+                    usos_max=usos_max,
+                    usos_actuales=0,
+                    activo=True,
+                )
+                session.add(c)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+                self.mensaje = f"El código '{codigo}' ya existe."
+                return
+        self.mensaje = f"Cupón '{nombre}' guardado."
+        self.cupon_form_visible = False
+        self._reset_cupon_form()
+        self.cargar_cupones()
+
+    def toggle_cupon_activo(self, cupon_id: int) -> None:
+        with self._tenant_session() as session:
+            c = session.get(CuponLote, cupon_id)
+            if c is None or c.company_id != self._company_id():
+                return
+            c.activo = not c.activo
+            c.updated_at = _utcnow()
+            session.add(c)
+            session.commit()
+        self.cargar_cupones()
+
+    def cancelar_cupon_form(self) -> None:
+        self._reset_cupon_form()
+        self.cupon_form_visible = False
 
 
 # ─── Estado público (sin auth) ────────────────────────────────────────────────

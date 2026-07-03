@@ -556,6 +556,30 @@ class DetallePedido(TimestampedModel, table=True):
     producto: Producto | None = Relationship(back_populates="detalles")
 
 
+class CuponLote(TimestampedModel, table=True):
+    """Lote de cupones por código — apertura, fidelidad, marketing, etc."""
+
+    __tablename__ = "food_cupon_lotes"
+    __table_args__ = (
+        UniqueConstraint("company_id", "codigo", name="uq_food_cupon_lotes_company_codigo"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    codigo: str = Field(max_length=40, nullable=False)
+    tipo: str = Field(max_length=20, nullable=False)  # "porcentaje" | "monto_fijo"
+    valor: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    fecha_inicio: date | None = Field(default=None, sa_column=Column(Date, nullable=True))
+    fecha_fin: date | None = Field(default=None, sa_column=Column(Date, nullable=True))
+    usos_max: int | None = Field(default=None, nullable=True)
+    usos_actuales: int = Field(default=0, nullable=False)
+    activo: bool = Field(default=True, nullable=False)
+
+
 @event.listens_for(TimestampedModel, "before_update", propagate=True)
 def _auto_updated_at(mapper, connection, target) -> None:
     target.updated_at = datetime.utcnow()
