@@ -237,7 +237,7 @@ def _carrito_section() -> rx.Component:
             rx.cond(
                 FoodState.carrito.length() == 0,
                 rx.center(
-                    rx.text("Carrito vacio", font_size="12px", color="#64748B"),
+                    rx.text("Carrito vacío", font_size="12px", color="#64748B"),
                     padding_y="12px",
                 ),
                 rx.vstack(
@@ -598,7 +598,7 @@ def _menu_section() -> rx.Component:
                 rx.cond(
                     FoodState.productos_filtrados.length() == 0,
                     rx.center(
-                        rx.text("Sin productos disponibles en esta categoria.", font_size="13px", color="#64748B"),
+                        rx.text("Sin productos disponibles en esta categoría.", font_size="13px", color="#64748B"),
                         padding_y="24px",
                     ),
                     rx.grid(

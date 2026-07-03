@@ -502,18 +502,18 @@ def _sidebar_user_badge() -> rx.Component:
 _NAV_DESCRIPTIONS = {
     "Mozos":        "Mesas y comanda",
     "Caja":         "Cobro y tickets",
-    "Mostrador":    "Takeaway rapido",
-    "Cocina":       "KDS / Produccion",
+    "Mostrador":    "Takeaway rápido",
+    "Cocina":       "KDS / Producción",
     "Carta":        "Carta y precios",
-    "Reportes":     "Ventas del dia",
+    "Reportes":     "Ventas del día",
     "Usuarios":     "Personal y PINs",
-    "Configuracion": "Impresoras y local",
+    "Configuración": "Impresoras y local",
 }
 
 
 def _desktop_nav_item(label: str, href: str, icon_tag: str,
                       active: bool) -> rx.Component:
-    desc = _NAV_DESCRIPTIONS.get(label, "Modulo operativo")
+    desc = _NAV_DESCRIPTIONS.get(label, "Módulo operativo")
     return rx.link(
         rx.box(
             rx.hstack(
@@ -616,7 +616,7 @@ def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
                 nav_item("Usuarios", "/usuarios", "users", active == "usuarios"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_configuracion,
-                nav_item("Configuracion", "/configuracion", "settings",
+                nav_item("Configuración", "/configuracion", "settings",
                          active == "configuracion"),
                 rx.fragment()),
         width="100%",

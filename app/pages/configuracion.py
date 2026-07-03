@@ -22,7 +22,7 @@ class ConfigSeccionState(rx.State):
 _SECCIONES = [
     ("local",       "Local",          "store",        "Nombre del restaurante"),
     ("carta",       "Carta digital",  "qr_code",      "Slug URL y código QR"),
-    ("mesas",       "Mesas",          "layout_grid",  "Salon y sectores"),
+    ("mesas",       "Mesas",          "layout_grid",  "Salón y sectores"),
     ("impresoras",  "Impresoras",     "printer",      "Cocina y caja"),
     ("cuenta",      "Cuenta Admin",   "key_round",    "Email y contraseña"),
 ]
@@ -178,7 +178,7 @@ def _qr_section() -> rx.Component:
                     ),
                     width="100%",
                 ),
-                rx.text("Guarda la configuracion para generar el QR.",
+                rx.text("Guarda la configuración para generar el QR.",
                         font_size="12px", color="#94A3B8", font_style="italic"),
             ),
             spacing="4", width="100%",
@@ -529,7 +529,7 @@ def _config_left_sidebar() -> rx.Component:
             ),
             _seccion_item("local",      "Local",         "store",       "Nombre del restaurante"),
             _seccion_item("carta",      "Carta digital", "qr_code",     "Slug URL y código QR"),
-            _seccion_item("mesas",      "Mesas",         "layout_grid", "Salon y sectores"),
+            _seccion_item("mesas",      "Mesas",         "layout_grid", "Salón y sectores"),
             _seccion_item("impresoras", "Impresoras",    "printer",     "Cocina y caja"),
             _seccion_item("cuenta",     "Cuenta Admin",  "key_round",   "Email y contraseña"),
             spacing="1",

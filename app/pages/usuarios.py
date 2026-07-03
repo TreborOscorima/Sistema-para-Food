@@ -274,8 +274,8 @@ def _usuario_form() -> rx.Component:
             rx.input(
                 placeholder=rx.cond(
                     FoodState.usuario_form_es_edicion,
-                    "Nuevo PIN (dejar vacio para no cambiar)",
-                    "PIN (4-6 digitos) *",
+                    "Nuevo PIN (dejar vacío para no cambiar)",
+                    "PIN (4-6 dígitos) *",
                 ),
                 value=FoodState.usuario_form_pin,
                 on_change=FoodState.on_change_uf_pin,
@@ -397,7 +397,7 @@ def _usuario_modal_content() -> rx.Component:
                     rx.text("Admin — acceso completo al sistema", font_size="11px", color=TEXT_MUTED),
                     rx.text("Mozo — mesas y pedidos", font_size="11px", color=TEXT_MUTED),
                     rx.text("Caja — cobros y mostrador", font_size="11px", color=TEXT_MUTED),
-                    rx.text("Cocina — KDS y produccion", font_size="11px", color=TEXT_MUTED),
+                    rx.text("Cocina — KDS y producción", font_size="11px", color=TEXT_MUTED),
                     spacing="1",
                     align="start",
                 ),

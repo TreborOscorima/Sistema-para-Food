@@ -251,7 +251,7 @@ def _mostrador_content() -> rx.Component:
                         rx.cond(
                             FoodState.mostrador_carrito.length() == 0,
                             rx.center(
-                                rx.text("Agregá productos para armar el pedido", font_size="11px", color="#475569"),
+                                rx.text("Agrega productos para armar el pedido", font_size="11px", color="#475569"),
                                 padding_y="2px",
                             ),
                             rx.box(

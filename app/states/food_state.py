@@ -1672,7 +1672,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             return rx.redirect("/login", replace=True)
         if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES[route_key] and not also_allowed:
             return [
-                rx.window_alert("No tienes permisos para este modulo."),
+                rx.window_alert("No tienes permiso para este módulo."),
                 rx.redirect(self.usuario_home_route, replace=True),
             ]
         bloqueo = _bloqueo_suscripcion(self._company_id())
@@ -1794,7 +1794,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             return rx.redirect("/login", replace=True)
         if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES["usuarios"]:
             return [
-                rx.window_alert("No tienes permisos para este modulo."),
+                rx.window_alert("No tienes permiso para este módulo."),
                 rx.redirect(self.usuario_home_route, replace=True),
             ]
         self.cargar_usuarios_admin()
@@ -2006,7 +2006,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             return
         rol = self.usuario_form_rol
         if rol not in [r.value for r in RolUsuario]:
-            self.mensaje = "Rol invalido."
+            self.mensaje = "Rol inválido."
             return
 
         nuevo_pin = _normalize_pin(self.usuario_form_pin)
@@ -2014,11 +2014,11 @@ class FoodState(CajaTurnoMixin, rx.State):
 
         if not es_edicion:
             if len(nuevo_pin) < 4:
-                self.mensaje = "El PIN debe tener al menos 4 digitos."
+                self.mensaje = "El PIN debe tener al menos 4 dígitos."
                 return
         else:
             if self.usuario_form_pin and len(nuevo_pin) < 4:
-                self.mensaje = "El nuevo PIN debe tener al menos 4 digitos."
+                self.mensaje = "El nuevo PIN debe tener al menos 4 dígitos."
                 return
 
         if self.usuario_form_pin:
@@ -2096,7 +2096,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     )
                 ).all()
                 if len(admins_activos) <= 1:
-                    self.mensaje = "No puedes desactivar al ultimo administrador."
+                    self.mensaje = "No puedes desactivar al último administrador."
                     return
             u.activo = not u.activo
             u.updated_at = _utcnow()
@@ -2173,7 +2173,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         url = f"{_FOOD_BASE_URL}/menu/{slug}"
         self.config_menu_url = url
         self.config_menu_qr_base64 = _generar_qr_base64(url)
-        self.mensaje = "Configuracion guardada."
+        self.mensaje = "Configuración guardada."
 
     def set_config_nombre_local(self, v: str) -> None:
         self.config_nombre_local = v
@@ -2220,7 +2220,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     def guardar_admin_cuenta(self) -> None:
         email = self.config_admin_email.strip().lower()
         if not email or "@" not in email:
-            self.mensaje = "Ingresa un email valido."
+            self.mensaje = "Ingresa un email válido."
             return
         nueva = self.config_admin_password_nueva.strip()
         confirm = self.config_admin_password_confirm.strip()
@@ -2287,7 +2287,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         try:
             numero = int(self.mesa_config_form_numero.strip())
         except (ValueError, AttributeError):
-            self.mensaje = "El numero de mesa debe ser un entero."
+            self.mensaje = "El número de mesa debe ser un entero."
             return
         try:
             capacidad = max(1, int(self.mesa_config_form_capacidad.strip() or "4"))
@@ -2872,7 +2872,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.mensaje = "Selecciona una mesa antes de solicitar cuenta."
             return
         if self.cantidad_items_carrito > 0:
-            self.mensaje = "Primero envia a cocina los items pendientes."
+            self.mensaje = "Primero envía a cocina los ítems pendientes."
             return
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
@@ -2884,7 +2884,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.mensaje = "No hay consumo pendiente en esa mesa."
                 return
             if _get_not_delivered_details(session, pedido.id or 0):
-                self.mensaje = "Todavia hay items en cocina o listos por entregar."
+                self.mensaje = "Todavía hay ítems en cocina o listos por entregar."
                 return
             mesa.estado = EstadoMesa.ESPERANDO_CUENTA.value
             mesa.updated_at = _utcnow()
@@ -3051,13 +3051,13 @@ class FoodState(CajaTurnoMixin, rx.State):
     def _transition_ticket_state(self, detalle_ids_csv: str, source_state: str, target_state: str, success_message: str, actor_user_id: int | None = None, actor_field_name: str | None = None) -> None:
         ids = [int(x) for x in detalle_ids_csv.split(",") if x.strip()]
         if not ids:
-            self.mensaje = "No se encontro el ticket de cocina."
+            self.mensaje = "No se encontró el ticket de cocina."
             return
         with self._tenant_session() as session:
             detalles = session.exec(select(DetallePedido).where(DetallePedido.id.in_(ids))).all()
             actualizables = [d for d in detalles if d.impreso_cocina and d.estado_produccion == source_state]
             if not actualizables:
-                self.mensaje = "El ticket ya cambio de estado."
+                self.mensaje = "El ticket ya cambió de estado."
                 return
             pedidos_afectados: set[int] = set()
             now = _utcnow()
@@ -3100,7 +3100,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.mensaje = "El item indicado ya no existe."
                 return
             if detalle.estado_produccion != EstadoProduccion.LISTO_PARA_ENTREGAR.value:
-                self.mensaje = "Ese item no esta listo para entrega."
+                self.mensaje = "Ese ítem no está listo para entrega."
                 return
             detalle.estado_produccion = EstadoProduccion.ENTREGADO_AL_CLIENTE.value
             detalle.updated_at = _utcnow()
@@ -3343,7 +3343,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.usuario_actual.rol != RolUsuario.ADMIN.value
             and not self.usuario_actual.perm_anular
         ):
-            self.mensaje = "No tienes permiso para anular pedidos. Solicitalo al administrador."
+            self.mensaje = "No tienes permiso para anular pedidos. Solicítalo al administrador."
             return
         with self._tenant_session() as session:
             pedido = _get_open_order(session, mesa_id, self._company_id())
@@ -3456,10 +3456,10 @@ class FoodState(CajaTurnoMixin, rx.State):
                     self.mensaje = "No hay pedido abierto para esa mesa."
                     return
                 if _get_unsent_details(session, pedido.id or 0):
-                    self.mensaje = "Todavia hay items pendientes de enviar a cocina."
+                    self.mensaje = "Todavía hay ítems pendientes de enviar a cocina."
                     return
                 if _get_not_delivered_details(session, pedido.id or 0):
-                    self.mensaje = "Todavia hay items en cocina o listos por entregar."
+                    self.mensaje = "Todavía hay ítems en cocina o listos por entregar."
                     return
 
             turno = get_turno_abierto(session, self._company_id())
@@ -3736,7 +3736,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     subtotal_texto=_money_text(subtotal),
                 ))
         if not encontrado:
-            self.mensaje = "Ese producto no esta en el carrito de mostrador."
+            self.mensaje = "Ese producto no está en el carrito de mostrador."
             return
         self.mostrador_carrito = carrito_actualizado
         self.mensaje = "Carrito de mostrador actualizado."
@@ -3755,7 +3755,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.mensaje = "Agrega productos antes de enviar a cocina."
             return
         if self.usuario_actual is None:
-            self.mensaje = "Inicia sesion para registrar el pedido."
+            self.mensaje = "Inicia sesión para registrar el pedido."
             return
         pedido_id = 0
         cliente_nombre = _actor_name(self.mostrador_cliente_nombre) or "Sin nombre"
@@ -4435,7 +4435,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     def guardar_categoria(self) -> None:
         nombre = self.categoria_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre de la categoria es obligatorio."
+            self.mensaje = "El nombre de la categoría es obligatorio."
             return
         try:
             orden = int(self.categoria_form_orden)
@@ -4445,7 +4445,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             if self.categoria_form_id:
                 cat = session.get(Categoria, self.categoria_form_id)
                 if cat is None or cat.company_id != self._company_id():
-                    self.mensaje = "Categoria no encontrada."
+                    self.mensaje = "Categoría no encontrada."
                     return
                 cat.nombre = nombre
                 cat.descripcion = self.categoria_form_descripcion.strip() or None
@@ -4464,7 +4464,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_menu()
         self._reset_categoria_form()
         self.carta_cat_modal = False
-        self.mensaje = "Categoria guardada."
+        self.mensaje = "Categoría guardada."
 
     def editar_categoria(self, categoria_id: int) -> None:
         cat = next((c for c in self.categorias if c.id == categoria_id), None)
@@ -4528,7 +4528,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             return
         precio = _parse_positive_price(self.producto_form_precio)
         if precio is None:
-            self.mensaje = "El precio debe ser un numero mayor a 0."
+            self.mensaje = "El precio debe ser un número mayor a 0."
             return
         with self._tenant_session() as session:
             cat = session.exec(
@@ -4538,7 +4538,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 )
             ).first()
             if cat is None:
-                self.mensaje = f"Categoria '{self.producto_form_categoria_nombre}' no encontrada."
+                self.mensaje = f"Categoría '{self.producto_form_categoria_nombre}' no encontrada."
                 return
             if self.producto_form_id:
                 prod = session.get(Producto, self.producto_form_id)

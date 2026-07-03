@@ -935,7 +935,7 @@ def dono_login_page() -> rx.Component:
                 ),
                 rx.center(
                     rx.hstack(
-                        rx.text("¿Sos empleado?", font_size="12px", color="#475569"),
+                        rx.text("¿Eres empleado?", font_size="12px", color="#475569"),
                         rx.link(
                             "Ingresar con PIN",
                             href="/login?empresa=" + AdminLocalState.login_empresa_slug,

@@ -727,7 +727,7 @@ def _panel_central() -> rx.Component:
             rx.center(
                 rx.vstack(
                     rx.icon(tag="credit_card", size=32, color="#CBD5E1"),
-                    rx.text("Seleccioná una mesa para cobrar", font_size="14px", color="#94A3B8"),
+                    rx.text("Selecciona una mesa para cobrar", font_size="14px", color="#94A3B8"),
                     spacing="2", align="center",
                 ),
                 padding_y="80px", width="100%",

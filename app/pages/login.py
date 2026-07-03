@@ -186,7 +186,7 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
 def _restaurant_selector_card() -> rx.Component:
     return rx.box(
         rx.text(
-            "ELEGI TU RESTAURANTE",
+            "ELIGE TU RESTAURANTE",
             font_size="11px",
             font_weight="700",
             color="#64748B",
@@ -254,9 +254,9 @@ def _login_card() -> rx.Component:
             gap="8px",
             margin_bottom="28px",
         ),
-        # Ingresá tu PIN
+        # Ingresa tu PIN
         rx.text(
-            "Ingresá tu PIN",
+            "Ingresa tu PIN",
             font_size="11px",
             font_weight="700",
             color="#64748B",
