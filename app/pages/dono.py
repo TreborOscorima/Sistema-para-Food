@@ -675,7 +675,7 @@ def _admin_glow() -> rx.Component:
         transform="translate(-50%, -50%)",
         width=rx.breakpoints(initial="280px", md="420px"),
         height=rx.breakpoints(initial="280px", md="420px"),
-        background="radial-gradient(circle, rgba(234,88,12,0.35) 0%, rgba(234,88,12,0) 70%)",
+        background="radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 70%)",
         pointer_events="none",
         z_index="0",
     )
@@ -698,7 +698,7 @@ def _brand_banner_generico() -> rx.Component:
         border_radius="20px",
         width=rx.breakpoints(initial="190px", sm="230px", md="270px"),
         height=rx.breakpoints(initial="130px", sm="158px", md="186px"),
-        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        box_shadow="0 12px 40px rgba(0,0,0,0.5)",
         position="relative",
         z_index="1",
     )
@@ -727,7 +727,7 @@ def _brand_banner_empresa() -> rx.Component:
                 ),
                 width="100%", height="100%",
                 display="flex", align_items="center", justify_content="center",
-                background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                background="#334155",
                 border_radius="20px",
             ),
         ),
@@ -735,7 +735,7 @@ def _brand_banner_empresa() -> rx.Component:
         border_radius="20px",
         width=rx.breakpoints(initial="155px", sm="190px", md="220px"),
         height=rx.breakpoints(initial="105px", sm="128px", md="150px"),
-        box_shadow="0 0 0 3px rgba(234,88,12,0.4), 0 12px 40px rgba(0,0,0,0.5)",
+        box_shadow="0 12px 40px rgba(0,0,0,0.5)",
         position="relative",
         z_index="1",
     )
