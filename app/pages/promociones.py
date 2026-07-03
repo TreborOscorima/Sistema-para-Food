@@ -133,6 +133,7 @@ def _promo_form() -> rx.Component:
                     spacing="1", align="start", flex="1",
                 ),
                 spacing="3", width="100%",
+                class_name="twk-form-row",
             ),
             rx.hstack(
                 rx.vstack(
@@ -178,6 +179,7 @@ def _promo_form() -> rx.Component:
                     spacing="1", align="start", flex="1",
                 ),
                 spacing="3", width="100%",
+                class_name="twk-form-row",
             ),
             rx.vstack(
                 rx.text("Descripción", font_size="11px", font_weight="600", color="#64748B"),

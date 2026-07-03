@@ -112,7 +112,7 @@ def _pagos_divididos_panel() -> rx.Component:
                     border_radius="8px", font_size="13px", font_weight="700",
                     cursor="pointer", _hover={"background": "#C2410C"},
                 ),
-                spacing="2", width="100%", align="center",
+                spacing="2", width="100%", align="center", flex_wrap="wrap",
             ),
             rx.cond(
                 FoodState.caja_pagos_staged.length() > 0,
@@ -295,7 +295,7 @@ def _cobro_panel() -> rx.Component:
                         text_transform="uppercase", letter_spacing="0.05em", margin_bottom="12px"),
                 rx.grid(
                     *[_metodo_btn(v, l, i) for v, l, i in _METODOS],
-                    columns="4", gap="8px", width="100%",
+                    columns=rx.breakpoints(initial="2", sm="4"), gap="8px", width="100%",
                 ),
                 background="#FFFFFF", border="1px solid #E2E8F0",
                 border_radius="14px", padding="18px", width="100%",
