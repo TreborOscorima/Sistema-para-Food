@@ -942,6 +942,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.info["tenant_bypass"] = True
             yield session
 
+    carta_cat_modal: bool = False
+    carta_prod_modal: bool = False
+
     categoria_form_id: int = 0
     categoria_form_nombre: str = ""
     categoria_form_descripcion: str = ""
@@ -4145,6 +4148,24 @@ class FoodState(CajaTurnoMixin, rx.State):
     def set_categoria_form_orden(self, v: str) -> None:
         self.categoria_form_orden = v
 
+    def set_carta_cat_modal(self, v: bool) -> None:
+        self.carta_cat_modal = bool(v)
+        if not v:
+            self._reset_categoria_form()
+
+    def set_carta_prod_modal(self, v: bool) -> None:
+        self.carta_prod_modal = bool(v)
+        if not v:
+            self._reset_producto_form()
+
+    def abrir_cat_modal(self) -> None:
+        self._reset_categoria_form()
+        self.carta_cat_modal = True
+
+    def abrir_prod_modal(self) -> None:
+        self._reset_producto_form()
+        self.carta_prod_modal = True
+
     def guardar_categoria(self) -> None:
         nombre = self.categoria_form_nombre.strip()
         if not nombre:
@@ -4176,6 +4197,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.commit()
         self.cargar_menu()
         self._reset_categoria_form()
+        self.carta_cat_modal = False
         self.mensaje = "Categoria guardada."
 
     def editar_categoria(self, categoria_id: int) -> None:
@@ -4186,6 +4208,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.categoria_form_nombre = cat.nombre
         self.categoria_form_descripcion = cat.descripcion
         self.categoria_form_orden = str(cat.orden)
+        self.carta_cat_modal = True
 
     def toggle_categoria_activa(self, categoria_id: int) -> None:
         with self._tenant_session() as session:
@@ -4206,6 +4229,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def cancelar_categoria_form(self) -> None:
         self._reset_categoria_form()
+        self.carta_cat_modal = False
 
     # ─── Admin Carta — Productos ──────────────────────────────────────────────
 
@@ -4279,6 +4303,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.commit()
         self.cargar_menu()
         self._reset_producto_form()
+        self.carta_prod_modal = False
         self.mensaje = "Producto guardado."
 
     def editar_producto(self, producto_id: int) -> None:
@@ -4295,6 +4320,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         with self._tenant_session() as session:
             prod_db = session.get(Producto, producto_id)
             self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
+        self.carta_prod_modal = True
 
     def toggle_producto_disponible(self, producto_id: int) -> None:
         with self._tenant_session() as session:
@@ -4320,6 +4346,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def cancelar_producto_form(self) -> None:
         self._reset_producto_form()
+        self.carta_prod_modal = False
 
     async def handle_upload_imagen_producto(self, files: list[rx.UploadFile]) -> None:
         for file in files:
