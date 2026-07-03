@@ -5765,13 +5765,13 @@ class AdminLocalState(rx.State):
                     cfg.admin_password_hash = _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
                     session.add(cfg)
                     session.commit()
-        bloqueo = _bloqueo_suscripcion(cfg.company_id)
+                company_id = cfg.company_id
+        bloqueo = _bloqueo_suscripcion(company_id)
         if bloqueo:
             self.error_msg = bloqueo
             return
         self.autenticado = True
         self.password_input = ""
-        company_id = cfg.company_id
         # Vincular esta sesion con FoodState.usuario_actual: Carta, Reportes,
         # Usuarios y Configuracion validan acceso via usuario_actual.rol, no
         # via AdminLocalState.autenticado, asi que sin esto el dueño podia
