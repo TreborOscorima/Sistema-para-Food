@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.states.food_state import FoodState, PromocionView, AdminLocalState
-from app.pages.dono import _dono_shell
+from app.pages.dono import _dono_shell, AdminPanelState
 
 
 def _tipo_label(tipo: str) -> rx.Component:
@@ -356,33 +356,87 @@ def _promo_nueva_placeholder() -> rx.Component:
     )
 
 
+def _promo_tab_pill(key: str, icon_tag: str, label: str) -> rx.Component:
+    activo = AdminPanelState.promo_tab == key
+    return rx.button(
+        rx.hstack(
+            rx.icon(tag=icon_tag, size=13,
+                    color=rx.cond(activo, "#FFFFFF", "#64748B")),
+            rx.text(label, font_size="13px", font_weight="600",
+                    color=rx.cond(activo, "#FFFFFF", "#64748B")),
+            spacing="2", align="center",
+        ),
+        on_click=AdminPanelState.set_promo_tab(key),
+        background=rx.cond(activo, "#EA580C", "transparent"),
+        border="none",
+        border_radius="7px",
+        padding_x="14px", padding_y="7px",
+        cursor="pointer",
+        transition="all 0.15s ease",
+        _hover={"background": rx.cond(activo, "#C2410C", "#E2E8F0")},
+    )
+
+
 def _promociones_content() -> rx.Component:
+    from app.pages.cupones import _cupones_body
+
     return rx.vstack(
+        # ── Header ──────────────────────────────────────────────────────
         rx.hstack(
             rx.vstack(
                 rx.text("Promociones", font_size="22px", font_weight="800", color="#0F172A"),
-                rx.text("Descuentos, combos y ofertas activas", font_size="13px", color="#64748B"),
+                rx.text("Descuentos automáticos y cupones de código",
+                        font_size="13px", color="#64748B"),
                 spacing="0", align="start",
             ),
             rx.spacer(),
-            rx.dialog.root(
+            # Botón contextual cambia según el tab activo
+            rx.cond(
+                AdminPanelState.promo_tab == "automaticas",
+                rx.dialog.root(
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="plus", size=13),
+                            rx.text("Nueva promo", font_size="13px", font_weight="700"),
+                            spacing="1", align="center",
+                        ),
+                        on_click=FoodState.abrir_nueva_promo,
+                        background="#EA580C", color="#FFFFFF", border_radius="9px",
+                        padding_x="16px", padding_y="9px", cursor="pointer",
+                        _hover={"background": "#C2410C"},
+                    ),
+                    rx.dialog.content(_promo_modal_content(), class_name="light"),
+                    open=FoodState.promo_form_visible,
+                    on_open_change=FoodState.set_promo_form_visible,
+                ),
                 rx.button(
                     rx.hstack(
                         rx.icon(tag="plus", size=13),
-                        rx.text("Nueva promo", font_size="13px", font_weight="700"),
+                        rx.text("Nuevo cupón", font_size="13px", font_weight="700"),
                         spacing="1", align="center",
                     ),
-                    on_click=FoodState.abrir_nueva_promo,
+                    on_click=FoodState.abrir_nuevo_cupon,
                     background="#EA580C", color="#FFFFFF", border_radius="9px",
                     padding_x="16px", padding_y="9px", cursor="pointer",
                     _hover={"background": "#C2410C"},
                 ),
-                rx.dialog.content(_promo_modal_content(), class_name="light"),
-                open=FoodState.promo_form_visible,
-                on_open_change=FoodState.set_promo_form_visible,
             ),
             width="100%", align="center",
         ),
+        # ── Selector de tab ──────────────────────────────────────────────
+        rx.box(
+            rx.hstack(
+                _promo_tab_pill("automaticas", "tag",            "Automáticas"),
+                _promo_tab_pill("cupones",     "ticket_percent", "Cupones"),
+                spacing="1",
+                padding="4px",
+            ),
+            background="#F1F5F9",
+            border="1px solid #E2E8F0",
+            border_radius="10px",
+            width="fit-content",
+        ),
+        # ── Mensaje global ───────────────────────────────────────────────
         rx.cond(
             FoodState.mensaje != "",
             rx.box(
@@ -392,12 +446,20 @@ def _promociones_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        _promo_activa_banner(),
-        rx.grid(
-            rx.foreach(FoodState.promociones_lista, _promo_card),
-            _promo_nueva_placeholder(),
-            columns=rx.breakpoints(initial="1", sm="2", lg="3"),
-            gap="16px", width="100%",
+        # ── Contenido por tab ────────────────────────────────────────────
+        rx.cond(
+            AdminPanelState.promo_tab == "automaticas",
+            rx.vstack(
+                _promo_activa_banner(),
+                rx.grid(
+                    rx.foreach(FoodState.promociones_lista, _promo_card),
+                    _promo_nueva_placeholder(),
+                    columns=rx.breakpoints(initial="1", sm="2", lg="3"),
+                    gap="16px", width="100%",
+                ),
+                spacing="4", width="100%",
+            ),
+            _cupones_body(),
         ),
         spacing="4", width="100%",
     )

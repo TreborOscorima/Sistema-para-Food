@@ -44,6 +44,11 @@ class AdminPanelState(rx.State):
     def cerrar_sidebar(self) -> None:
         self.sidebar_open = False
 
+    promo_tab: str = "automaticas"
+
+    def set_promo_tab(self, tab: str) -> None:
+        self.promo_tab = tab
+
 
 # ── Topbar del shell ──────────────────────────────────────────────────────────
 
@@ -182,8 +187,7 @@ def _admin_sidebar() -> rx.Component:
             _admin_nav_item("ventas",     "Reportes",     "trending_up",      "Dashboard y ventas del día"),
             _admin_nav_item("clientes",   "Clientes",     "users",            "Fidelización y alertas"),
             _admin_nav_item("cuentas",    "Cuentas",      "credit_card",      "Fiado y créditos"),
-            _admin_nav_item("promociones","Promociones",  "tag",              "Happy hour y descuentos"),
-            _admin_nav_item("cupones",    "Cupones",      "ticket_percent",   "Códigos de descuento"),
+            _admin_nav_item("promociones","Promociones",  "tag",              "Descuentos y cupones"),
             _admin_nav_item("inventario", "Inventario",   "package",          "Stock y alertas"),
             _admin_nav_item("usuarios",   "Usuarios",     "users_round",      "Personal y PINs"),
             _admin_nav_item("config",     "Configuración","settings",         "Ajustes del sistema"),

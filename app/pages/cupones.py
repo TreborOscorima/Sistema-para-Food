@@ -260,29 +260,10 @@ def _cupones_nueva_placeholder() -> rx.Component:
     )
 
 
-def _cupones_content() -> rx.Component:
+def _cupones_body() -> rx.Component:
+    """Cuerpo reutilizable — sin header de título ni botón nuevo.
+    Usado cuando cupones se embebe dentro de otro módulo (Promociones)."""
     return rx.vstack(
-        rx.hstack(
-            rx.vstack(
-                rx.text("Cupones", font_size="22px", font_weight="800", color="#0F172A"),
-                rx.text("Códigos de descuento por lote", font_size="13px", color="#64748B"),
-                spacing="0", align="start",
-            ),
-            rx.spacer(),
-            rx.button(
-                rx.hstack(
-                    rx.icon(tag="plus", size=13),
-                    rx.text("Nuevo cupón", font_size="13px", font_weight="700"),
-                    spacing="1", align="center",
-                ),
-                on_click=FoodState.abrir_nuevo_cupon,
-                background="#EA580C", color="#FFFFFF", border_radius="9px",
-                padding_x="16px", padding_y="9px", cursor="pointer",
-                _hover={"background": "#C2410C"},
-            ),
-            width="100%", align="center",
-        ),
-        # Banner informativo de uso
         rx.box(
             rx.hstack(
                 rx.icon(tag="info", size=14, color="#1D4ED8"),
@@ -312,6 +293,33 @@ def _cupones_content() -> rx.Component:
             gap="16px", width="100%",
         ),
         _cupon_form_modal(),
+        spacing="4", width="100%",
+    )
+
+
+def _cupones_content() -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.vstack(
+                rx.text("Cupones", font_size="22px", font_weight="800", color="#0F172A"),
+                rx.text("Códigos de descuento por lote", font_size="13px", color="#64748B"),
+                spacing="0", align="start",
+            ),
+            rx.spacer(),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="plus", size=13),
+                    rx.text("Nuevo cupón", font_size="13px", font_weight="700"),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.abrir_nuevo_cupon,
+                background="#EA580C", color="#FFFFFF", border_radius="9px",
+                padding_x="16px", padding_y="9px", cursor="pointer",
+                _hover={"background": "#C2410C"},
+            ),
+            width="100%", align="center",
+        ),
+        _cupones_body(),
         spacing="4", width="100%",
     )
 
