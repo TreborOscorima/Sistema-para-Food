@@ -202,7 +202,7 @@ _ROL_PERM_DEFAULTS: dict[str, dict[str, bool]] = {
 
 # Base URLs leídas del entorno en tiempo de importación. El company_id ya no es
 # fijo: FoodState._company_id() lo resuelve por sesión (ver clase FoodState).
-_FOOD_BASE_URL: str = os.getenv("FOOD_BASE_URL", "http://localhost:3003").rstrip("/")
+_FOOD_BASE_URL: str = (os.getenv("FOOD_BASE_URL") or os.getenv("PUBLIC_API_URL", "http://localhost:3003")).rstrip("/")
 _FOOD_API_URL: str = os.getenv("PUBLIC_API_URL", "http://localhost:3004").rstrip("/")
 
 
