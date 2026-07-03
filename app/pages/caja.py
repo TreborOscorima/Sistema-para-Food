@@ -28,7 +28,7 @@ def _metodo_btn(value: str, label: str, icon: str) -> rx.Component:
         rx.text(label, font_size="12px", font_weight="700",
                 color=rx.cond(activo, "#FFFFFF", "#64748B")),
         on_click=FoodState.set_caja_cobro_metodo(value),
-        background=rx.cond(activo, "#0F172A", "#FFFFFF"),
+        background=rx.cond(activo, "#EA580C", "#FFFFFF"),
         border=rx.cond(activo, "2px solid #EA580C", "2px solid #E2E8F0"),
         border_radius="10px",
         padding="12px 4px",
