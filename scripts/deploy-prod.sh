@@ -199,9 +199,14 @@ if $SKIP_PUBLIC_CHECK; then
     warn "Health externo omitido (--skip-public-check)"
 else
     HEALTH_URL="${PUBLIC_URL%/}/api/health"
-    surface="$(curl -sf --max-time 15 "$HEALTH_URL" | grep -o '"surface":"[^"]*"' || true)"
-    if [[ -z "$surface" ]]; then
+    health_body="$(curl -sf --max-time 15 "$HEALTH_URL" 2>/dev/null || true)"
+    app_id="$(echo "$health_body" | grep -o '"app":"[^"]*"' || true)"
+    health_status="$(echo "$health_body" | grep -o '"status":"[^"]*"' || true)"
+    if [[ "$app_id" == *tuwaykifood* && "$health_status" == *ok* ]]; then
+        ok "food → ${health_status} ${app_id}"
+    else
         warn "Health externo falló: $HEALTH_URL"
+        [[ -n "$health_body" ]] && echo "  Respuesta: $health_body"
         echo ""
         echo "  El contenedor está OK internamente. Si es el primer deploy, configurá NPM:"
         echo "    Domain: food.tuwayki.app"
@@ -213,9 +218,8 @@ else
         echo "  Verificá red del contenedor:"
         echo "    docker inspect tuwayki_food --format '{{range \$k,\$v := .NetworkSettings.Networks}}{{printf \"%s \" \$k}}{{end}}'"
         echo ""
-        fail "Configurá NPM y reintentá, o usá --skip-public-check en el primer deploy"
+        fail "Health externo no devolvió app=tuwaykifood status=ok — revisá NPM/DNS/SSL o usá --skip-public-check"
     fi
-    ok "food → $surface"
 fi
 
 echo ""
