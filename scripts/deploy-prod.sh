@@ -133,9 +133,15 @@ else
 fi
 
 # ─── 2. Código ────────────────────────────────────────────────────────────────
+# reset --hard: el servidor no debe tener edits locales; evita fallo en CD/Actions.
 info "Actualizando código: origin/$BRANCH"
 git fetch origin "$BRANCH"
-git checkout -B "$BRANCH" "origin/$BRANCH"
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git checkout -f "$BRANCH"
+else
+    git checkout -B "$BRANCH" "origin/$BRANCH"
+fi
+git reset --hard "origin/$BRANCH"
 ok "Commit: $(git log --oneline -1)"
 
 # ─── 3. Build + deploy ────────────────────────────────────────────────────────
