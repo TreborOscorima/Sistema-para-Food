@@ -3427,6 +3427,26 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.anulacion_motivo = ""
         self.anulacion_error = ""
 
+    def liberar_mesa_sin_cobro(self) -> None:
+        """Mozo libera la mesa actual (cliente se fue sin pagar)."""
+        mesa_id = self.mesa_seleccionada_id
+        if not mesa_id:
+            return
+        with self._tenant_session() as session:
+            pedido = _get_open_order(session, mesa_id, self._company_id())
+            if pedido is None:
+                self.mensaje = "No hay pedido abierto para esa mesa."
+                return
+            mesa = session.get(Mesa, mesa_id)
+            referencia = (mesa.nombre or f"Mesa {mesa.numero}") if mesa else f"Mesa {mesa_id}"
+            self.anulacion_pedido_id = pedido.id or 0
+            self.anulacion_referencia = f"{referencia} — pedido #{pedido.id}"
+        self.modal_agregar_abierto = False
+        self.anulacion_es_venta = False
+        self.anulacion_motivo = ""
+        self.anulacion_error = ""
+        self.anulacion_modal_visible = True
+
     def abrir_anulacion_pedido_abierto(self, mesa_id: int) -> None:
         """Anular el pedido abierto de una mesa (desde Caja) — libera la mesa."""
         if self.usuario_actual is None or (

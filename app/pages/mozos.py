@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import app_shell, cumpleanos_banner, section_card, surface_card
+from app.components.shared import anulacion_modal, app_shell, cumpleanos_banner, section_card, surface_card
 from app.states.food_state import CarritoItem, FoodState, HistorialItem, MesaView, ProductoView
 
 
@@ -448,12 +448,13 @@ def _modal_agregar_productos() -> rx.Component:
                                 ),
                             ),
                             overflow_y="auto",
-                            max_height="45vh",
+                            max_height=rx.breakpoints(initial="28vh", md="45vh"),
                             width="100%",
                         ),
                         spacing="2",
                         flex="3",
                         min_width="0",
+                        overflow="hidden",
                     ),
                     # ─── Columna derecha: historial + carrito ───
                     rx.vstack(
@@ -472,7 +473,7 @@ def _modal_agregar_productos() -> rx.Component:
                                         width="100%", spacing="0",
                                     ),
                                     overflow_y="auto",
-                                    max_height="20vh",
+                                    max_height=rx.breakpoints(initial="12vh", md="20vh"),
                                     width="100%",
                                 ),
                                 spacing="2", width="100%",
@@ -545,8 +546,31 @@ def _modal_agregar_productos() -> rx.Component:
                             _hover={"background": "#C2410C"},
                             is_disabled=FoodState.cantidad_items_carrito == 0,
                         ),
+                        # Botón Liberar mesa (solo si tiene pedido enviado y carrito vacío)
+                        rx.cond(
+                            (FoodState.historial_pedido.length() > 0) & (FoodState.cantidad_items_carrito == 0),
+                            rx.button(
+                                rx.hstack(
+                                    rx.icon(tag="log_out", size=13),
+                                    rx.text("Liberar mesa"),
+                                    spacing="2", align="center",
+                                ),
+                                on_click=FoodState.liberar_mesa_sin_cobro,
+                                background="transparent",
+                                color="#EF4444",
+                                border="1px solid #7F1D1D",
+                                border_radius="8px",
+                                font_size="12px",
+                                font_weight="600",
+                                width="100%",
+                                cursor="pointer",
+                                _hover={"background": "#1C1917", "border": "1px solid #EF4444"},
+                            ),
+                            rx.fragment(),
+                        ),
                         spacing="2",
                         flex="2",
+                        flex_shrink="0",
                         min_width="0",
                         background="#1E293B",
                         border="1px solid #334155",
@@ -561,8 +585,8 @@ def _modal_agregar_productos() -> rx.Component:
                 ),
                 spacing="3",
                 width="100%",
-                height="75vh",
-                max_height="75vh",
+                height=rx.breakpoints(initial="88vh", md="75vh"),
+                max_height=rx.breakpoints(initial="88vh", md="75vh"),
             ),
             background="#0F172A",
             border="1px solid #334155",
@@ -611,6 +635,7 @@ def _mozos_content() -> rx.Component:
         ),
         _salon_content(),
         _modal_agregar_productos(),
+        anulacion_modal(),
         spacing="4",
         width="100%",
     )
