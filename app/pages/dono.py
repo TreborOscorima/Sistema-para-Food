@@ -6,27 +6,26 @@ import reflex as rx
 
 from app.states.food_state import AdminLocalState, FoodState
 from app.components.shared import _CSS_SCRIPT
-
-
-# ── Paleta ────────────────────────────────────────────────────────────────────
-_ORANGE    = "#EA580C"
-_ORANGE_DK = "#C2410C"
-_ORANGE_LT = "#FFF7ED"
-_ORANGE_BD = "#FED7AA"
-_SLATE_900 = "#0F172A"
-_SLATE_700 = "#334155"
-_SLATE_500 = "#64748B"
-_SLATE_200 = "#E2E8F0"
-_SLATE_100 = "#F1F5F9"
-_SLATE_50  = "#F8FAFC"
-_WHITE     = "#FFFFFF"
-_GREEN     = "#15803D"
-_GREEN_LT  = "#F0FDF4"
-_BLUE      = "#1D4ED8"
-_BLUE_LT   = "#EFF6FF"
-_AMBER     = "#B45309"
-_AMBER_LT  = "#FFFBEB"
-_AMBER_BD  = "#FDE68A"
+from app.components.theme import (
+    ACCENT as _ORANGE,
+    ACCENT_HOVER as _ORANGE_DK,
+    ACCENT_BG as _ORANGE_LT,
+    ACCENT_MUTED as _ORANGE_BD,
+    DARK_900 as _SLATE_900,
+    DARK_700 as _SLATE_700,
+    SLATE_500 as _SLATE_500,
+    SLATE_200 as _SLATE_200,
+    SLATE_100 as _SLATE_100,
+    SLATE_50 as _SLATE_50,
+    TEXT_WHITE as _WHITE,
+    SUCCESS_TEXT as _GREEN,
+    SUCCESS_BG as _GREEN_LT,
+    INFO_TEXT as _BLUE,
+    INFO_BG as _BLUE_LT,
+    WARNING_TEXT as _AMBER,
+    WARNING_BG as _AMBER_LT,
+    WARNING_BORDER as _AMBER_BD,
+)
 
 
 # ── Estado local para sub-módulo activo ───────────────────────────────────────

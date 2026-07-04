@@ -84,9 +84,14 @@ def _menu_content() -> rx.Component:
                     ),
                     rx.spacer(),
                     rx.image(
-                        src="/TUWAYKIFOODFAVICON.png",
+                        src=rx.cond(
+                            MenuPublicoState.logo_url_local != "",
+                            MenuPublicoState.logo_url_local,
+                            "/TUWAYKIFOODFAVICON.png",
+                        ),
                         width="44px", height="44px", border_radius="12px",
-                        alt="TUWAYKIFOOD",
+                        object_fit="cover",
+                        alt=MenuPublicoState.nombre_local,
                         box_shadow="0 4px 12px rgba(234,88,12,0.3)",
                     ),
                     width="100%", align="center", margin_bottom="14px",

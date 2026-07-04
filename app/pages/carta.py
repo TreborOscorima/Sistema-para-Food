@@ -345,6 +345,22 @@ def _prod_modal() -> rx.Component:
                     font_size="13px",
                     width="100%",
                 ),
+                rx.text_area(
+                    placeholder="Descripción del producto (se muestra en la carta QR)",
+                    value=FoodState.producto_form_descripcion,
+                    on_change=FoodState.set_producto_form_descripcion,
+                    background="#FFFFFF",
+                    border="1px solid #E2E8F0",
+                    color="#0F172A",
+                    border_radius="8px",
+                    padding_x="12px",
+                    padding_y="8px",
+                    font_size="13px",
+                    rows="2",
+                    resize="vertical",
+                    width="100%",
+                    max_length=240,
+                ),
                 # ── Ícono ────────────────────────────────────────────────────
                 rx.vstack(
                     rx.hstack(

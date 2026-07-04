@@ -48,6 +48,7 @@ from app.services.receipt_service import (
     build_print_script,
     generate_cashier_ticket_html,
     generate_kitchen_ticket_html,
+    generate_precuenta_html,
 )
 from tuwayki_core.utils.timezone import format_local_datetime
 
@@ -99,6 +100,7 @@ OPEN_ORDER_STATES = (
 KITCHEN_VISIBLE_STATES = (
     EstadoProduccion.PENDIENTE.value,
     EstadoProduccion.EN_PREPARACION.value,
+    EstadoProduccion.LISTO_PARA_ENTREGAR.value,
 )
 
 MESA_LABELS = {
@@ -149,10 +151,12 @@ PRODUCTION_BADGE_TEXTS = {
 KITCHEN_CARD_BACKGROUNDS = {
     EstadoProduccion.PENDIENTE.value: "#0F172A",
     EstadoProduccion.EN_PREPARACION.value: "#0F172A",
+    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#0F172A",
 }
 KITCHEN_CARD_BORDERS = {
     EstadoProduccion.PENDIENTE.value: "#F59E0B",
     EstadoProduccion.EN_PREPARACION.value: "#EA580C",
+    EstadoProduccion.LISTO_PARA_ENTREGAR.value: "#16A34A",
 }
 KITCHEN_DEMORADO_MINUTOS = 15
 KITCHEN_DEMORADO_COLOR = "#DC2626"
@@ -1415,6 +1419,14 @@ class FoodState(CajaTurnoMixin, rx.State):
         return len(self.tickets_en_preparacion)
 
     @rx.var
+    def tickets_listos(self) -> list[CocinaTicketView]:
+        return [t for t in self.tickets_cocina if t.estado_produccion == EstadoProduccion.LISTO_PARA_ENTREGAR.value]
+
+    @rx.var
+    def cantidad_tickets_listos(self) -> int:
+        return len(self.tickets_listos)
+
+    @rx.var
     def mesas_con_alerta_entrega(self) -> int:
         return sum(1 for m in self.mesas if m.tiene_items_listos)
 
@@ -2484,28 +2496,28 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     @rx.event(background=True)
     async def start_mozos_polling(self) -> None:
-        await self._run_polling_loop("mozos_polling_enabled", 5, self._refresh_mozos_slice)
+        await self._run_polling_loop("mozos_polling_enabled", 3, self._refresh_mozos_slice)
 
     def stop_mozos_polling(self) -> None:
         self.mozos_polling_enabled = False
 
     @rx.event(background=True)
     async def start_cocina_polling(self) -> None:
-        await self._run_polling_loop("cocina_polling_enabled", 5, self._refresh_cocina_slice)
+        await self._run_polling_loop("cocina_polling_enabled", 3, self._refresh_cocina_slice)
 
     def stop_cocina_polling(self) -> None:
         self.cocina_polling_enabled = False
 
     @rx.event(background=True)
     async def start_caja_polling(self) -> None:
-        await self._run_polling_loop("caja_polling_enabled", 10, self._refresh_caja_slice)
+        await self._run_polling_loop("caja_polling_enabled", 3, self._refresh_caja_slice)
 
     def stop_caja_polling(self) -> None:
         self.caja_polling_enabled = False
 
     @rx.event(background=True)
     async def start_mostrador_polling(self) -> None:
-        await self._run_polling_loop("mostrador_polling_enabled", 5, self._refresh_mostrador_slice)
+        await self._run_polling_loop("mostrador_polling_enabled", 3, self._refresh_mostrador_slice)
 
     def stop_mostrador_polling(self) -> None:
         self.mostrador_polling_enabled = False
@@ -2959,9 +2971,6 @@ class FoodState(CajaTurnoMixin, rx.State):
             if pedido is None or _to_decimal(pedido.total) <= 0:
                 self.mensaje = "No hay consumo pendiente en esa mesa."
                 return
-            if _get_not_delivered_details(session, pedido.id or 0):
-                self.mensaje = "Todavía hay ítems en cocina o listos por entregar."
-                return
             mesa.estado = EstadoMesa.ESPERANDO_CUENTA.value
             mesa.updated_at = _utcnow()
             session.add(mesa)
@@ -3028,12 +3037,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.cargar_mesas()
         self.cargar_cocina()
-        html_ticket = generate_kitchen_ticket_html(
-            mesa_label=mesa_label, pedido_id=pedido_id, items=ticket_lines,
-            notes=self.nota_pedido_mesa, paper_width_mm=self._ticket_paper_width_mm(),
-        )
         self.mensaje = f"Pedido #{pedido_id} enviado correctamente."
-        return rx.call_script(build_print_script(html_ticket))
+        return rx.toast.success(f"Pedido #{pedido_id} enviado a cocina")
 
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
 
@@ -3074,6 +3079,8 @@ class FoodState(CajaTurnoMixin, rx.State):
                         "action_label": (
                             "▶ Iniciar preparación"
                             if estado_produccion == EstadoProduccion.PENDIENTE.value
+                            else "↩ Volver a preparación"
+                            if estado_produccion == EstadoProduccion.LISTO_PARA_ENTREGAR.value
                             else "✓ Todo listo"
                         ),
                         "accent_bg": KITCHEN_CARD_BACKGROUNDS.get(estado_produccion, "#FFF7ED"),
@@ -3154,6 +3161,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         if self.mesa_seleccionada_id:
             self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.mensaje = success_message
+        return rx.toast.success(success_message)
 
     def iniciar_preparacion_ticket(self, detalle_ids_csv: str) -> None:
         self._transition_ticket_state(
@@ -3167,6 +3175,12 @@ class FoodState(CajaTurnoMixin, rx.State):
             EstadoProduccion.LISTO_PARA_ENTREGAR.value, "Pedido listo para entregar a salon.",
             actor_user_id=((self.usuario_actual.id or None) if self.usuario_actual else None),
             actor_field_name="preparado_por_id",
+        )
+
+    def devolver_ticket_a_preparacion(self, detalle_ids_csv: str) -> None:
+        self._transition_ticket_state(
+            detalle_ids_csv, EstadoProduccion.LISTO_PARA_ENTREGAR.value,
+            EstadoProduccion.EN_PREPARACION.value, "Ticket devuelto a preparación.",
         )
 
     def entregar_item_historial(self, detalle_id: int) -> None:
@@ -3531,13 +3545,6 @@ class FoodState(CajaTurnoMixin, rx.State):
                 if pedido is None:
                     self.mensaje = "No hay pedido abierto para esa mesa."
                     return
-                if _get_unsent_details(session, pedido.id or 0):
-                    self.mensaje = "Todavía hay ítems pendientes de enviar a cocina."
-                    return
-                if _get_not_delivered_details(session, pedido.id or 0):
-                    self.mensaje = "Todavía hay ítems en cocina o listos por entregar."
-                    return
-
             turno = get_turno_abierto(session, self._company_id())
             if turno is None:
                 self.caja_cobro_error = "No hay turno de caja abierto. Abre el turno antes de cobrar."
@@ -3598,6 +3605,14 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.caja_cobro_error = "Selecciona el cliente para registrar el fiado."
                 return
             now = _utcnow()
+            for d in session.exec(
+                select(DetallePedido).where(
+                    DetallePedido.pedido_id == pedido.id,
+                    DetallePedido.estado_produccion != EstadoProduccion.ENTREGADO_AL_CLIENTE.value,
+                )
+            ).all():
+                d.estado_produccion = EstadoProduccion.ENTREGADO_AL_CLIENTE.value
+                session.add(d)
             if self.usuario_actual:
                 pedido.cajero_id = self.usuario_actual.id or None
             pedido.pagado = total_fiado == 0
@@ -3698,7 +3713,10 @@ class FoodState(CajaTurnoMixin, rx.State):
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
         self.mensaje = f"{mesa_label} cobrado ({metodo_final}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
-        return rx.call_script(build_print_script(html_ticket))
+        return [
+            rx.toast.success(f"{mesa_label} cobrado — {_money_text(total_final)}"),
+            rx.call_script(build_print_script(html_ticket)),
+        ]
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 
@@ -3706,6 +3724,67 @@ class FoodState(CajaTurnoMixin, rx.State):
         """Redirige al panel de cobro completo (método, descuento, propina, turno).
         El cobro directo sin panel quedó deprecado — siempre pasa por abrir_cobro_mesa."""
         return self.abrir_cobro_mesa(mesa_id or self.mesa_seleccionada_id)
+
+    def imprimir_precuenta(self, mesa_id: int = 0):
+        objetivo = mesa_id or self.caja_cobro_mesa_id or self.mesa_seleccionada_id
+        if objetivo <= 0:
+            self.mensaje = "Seleccioná una mesa para imprimir la pre-cuenta."
+            return
+        ticket_lines: list[TicketLine] = []
+        mesa_label = ""
+        pedido_id = 0
+        attended_by = ""
+        total = 0.0
+        descuento = 0.0
+        with self._tenant_session() as session:
+            mesa = session.get(Mesa, objetivo)
+            if mesa is None or mesa.company_id != self._company_id():
+                self.mensaje = "Mesa no encontrada."
+                return
+            mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
+            pedido = _get_open_order(session, objetivo, self._company_id())
+            if pedido is None:
+                self.mensaje = f"{mesa_label} no tiene pedido abierto."
+                return
+            pedido_id = pedido.id or 0
+            attended_by = ""
+            if pedido.mozo_id:
+                mozo = session.get(UsuarioFood, pedido.mozo_id)
+                attended_by = mozo.nombre if mozo else ""
+            detalles = session.exec(
+                select(DetallePedido).where(
+                    DetallePedido.pedido_id == pedido.id
+                ).order_by(DetallePedido.id)
+            ).all()
+            productos_map = {
+                p.id: p
+                for p in session.exec(
+                    select(Producto).where(Producto.company_id == self._company_id())
+                ).all()
+            }
+            for d in detalles:
+                prod = productos_map.get(d.producto_id)
+                ticket_lines.append(TicketLine(
+                    name=prod.nombre if prod else f"Producto {d.producto_id}",
+                    quantity=d.cantidad,
+                    unit_price=float(d.precio_unitario),
+                    subtotal=float(d.subtotal),
+                    note=d.notas or "",
+                ))
+            total = float(pedido.total)
+            descuento = float(pedido.descuento or 0)
+
+        html_ticket = generate_precuenta_html(
+            order_reference=mesa_label,
+            pedido_id=pedido_id,
+            items=ticket_lines,
+            total=total,
+            attended_by=attended_by,
+            company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            descuento=descuento,
+            paper_width_mm=self._ticket_paper_width_mm(),
+        )
+        return rx.call_script(build_print_script(html_ticket))
 
     def abrir_cobro_pedido_mostrador(self, pedido_id: int) -> None:
         """Abre el panel de cobro para una orden de mostrador pendiente de pago."""
@@ -4559,6 +4638,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self._reset_categoria_form()
         self.carta_cat_modal = False
         self.mensaje = "Categoría guardada."
+        return rx.toast.success("Categoría guardada")
 
     def editar_categoria(self, categoria_id: int) -> None:
         cat = next((c for c in self.categorias if c.id == categoria_id), None)
@@ -4665,6 +4745,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self._reset_producto_form()
         self.carta_prod_modal = False
         self.mensaje = "Producto guardado."
+        return rx.toast.success("Producto guardado")
 
     def editar_producto(self, producto_id: int) -> None:
         prod = next((p for p in self.productos if p.id == producto_id), None)
@@ -6232,6 +6313,7 @@ class MenuPublicoState(rx.State):
     """Estado de la carta pública — no requiere sesión."""
 
     nombre_local: str = ""
+    logo_url_local: str = ""
     categorias_menu: list[CategoriaPublicaView] = []
     cargando: bool = True
     no_encontrado: bool = False
@@ -6241,6 +6323,7 @@ class MenuPublicoState(rx.State):
         self.cargando = True
         self.no_encontrado = False
         self.nombre_local = ""
+        self.logo_url_local = ""
         self.categorias_menu = []
 
         if not slug:
@@ -6268,6 +6351,9 @@ class MenuPublicoState(rx.State):
                 self.cargando = False
                 return
             self.nombre_local = cfg.nombre_local
+
+            empresa = session.get(Company, company_id)
+            self.logo_url_local = (empresa.logo_url or "") if empresa else ""
 
             cats = session.exec(
                 select(Categoria)

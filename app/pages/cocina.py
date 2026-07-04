@@ -77,13 +77,21 @@ def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
                 on_click=rx.cond(
                     ticket.estado_produccion == "pendiente",
                     FoodState.iniciar_preparacion_ticket(ticket.detalle_ids_csv),
-                    FoodState.marcar_ticket_listo(ticket.detalle_ids_csv),
+                    rx.cond(
+                        ticket.estado_produccion == "listo_para_entregar",
+                        FoodState.devolver_ticket_a_preparacion(ticket.detalle_ids_csv),
+                        FoodState.marcar_ticket_listo(ticket.detalle_ids_csv),
+                    ),
                 ),
                 width="100%",
                 background=rx.cond(
                     ticket.estado_produccion == "pendiente",
                     "#EA580C",
-                    "#16A34A",
+                    rx.cond(
+                        ticket.estado_produccion == "listo_para_entregar",
+                        "#475569",
+                        "#16A34A",
+                    ),
                 ),
                 color="#FFFFFF",
                 border_radius="10px",
@@ -186,6 +194,11 @@ def _cocina_content() -> rx.Component:
                     spacing="2", align="center",
                 ),
                 rx.hstack(
+                    rx.box(width="10px", height="10px", border_radius="3px", background="#16A34A"),
+                    rx.text("Listo", font_size="13px", color="#94A3B8", font_weight="500"),
+                    spacing="2", align="center",
+                ),
+                rx.hstack(
                     rx.box(width="10px", height="10px", border_radius="3px", background="#DC2626"),
                     rx.text("Demorado", font_size="13px", color="#94A3B8", font_weight="500"),
                     spacing="2", align="center",
@@ -216,6 +229,10 @@ def _cocina_content() -> rx.Component:
         _column(
             "En preparación", FoodState.cantidad_tickets_en_preparacion,
             FoodState.tickets_en_preparacion, "Sin pedidos en preparación",
+        ),
+        _column(
+            "Listo", FoodState.cantidad_tickets_listos,
+            FoodState.tickets_listos, "Sin pedidos listos",
         ),
         spacing="5",
         width="100%",

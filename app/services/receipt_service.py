@@ -191,6 +191,52 @@ def generate_cashier_ticket_html(
     return _render_html("Comprobante de Pago", lines, paper_width_mm)
 
 
+def generate_precuenta_html(
+    *,
+    order_reference: str,
+    pedido_id: int,
+    items: Iterable[TicketLine],
+    total: float,
+    attended_by: str = "",
+    company_name: str = "TUWAYKIFOOD",
+    descuento: float = 0.0,
+    paper_width_mm: int = 80,
+    width: int = 0,
+) -> str:
+    """Pre-cuenta (proforma): sin métodos de pago, con aviso legal."""
+    if width == 0:
+        width = _chars_for_mm(paper_width_mm)
+    now = datetime.now()
+    lines: list[str] = [
+        _center(company_name.upper(), width),
+        "",
+        _center("PRE-CUENTA", width),
+        _center("*** NO ES COMPROBANTE ***", width),
+        _center(f"{now:%Y-%m-%d  %H:%M}", width),
+        _line(width),
+        order_reference,
+        f"Pedido: #{pedido_id}",
+        f"Atendido por: {attended_by or 'Sin asignar'}",
+        _line(width),
+    ]
+    for item in items:
+        for line in _format_sale_line(item, width):
+            lines.append(line)
+        if item.note:
+            for note_line in _wrap(f"* {item.note}", width - 2):
+                lines.append(f"  {note_line}")
+    lines.append(_line(width))
+    if descuento > 0:
+        lines.append(_row("Descuento:", "-" + _money(descuento), width))
+        lines.append(_line(width))
+    lines.append(_row("TOTAL:", _money(total), width))
+    lines += [
+        _line(width),
+        _center("Documento sin valor fiscal", width),
+    ]
+    return _render_html("Pre-cuenta", lines, paper_width_mm)
+
+
 def generate_cash_close_ticket_html(
     *,
     company_name: str,

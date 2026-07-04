@@ -222,41 +222,27 @@ _FONT_JS = (
 _CSS_SCRIPT = f"(function(){{{_FONT_JS}if(!document.getElementById('twk-css')){{var s=document.createElement('style');s.id='twk-css';s.textContent={json.dumps(_TWK_CSS)};document.head.appendChild(s);}}}})();"
 
 
-# ─── PALETA (usada por todas las páginas) ────────────────────────────────────────
-PAGE_BACKGROUND  = "#F8FAFC"
-SURFACE_BASE     = "#FFFFFF"
-SURFACE_ELEVATED = "#FFFFFF"
-SURFACE_SOFT     = "#F8FAFC"
-SURFACE_MUTED    = "#F1F5F9"
-SURFACE_GHOST    = "#F8FAFC"
-SURFACE_HOVER    = "#F1F5F9"
-SURFACE_INTERACTIVE = "#FFF7ED"
-BORDER_COLOR     = "#E2E8F0"
-BORDER_STRONG    = "#CBD5E1"
-BORDER_ACCENT    = "#FED7AA"
-TEXT_PRIMARY     = "#0F172A"
-TEXT_SECONDARY   = "#334155"
-TEXT_MUTED       = "#64748B"
-ACCENT           = "#EA580C"
-ACCENT_HOVER     = "#C2410C"
-ACCENT_BG        = "#FFF7ED"
-ACCENT_TEXT      = "#9A3412"
-ACCENT_SOFT      = "#FFF7ED"
-SUCCESS_BG       = "#F0FDF4"
-SUCCESS_TEXT     = "#15803D"
-SUCCESS_BORDER   = "#BBF7D0"
-DANGER_BG        = "#FEF2F2"
-DANGER_TEXT      = "#B91C1C"
-DANGER_BORDER    = "#FECACA"
-WARNING_BG       = "#FFFBEB"
-WARNING_TEXT     = "#B45309"
-WARNING_BORDER   = "#FDE68A"
-INFO_BG          = "#EFF6FF"
-INFO_TEXT        = "#1D4ED8"
-INFO_BORDER      = "#BFDBFE"
-GLOW             = "0 1px 3px rgba(0,0,0,0.07),0 1px 2px rgba(0,0,0,0.04)"
-SOFT_GLOW        = "0 1px 2px rgba(0,0,0,0.05)"
-ACCENT_GLOW      = "0 2px 8px rgba(234,88,12,0.18)"
+# ─── PALETA — re-exportada desde theme.py (fuente única de verdad) ───────────
+from app.components.theme import (  # noqa: F401 — re-export
+    ACCENT, ACCENT_BG, ACCENT_GLOW, ACCENT_HOVER, ACCENT_MUTED, ACCENT_SHADOW,
+    ACCENT_SOFT, ACCENT_TEXT,
+    BORDER_ACCENT, BORDER_COLOR, BORDER_STRONG,
+    DANGER_BG, DANGER_BORDER, DANGER_TEXT,
+    DARK_600, DARK_700, DARK_800, DARK_900,
+    GLOW,
+    INFO_BG, INFO_BORDER, INFO_TEXT,
+    PAGE_BACKGROUND,
+    SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_HOVER_BG, SIDEBAR_TEXT, SIDEBAR_TEXT_ACTIVE,
+    SLATE_100, SLATE_200, SLATE_300, SLATE_400, SLATE_50, SLATE_500,
+    SOFT_GLOW,
+    SUCCESS_BG, SUCCESS_BORDER, SUCCESS_TEXT,
+    SURFACE_BASE, SURFACE_ELEVATED, SURFACE_GHOST, SURFACE_HOVER, SURFACE_INTERACTIVE,
+    SURFACE_MUTED, SURFACE_SOFT,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE,
+    WARNING_BG, WARNING_BORDER, WARNING_TEXT,
+    Z_ADMIN_BACKDROP, Z_ADMIN_SIDEBAR, Z_DRAWER, Z_MENU_PUBLIC, Z_MODAL,
+    Z_STICKY_HEADER, Z_TOAST,
+)
 
 
 # ─── UTILIDADES PÚBLICAS ──────────────────────────────────────────────────────────
