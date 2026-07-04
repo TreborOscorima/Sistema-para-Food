@@ -67,6 +67,7 @@ def _format_sale_line(item: TicketLine, width: int) -> list[str]:
 
 
 def _render_html(document_title: str, lines: list[str], paper_width_mm: int) -> str:
+    lines = lines + [""] * 5
     text = "\n".join(lines)
     safe_text = html.escape(text)
     safe_title = html.escape(document_title)

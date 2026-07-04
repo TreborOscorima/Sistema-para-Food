@@ -506,38 +506,59 @@ def _cobro_panel() -> rx.Component:
 def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
     seleccionado = FoodState.caja_cobro_pedido_id == pedido.pedido_id
     return rx.box(
-        rx.hstack(
-            rx.vstack(
-                rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700",
-                        color=rx.cond(seleccionado, "#EA580C", "#334155")),
-                rx.text(pedido.items_resumen, font_size="11px", color="#64748B", no_of_lines=2),
-                spacing="0", align="start",
-            ),
-            rx.spacer(),
-            rx.vstack(
-                rx.text(pedido.total_texto, font_size="16px", font_weight="800",
-                        color=rx.cond(seleccionado, "#0F172A", "#334155")),
-                rx.cond(
-                    pedido.en_cocina,
-                    rx.badge("En cocina", background="#FEF3C7", color="#92400E",
-                             border_radius="20px", font_size="10px", font_weight="700",
-                             padding_x="8px", padding_y="2px"),
-                    rx.badge("Listo", background="#DCFCE7", color="#166534",
-                             border_radius="20px", font_size="10px", font_weight="700",
-                             padding_x="8px", padding_y="2px"),
+        rx.box(
+            rx.hstack(
+                rx.vstack(
+                    rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700",
+                            color=rx.cond(seleccionado, "#EA580C", "#334155")),
+                    rx.text(pedido.items_resumen, font_size="11px", color="#64748B", no_of_lines=2),
+                    spacing="0", align="start",
                 ),
-                align="end", spacing="1",
+                rx.spacer(),
+                rx.vstack(
+                    rx.text(pedido.total_texto, font_size="16px", font_weight="800",
+                            color=rx.cond(seleccionado, "#0F172A", "#334155")),
+                    rx.cond(
+                        pedido.en_cocina,
+                        rx.badge("En cocina", background="#FEF3C7", color="#92400E",
+                                 border_radius="20px", font_size="10px", font_weight="700",
+                                 padding_x="8px", padding_y="2px"),
+                        rx.badge("Listo", background="#DCFCE7", color="#166534",
+                                 border_radius="20px", font_size="10px", font_weight="700",
+                                 padding_x="8px", padding_y="2px"),
+                    ),
+                    align="end", spacing="1",
+                ),
+                width="100%", align="center",
             ),
-            width="100%", align="center",
+            on_click=FoodState.abrir_cobro_pedido_mostrador(pedido.pedido_id),
+            cursor="pointer",
+            padding="14px 16px",
         ),
-        on_click=FoodState.abrir_cobro_pedido_mostrador(pedido.pedido_id),
-        padding="14px 16px",
+        rx.hstack(
+            rx.spacer(),
+            rx.button(
+                "✏️ Editar",
+                on_click=FoodState.editar_pedido_mostrador(pedido.pedido_id),
+                size="1",
+                variant="outline",
+                color="#EA580C",
+                border="1px solid #EA580C",
+                border_radius="6px",
+                font_size="11px",
+                font_weight="600",
+                padding_x="8px",
+                padding_y="2px",
+                cursor="pointer",
+                _hover={"background": "#FFF7ED"},
+            ),
+            padding_x="16px",
+            padding_bottom="8px",
+        ),
         background=rx.cond(seleccionado, "#FFF7ED", "#FFFFFF"),
         border_left=rx.cond(seleccionado, "3px solid #EA580C", "3px solid transparent"),
         border_bottom="1px solid #F1F5F9",
-        cursor="pointer",
         width="100%",
-        _hover={"background": rx.cond(seleccionado, "#FFF7ED", "#F8FAFC")},
     )
 
 
