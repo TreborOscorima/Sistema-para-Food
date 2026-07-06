@@ -743,6 +743,47 @@ def _reportes_content() -> rx.Component:
             gap="12px", width="100%",
             direction=rx.breakpoints(initial="column", md="row"),
         ),
+        # Desglose por método de pago
+        rx.box(
+            rx.hstack(
+                rx.icon(tag="credit_card", size=14, color="#EA580C"),
+                rx.text("Desglose por método de pago", font_size="13px", font_weight="700", color="#334155"),
+                spacing="2", align="center", margin_bottom="10px",
+            ),
+            rx.cond(
+                FoodState.reporte_metodos.length() > 0,
+                rx.recharts.responsive_container(
+                    rx.recharts.bar_chart(
+                        rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#E2E8F0"),
+                        rx.recharts.x_axis(
+                            data_key="metodo", font_size=11, tick_line=False,
+                            axis_line=False, stroke="#94A3B8",
+                        ),
+                        rx.recharts.y_axis(
+                            font_size=11, tick_line=False, axis_line=False,
+                            stroke="#94A3B8", width=70,
+                        ),
+                        rx.recharts.graphing_tooltip(
+                            content_style={"fontSize": "12px", "borderRadius": "8px"},
+                        ),
+                        rx.recharts.bar(
+                            data_key="total", fill="#EA580C", radius=[4, 4, 0, 0],
+                            name="Total (S/)",
+                        ),
+                        rx.recharts.bar(
+                            data_key="count", fill="#FB923C", radius=[4, 4, 0, 0],
+                            name="Pagos",
+                        ),
+                        data=FoodState.reporte_metodos,
+                        margin={"top": 4, "right": 4, "left": 0, "bottom": 0},
+                    ),
+                    width="100%", height=220,
+                ),
+                rx.text("Sin pagos en el período.", font_size="12px", color="#94A3B8"),
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", width="100%",
+        ),
         # Margen por plato
         rx.box(
             rx.hstack(

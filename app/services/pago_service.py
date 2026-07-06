@@ -93,30 +93,49 @@ def registrar_pagos_pedido(
     usuario_id: int | None,
     pagos: list[tuple[str, Decimal]],
     resultado: ResultadoPagos,
+    split_detalles: list[str] | None = None,
 ) -> list[PagoPedido]:
-    """Persiste los pagos de un pedido. El efectivo se consolida en una sola
-    fila neta de vuelto (lo que queda en el cajón); el resto va fila por fila."""
+    """Persiste los pagos de un pedido.
+
+    Sin ``split_detalles``: el efectivo se consolida en una sola fila neta de
+    vuelto (lo que queda en el cajón); el resto va fila por fila.
+
+    Con ``split_detalles`` (split por ítems): cada pago se persiste 1:1 sin
+    consolidar, con su ``detalle_ids_json`` asociado.
+    """
     filas: list[PagoPedido] = []
-    if resultado.efectivo_neto > 0:
-        filas.append(PagoPedido(
-            company_id=pedido.company_id,
-            pedido_id=pedido.id or 0,
-            turno_caja_id=turno_caja_id,
-            usuario_id=usuario_id,
-            metodo="efectivo",
-            monto=resultado.efectivo_neto,
-        ))
-    for metodo, monto in pagos:
-        if metodo == "efectivo":
-            continue
-        filas.append(PagoPedido(
-            company_id=pedido.company_id,
-            pedido_id=pedido.id or 0,
-            turno_caja_id=turno_caja_id,
-            usuario_id=usuario_id,
-            metodo=metodo,
-            monto=_dec(monto),
-        ))
+    if split_detalles:
+        for (metodo, monto), det_json in zip(pagos, split_detalles):
+            filas.append(PagoPedido(
+                company_id=pedido.company_id,
+                pedido_id=pedido.id or 0,
+                turno_caja_id=turno_caja_id,
+                usuario_id=usuario_id,
+                metodo=metodo,
+                monto=_dec(monto),
+                detalle_ids_json=det_json,
+            ))
+    else:
+        if resultado.efectivo_neto > 0:
+            filas.append(PagoPedido(
+                company_id=pedido.company_id,
+                pedido_id=pedido.id or 0,
+                turno_caja_id=turno_caja_id,
+                usuario_id=usuario_id,
+                metodo="efectivo",
+                monto=resultado.efectivo_neto,
+            ))
+        for metodo, monto in pagos:
+            if metodo == "efectivo":
+                continue
+            filas.append(PagoPedido(
+                company_id=pedido.company_id,
+                pedido_id=pedido.id or 0,
+                turno_caja_id=turno_caja_id,
+                usuario_id=usuario_id,
+                metodo=metodo,
+                monto=_dec(monto),
+            ))
     for fila in filas:
         session.add(fila)
     session.flush()

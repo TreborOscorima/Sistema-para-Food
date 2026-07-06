@@ -37,7 +37,19 @@ def _categoria_row(cat: CategoriaView) -> rx.Component:
             flex="1",
             min_width="0",
         ),
-        rx.text(f"Orden: {cat.orden}", font_size="11px", color="#94A3B8", white_space="nowrap"),
+        rx.hstack(
+            rx.icon(
+                tag="chevron_up", size=14, color="#64748B", cursor="pointer",
+                on_click=FoodState.mover_categoria(cat.id, "arriba"),
+                _hover={"color": "#EA580C"},
+            ),
+            rx.icon(
+                tag="chevron_down", size=14, color="#64748B", cursor="pointer",
+                on_click=FoodState.mover_categoria(cat.id, "abajo"),
+                _hover={"color": "#EA580C"},
+            ),
+            spacing="0", align="center", flex_shrink="0",
+        ),
         rx.button(
             "✏️ Editar",
             on_click=FoodState.editar_categoria(cat.id),
@@ -114,6 +126,23 @@ def _producto_row(prod: ProductoView) -> rx.Component:
             ),
             rx.hstack(
                 rx.text(prod.precio_texto, font_size="13px", font_weight="700", color="#EA580C"),
+                rx.cond(
+                    prod.margen_pct >= 0,
+                    rx.badge(
+                        prod.margen_pct.to_string() + "%",
+                        background=rx.cond(
+                            prod.margen_pct >= 50, "#DCFCE7",
+                            rx.cond(prod.margen_pct >= 30, "#FEF9C3", "#FEE2E2"),
+                        ),
+                        color=rx.cond(
+                            prod.margen_pct >= 50, "#166534",
+                            rx.cond(prod.margen_pct >= 30, "#713F12", "#991B1B"),
+                        ),
+                        border_radius="5px", font_size="10px", font_weight="700",
+                        padding="1px 6px",
+                    ),
+                    rx.fragment(),
+                ),
                 rx.text("·", color="#CBD5E1", font_size="10px"),
                 rx.text(prod.categoria_nombre, font_size="11px", color="#94A3B8"),
                 spacing="1",
@@ -131,6 +160,23 @@ def _producto_row(prod: ProductoView) -> rx.Component:
             background="#FFF7ED",
             color="#EA580C",
             border="1px solid #FED7AA",
+            border_radius="6px",
+            font_size="11px",
+            cursor="pointer",
+            padding_x="8px",
+            padding_y="4px",
+            _hover={"opacity": "0.85"},
+        ),
+        rx.button(
+            rx.hstack(
+                rx.icon(tag="copy", size=12),
+                rx.text("Duplicar", font_size="11px"),
+                spacing="1", align="center",
+            ),
+            on_click=FoodState.duplicar_producto(prod.id),
+            background="#F0F9FF",
+            color="#0369A1",
+            border="1px solid #BAE6FD",
             border_radius="6px",
             font_size="11px",
             cursor="pointer",
@@ -791,6 +837,244 @@ def _mod_asignar_modal() -> rx.Component:
     )
 
 
+def _combo_row(combo: dict) -> rx.Component:
+    return rx.hstack(
+        rx.text(combo["emoji"].to(str), font_size="16px", flex_shrink="0"),
+        rx.vstack(
+            rx.text(combo["nombre"].to(str), font_size="13px", font_weight="600", color="#0F172A"),
+            rx.text(combo["items_texto"].to(str), font_size="11px", color="#94A3B8", no_of_lines=1),
+            spacing="0", flex="1", min_width="0",
+        ),
+        rx.text(combo["precio_texto"].to(str), font_size="13px", font_weight="700", color="#EA580C", flex_shrink="0"),
+        rx.hstack(
+            rx.icon_button(
+                rx.icon(tag="pencil", size=12),
+                on_click=FoodState.editar_combo(combo["id"].to(int)),
+                background="transparent", color="#64748B", border="none", size="1",
+                cursor="pointer", _hover={"color": "#0F172A"},
+            ),
+            rx.icon_button(
+                rx.icon(tag=rx.cond(combo["activo"].to(bool), "eye", "eye_off"), size=12),
+                on_click=FoodState.toggle_combo_activo(combo["id"].to(int)),
+                background="transparent",
+                color=rx.cond(combo["activo"].to(bool), "#16A34A", "#94A3B8"),
+                border="none", size="1", cursor="pointer",
+            ),
+            rx.icon_button(
+                rx.icon(tag="trash_2", size=12),
+                on_click=FoodState.eliminar_combo(combo["id"].to(int)),
+                background="transparent", color="#DC2626", border="none", size="1",
+                cursor="pointer", _hover={"color": "#B91C1C"},
+            ),
+            spacing="1",
+        ),
+        width="100%", align="center", spacing="3",
+        padding="10px 12px",
+        border="1px solid #E2E8F0", border_radius="8px",
+        background=rx.cond(combo["activo"].to(bool), "#FFFFFF", "#F8FAFC"),
+        opacity=rx.cond(combo["activo"].to(bool), "1", "0.6"),
+    )
+
+
+def _combo_item_form_row(item: dict, idx: int) -> rx.Component:
+    return rx.hstack(
+        rx.select(
+            FoodState.productos.to(list).foreach(
+                lambda p: p.nombre
+            ),
+            placeholder="Seleccionar producto...",
+            value=rx.cond(
+                item["producto_id"].to(str) != "",
+                FoodState.productos.to(list)[item["producto_id"].to(int)].nombre,
+                "",
+            ),
+            on_change=lambda v: FoodState.combo_set_item_field(idx.to_string() + "|producto_id|" + v),
+            width="100%",
+        ),
+    )
+
+
+def _combo_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.text(
+                        rx.cond(FoodState.combo_form_id > 0, "Editar Combo", "Nuevo Combo"),
+                        font_size="16px", font_weight="700", color="#0F172A",
+                    ),
+                    rx.spacer(),
+                    rx.dialog.close(
+                        rx.box(rx.icon(tag="x", size=16, color="#94A3B8"),
+                               cursor="pointer", padding="4px", border_radius="6px",
+                               _hover={"background": "#F1F5F9"}),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.vstack(
+                    rx.text("Nombre", font_size="12px", font_weight="600", color="#334155"),
+                    rx.input(
+                        value=FoodState.combo_form_nombre,
+                        on_change=FoodState.set_combo_form_nombre,
+                        placeholder="Ej: Combo Hamburguesa",
+                        border="1px solid #E2E8F0", border_radius="6px",
+                        font_size="13px", width="100%",
+                        _focus={"border": "1px solid #EA580C"},
+                    ),
+                    spacing="1", width="100%",
+                ),
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Precio", font_size="12px", font_weight="600", color="#334155"),
+                        rx.input(
+                            value=FoodState.combo_form_precio,
+                            on_change=FoodState.set_combo_form_precio,
+                            placeholder="25.00",
+                            border="1px solid #E2E8F0", border_radius="6px",
+                            font_size="13px", width="100%",
+                            _focus={"border": "1px solid #EA580C"},
+                        ),
+                        spacing="1", flex="1",
+                    ),
+                    rx.vstack(
+                        rx.text("Emoji", font_size="12px", font_weight="600", color="#334155"),
+                        rx.input(
+                            value=FoodState.combo_form_emoji,
+                            on_change=FoodState.set_combo_form_emoji,
+                            placeholder="🍱",
+                            border="1px solid #E2E8F0", border_radius="6px",
+                            font_size="13px", width="80px",
+                            _focus={"border": "1px solid #EA580C"},
+                        ),
+                        spacing="1",
+                    ),
+                    width="100%", spacing="3",
+                ),
+                rx.vstack(
+                    rx.text("Descripción (opcional)", font_size="12px", font_weight="600", color="#334155"),
+                    rx.text_area(
+                        value=FoodState.combo_form_descripcion,
+                        on_change=FoodState.set_combo_form_descripcion,
+                        placeholder="Ej: Incluye hamburguesa, papas fritas y bebida",
+                        border="1px solid #E2E8F0", border_radius="6px",
+                        font_size="12px", width="100%", rows="2",
+                        _focus={"border": "1px solid #EA580C"},
+                    ),
+                    spacing="1", width="100%",
+                ),
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Productos del combo", font_size="12px", font_weight="600", color="#334155"),
+                        rx.spacer(),
+                        rx.button(
+                            rx.hstack(rx.icon(tag="plus", size=10), rx.text("Agregar", font_size="10px"), spacing="1", align="center"),
+                            on_click=FoodState.combo_add_item,
+                            background="#F1F5F9", color="#64748B",
+                            border="1px solid #E2E8F0", border_radius="5px",
+                            cursor="pointer", padding_x="8px", padding_y="3px",
+                            _hover={"background": "#E2E8F0"},
+                        ),
+                        width="100%", align="center",
+                    ),
+                    rx.vstack(
+                        rx.foreach(
+                            FoodState.combo_form_items,
+                            lambda item, idx: rx.hstack(
+                                rx.input(
+                                    value=item["producto_id"].to(str),
+                                    on_change=lambda v: FoodState.combo_set_item_field(idx.to_string() + "|producto_id|" + v),
+                                    placeholder="ID producto",
+                                    border="1px solid #E2E8F0", border_radius="6px",
+                                    font_size="12px", flex="1",
+                                    _focus={"border": "1px solid #EA580C"},
+                                ),
+                                rx.input(
+                                    value=item["cantidad"].to(str),
+                                    on_change=lambda v: FoodState.combo_set_item_field(idx.to_string() + "|cantidad|" + v),
+                                    placeholder="Cant",
+                                    border="1px solid #E2E8F0", border_radius="6px",
+                                    font_size="12px", width="60px",
+                                    _focus={"border": "1px solid #EA580C"},
+                                ),
+                                rx.icon_button(
+                                    rx.icon(tag="trash_2", size=11),
+                                    on_click=FoodState.combo_remove_item(idx),
+                                    background="transparent", color="#DC2626",
+                                    border="none", size="1", cursor="pointer",
+                                ),
+                                spacing="2", width="100%", align="center",
+                            ),
+                        ),
+                        spacing="2", width="100%",
+                    ),
+                    spacing="2", width="100%",
+                ),
+                rx.button(
+                    rx.cond(FoodState.combo_form_id > 0, "Guardar cambios", "Crear Combo"),
+                    on_click=FoodState.guardar_combo,
+                    background="#EA580C", color="#FFFFFF",
+                    border_radius="8px", font_size="13px", font_weight="700",
+                    width="100%", cursor="pointer",
+                    _hover={"background": "#C2410C"},
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#FFFFFF",
+            border_radius="14px",
+            padding="20px",
+            max_width="480px",
+            width="90vw",
+        ),
+        open=FoodState.combo_modal,
+        on_open_change=FoodState.set_combo_modal,
+    )
+
+
+def _combos_section() -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.text("Combos", font_size="15px", font_weight="700", color="#64748B"),
+            rx.badge(
+                FoodState.combos_admin.length().to_string(),
+                background="#FEF3C7", color="#92400E",
+                border_radius="12px", font_size="11px", font_weight="700",
+                padding_x="8px",
+            ),
+            rx.spacer(),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="plus", size=12),
+                    rx.text("Nuevo Combo", font_size="11px", font_weight="700"),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.abrir_combo_modal,
+                background="#FEF3C7", color="#92400E",
+                border="1px solid #FDE68A", border_radius="6px",
+                cursor="pointer", padding_x="10px", padding_y="5px",
+                _hover={"background": "#FDE68A"},
+            ),
+            spacing="2", align="center", width="100%",
+        ),
+        rx.cond(
+            FoodState.combos_admin.length() == 0,
+            rx.box(
+                rx.text(
+                    "Sin combos. Creá uno para ofrecer paquetes a precio fijo (ej: hamburguesa + papas + bebida).",
+                    font_size="12px", color="#94A3B8", text_align="center",
+                ),
+                padding="24px 16px", width="100%",
+            ),
+            rx.vstack(
+                rx.foreach(FoodState.combos_admin, _combo_row),
+                spacing="2", width="100%",
+            ),
+        ),
+        spacing="3",
+        width="100%",
+        class_name="twk-panel",
+    )
+
+
 def _modificadores_section() -> rx.Component:
     return rx.vstack(
         rx.hstack(
@@ -842,6 +1126,7 @@ def _carta_content() -> rx.Component:
         _prod_modal(),
         _mod_grupo_modal(),
         _mod_asignar_modal(),
+        _combo_modal(),
         # ── Header ────────────────────────────────────────────────────────────
         rx.hstack(
             rx.vstack(
@@ -1073,6 +1358,7 @@ def _carta_content() -> rx.Component:
             align="start",
             class_name="twk-cols-lg",
         ),
+        _combos_section(),
         _modificadores_section(),
         spacing="5",
         width="100%",

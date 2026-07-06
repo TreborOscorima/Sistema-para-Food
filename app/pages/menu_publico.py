@@ -98,19 +98,47 @@ def _menu_content() -> rx.Component:
                 ),
                 rx.cond(
                     MenuPublicoState.categorias_menu.length() > 0,
-                    rx.hstack(
-                        rx.link(
-                            "Todo", href="#menu-categorias",
-                            background="#EA580C", color="#FFFFFF",
-                            font_size="12px", font_weight="700",
-                            padding="6px 14px", border_radius="20px",
-                            white_space="nowrap", flex_shrink="0",
+                    rx.vstack(
+                        rx.hstack(
+                            rx.link(
+                                "Todo", href="#menu-categorias",
+                                background="#EA580C", color="#FFFFFF",
+                                font_size="12px", font_weight="700",
+                                padding="6px 14px", border_radius="20px",
+                                white_space="nowrap", flex_shrink="0",
+                            ),
+                            rx.foreach(
+                                MenuPublicoState.categorias_menu,
+                                lambda cat, idx: _categoria_chip(cat, idx),
+                            ),
+                            spacing="2", overflow_x="auto", width="100%",
                         ),
-                        rx.foreach(
-                            MenuPublicoState.categorias_menu,
-                            lambda cat, idx: _categoria_chip(cat, idx),
+                        rx.hstack(
+                            rx.icon(tag="search", size=16, color="#94A3B8", flex_shrink="0"),
+                            rx.input(
+                                placeholder="Buscar plato...",
+                                value=MenuPublicoState.busqueda_menu,
+                                on_change=MenuPublicoState.set_busqueda_menu,
+                                border="none", outline="none",
+                                font_size="14px", color="#0F172A",
+                                padding="0", flex="1",
+                                _focus={"border": "none", "box_shadow": "none"},
+                                _placeholder={"color": "#94A3B8"},
+                            ),
+                            rx.cond(
+                                MenuPublicoState.busqueda_menu != "",
+                                rx.icon(
+                                    tag="x", size=16, color="#94A3B8",
+                                    cursor="pointer", flex_shrink="0",
+                                    on_click=MenuPublicoState.set_busqueda_menu(""),
+                                ),
+                                rx.fragment(),
+                            ),
+                            spacing="2", align="center", width="100%",
+                            background="#F1F5F9", border_radius="12px",
+                            padding="8px 12px",
                         ),
-                        spacing="2", overflow_x="auto", width="100%", padding_bottom="4px",
+                        spacing="2", width="100%",
                     ),
                     rx.fragment(),
                 ),
@@ -164,16 +192,28 @@ def _menu_content() -> rx.Component:
                             padding_y="80px",
                             width="100%",
                         ),
-                        rx.vstack(
-                            rx.foreach(
-                                MenuPublicoState.categorias_menu,
-                                lambda cat, idx: _categoria_section(cat, idx),
+                        rx.cond(
+                            MenuPublicoState.categorias_menu_filtradas.length() == 0,
+                            rx.center(
+                                rx.vstack(
+                                    rx.icon(tag="search_x", size=40, color="#CBD5E1"),
+                                    rx.text("Sin resultados", font_size="15px", font_weight="600", color="#475569"),
+                                    rx.text("Probá con otro término", font_size="13px", color="#94A3B8"),
+                                    spacing="2", align="center",
+                                ),
+                                padding_y="60px", width="100%",
                             ),
-                            id="menu-categorias",
-                            width="100%",
-                            spacing="6",
-                            padding=rx.breakpoints(initial="18px 16px", md="20px 24px"),
-                            scroll_margin_top="120px",
+                            rx.vstack(
+                                rx.foreach(
+                                    MenuPublicoState.categorias_menu_filtradas,
+                                    lambda cat, idx: _categoria_section(cat, idx),
+                                ),
+                                id="menu-categorias",
+                                width="100%",
+                                spacing="6",
+                                padding=rx.breakpoints(initial="18px 16px", md="20px 24px"),
+                                scroll_margin_top="120px",
+                            ),
                         ),
                     ),
                 ),

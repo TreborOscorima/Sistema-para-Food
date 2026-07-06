@@ -932,6 +932,37 @@ def _content_impresoras() -> rx.Component:
             background="#EFF6FF", border="1px solid #BFDBFE",
             border_radius="8px", padding="12px 14px", width="100%",
         ),
+        rx.box(
+            rx.vstack(
+                _section_header("Pantalla de cocina (KDS)", "chef_hat"),
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Minutos para alerta de demorado", font_size="13px",
+                                color="#334155", font_weight="600"),
+                        rx.text("Un ticket se marca como demorado si supera este tiempo.",
+                                font_size="12px", color="#94A3B8"),
+                        spacing="0", align="start", flex="1",
+                    ),
+                    rx.input(
+                        value=FoodState.config_kds_minutos_alerta,
+                        on_change=FoodState.set_config_kds_minutos_alerta,
+                        type="number", min="1", max="120",
+                        width="80px",
+                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        border_radius="7px", font_size="14px", font_weight="700",
+                        text_align="center",
+                        padding_y="8px",
+                        _focus={"border": "1px solid #EA580C"},
+                    ),
+                    rx.text("min", font_size="13px", color="#64748B", font_weight="600"),
+                    spacing="3", align="center", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#FFFFFF", border="1px solid #E2E8F0",
+            border_radius="12px", padding="20px",
+            width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
         rx.hstack(
             rx.button(
                 rx.hstack(
@@ -951,7 +982,7 @@ def _content_impresoras() -> rx.Component:
             rx.button(
                 rx.hstack(
                     rx.icon(tag="save", size=14, color="#FFFFFF"),
-                    rx.text("Guardar impresoras", font_size="13px",
+                    rx.text("Guardar configuración", font_size="13px",
                             font_weight="700", color="#FFFFFF"),
                     spacing="2", align="center",
                 ),

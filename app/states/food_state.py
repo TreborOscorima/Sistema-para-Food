@@ -24,6 +24,8 @@ from app.models.company import Company
 from app.models.food import (
     Categoria,
     Cliente,
+    Combo,
+    ComboItem,
     ConfigImpresora,
     CuponLote,
     CuentaCorriente,
@@ -524,6 +526,7 @@ class MesaView(BaseModel):
     items_total_count: int = 0
     tiempo_abierto_texto: str = ""
     sector: str = "Salón"
+    mozo_nombre: str = ""
 
 
 class PagoStagedView(BaseModel):
@@ -533,14 +536,20 @@ class PagoStagedView(BaseModel):
     metodo_label: str
     monto: float
     monto_texto: str
+    items_indices_json: str = ""
+    items_texto: str = ""
 
 
 class CajaItemView(BaseModel):
+    detalle_id: int = 0
     producto_nombre: str = ""
     cantidad: int = 0
     precio_unitario_texto: str = ""
     subtotal_texto: str = ""
+    subtotal_float: float = 0.0
     notas: str = ""
+    seleccionado: bool = False
+    asignado_pago: int = 0
 
 
 class MesaAdminView(BaseModel):
@@ -740,6 +749,33 @@ class GrupoModificadorAdminView(BaseModel):
     productos_count: int = 0
 
 
+class ComboItemView(BaseModel):
+    producto_id: int
+    producto_nombre: str
+    cantidad: int
+
+class ComboAdminView(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str = ""
+    precio: float
+    precio_texto: str
+    emoji: str = ""
+    activo: bool
+    orden: int
+    items_count: int = 0
+    items_texto: str = ""
+
+class ComboMenuView(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str = ""
+    precio: float
+    precio_texto: str
+    emoji: str = ""
+    items_texto: str = ""
+
+
 class ProductoView(BaseModel):
     id: int
     categoria_id: int
@@ -752,6 +788,7 @@ class ProductoView(BaseModel):
     imagen_url: str
     emoji: str = "🍽️"
     tiene_modificadores: bool = False
+    margen_pct: float = -1.0
 
 
 class CarritoItem(BaseModel):
@@ -764,6 +801,8 @@ class CarritoItem(BaseModel):
     nota: str = ""
     modificadores_texto: str = ""
     modificadores_json: str = ""
+    combo_items_json: str = ""
+    es_combo: bool = False
 
 
 class HistorialItem(BaseModel):
@@ -929,7 +968,17 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
     ).all()
     if not detalles:
         return
-    producto_ids = list({d.producto_id for d in detalles})
+    producto_ids_set: set[int] = set()
+    for d in detalles:
+        producto_ids_set.add(d.producto_id)
+        if d.combo_items_json:
+            import json as _json
+            try:
+                for ci in _json.loads(d.combo_items_json):
+                    producto_ids_set.add(ci.get("producto_id", 0))
+            except Exception:
+                pass
+    producto_ids = list(producto_ids_set)
     recetas = session.exec(
         select(RecetaItem).where(
             RecetaItem.company_id == company_id,
@@ -953,9 +1002,22 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
     }
     descuentos: dict[int, Decimal] = {}
     for d in detalles:
-        for ri in receta_por_producto.get(d.producto_id, []):
-            uso = Decimal(str(ri.cantidad)) * d.cantidad
-            descuentos[ri.insumo_id] = descuentos.get(ri.insumo_id, Decimal("0")) + uso
+        if d.combo_items_json:
+            import json as _json
+            try:
+                combo_items = _json.loads(d.combo_items_json)
+            except Exception:
+                combo_items = []
+            for ci in combo_items:
+                ci_pid = ci.get("producto_id", 0)
+                ci_cant = ci.get("cantidad", 1)
+                for ri in receta_por_producto.get(ci_pid, []):
+                    uso = Decimal(str(ri.cantidad)) * ci_cant * d.cantidad
+                    descuentos[ri.insumo_id] = descuentos.get(ri.insumo_id, Decimal("0")) + uso
+        else:
+            for ri in receta_por_producto.get(d.producto_id, []):
+                uso = Decimal(str(ri.cantidad)) * d.cantidad
+                descuentos[ri.insumo_id] = descuentos.get(ri.insumo_id, Decimal("0")) + uso
     for insumo_id, uso_total in descuentos.items():
         ins = insumos.get(insumo_id)
         if ins:
@@ -1073,6 +1135,17 @@ class FoodState(CajaTurnoMixin, rx.State):
     mod_seleccion_elegidos: dict[str, list[int]] = {}
     mod_seleccion_origen: str = "mozos"
 
+    # Combos
+    combos_admin: list[dict[str, object]] = []
+    combos_menu: list[dict[str, object]] = []
+    combo_modal: bool = False
+    combo_form_id: int = 0
+    combo_form_nombre: str = ""
+    combo_form_descripcion: str = ""
+    combo_form_precio: str = ""
+    combo_form_emoji: str = ""
+    combo_form_items: list[dict[str, str]] = []
+
     pagina_cargada: bool = False
     mozos_polling_enabled: bool = False
     cocina_polling_enabled: bool = False
@@ -1121,6 +1194,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     # Caja — cobro dividido / pago mixto
     caja_cobro_dividido: bool = False
+    caja_split_por_items: bool = False
     caja_pago_staged_metodo: str = "efectivo"
     caja_pago_staged_monto: str = ""
     caja_pagos_staged: list[PagoStagedView] = []
@@ -1150,6 +1224,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     reporte_mozos: list[MozoRankView] = []
     reporte_horas: list[FranjaHoraView] = []
     reporte_margen: list[MargenPlatoView] = []
+    reporte_metodos: list[dict[str, object]] = []
 
     historial_filtro_fecha_desde: str = ""
     historial_filtro_fecha_hasta: str = ""
@@ -1189,6 +1264,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     config_mostrar_iva: bool = False
     config_nombre_impuesto: str = "IGV"
     config_porcentaje_iva: str = "18.0"
+    config_kds_minutos_alerta: str = "15"
     config_admin_email: str = ""
     config_admin_password_nueva: str = ""
     config_admin_password_confirm: str = ""
@@ -1868,6 +1944,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_menu()
         self.cargar_cocina()
         self.cargar_grupos_modificadores()
+        self.cargar_combos()
         self._bootstrap_forms()
         if self.mesa_seleccionada_id:
             self._cargar_carrito_mesa(self.mesa_seleccionada_id)
@@ -2416,6 +2493,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.config_mostrar_iva = cfg.mostrar_iva
                 self.config_nombre_impuesto = cfg.nombre_impuesto or "IGV"
                 self.config_porcentaje_iva = str(cfg.porcentaje_iva)
+                self.config_kds_minutos_alerta = str(cfg.kds_minutos_alerta)
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
@@ -2447,6 +2525,11 @@ class FoodState(CajaTurnoMixin, rx.State):
                 cfg.porcentaje_iva = pct if 0 < pct <= 100 else 18.0
             except (ValueError, AttributeError):
                 cfg.porcentaje_iva = 18.0
+            try:
+                kds_min = int(self.config_kds_minutos_alerta.strip())
+                cfg.kds_minutos_alerta = kds_min if 1 <= kds_min <= 120 else 15
+            except (ValueError, AttributeError):
+                cfg.kds_minutos_alerta = 15
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
             cfg.updated_at = _utcnow()
@@ -2524,6 +2607,9 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_config_porcentaje_iva(self, v: str) -> None:
         self.config_porcentaje_iva = v
+
+    def set_config_kds_minutos_alerta(self, v: str) -> None:
+        self.config_kds_minutos_alerta = v
 
     def set_config_slug(self, v: str) -> None:
         self.config_slug = v
@@ -2991,6 +3077,15 @@ class FoodState(CajaTurnoMixin, rx.State):
                         items_total_by_pedido.get(d.pedido_id, 0) + d.cantidad
                     )
 
+            # Bulk: 1 query para nombres de mozos
+            mozo_ids = {p.mozo_id for p in pedidos_abiertos.values() if p.mozo_id}
+            mozos_map: dict[int, str] = {}
+            if mozo_ids:
+                for u in session.exec(
+                    select(UsuarioFood).where(UsuarioFood.id.in_(list(mozo_ids)))
+                ).all():
+                    mozos_map[u.id or 0] = u.nombre
+
             # Construir vistas y acumular correcciones de mesas stuck
             hay_stuck = False
             for mesa in mesas_db:
@@ -3008,9 +3103,12 @@ class FoodState(CajaTurnoMixin, rx.State):
                 tiene_items_listos = items_listos_count > 0
                 items_total_count = items_total_by_pedido.get(pid, 0) if pedido_abierto else 0
                 tiempo_abierto_texto = ""
+                mozo_nombre = ""
                 if pedido_abierto is not None:
                     elapsed_min = max(0, int((_utcnow() - pedido_abierto.created_at).total_seconds() // 60))
                     tiempo_abierto_texto = f"{elapsed_min} min"
+                    if pedido_abierto.mozo_id:
+                        mozo_nombre = mozos_map.get(pedido_abierto.mozo_id, "")
                 mesas_ui.append(MesaView(
                     id=mesa.id or 0,
                     numero=mesa.numero,
@@ -3032,6 +3130,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     items_listos_count=items_listos_count,
                     items_total_count=items_total_count,
                     tiempo_abierto_texto=tiempo_abierto_texto,
+                    mozo_nombre=mozo_nombre,
                     sector=mesa.sector or "Salón",
                 ))
             if hay_stuck:
@@ -3070,14 +3169,38 @@ class FoodState(CajaTurnoMixin, rx.State):
                 for c in categorias_db
             ]
             productos_con_mods: set[int] = set()
-            if productos_db:
-                pids = [p.id for p in productos_db if p.id]
-                if pids:
-                    for pg in session.exec(
-                        select(ProductoGrupoModificador)
-                        .where(ProductoGrupoModificador.producto_id.in_(pids))
-                    ).all():
-                        productos_con_mods.add(pg.producto_id)
+            pids = [p.id for p in productos_db if p.id]
+            if pids:
+                for pg in session.exec(
+                    select(ProductoGrupoModificador)
+                    .where(ProductoGrupoModificador.producto_id.in_(pids))
+                ).all():
+                    productos_con_mods.add(pg.producto_id)
+            margen_map: dict[int, float] = {}
+            if pids:
+                recetas = session.exec(
+                    select(RecetaItem).where(RecetaItem.company_id == self._company_id())
+                ).all()
+                insumos = {
+                    i.id: i for i in session.exec(
+                        select(Insumo).where(Insumo.company_id == self._company_id())
+                    ).all()
+                }
+                receta_por_prod: dict[int, list] = {}
+                for r in recetas:
+                    receta_por_prod.setdefault(r.producto_id, []).append(r)
+                for prod in productos_db:
+                    items_r = receta_por_prod.get(prod.id or 0)
+                    if not items_r:
+                        continue
+                    costo = Decimal("0.00")
+                    for item in items_r:
+                        ins = insumos.get(item.insumo_id)
+                        if ins:
+                            costo += _to_decimal(ins.costo_unitario) * Decimal(str(item.cantidad))
+                    precio_d = _to_decimal(prod.precio)
+                    if precio_d > 0:
+                        margen_map[prod.id or 0] = round(float((precio_d - costo) / precio_d * 100), 1)
             self.productos = [
                 ProductoView(
                     id=p.id or 0,
@@ -3091,6 +3214,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     imagen_url=p.imagen_url or "",
                     emoji=p.emoji or _emoji_para_producto(p.nombre),
                     tiene_modificadores=(p.id or 0) in productos_con_mods,
+                    margen_pct=margen_map.get(p.id or 0, -1.0),
                 )
                 for p in productos_db
             ]
@@ -3190,10 +3314,10 @@ class FoodState(CajaTurnoMixin, rx.State):
             productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             items: list[CarritoItem] = []
             for d in detalles:
+                import json as _json
                 mods_texto = ""
                 if d.modificadores_json:
                     try:
-                        import json as _json
                         mods_list = _json.loads(d.modificadores_json)
                         mods_texto = ", ".join(
                             m.get("opcion", "") + (f" +S/{m['precio_extra']:.2f}" if m.get("precio_extra", 0) > 0 else "")
@@ -3201,9 +3325,21 @@ class FoodState(CajaTurnoMixin, rx.State):
                         )
                     except Exception:
                         pass
+                es_combo = bool(d.combo_items_json)
+                if es_combo:
+                    try:
+                        combo_items = _json.loads(d.combo_items_json)
+                        combo_nombre = "Combo: " + ", ".join(
+                            f"{ci.get('cantidad', 1)}x {ci.get('nombre', '?')}" for ci in combo_items
+                        )
+                    except Exception:
+                        combo_nombre = ""
+                else:
+                    combo_nombre = ""
+                nombre_display = combo_nombre if es_combo else (productos_map[d.producto_id].nombre if d.producto_id in productos_map else f"Producto {d.producto_id}")
                 items.append(CarritoItem(
                     producto_id=d.producto_id,
-                    nombre=(productos_map[d.producto_id].nombre if d.producto_id in productos_map else f"Producto {d.producto_id}"),
+                    nombre=nombre_display,
                     cantidad=d.cantidad,
                     precio_unitario=float(_to_decimal(d.precio_unitario)),
                     subtotal=float(_to_decimal(d.subtotal)),
@@ -3211,6 +3347,8 @@ class FoodState(CajaTurnoMixin, rx.State):
                     nota=d.notas or "",
                     modificadores_texto=mods_texto,
                     modificadores_json=d.modificadores_json or "",
+                    combo_items_json=d.combo_items_json or "",
+                    es_combo=es_combo,
                 ))
             self.carrito = items
 
@@ -3547,6 +3685,10 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def cargar_cocina(self) -> None:
         with self._tenant_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
+            ).first()
+            kds_umbral = cfg.kds_minutos_alerta if cfg else KITCHEN_DEMORADO_MINUTOS
             detalles = session.exec(
                 select(DetallePedido).where(
                     DetallePedido.company_id == self._company_id(),
@@ -3600,11 +3742,19 @@ class FoodState(CajaTurnoMixin, rx.State):
                         "items_lines": [],
                         "items_ids": [],
                     }
+                import json as _json
                 producto = productos.get(d.producto_id)
-                line = f"{d.cantidad} x {producto.nombre if producto else f'Producto {d.producto_id}'}"
+                if d.combo_items_json:
+                    try:
+                        combo_items = _json.loads(d.combo_items_json)
+                        combo_desc = " + ".join(f"{ci.get('cantidad', 1)}x {ci.get('nombre', '?')}" for ci in combo_items)
+                        line = f"{d.cantidad} x COMBO [{combo_desc}]"
+                    except Exception:
+                        line = f"{d.cantidad} x Combo"
+                else:
+                    line = f"{d.cantidad} x {producto.nombre if producto else f'Producto {d.producto_id}'}"
                 if d.modificadores_json:
                     try:
-                        import json as _json
                         mods_list = _json.loads(d.modificadores_json)
                         mods_str = ", ".join(m.get("opcion", "") for m in mods_list if m.get("opcion"))
                         if mods_str:
@@ -3626,7 +3776,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     data["minutos_texto"] = f"{horas}h {mins_rest}min"
                 else:
                     data["minutos_texto"] = f"{mins:02d}:{segs:02d} min"
-                data["demorado"] = mins >= KITCHEN_DEMORADO_MINUTOS
+                data["demorado"] = mins >= kds_umbral
                 if data["demorado"]:
                     data["estado_label"] = "⚠ Demorado"
                     data["accent_border"] = KITCHEN_DEMORADO_COLOR
@@ -3804,10 +3954,12 @@ class FoodState(CajaTurnoMixin, rx.State):
                 for d in detalles:
                     prod = productos.get(d.producto_id)
                     items_ui.append(CajaItemView(
+                        detalle_id=d.id or 0,
                         producto_nombre=prod.nombre if prod else f"Producto {d.producto_id}",
                         cantidad=d.cantidad,
                         precio_unitario_texto=_money_text(_to_decimal(d.precio_unitario)),
                         subtotal_texto=_money_text(_to_decimal(d.subtotal)),
+                        subtotal_float=float(_to_decimal(d.subtotal)),
                         notas=d.notas or "",
                     ))
                 # Aplicación automática de la mejor promo vigente
@@ -3857,6 +4009,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_error = ""
         self.caja_cobro_items = []
         self.caja_cobro_dividido = False
+        self.caja_split_por_items = False
         self.caja_pago_staged_metodo = "efectivo"
         self.caja_pago_staged_monto = ""
         self.caja_pagos_staged = []
@@ -3919,12 +4072,66 @@ class FoodState(CajaTurnoMixin, rx.State):
     def caja_pagos_tiene_fiado(self) -> bool:
         return any(p.metodo == "fiado" for p in self.caja_pagos_staged)
 
+    # ─── Split por ítems (CJ-02 + BE-06) ─────────────────────────────────────
+
+    @rx.var
+    def caja_split_subtotal_sel(self) -> float:
+        if not self.caja_split_por_items:
+            return 0.0
+        return round(sum(
+            item.subtotal_float for item in self.caja_cobro_items if item.seleccionado
+        ), 2)
+
+    @rx.var
+    def caja_split_subtotal_sel_texto(self) -> str:
+        return _money_text(self.caja_split_subtotal_sel)
+
+    @rx.var
+    def caja_split_hay_seleccion(self) -> bool:
+        return any(item.seleccionado for item in self.caja_cobro_items)
+
+    @rx.var
+    def caja_split_todos_asignados(self) -> bool:
+        if not self.caja_split_por_items or not self.caja_cobro_items:
+            return False
+        return all(item.asignado_pago > 0 for item in self.caja_cobro_items)
+
     def set_caja_cobro_dividido(self, v: bool) -> None:
         self.caja_cobro_dividido = bool(v)
+        self.caja_split_por_items = False
+        self._reset_split_items()
         self.caja_pagos_staged = []
         self.caja_pago_staged_metodo = "efectivo"
         self.caja_pago_staged_monto = ""
         self.caja_cobro_error = ""
+
+    def set_caja_split_por_items(self, v: bool) -> None:
+        self.caja_split_por_items = bool(v)
+        self._reset_split_items()
+        self.caja_pagos_staged = []
+        self.caja_pago_staged_monto = ""
+        self.caja_cobro_error = ""
+
+    def _reset_split_items(self) -> None:
+        items = list(self.caja_cobro_items)
+        for i, item in enumerate(items):
+            items[i] = item.model_copy(update={"seleccionado": False, "asignado_pago": 0})
+        self.caja_cobro_items = items
+
+    def toggle_split_item_sel(self, idx: int) -> None:
+        items = list(self.caja_cobro_items)
+        if 0 <= idx < len(items):
+            item = items[idx]
+            if item.asignado_pago == 0:
+                items[idx] = item.model_copy(update={"seleccionado": not item.seleccionado})
+                self.caja_cobro_items = items
+
+    def seleccionar_todos_restantes(self) -> None:
+        items = list(self.caja_cobro_items)
+        for i, item in enumerate(items):
+            if item.asignado_pago == 0:
+                items[i] = item.model_copy(update={"seleccionado": True})
+        self.caja_cobro_items = items
 
     def set_caja_pago_staged_metodo(self, v: str) -> None:
         self.caja_pago_staged_metodo = v
@@ -3933,7 +4140,39 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_pago_staged_monto = v
 
     def agregar_pago_staged(self) -> None:
+        import json as _json
         self.caja_cobro_error = ""
+        labels = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "qr": "QR / Yape", "fiado": "Fiado / CC"}
+        metodo = self.caja_pago_staged_metodo or "efectivo"
+
+        if self.caja_split_por_items:
+            items = list(self.caja_cobro_items)
+            sel_indices = [i for i, it in enumerate(items) if it.seleccionado]
+            if not sel_indices:
+                self.caja_cobro_error = "Selecciona al menos un ítem."
+                return
+            monto = round(sum(items[i].subtotal_float for i in sel_indices), 2)
+            if monto <= 0:
+                self.caja_cobro_error = "El subtotal de la selección es cero."
+                return
+            items_desc = " + ".join(
+                f"{items[i].cantidad}x {items[i].producto_nombre}" for i in sel_indices
+            )
+            pago_num = len(self.caja_pagos_staged) + 1
+            self.caja_pagos_staged.append(PagoStagedView(
+                metodo=metodo,
+                metodo_label=labels.get(metodo, metodo),
+                monto=monto,
+                monto_texto=_money_text(monto),
+                items_indices_json=_json.dumps(sel_indices),
+                items_texto=items_desc,
+            ))
+            for i in sel_indices:
+                items[i] = items[i].model_copy(update={"seleccionado": False, "asignado_pago": pago_num})
+            self.caja_cobro_items = items
+            self.caja_pago_staged_monto = ""
+            return
+
         raw = (self.caja_pago_staged_monto or "").replace(",", ".").strip()
         if raw:
             try:
@@ -3942,12 +4181,10 @@ class FoodState(CajaTurnoMixin, rx.State):
                 self.caja_cobro_error = "Monto de pago inválido."
                 return
         else:
-            monto = self.caja_pagos_restante  # sin monto: completa lo que falta
+            monto = self.caja_pagos_restante
         if monto <= 0:
             self.caja_cobro_error = "El pago debe ser mayor a cero."
             return
-        labels = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "qr": "QR / Yape", "fiado": "Fiado / CC"}
-        metodo = self.caja_pago_staged_metodo or "efectivo"
         self.caja_pagos_staged.append(PagoStagedView(
             metodo=metodo,
             metodo_label=labels.get(metodo, metodo),
@@ -3957,10 +4194,30 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_pago_staged_monto = ""
 
     def quitar_pago_staged(self, idx: int) -> None:
+        import json as _json
         if 0 <= idx < len(self.caja_pagos_staged):
             pagos = list(self.caja_pagos_staged)
-            pagos.pop(idx)
+            removed = pagos.pop(idx)
             self.caja_pagos_staged = pagos
+            if self.caja_split_por_items and removed.items_indices_json:
+                try:
+                    released = _json.loads(removed.items_indices_json)
+                except Exception:
+                    released = []
+                items = list(self.caja_cobro_items)
+                for i in released:
+                    if 0 <= i < len(items):
+                        items[i] = items[i].model_copy(update={"asignado_pago": 0})
+                for p_idx, pago in enumerate(self.caja_pagos_staged):
+                    if pago.items_indices_json:
+                        try:
+                            p_indices = _json.loads(pago.items_indices_json)
+                        except Exception:
+                            continue
+                        for i in p_indices:
+                            if 0 <= i < len(items):
+                                items[i] = items[i].model_copy(update={"asignado_pago": p_idx + 1})
+                self.caja_cobro_items = items
 
     # ─── Anulación auditada de pedidos y ventas ──────────────────────────────
 
@@ -4120,16 +4377,27 @@ class FoodState(CajaTurnoMixin, rx.State):
                 return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            ticket_lines = [
-                TicketLine(
-                    name=(productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"),
+            ticket_lines = []
+            for d in detalles:
+                if d.combo_items_json:
+                    import json as _json
+                    try:
+                        combo_items = _json.loads(d.combo_items_json)
+                        combo_desc = "Combo: " + " + ".join(
+                            f"{ci.get('cantidad', 1)}x {ci.get('nombre', '?')}" for ci in combo_items
+                        )
+                    except Exception:
+                        combo_desc = "Combo"
+                    name = combo_desc
+                else:
+                    name = productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"
+                ticket_lines.append(TicketLine(
+                    name=name,
                     quantity=d.cantidad,
                     unit_price=float(_to_decimal(d.precio_unitario)),
                     subtotal=float(_to_decimal(d.subtotal)),
                     note=d.notas or "",
-                )
-                for d in detalles
-            ]
+                ))
             if es_mostrador:
                 attended_by = _actor_name(
                     self.usuario_actual.nombre if self.usuario_actual else ""
@@ -4145,12 +4413,15 @@ class FoodState(CajaTurnoMixin, rx.State):
             if descuento > total_base:
                 self.caja_cobro_error = f"El descuento ({_money_text(descuento)}) no puede superar el total ({_money_text(total_base)})."
                 return
-            # Construir la lista de pagos: dividido/mixto usa la lista armada
-            # en la UI; el cobro simple se normaliza a un único pago para que
-            # todo quede registrado igual en food_pagos_pedido.
+            import json as _json
             if self.caja_cobro_dividido:
                 if not self.caja_pagos_staged:
                     self.caja_cobro_error = "Agrega al menos un pago."
+                    return
+                if self.caja_split_por_items and not all(
+                    it.asignado_pago > 0 for it in self.caja_cobro_items
+                ):
+                    self.caja_cobro_error = "Asigna todos los ítems antes de confirmar."
                     return
                 total_final = max(total_base - descuento + propina, Decimal("0.00"))
                 pagos_lista = [
@@ -4159,7 +4430,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 ]
             else:
                 if metodo == "fiado":
-                    propina = Decimal("0.00")  # el fiado no registra propina
+                    propina = Decimal("0.00")
                 total_final = max(total_base - descuento + propina, Decimal("0.00"))
                 pagos_lista = [(metodo, total_final)] if total_final > 0 else []
             resultado_pagos = None
@@ -4218,6 +4489,20 @@ class FoodState(CajaTurnoMixin, rx.State):
                     self.caja_cobro_error = str(exc)
                     return
             if resultado_pagos is not None:
+                split_det = None
+                if self.caja_split_por_items:
+                    split_det = []
+                    items_snap = list(self.caja_cobro_items)
+                    for p in self.caja_pagos_staged:
+                        if p.items_indices_json:
+                            try:
+                                indices = _json.loads(p.items_indices_json)
+                                det_ids = [items_snap[i].detalle_id for i in indices if 0 <= i < len(items_snap)]
+                            except Exception:
+                                det_ids = []
+                            split_det.append(_json.dumps(det_ids))
+                        else:
+                            split_det.append("")
                 registrar_pagos_pedido(
                     session,
                     pedido,
@@ -4225,6 +4510,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     (self.usuario_actual.id or None) if self.usuario_actual else None,
                     pagos_lista,
                     resultado_pagos,
+                    split_detalles=split_det,
                 )
             metodo_final = pedido.metodo_pago or metodo
             session.commit()
@@ -4382,10 +4668,12 @@ class FoodState(CajaTurnoMixin, rx.State):
             for d in detalles:
                 prod = productos.get(d.producto_id)
                 items_ui.append(CajaItemView(
+                    detalle_id=d.id or 0,
                     producto_nombre=prod.nombre if prod else f"Producto {d.producto_id}",
                     cantidad=d.cantidad,
                     precio_unitario_texto=_money_text(_to_decimal(d.precio_unitario)),
                     subtotal_texto=_money_text(_to_decimal(d.subtotal)),
+                    subtotal_float=float(_to_decimal(d.subtotal)),
                     notas=d.notas or "",
                 ))
             total_override = float(_to_decimal(pedido.total))
@@ -4599,16 +4887,16 @@ class FoodState(CajaTurnoMixin, rx.State):
         ticket_lines: list[TicketLine] = []
         with self._tenant_session() as session:
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            invalidos = [item.nombre for item in self.mostrador_carrito if item.producto_id not in productos or not productos[item.producto_id].disponible]
+            invalidos = [item.nombre for item in self.mostrador_carrito if not item.es_combo and (item.producto_id not in productos or not productos[item.producto_id].disponible)]
             if invalidos:
                 self.mensaje = f"Productos no disponibles: {', '.join(invalidos)}"
                 return
-            errores_stock = _validar_stock_para_items(
-                session, [(item.producto_id, item.cantidad) for item in self.mostrador_carrito], self._company_id()
-            )
-            if errores_stock:
-                self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
-                return
+            stock_items = [(item.producto_id, item.cantidad) for item in self.mostrador_carrito if not item.es_combo]
+            if stock_items:
+                errores_stock = _validar_stock_para_items(session, stock_items, self._company_id())
+                if errores_stock:
+                    self.mensaje = "Stock insuficiente — " + "; ".join(errores_stock)
+                    return
             now = _utcnow()
             pedido = Pedido(
                 company_id=self._company_id(),
@@ -4628,32 +4916,65 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.commit()
             session.refresh(pedido)
             for item in self.mostrador_carrito:
-                producto = productos[item.producto_id]
-                precio = _to_decimal(item.precio_unitario) if item.modificadores_json else _to_decimal(producto.precio)
-                subtotal = precio * item.cantidad
-                detalle = DetallePedido(
-                    company_id=self._company_id(),
-                    pedido_id=pedido.id or 0,
-                    producto_id=producto.id or 0,
-                    cantidad=item.cantidad,
-                    precio_unitario=precio,
-                    subtotal=subtotal,
-                    notas=item.nota or None,
-                    estado_produccion=EstadoProduccion.PENDIENTE.value,
-                    impreso_cocina=True,
-                    impreso_caja=True,
-                    enviado_cocina_at=now,
-                    modificadores_json=item.modificadores_json or None,
-                )
-                session.add(detalle)
-                mod_note = f" ({item.modificadores_texto})" if item.modificadores_texto else ""
-                ticket_lines.append(TicketLine(
-                    name=producto.nombre + mod_note,
-                    quantity=item.cantidad,
-                    unit_price=float(precio),
-                    subtotal=float(subtotal),
-                    note="",
-                ))
+                if item.es_combo:
+                    import json as _json
+                    precio = _to_decimal(item.precio_unitario)
+                    subtotal = precio * item.cantidad
+                    combo_items = []
+                    try:
+                        combo_items = _json.loads(item.combo_items_json) if item.combo_items_json else []
+                    except Exception:
+                        pass
+                    first_pid = combo_items[0].get("producto_id", 0) if combo_items else 0
+                    detalle = DetallePedido(
+                        company_id=self._company_id(),
+                        pedido_id=pedido.id or 0,
+                        producto_id=first_pid,
+                        cantidad=item.cantidad,
+                        precio_unitario=precio,
+                        subtotal=subtotal,
+                        notas=item.nota or None,
+                        estado_produccion=EstadoProduccion.PENDIENTE.value,
+                        impreso_cocina=True,
+                        impreso_caja=True,
+                        enviado_cocina_at=now,
+                        combo_items_json=item.combo_items_json or None,
+                    )
+                    session.add(detalle)
+                    ticket_lines.append(TicketLine(
+                        name=item.nombre,
+                        quantity=item.cantidad,
+                        unit_price=float(precio),
+                        subtotal=float(subtotal),
+                        note="",
+                    ))
+                else:
+                    producto = productos[item.producto_id]
+                    precio = _to_decimal(item.precio_unitario) if item.modificadores_json else _to_decimal(producto.precio)
+                    subtotal = precio * item.cantidad
+                    detalle = DetallePedido(
+                        company_id=self._company_id(),
+                        pedido_id=pedido.id or 0,
+                        producto_id=producto.id or 0,
+                        cantidad=item.cantidad,
+                        precio_unitario=precio,
+                        subtotal=subtotal,
+                        notas=item.nota or None,
+                        estado_produccion=EstadoProduccion.PENDIENTE.value,
+                        impreso_cocina=True,
+                        impreso_caja=True,
+                        enviado_cocina_at=now,
+                        modificadores_json=item.modificadores_json or None,
+                    )
+                    session.add(detalle)
+                    mod_note = f" ({item.modificadores_texto})" if item.modificadores_texto else ""
+                    ticket_lines.append(TicketLine(
+                        name=producto.nombre + mod_note,
+                        quantity=item.cantidad,
+                        unit_price=float(precio),
+                        subtotal=float(subtotal),
+                        note="",
+                    ))
             _recalculate_order_total(session, pedido)
             _sync_order_status(session, pedido)
             session.commit()
@@ -4986,12 +5307,24 @@ class FoodState(CajaTurnoMixin, rx.State):
         return desde, hasta
 
     def cargar_analitica(self) -> None:
-        """Ranking por mozo, ventas por hora y margen por plato (P6)."""
+        """Ranking por mozo, ventas por hora, margen por plato y desglose por método."""
         desde, hasta = self._rango_filtros_historial()
+        pagos_por_metodo: dict[str, dict[str, object]] = {}
         with self._tenant_session() as session:
             mozos = ventas_por_mozo(session, self._company_id(), desde, hasta)
             horas = ventas_por_hora(session, self._company_id(), desde, hasta)
             margenes = margen_por_plato(session, self._company_id())
+            q_pagos = select(PagoPedido).where(PagoPedido.company_id == self._company_id())
+            if desde is not None:
+                q_pagos = q_pagos.where(PagoPedido.created_at >= desde)
+            if hasta is not None:
+                q_pagos = q_pagos.where(PagoPedido.created_at <= hasta)
+            for pago in session.exec(q_pagos).all():
+                m = pago.metodo or "otro"
+                if m not in pagos_por_metodo:
+                    pagos_por_metodo[m] = {"total": 0.0, "count": 0}
+                pagos_por_metodo[m]["total"] = round(float(pagos_por_metodo[m]["total"]) + float(pago.monto), 2)
+                pagos_por_metodo[m]["count"] = int(pagos_por_metodo[m]["count"]) + 1
         self.reporte_mozos = [
             MozoRankView(
                 nombre=f["nombre"],
@@ -5035,6 +5368,11 @@ class FoodState(CajaTurnoMixin, rx.State):
                 costo_completo=f["costo_completo"],
             ))
         self.reporte_margen = vistas_margen
+        labels = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "qr": "QR / Yape", "fiado": "Fiado"}
+        self.reporte_metodos = [
+            {"metodo": labels.get(m, m.title()), "total": v["total"], "count": v["count"]}
+            for m, v in sorted(pagos_por_metodo.items(), key=lambda x: -float(x[1]["total"]))
+        ]
 
     def buscar_historial_manual(self) -> None:
         self.historial_filtro_rapido = "personalizado"
@@ -5345,6 +5683,28 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.commit()
         self.cargar_menu()
 
+    def mover_categoria(self, categoria_id: int, direccion: str) -> None:
+        cats = list(self.categorias)
+        idx = next((i for i, c in enumerate(cats) if c.id == categoria_id), -1)
+        if idx < 0:
+            return
+        swap_idx = idx - 1 if direccion == "arriba" else idx + 1
+        if swap_idx < 0 or swap_idx >= len(cats):
+            return
+        with self._tenant_session() as session:
+            cat_a = session.get(Categoria, cats[idx].id)
+            cat_b = session.get(Categoria, cats[swap_idx].id)
+            if cat_a is None or cat_b is None:
+                return
+            cat_a.orden, cat_b.orden = cat_b.orden, cat_a.orden
+            now = _utcnow()
+            cat_a.updated_at = now
+            cat_b.updated_at = now
+            session.add(cat_a)
+            session.add(cat_b)
+            session.commit()
+        self.cargar_menu()
+
     def _reset_categoria_form(self) -> None:
         self.categoria_form_id = 0
         self.categoria_form_nombre = ""
@@ -5592,6 +5952,282 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_menu()
         return rx.toast.success("Modificadores asignados")
 
+    # ─── Combos Admin ─────────────────────────────────────────────────────────
+
+    def cargar_combos(self) -> None:
+        with self._tenant_session() as session:
+            combos = session.exec(
+                select(Combo).where(Combo.company_id == self._company_id()).order_by(Combo.orden, Combo.nombre)
+            ).all()
+            admin_list: list[dict[str, object]] = []
+            menu_list: list[dict[str, object]] = []
+            for c in combos:
+                items_db = session.exec(
+                    select(ComboItem).where(ComboItem.combo_id == c.id)
+                ).all()
+                prod_ids = [ci.producto_id for ci in items_db]
+                productos = {p.id: p for p in session.exec(select(Producto).where(Producto.id.in_(prod_ids))).all()} if prod_ids else {}
+                items_texto = ", ".join(
+                    f"{ci.cantidad}x {productos.get(ci.producto_id, Producto(nombre='?')).nombre}"
+                    for ci in items_db
+                )
+                precio_f = float(_to_decimal(c.precio))
+                entry: dict[str, object] = {
+                    "id": c.id or 0,
+                    "nombre": c.nombre,
+                    "descripcion": c.descripcion or "",
+                    "precio": precio_f,
+                    "precio_texto": _money_text(c.precio),
+                    "emoji": c.emoji or "🍱",
+                    "activo": c.activo,
+                    "orden": c.orden,
+                    "items_count": len(items_db),
+                    "items_texto": items_texto,
+                }
+                admin_list.append(entry)
+                if c.activo:
+                    menu_list.append(entry)
+            self.combos_admin = admin_list
+            self.combos_menu = menu_list
+
+    def abrir_combo_modal(self) -> None:
+        self.combo_form_id = 0
+        self.combo_form_nombre = ""
+        self.combo_form_descripcion = ""
+        self.combo_form_precio = ""
+        self.combo_form_emoji = ""
+        self.combo_form_items = [{"producto_id": "", "cantidad": "1"}]
+        self.combo_modal = True
+
+    def set_combo_modal(self, v: bool) -> None:
+        self.combo_modal = bool(v)
+
+    def set_combo_form_nombre(self, v: str) -> None:
+        self.combo_form_nombre = str(v)[:160]
+
+    def set_combo_form_descripcion(self, v: str) -> None:
+        self.combo_form_descripcion = str(v)[:240]
+
+    def set_combo_form_precio(self, v: str) -> None:
+        self.combo_form_precio = v
+
+    def set_combo_form_emoji(self, v: str) -> None:
+        self.combo_form_emoji = str(v)[:16]
+
+    def combo_add_item(self) -> None:
+        items = list(self.combo_form_items)
+        items.append({"producto_id": "", "cantidad": "1"})
+        self.combo_form_items = items
+
+    def combo_remove_item(self, idx: int) -> None:
+        items = list(self.combo_form_items)
+        if 0 <= idx < len(items) and len(items) > 1:
+            items.pop(idx)
+        self.combo_form_items = items
+
+    def combo_set_item_field(self, payload: str) -> None:
+        parts = payload.split("|", 2)
+        if len(parts) != 3:
+            return
+        idx_str, field, value = parts
+        try:
+            idx = int(idx_str)
+        except ValueError:
+            return
+        items = list(self.combo_form_items)
+        if 0 <= idx < len(items):
+            item = dict(items[idx])
+            item[field] = value
+            items[idx] = item
+        self.combo_form_items = items
+
+    def editar_combo(self, combo_id: int) -> None:
+        with self._tenant_session() as session:
+            combo = session.get(Combo, combo_id)
+            if combo is None or combo.company_id != self._company_id():
+                return
+            self.combo_form_id = combo.id or 0
+            self.combo_form_nombre = combo.nombre
+            self.combo_form_descripcion = combo.descripcion or ""
+            self.combo_form_precio = str(combo.precio)
+            self.combo_form_emoji = combo.emoji or ""
+            items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
+            self.combo_form_items = [
+                {"producto_id": str(ci.producto_id), "cantidad": str(ci.cantidad)}
+                for ci in items_db
+            ] or [{"producto_id": "", "cantidad": "1"}]
+        self.combo_modal = True
+
+    def guardar_combo(self) -> None:
+        nombre = self.combo_form_nombre.strip()
+        if not nombre:
+            self.mensaje = "El combo necesita un nombre."
+            return
+        try:
+            precio = Decimal(self.combo_form_precio.replace(",", ".").strip())
+        except (ValueError, InvalidOperation):
+            self.mensaje = "Precio inválido para el combo."
+            return
+        if precio < 0:
+            self.mensaje = "El precio no puede ser negativo."
+            return
+        items_validos: list[tuple[int, int]] = []
+        for item in self.combo_form_items:
+            pid_str = str(item.get("producto_id", "")).strip()
+            cant_str = str(item.get("cantidad", "1")).strip()
+            if not pid_str:
+                continue
+            try:
+                pid = int(pid_str)
+                cant = max(int(cant_str), 1)
+            except ValueError:
+                continue
+            items_validos.append((pid, cant))
+        if not items_validos:
+            self.mensaje = "Agrega al menos un producto al combo."
+            return
+        with self._tenant_session() as session:
+            if self.combo_form_id > 0:
+                combo = session.get(Combo, self.combo_form_id)
+                if combo is None or combo.company_id != self._company_id():
+                    self.mensaje = "Combo no encontrado."
+                    return
+                combo.nombre = nombre
+                combo.descripcion = self.combo_form_descripcion.strip() or None
+                combo.precio = precio
+                combo.emoji = self.combo_form_emoji.strip() or None
+                for old_item in session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all():
+                    session.delete(old_item)
+                session.flush()
+            else:
+                combo = Combo(
+                    company_id=self._company_id(),
+                    nombre=nombre,
+                    descripcion=self.combo_form_descripcion.strip() or None,
+                    precio=precio,
+                    emoji=self.combo_form_emoji.strip() or None,
+                )
+                session.add(combo)
+                session.flush()
+            for pid, cant in items_validos:
+                session.add(ComboItem(combo_id=combo.id or 0, producto_id=pid, cantidad=cant))
+            session.commit()
+        self.combo_modal = False
+        self.cargar_combos()
+        action = "actualizado" if self.combo_form_id > 0 else "creado"
+        return rx.toast.success(f"Combo \"{nombre}\" {action}")
+
+    def toggle_combo_activo(self, combo_id: int) -> None:
+        with self._tenant_session() as session:
+            combo = session.get(Combo, combo_id)
+            if combo is None or combo.company_id != self._company_id():
+                return
+            combo.activo = not combo.activo
+            session.commit()
+        self.cargar_combos()
+
+    def eliminar_combo(self, combo_id: int) -> None:
+        with self._tenant_session() as session:
+            combo = session.get(Combo, combo_id)
+            if combo is None or combo.company_id != self._company_id():
+                return
+            for ci in session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all():
+                session.delete(ci)
+            session.delete(combo)
+            session.commit()
+        self.cargar_combos()
+        return rx.toast.success("Combo eliminado")
+
+    def agregar_combo(self, combo_id: int) -> None:
+        import json as _json
+        combo_data = next((c for c in self.combos_menu if c.get("id") == combo_id), None)
+        if combo_data is None:
+            self.mensaje = "Combo no disponible."
+            return
+        if self.mesa_seleccionada_id == 0:
+            self.mensaje = "Selecciona una mesa antes de agregar combos."
+            return
+        with self._tenant_session() as session:
+            mesa = session.get(Mesa, self.mesa_seleccionada_id)
+            if mesa is None or mesa.company_id != self._company_id():
+                self.mensaje = "La mesa seleccionada ya no existe."
+                return
+            combo = session.get(Combo, combo_id)
+            if combo is None or combo.company_id != self._company_id() or not combo.activo:
+                self.mensaje = "Combo no disponible."
+                return
+            items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            combo_snapshot = [
+                {
+                    "producto_id": ci.producto_id,
+                    "nombre": productos.get(ci.producto_id, Producto(nombre="?")).nombre,
+                    "cantidad": ci.cantidad,
+                }
+                for ci in items_db
+            ]
+            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=(self.usuario_actual.id or None) if self.usuario_actual else None)
+            precio = _to_decimal(combo.precio)
+            first_pid = items_db[0].producto_id if items_db else 0
+            detalle = DetallePedido(
+                company_id=self._company_id(),
+                pedido_id=pedido.id or 0,
+                producto_id=first_pid,
+                cantidad=1,
+                precio_unitario=precio,
+                subtotal=precio,
+                estado_produccion=EstadoProduccion.PENDIENTE.value,
+                impreso_cocina=False,
+                impreso_caja=False,
+                combo_items_json=_json.dumps(combo_snapshot, ensure_ascii=False),
+            )
+            session.add(detalle)
+            _recalculate_order_total(session, pedido)
+            mesa.estado = EstadoMesa.OCUPADA.value
+            mesa.updated_at = _utcnow()
+            session.add(mesa)
+            session.commit()
+        self._cargar_carrito_mesa(self.mesa_seleccionada_id)
+        self._cargar_historial_mesa(self.mesa_seleccionada_id)
+        self.cargar_mesas()
+        self.mensaje = f"Combo \"{combo_data.get('nombre', '')}\" agregado."
+
+    def agregar_combo_mostrador(self, combo_id: int) -> None:
+        import json as _json
+        combo_data = next((c for c in self.combos_menu if c.get("id") == combo_id), None)
+        if combo_data is None:
+            self.mensaje = "Combo no disponible."
+            return
+        with self._tenant_session() as session:
+            combo = session.get(Combo, combo_id)
+            if combo is None or not combo.activo:
+                self.mensaje = "Combo no disponible."
+                return
+            items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            combo_snapshot = [
+                {
+                    "producto_id": ci.producto_id,
+                    "nombre": productos.get(ci.producto_id, Producto(nombre="?")).nombre,
+                    "cantidad": ci.cantidad,
+                }
+                for ci in items_db
+            ]
+        precio_f = float(combo_data.get("precio", 0))
+        carrito = list(self.mostrador_carrito)
+        carrito.append(CarritoItem(
+            producto_id=0,
+            nombre=str(combo_data.get("nombre", "")),
+            cantidad=1,
+            precio_unitario=precio_f,
+            subtotal=precio_f,
+            subtotal_texto=_money_text(precio_f),
+            combo_items_json=_json.dumps(combo_snapshot, ensure_ascii=False),
+            es_combo=True,
+        ))
+        self.mostrador_carrito = carrito
+        self.mensaje = f"Combo \"{combo_data.get('nombre', '')}\" agregado a mostrador."
+
     # ─── Modificadores — Selección al pedir ───────────────────────────────────
 
     def _abrir_seleccion_modificadores(self, producto_id: int, producto_nombre: str, precio: float, origen: str = "mozos") -> None:
@@ -5837,6 +6473,22 @@ class FoodState(CajaTurnoMixin, rx.State):
             return
         self.producto_form_id = prod.id
         self.producto_form_nombre = prod.nombre
+        self.producto_form_descripcion = prod.descripcion
+        self.producto_form_precio = str(prod.precio)
+        self.producto_form_categoria_nombre = prod.categoria_nombre
+        self.producto_form_disponible = prod.disponible
+        self.producto_form_imagen_url = prod.imagen_url
+        with self._tenant_session() as session:
+            prod_db = session.get(Producto, producto_id)
+            self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
+        self.carta_prod_modal = True
+
+    def duplicar_producto(self, producto_id: int) -> None:
+        prod = next((p for p in self.productos if p.id == producto_id), None)
+        if prod is None:
+            return
+        self.producto_form_id = 0
+        self.producto_form_nombre = f"Copia de {prod.nombre}"
         self.producto_form_descripcion = prod.descripcion
         self.producto_form_precio = str(prod.precio)
         self.producto_form_categoria_nombre = prod.categoria_nombre
@@ -7406,6 +8058,27 @@ class MenuPublicoState(rx.State):
     categorias_menu: list[CategoriaPublicaView] = []
     cargando: bool = True
     no_encontrado: bool = False
+    busqueda_menu: str = ""
+
+    def set_busqueda_menu(self, v: str) -> None:
+        self.busqueda_menu = v
+
+    @rx.var
+    def categorias_menu_filtradas(self) -> list[CategoriaPublicaView]:
+        q = self.busqueda_menu.strip().lower()
+        if not q:
+            return self.categorias_menu
+        result: list[CategoriaPublicaView] = []
+        for cat in self.categorias_menu:
+            prods = [
+                p for p in cat.productos
+                if q in p.nombre.lower() or q in (p.descripcion or "").lower()
+            ]
+            if prods:
+                result.append(CategoriaPublicaView(
+                    nombre=cat.nombre, emoji=cat.emoji, productos=prods,
+                ))
+        return result
 
     def on_load(self) -> None:
         slug = self.router.page.params.get("slug", "")
@@ -7414,6 +8087,7 @@ class MenuPublicoState(rx.State):
         self.nombre_local = ""
         self.logo_url_local = ""
         self.categorias_menu = []
+        self.busqueda_menu = ""
 
         if not slug:
             self.no_encontrado = True

@@ -337,7 +337,10 @@ El panel dono ya existe; una vista resumida mobile-first (ventas en vivo, mesas 
 
 **Sprint C — Modelo de producto profesional (P1 grande): EN PROGRESO**
 - ✅ FEAT-01 + BE-07 (modificadores de producto — 3 tablas: GrupoModificador, OpcionModificador, ProductoGrupoModificador + DetallePedido.modificadores_json; admin CRUD en /carta con modal grupo+opciones y asignación a productos; modal selección en mozos y mostrador con validación min/max; display en carrito, KDS y tickets; migración 72325b029491)
-- FEAT-02 (combos) → FEAT-03 (happy hour) → CJ-02 + BE-06 (split por ítems).
+- ✅ FEAT-02 (combos a precio fijo — 2 tablas: Combo, ComboItem + DetallePedido.combo_items_json; admin CRUD en /carta con modal nombre/precio/emoji/items; catálogo en mozos y mostrador con cards; display combo badge en carrito; KDS muestra componentes; stock se descuenta por componentes; ticket cobro muestra detalles combo; migración 211cb3440c87)
+- ✅ CJ-06 (confirmación post-cobro — ya implementado: toast success + auto-print ticket al confirmar cobro)
+- ✅ CJ-07 (ticket cierre turno — ya implementado: generate_cash_close_ticket_html + build_print_script al cerrar turno)
+- FEAT-03 (happy hour) → CJ-02 + BE-06 (split por ítems).
 
 **Continuo:** BE-01 (un mixin extraído por sprint), UI-01 fase d (migración de hex a constantes en cada página tocada), UI-14 (copy).
 

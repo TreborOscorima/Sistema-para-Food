@@ -65,6 +65,12 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     no_of_lines=1,
                 ),
                 rx.cond(
+                    item.es_combo,
+                    rx.badge("🍱 Combo", background="#92400E", color="#FDE68A",
+                             border_radius="4px", font_size="9px", padding="1px 5px"),
+                    rx.fragment(),
+                ),
+                rx.cond(
                     item.modificadores_texto != "",
                     rx.text(
                         "⚙ " + item.modificadores_texto,
@@ -351,6 +357,29 @@ def _mostrador_content() -> rx.Component:
                     flex="1",
                     width="100%",
                 ),
+                # Combos
+                rx.cond(
+                    FoodState.combos_menu.length() > 0,
+                    rx.vstack(
+                        rx.hstack(
+                            rx.text("🍱", font_size="14px"),
+                            rx.text("Combos", font_size="12px", font_weight="700", color="#FDE68A"),
+                            rx.badge(
+                                FoodState.combos_menu.length().to_string(),
+                                background="#92400E", color="#FDE68A",
+                                border_radius="8px", font_size="10px", padding_x="6px",
+                            ),
+                            spacing="2", align="center",
+                        ),
+                        rx.grid(
+                            rx.foreach(FoodState.combos_menu, _combo_card_m),
+                            columns=rx.breakpoints(initial="1", sm="2"),
+                            gap="6px", width="100%",
+                        ),
+                        spacing="2", width="100%",
+                    ),
+                    rx.fragment(),
+                ),
                 spacing="2",
                 flex="3",
                 min_width="0",
@@ -499,6 +528,34 @@ def _mostrador_content() -> rx.Component:
         ),
         spacing="4",
         width="100%",
+    )
+
+
+def _combo_card_m(combo: dict) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(combo["emoji"].to(str), font_size="18px", line_height="1", flex_shrink="0"),
+            rx.vstack(
+                rx.text(combo["nombre"].to(str), font_size="12px", font_weight="600", color="#F1F5F9", no_of_lines=1),
+                rx.text(combo["items_texto"].to(str), font_size="10px", color="#94A3B8", no_of_lines=1),
+                rx.text(combo["precio_texto"].to(str), font_size="12px", font_weight="700", color="#EA580C"),
+                spacing="0", align="start", flex="1", min_width="0",
+            ),
+            rx.box(
+                rx.icon(tag="plus", size=16, color="#FFFFFF"),
+                on_click=FoodState.agregar_combo_mostrador(combo["id"].to(int)),
+                width="36px", height="36px", border_radius="8px",
+                background="#EA580C", display="flex", align_items="center",
+                justify_content="center", flex_shrink="0", cursor="pointer",
+                _hover={"background": "#C2410C"},
+                transition="all 0.12s ease",
+            ),
+            spacing="2", align="center", width="100%",
+        ),
+        background="#1E293B", border="1px solid #334155", border_radius="10px",
+        padding="8px 10px",
+        _hover={"border_color": "#FDE68A"},
+        transition="all 0.12s ease",
     )
 
 

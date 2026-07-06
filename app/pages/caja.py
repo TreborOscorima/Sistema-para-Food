@@ -42,11 +42,33 @@ def _metodo_btn(value: str, label: str, icon: str) -> rx.Component:
     )
 
 
-def _caja_item_row(item: CajaItemView) -> rx.Component:
+def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
+    asignado = item.asignado_pago > 0
     return rx.box(
         rx.grid(
+            rx.cond(
+                FoodState.caja_split_por_items,
+                rx.cond(
+                    asignado,
+                    rx.badge(
+                        "Pago " + item.asignado_pago.to_string(),
+                        background="#DBEAFE", color="#1E40AF",
+                        font_size="9px", font_weight="700",
+                        border_radius="4px", padding_x="4px", padding_y="1px",
+                    ),
+                    rx.icon(
+                        tag=rx.cond(item.seleccionado, "square_check_big", "square"),
+                        size=16,
+                        color=rx.cond(item.seleccionado, "#EA580C", "#94A3B8"),
+                        cursor="pointer",
+                        on_click=FoodState.toggle_split_item_sel(idx),
+                    ),
+                ),
+                rx.fragment(),
+            ),
             rx.vstack(
-                rx.text(item.producto_nombre, font_size="13px", font_weight="600", color="#0F172A"),
+                rx.text(item.producto_nombre, font_size="13px", font_weight="600",
+                        color=rx.cond(asignado & FoodState.caja_split_por_items, "#94A3B8", "#0F172A")),
                 rx.cond(
                     item.notas != "",
                     rx.text(item.notas, font_size="11px", color="#64748B"),
@@ -57,36 +79,90 @@ def _caja_item_row(item: CajaItemView) -> rx.Component:
             rx.text("×" + item.cantidad.to_string(), font_size="13px", font_weight="600",
                     color="#334155", text_align="center"),
             rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
-                    color="#0F172A", text_align="right"),
-            columns="1fr 50px 80px",
+                    color=rx.cond(asignado & FoodState.caja_split_por_items, "#94A3B8", "#0F172A"),
+                    text_align="right"),
+            columns=rx.cond(
+                FoodState.caja_split_por_items,
+                "32px 1fr 50px 80px",
+                "1fr 50px 80px",
+            ),
             gap="8px", align_items="center", width="100%",
         ),
         padding="12px 16px",
         border_bottom="1px solid #F8FAFC",
+        background=rx.cond(
+            item.seleccionado & FoodState.caja_split_por_items,
+            "#FFF7ED",
+            rx.cond(asignado & FoodState.caja_split_por_items, "#F8FAFC", "transparent"),
+        ),
         width="100%",
+        cursor=rx.cond(
+            FoodState.caja_split_por_items & ~asignado,
+            "pointer", "default",
+        ),
+        on_click=rx.cond(
+            FoodState.caja_split_por_items & ~asignado,
+            FoodState.toggle_split_item_sel(idx),
+            None,
+        ),
     )
 
 
 def _pago_staged_chip(pago: PagoStagedView, idx) -> rx.Component:
-    return rx.hstack(
-        rx.text(pago.metodo_label, font_size="12px", font_weight="700", color="#334155"),
-        rx.text(pago.monto_texto, font_size="12px", font_weight="800", color="#0F172A"),
-        rx.icon(
-            tag="x", size=13, color="#94A3B8", cursor="pointer",
-            on_click=FoodState.quitar_pago_staged(idx),
+    return rx.vstack(
+        rx.hstack(
+            rx.text(pago.metodo_label, font_size="12px", font_weight="700", color="#334155"),
+            rx.text(pago.monto_texto, font_size="12px", font_weight="800", color="#0F172A"),
+            rx.icon(
+                tag="x", size=13, color="#94A3B8", cursor="pointer",
+                on_click=FoodState.quitar_pago_staged(idx),
+            ),
+            spacing="2", align="center",
         ),
-        spacing="2", align="center",
+        rx.cond(
+            pago.items_texto != "",
+            rx.text(pago.items_texto, font_size="10px", color="#64748B",
+                    no_of_lines=1, max_width="200px"),
+            rx.fragment(),
+        ),
+        spacing="0", align="start",
         background="#F8FAFC", border="1px solid #E2E8F0",
-        border_radius="20px", padding="6px 12px",
+        border_radius="12px", padding="6px 12px",
     )
 
 
 def _pagos_divididos_panel() -> rx.Component:
     """Panel de pagos múltiples: cuenta dividida entre comensales o pago mixto."""
     return rx.box(
-        rx.text("Pagos de la cuenta", font_size="12px", font_weight="700", color="#64748B",
-                text_transform="uppercase", letter_spacing="0.05em", margin_bottom="12px"),
+        rx.hstack(
+            rx.text("Pagos de la cuenta", font_size="12px", font_weight="700", color="#64748B",
+                    text_transform="uppercase", letter_spacing="0.05em"),
+            rx.spacer(),
+            rx.hstack(
+                rx.switch(
+                    checked=FoodState.caja_split_por_items,
+                    on_change=FoodState.set_caja_split_por_items,
+                    color_scheme="blue", size="1",
+                ),
+                rx.text("Por ítems", font_size="10px", color="#64748B", font_weight="600"),
+                spacing="1", align="center",
+            ),
+            width="100%", align="center", margin_bottom="12px",
+        ),
         rx.vstack(
+            # Subtotal de selección (solo en split por ítems)
+            rx.cond(
+                FoodState.caja_split_por_items & FoodState.caja_split_hay_seleccion,
+                rx.hstack(
+                    rx.text("Subtotal selección:", font_size="11px", font_weight="600", color="#EA580C"),
+                    rx.text(FoodState.caja_split_subtotal_sel_texto, font_size="13px",
+                            font_weight="800", color="#EA580C"),
+                    spacing="2", align="center", width="100%",
+                    background="#FFF7ED", border="1px solid #FED7AA",
+                    border_radius="8px", padding="6px 10px",
+                ),
+                rx.fragment(),
+            ),
             rx.hstack(
                 rx.select(
                     ["efectivo", "tarjeta", "qr", "fiado"],
@@ -94,19 +170,23 @@ def _pagos_divididos_panel() -> rx.Component:
                     on_change=FoodState.set_caja_pago_staged_metodo,
                     width="130px",
                 ),
-                rx.input(
-                    placeholder="Monto (vacío = restante)",
-                    value=FoodState.caja_pago_staged_monto,
-                    on_change=FoodState.set_caja_pago_staged_monto,
-                    type="number", min="0", step="0.50",
-                    flex="1",
-                    background="#F8FAFC", border="1px solid #E2E8F0",
-                    border_radius="8px", font_size="13px",
-                    padding_x="10px",
-                    _focus={"border_color": "#EA580C"},
+                rx.cond(
+                    FoodState.caja_split_por_items,
+                    rx.fragment(),
+                    rx.input(
+                        placeholder="Monto (vacío = restante)",
+                        value=FoodState.caja_pago_staged_monto,
+                        on_change=FoodState.set_caja_pago_staged_monto,
+                        type="number", min="0", step="0.50",
+                        flex="1",
+                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        border_radius="8px", font_size="13px",
+                        padding_x="10px",
+                        _focus={"border_color": "#EA580C"},
+                    ),
                 ),
                 rx.button(
-                    "Agregar",
+                    rx.cond(FoodState.caja_split_por_items, "Asignar pago", "Agregar"),
                     on_click=FoodState.agregar_pago_staged,
                     background="#EA580C", color="#FFFFFF",
                     border_radius="8px", font_size="13px", font_weight="700",
@@ -114,14 +194,33 @@ def _pagos_divididos_panel() -> rx.Component:
                 ),
                 spacing="2", width="100%", align="center", flex_wrap="wrap",
             ),
+            # Botón "Seleccionar restantes" en split mode
+            rx.cond(
+                FoodState.caja_split_por_items & ~FoodState.caja_split_todos_asignados,
+                rx.button(
+                    "Seleccionar restantes",
+                    on_click=FoodState.seleccionar_todos_restantes,
+                    background="transparent", color="#1D4ED8",
+                    border="0.5px solid #BFDBFE", border_radius="6px",
+                    font_size="11px", font_weight="600", cursor="pointer",
+                    padding_x="8px", padding_y="4px",
+                    _hover={"background": "#EFF6FF"},
+                ),
+                rx.fragment(),
+            ),
             rx.cond(
                 FoodState.caja_pagos_staged.length() > 0,
                 rx.flex(
                     rx.foreach(FoodState.caja_pagos_staged, _pago_staged_chip),
                     gap="8px", width="100%", flex_wrap="wrap",
                 ),
-                rx.text("Agrega un pago por comensal o por método.",
-                        font_size="12px", color="#94A3B8"),
+                rx.cond(
+                    FoodState.caja_split_por_items,
+                    rx.text("Selecciona ítems en la lista y asigna un pago por comensal.",
+                            font_size="12px", color="#94A3B8"),
+                    rx.text("Agrega un pago por comensal o por método.",
+                            font_size="12px", color="#94A3B8"),
+                ),
             ),
             rx.hstack(
                 rx.cond(

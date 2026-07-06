@@ -210,6 +210,40 @@ class ProductoGrupoModificador(TimestampedModel, table=True):
     grupo: GrupoModificador | None = Relationship(back_populates="producto_grupos")
 
 
+class Combo(TimestampedModel, table=True):
+    """Combo a precio fijo (ej: hamburguesa+papas+bebida S/25)."""
+
+    __tablename__ = "food_combos"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=160, nullable=False)
+    descripcion: str | None = Field(default=None, max_length=240)
+    precio: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False),
+    )
+    emoji: str | None = Field(default=None, max_length=16)
+    activo: bool = Field(default=True, nullable=False)
+    orden: int = Field(default=0, nullable=False)
+
+    items: list["ComboItem"] = Relationship(back_populates="combo")
+
+
+class ComboItem(TimestampedModel, table=True):
+    """Componente de un combo (producto + cantidad)."""
+
+    __tablename__ = "food_combo_items"
+
+    id: int | None = Field(default=None, primary_key=True)
+    combo_id: int = Field(foreign_key="food_combos.id", index=True, nullable=False)
+    producto_id: int = Field(foreign_key="food_productos.id", index=True, nullable=False)
+    cantidad: int = Field(default=1, nullable=False)
+
+    combo: Combo | None = Relationship(back_populates="items")
+    producto: Producto | None = Relationship()
+
+
 class Pedido(TimestampedModel, table=True):
     """Pedido de mesa o mostrador, scoped por empresa."""
 
@@ -389,6 +423,7 @@ class ConfigImpresora(TimestampedModel, table=True):
     mostrar_iva: bool = Field(default=False, nullable=False)
     nombre_impuesto: str = Field(default="IGV", max_length=20, nullable=False)
     porcentaje_iva: float = Field(default=18.0, nullable=False)
+    kds_minutos_alerta: int = Field(default=15, nullable=False)
 
 
 class Insumo(TimestampedModel, table=True):
@@ -585,6 +620,9 @@ class PagoPedido(TimestampedModel, table=True):
         default=Decimal("0.00"),
         sa_column=Column(Numeric(10, 2), nullable=False),
     )
+    detalle_ids_json: str | None = Field(
+        default=None, sa_column=Column(Text, nullable=True),
+    )
 
 
 class DetallePedido(TimestampedModel, table=True):
@@ -621,6 +659,10 @@ class DetallePedido(TimestampedModel, table=True):
     impreso_cocina: bool = Field(default=False, nullable=False)
     impreso_caja: bool = Field(default=False, nullable=False)
     modificadores_json: str | None = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+    )
+    combo_items_json: str | None = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
     )
