@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import anulacion_modal, app_shell
+from app.components.shared import anulacion_modal, app_shell, loading_placeholder
 from app.states.food_state import FoodState, TopPlatoView, VentaDetalleItemView, VentaHistorialView
 
 _METODOS_FILTRO = [
@@ -143,22 +143,64 @@ def _mozo_row(m) -> rx.Component:
     )
 
 
-def _hora_row(h) -> rx.Component:
-    return rx.hstack(
-        rx.text(h.hora_label, font_size="12px", font_weight="700", color="#334155",
-                min_width="44px"),
-        rx.box(
-            rx.box(
-                background="#EA580C", border_radius="4px", height="10px",
-                width=h.barra_pct.to_string() + "%", min_width="2px",
+def _ventas_hora_chart() -> rx.Component:
+    return rx.recharts.responsive_container(
+        rx.recharts.bar_chart(
+            rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#E2E8F0"),
+            rx.recharts.x_axis(
+                data_key="hora_label", font_size=11, tick_line=False,
+                axis_line=False, stroke="#94A3B8",
             ),
-            flex="1", background="#F1F5F9", border_radius="4px", height="10px",
+            rx.recharts.y_axis(
+                font_size=11, tick_line=False, axis_line=False,
+                stroke="#94A3B8", width=60,
+            ),
+            rx.recharts.graphing_tooltip(
+                content_style={"fontSize": "12px", "borderRadius": "8px"},
+            ),
+            rx.recharts.bar(
+                data_key="total", fill="#EA580C", radius=[4, 4, 0, 0],
+                name="Total (S/)",
+            ),
+            rx.recharts.bar(
+                data_key="pedidos", fill="#FB923C", radius=[4, 4, 0, 0],
+                name="Pedidos",
+            ),
+            data=FoodState.reporte_horas_chart,
+            margin={"top": 4, "right": 4, "left": 0, "bottom": 0},
         ),
-        rx.text(h.total_texto, font_size="12px", font_weight="700", color="#0F172A",
-                min_width="80px", text_align="right"),
-        rx.text(h.pedidos.to_string(), font_size="11px", color="#94A3B8",
-                min_width="24px", text_align="right"),
-        width="100%", align="center", gap="8px",
+        width="100%", height=220,
+    )
+
+
+def _ventas_mozo_chart() -> rx.Component:
+    return rx.recharts.responsive_container(
+        rx.recharts.bar_chart(
+            rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#E2E8F0"),
+            rx.recharts.x_axis(
+                data_key="nombre", font_size=10, tick_line=False,
+                axis_line=False, stroke="#94A3B8", interval=0,
+                angle=-25, text_anchor="end", height=50,
+            ),
+            rx.recharts.y_axis(
+                font_size=11, tick_line=False, axis_line=False,
+                stroke="#94A3B8", width=60,
+            ),
+            rx.recharts.graphing_tooltip(
+                content_style={"fontSize": "12px", "borderRadius": "8px"},
+            ),
+            rx.recharts.bar(
+                data_key="total", fill="#EA580C", radius=[4, 4, 0, 0],
+                name="Total (S/)",
+            ),
+            rx.recharts.bar(
+                data_key="propinas", fill="#F59E0B", radius=[4, 4, 0, 0],
+                name="Propinas (S/)",
+            ),
+            data=FoodState.reporte_mozos_chart,
+            margin={"top": 4, "right": 4, "left": 0, "bottom": 0},
+        ),
+        width="100%", height=220,
     )
 
 
@@ -677,10 +719,7 @@ def _reportes_content() -> rx.Component:
                 ),
                 rx.cond(
                     FoodState.reporte_mozos.length() > 0,
-                    rx.vstack(
-                        rx.foreach(FoodState.reporte_mozos, _mozo_row),
-                        spacing="0", width="100%",
-                    ),
+                    _ventas_mozo_chart(),
                     rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
                 ),
                 background="#F8FAFC", border="1px solid #E2E8F0",
@@ -695,10 +734,7 @@ def _reportes_content() -> rx.Component:
                 ),
                 rx.cond(
                     FoodState.reporte_horas.length() > 0,
-                    rx.vstack(
-                        rx.foreach(FoodState.reporte_horas, _hora_row),
-                        spacing="1", width="100%",
-                    ),
+                    _ventas_hora_chart(),
                     rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
                 ),
                 background="#F8FAFC", border="1px solid #E2E8F0",
@@ -837,4 +873,8 @@ def _reportes_content() -> rx.Component:
 
 @rx.page(route="/reportes", on_load=FoodState.on_load_reportes, title="TUWAYKIFOOD | Reportes")
 def reportes_page() -> rx.Component:
-    return app_shell(_reportes_content(), page_key="reportes")
+    return rx.cond(
+        FoodState.pagina_cargada,
+        app_shell(_reportes_content(), page_key="reportes"),
+        app_shell(loading_placeholder(), page_key="reportes"),
+    )

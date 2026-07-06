@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import _CSS_SCRIPT
+from app.components.shared import _CSS_SCRIPT, _connection_banner_es
 from app.states.food_state import CompanyOptionView, FoodState
 
 
@@ -421,6 +421,24 @@ def _brand_logo_box() -> rx.Component:
 def login_page() -> rx.Component:
     return rx.box(
         rx.script(_CSS_SCRIPT),
+        _connection_banner_es(),
+        rx.el.input(
+            id="login-key-capture",
+            value="",
+            on_key_down=FoodState.login_keydown,
+            auto_focus=True,
+            position="fixed",
+            opacity="0",
+            width="1px",
+            height="1px",
+            overflow="hidden",
+            pointer_events="none",
+            z_index="-1",
+        ),
+        rx.script(
+            "setInterval(function(){var e=document.getElementById('login-key-capture');"
+            "if(e&&document.activeElement!==e)e.focus();},500);"
+        ),
         rx.center(
             rx.vstack(
                 _brand_logo_box(),

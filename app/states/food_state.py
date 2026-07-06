@@ -28,14 +28,18 @@ from app.models.food import (
     CuponLote,
     CuentaCorriente,
     DetallePedido,
+    EstacionCocina,
     EstadoMesa,
     EstadoPedido,
     EstadoProduccion,
+    GrupoModificador,
     Insumo,
     Mesa,
     MovimientoCuenta,
+    OpcionModificador,
     Pedido,
     Producto,
+    ProductoGrupoModificador,
     Promocion,
     RecetaItem,
     RolUsuario,
@@ -129,6 +133,9 @@ MESA_CARD_BORDERS = {
     EstadoMesa.ESPERANDO_CUENTA.value: "2px solid #F59E0B",
 }
 READY_ALERT_BORDER = "3px solid #F59E0B"
+
+_SOUND_BELL_JS = """(function(){try{var c=new(window.AudioContext||window.webkitAudioContext)();var o=c.createOscillator();var g=c.createGain();o.type='triangle';o.frequency.value=880;g.gain.setValueAtTime(0.3,c.currentTime);g.gain.exponentialRampToValueAtTime(0.01,c.currentTime+0.4);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+0.4)}catch(e){}})()"""
+_SOUND_CHIME_JS = """(function(){try{var c=new(window.AudioContext||window.webkitAudioContext)();function b(f,t){var o=c.createOscillator();var g=c.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.25,c.currentTime+t);g.gain.exponentialRampToValueAtTime(0.01,c.currentTime+t+0.3);o.connect(g);g.connect(c.destination);o.start(c.currentTime+t);o.stop(c.currentTime+t+0.3)}b(659,0);b(784,0.15);b(988,0.3)}catch(e){}})()"""
 
 PRODUCTION_LABELS = {
     EstadoProduccion.PENDIENTE.value: "Pendiente",
@@ -516,6 +523,7 @@ class MesaView(BaseModel):
     items_listos_count: int
     items_total_count: int = 0
     tiempo_abierto_texto: str = ""
+    sector: str = "Salón"
 
 
 class PagoStagedView(BaseModel):
@@ -542,6 +550,7 @@ class MesaAdminView(BaseModel):
     capacidad: int
     activa: bool
     estado: str
+    sector: str = "Salón"
 
 
 class InsumoView(BaseModel):
@@ -573,13 +582,16 @@ class KardexView(BaseModel):
 class MozoRankView(BaseModel):
     nombre: str = ""
     pedidos: int = 0
+    total: float = 0.0
     total_texto: str = ""
+    propinas: float = 0.0
     propinas_texto: str = ""
 
 
 class FranjaHoraView(BaseModel):
     hora_label: str = ""
     pedidos: int = 0
+    total: float = 0.0
     total_texto: str = ""
     barra_pct: int = 0
 
@@ -701,6 +713,31 @@ class CategoriaView(BaseModel):
     activa: bool
     productos_count: int = 0
     emoji: str = "🍽️"
+    estacion: str = "cocina"
+
+
+class OpcionModificadorView(BaseModel):
+    id: int
+    nombre: str
+    precio_extra: float
+    precio_extra_texto: str
+
+class GrupoModificadorView(BaseModel):
+    id: int
+    nombre: str
+    min_selecciones: int
+    max_selecciones: int
+    opciones: list[dict[str, object]] = []
+
+class GrupoModificadorAdminView(BaseModel):
+    id: int
+    nombre: str
+    min_selecciones: int
+    max_selecciones: int
+    activo: bool
+    orden: int
+    opciones_count: int = 0
+    productos_count: int = 0
 
 
 class ProductoView(BaseModel):
@@ -714,6 +751,7 @@ class ProductoView(BaseModel):
     disponible: bool
     imagen_url: str
     emoji: str = "🍽️"
+    tiene_modificadores: bool = False
 
 
 class CarritoItem(BaseModel):
@@ -724,6 +762,8 @@ class CarritoItem(BaseModel):
     subtotal: float
     subtotal_texto: str
     nota: str = ""
+    modificadores_texto: str = ""
+    modificadores_json: str = ""
 
 
 class HistorialItem(BaseModel):
@@ -756,7 +796,9 @@ class CocinaTicketView(BaseModel):
     accent_bg: str
     accent_border: str
     detalle_ids_csv: str
-    items_lines: list[str]
+    items_lines: list[str] = []
+    items_ids: list[str] = []
+    bumpable: bool = False
     minutos_texto: str = ""
     demorado: bool = False
 
@@ -937,6 +979,8 @@ class FoodState(CajaTurnoMixin, rx.State):
     pedidos_mostrador_entregados: list[MostradorEntregadoView] = []
 
     mesa_seleccionada_id: int = 0
+    transfer_modal_abierto: bool = False
+    mozos_filtro_sector: str = ""
     mesa_atendida_por_nombre: str = ""
     categoria_activa_id: int = 0
     mostrador_categoria_activa_id: int = 0
@@ -996,6 +1040,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     categoria_form_nombre: str = ""
     categoria_form_descripcion: str = ""
     categoria_form_orden: str = "1"
+    categoria_form_estacion: str = "cocina"
 
     producto_form_id: int = 0
     producto_form_categoria_nombre: str = ""
@@ -1006,11 +1051,40 @@ class FoodState(CajaTurnoMixin, rx.State):
     producto_form_imagen_url: str = ""
     producto_form_emoji: str = ""
 
+    # Modificadores (admin)
+    grupos_modificadores: list[GrupoModificadorAdminView] = []
+    mod_grupo_modal: bool = False
+    mod_grupo_form_id: int = 0
+    mod_grupo_form_nombre: str = ""
+    mod_grupo_form_min: str = "0"
+    mod_grupo_form_max: str = "1"
+    mod_opciones_form: list[dict[str, str]] = []
+    mod_asignar_modal: bool = False
+    mod_asignar_producto_id: int = 0
+    mod_asignar_producto_nombre: str = ""
+    mod_asignar_grupo_ids: list[int] = []
+
+    # Modificadores (selección al pedir)
+    mod_seleccion_modal: bool = False
+    mod_seleccion_producto_id: int = 0
+    mod_seleccion_producto_nombre: str = ""
+    mod_seleccion_producto_precio: float = 0.0
+    mod_seleccion_grupos: list[dict[str, object]] = []
+    mod_seleccion_elegidos: dict[str, list[int]] = {}
+    mod_seleccion_origen: str = "mozos"
+
+    pagina_cargada: bool = False
     mozos_polling_enabled: bool = False
     cocina_polling_enabled: bool = False
+    cocina_fullscreen: bool = False
     caja_polling_enabled: bool = False
     mostrador_polling_enabled: bool = False
     cocina_auto_print_max_id: int = 0
+    cocina_filtro_estacion: str = ""
+
+    sonidos_activos: bool = True
+    _prev_tickets_pendientes: int = -1
+    _prev_mesas_alerta_entrega: int = -1
 
     usuarios_admin: list[UsuarioAdminView] = []
     usuario_form_id: int = 0
@@ -1034,7 +1108,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_cobro_mesa_id: int = 0
     caja_cobro_metodo: str = "efectivo"
     caja_cobro_propina: str = ""
+    caja_cobro_propina_pct: int = 0
     caja_cobro_descuento: str = ""
+    caja_cobro_descuento_es_pct: bool = False
     caja_cobro_efectivo_recibido: str = ""
     caja_cobro_error: str = ""
     caja_cobro_items: list[CajaItemView] = []
@@ -1124,6 +1200,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     mesa_config_form_numero: str = ""
     mesa_config_form_nombre: str = ""
     mesa_config_form_capacidad: str = "4"
+    mesa_config_form_sector: str = "Salón"
 
     # Inventario de insumos / recetas
     inv_insumos: list[InsumoView] = []
@@ -1236,6 +1313,14 @@ class FoodState(CajaTurnoMixin, rx.State):
     @rx.var
     def historial_ventas_recientes(self) -> list[VentaHistorialView]:
         return self.historial_ventas[:5]
+
+    @rx.var
+    def reporte_horas_chart(self) -> list[dict[str, object]]:
+        return [{"hora_label": h.hora_label, "total": h.total, "pedidos": h.pedidos} for h in self.reporte_horas]
+
+    @rx.var
+    def reporte_mozos_chart(self) -> list[dict[str, object]]:
+        return [{"nombre": m.nombre, "total": m.total, "propinas": m.propinas} for m in self.reporte_mozos]
 
     @rx.var
     def inv_insumos_filtrados(self) -> list[InsumoView]:
@@ -1400,6 +1485,15 @@ class FoodState(CajaTurnoMixin, rx.State):
         return sum(1 for m in self.mesas if m.estado != EstadoMesa.LIBRE.value)
 
     @rx.var
+    def mesas_destino_transfer(self) -> list[MesaView]:
+        return [m for m in self.mesas if m.id != self.mesa_seleccionada_id]
+
+    @rx.var
+    def mesa_seleccionada_ocupada(self) -> bool:
+        mesa = next((m for m in self.mesas if m.id == self.mesa_seleccionada_id), None)
+        return mesa is not None and mesa.estado != EstadoMesa.LIBRE.value
+
+    @rx.var
     def mesas_por_cobrar(self) -> list[MesaView]:
         return [m for m in self.mesas if m.estado != EstadoMesa.LIBRE.value and m.total_abierto > 0]
 
@@ -1430,6 +1524,95 @@ class FoodState(CajaTurnoMixin, rx.State):
     @rx.var
     def mesas_con_alerta_entrega(self) -> int:
         return sum(1 for m in self.mesas if m.tiene_items_listos)
+
+    @rx.var
+    def sectores_unicos(self) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for m in self.mesas:
+            if m.sector not in seen:
+                seen.add(m.sector)
+                result.append(m.sector)
+        return result
+
+    @rx.var
+    def mesas_filtradas_por_sector(self) -> list[MesaView]:
+        if not self.mozos_filtro_sector:
+            return self.mesas
+        return [m for m in self.mesas if m.sector == self.mozos_filtro_sector]
+
+    @rx.var
+    def sectores_config(self) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for m in self.mesas_config:
+            if m.sector not in seen:
+                seen.add(m.sector)
+                result.append(m.sector)
+        return result
+
+    @rx.var
+    def mod_seleccion_items_flat(self) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for g in self.mod_seleccion_grupos:
+            gid = str(g.get("id", ""))
+            result.append({
+                "type": "header",
+                "nombre": str(g.get("nombre", "")),
+                "min": int(g.get("min", 0)),
+                "max": int(g.get("max", 1)),
+                "grupo_id": gid,
+                "opcion_id": 0,
+                "precio_extra": 0.0,
+                "selected": False,
+                "key": f"h_{gid}",
+            })
+            opciones = g.get("opciones", [])
+            if not isinstance(opciones, list):
+                opciones = []
+            elegidos = self.mod_seleccion_elegidos.get(gid, [])
+            for op in opciones:
+                if not isinstance(op, dict):
+                    continue
+                oid = int(op.get("id", 0))
+                result.append({
+                    "type": "option",
+                    "nombre": str(op.get("nombre", "")),
+                    "min": 0,
+                    "max": 0,
+                    "grupo_id": gid,
+                    "opcion_id": oid,
+                    "precio_extra": float(op.get("precio_extra", 0)),
+                    "selected": oid in elegidos,
+                    "key": f"o_{gid}_{oid}",
+                })
+        return result
+
+    @rx.var
+    def mod_seleccion_extra_total(self) -> float:
+        total = 0.0
+        for g in self.mod_seleccion_grupos:
+            gid = str(g.get("id", ""))
+            elegidos = self.mod_seleccion_elegidos.get(gid, [])
+            opciones = g.get("opciones", [])
+            if not isinstance(opciones, list):
+                continue
+            for op in opciones:
+                if not isinstance(op, dict):
+                    continue
+                if int(op.get("id", 0)) in elegidos:
+                    total += float(op.get("precio_extra", 0))
+        return total
+
+    @rx.var
+    def mod_seleccion_valido(self) -> bool:
+        for g in self.mod_seleccion_grupos:
+            gid = str(g.get("id", ""))
+            elegidos = self.mod_seleccion_elegidos.get(gid, [])
+            min_req = int(g.get("min", 0))
+            if len(elegidos) < min_req:
+                return False
+        return True
 
     @rx.var
     def categorias_activas(self) -> list[CategoriaView]:
@@ -1540,13 +1723,13 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     @rx.var
     def productos_modal_filtrados(self) -> list[ProductoView]:
-        disponibles = [p for p in self.productos if p.disponible]
+        resultado = list(self.productos)
         if self.categoria_activa_id != 0:
-            disponibles = [p for p in disponibles if p.categoria_id == self.categoria_activa_id]
+            resultado = [p for p in resultado if p.categoria_id == self.categoria_activa_id]
         q = self.busqueda_producto_modal.strip().lower()
         if q:
-            disponibles = [p for p in disponibles if q in p.nombre.lower()]
-        return disponibles
+            resultado = [p for p in resultado if q in p.nombre.lower()]
+        return sorted(resultado, key=lambda p: (not p.disponible, p.nombre))
 
     @rx.var
     def carta_productos_filtrados_count(self) -> int:
@@ -1644,7 +1827,11 @@ class FoodState(CajaTurnoMixin, rx.State):
     def caja_cobro_descuento_decimal(self) -> float:
         try:
             v = float(self.caja_cobro_descuento.replace(",", ".").strip())
-            return round(max(v, 0.0), 2)
+            v = max(v, 0.0)
+            if self.caja_cobro_descuento_es_pct:
+                v = min(v, 100.0)
+                v = self.caja_cobro_total_base * v / 100
+            return round(v, 2)
         except (ValueError, AttributeError):
             return 0.0
 
@@ -1680,6 +1867,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_mesas()
         self.cargar_menu()
         self.cargar_cocina()
+        self.cargar_grupos_modificadores()
         self._bootstrap_forms()
         if self.mesa_seleccionada_id:
             self._cargar_carrito_mesa(self.mesa_seleccionada_id)
@@ -1728,6 +1916,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_mesa_id = 0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
+        self.caja_cobro_propina_pct = 0
         self.caja_cobro_efectivo_recibido = ""
         self.nota_pedido_mesa = ""
 
@@ -1808,46 +1997,59 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.login_error = ""
 
     def on_load_mozos(self):
+        self.pagina_cargada = False
         self.stop_caja_polling()
         self.stop_cocina_polling()
         self.stop_mostrador_polling()
-        return self._route_access_result("mozos")
+        result = self._route_access_result("mozos")
+        self.pagina_cargada = True
+        return result
 
     def on_load_caja(self):
+        self.pagina_cargada = False
         self.stop_mozos_polling()
         self.stop_cocina_polling()
         self.stop_mostrador_polling()
         self._init_cocina_auto_print()
         result = self._route_access_result("caja")
         if result is not None:
+            self.pagina_cargada = True
             return result
         self.cargar_turno_caja()
         self.cargar_pedidos_mostrador_pendientes()
+        self.pagina_cargada = True
         return None
 
     def on_load_mostrador(self):
+        self.pagina_cargada = False
         self.stop_mozos_polling()
         self.stop_caja_polling()
         self.stop_cocina_polling()
         result = self._route_access_result("mostrador")
         if result is not None:
+            self.pagina_cargada = True
             return result
         self.cargar_turno_caja()
         self.cargar_pedidos_mostrador_pendientes()
         self.cargar_pedidos_mostrador_entregados()
+        self.pagina_cargada = True
         return None
 
     def on_load_cocina(self):
+        self.pagina_cargada = False
         self.stop_mozos_polling()
         self.stop_caja_polling()
         self.stop_mostrador_polling()
         self._init_cocina_auto_print()
-        return self._route_access_result("cocina")
+        result = self._route_access_result("cocina")
+        self.pagina_cargada = True
+        return result
 
     def on_load_carta(self):
         return self._route_access_result("carta")
 
     def on_load_reportes(self):
+        self.pagina_cargada = False
         result = self._route_access_result(
             "reportes",
             also_allowed=self.usuario_actual is not None and self.usuario_actual.perm_reportes,
@@ -1858,6 +2060,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_dashboard()
         self.cargar_historial_ventas()
         self.cargar_analitica()
+        self.pagina_cargada = True
         return None
 
     def on_load_usuarios(self):
@@ -1910,6 +2113,18 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def clear_login_pin(self) -> None:
         self.login_pin_input = ""
+
+    def login_keydown(self, key: str):
+        if self.login_step != "pin":
+            return
+        if key in "0123456789":
+            return self.append_login_digit(key)
+        if key == "Backspace":
+            return self.backspace_login_pin()
+        if key == "Enter":
+            return self.submit_login_pin()
+        if key == "Escape" or key == "Delete":
+            return self.clear_login_pin()
 
     def seleccionar_login_rol(self, rol: str) -> None:
         self.login_rol_seleccionado = rol
@@ -2248,6 +2463,38 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.config_menu_qr_base64 = _generar_qr_base64(url)
         self.mensaje = "Configuración guardada."
 
+    def imprimir_ticket_prueba(self):
+        try:
+            paper_mm = int(self.config_ticket_paper_width_mm.strip())
+        except (ValueError, AttributeError):
+            paper_mm = 80
+        nombre = self.config_nombre_local.strip() or "Mi Restaurante"
+        items_demo = [
+            TicketLine(name="Lomo Saltado", quantity=2, unit_price=32.0, subtotal=64.0),
+            TicketLine(name="Inka Cola 500ml", quantity=2, unit_price=5.0, subtotal=10.0, note="bien fría"),
+            TicketLine(name="Ceviche Clásico", quantity=1, unit_price=38.0, subtotal=38.0),
+        ]
+        html = generate_cashier_ticket_html(
+            order_reference="Mesa 1",
+            pedido_id=0,
+            items=items_demo,
+            total=112.0,
+            attended_by="Ticket de Prueba",
+            company_name=nombre,
+            company_ruc=self.config_ruc.strip(),
+            company_sucursal=self.config_sucursal.strip(),
+            company_direccion=self.config_direccion.strip(),
+            company_telefono=self.config_telefono.strip(),
+            descuento=0.0,
+            metodo_pago="efectivo",
+            mensaje_footer=self.config_mensaje_ticket.strip() or "¡Gracias por su preferencia!",
+            mostrar_iva=self.config_mostrar_iva,
+            nombre_impuesto=self.config_nombre_impuesto.strip() or "IGV",
+            porcentaje_iva=float(self.config_porcentaje_iva.strip() or "18"),
+            paper_width_mm=paper_mm,
+        )
+        return rx.call_script(build_print_script(html))
+
     def set_config_nombre_local(self, v: str) -> None:
         self.config_nombre_local = v
 
@@ -2336,6 +2583,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     capacidad=m.capacidad,
                     activa=m.activa,
                     estado=m.estado,
+                    sector=m.sector or "Salón",
                 )
                 for m in mesas
             ]
@@ -2345,6 +2593,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.mesa_config_form_numero = ""
         self.mesa_config_form_nombre = ""
         self.mesa_config_form_capacidad = "4"
+        self.mesa_config_form_sector = "Salón"
 
     def cancelar_mesa_config_form(self) -> None:
         self._reset_mesa_config_form()
@@ -2358,6 +2607,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.mesa_config_form_numero = str(m.numero)
         self.mesa_config_form_nombre = m.nombre or ""
         self.mesa_config_form_capacidad = str(m.capacidad)
+        self.mesa_config_form_sector = m.sector or "Salón"
 
     def guardar_mesa_config(self) -> None:
         try:
@@ -2391,6 +2641,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             m.numero = numero
             m.nombre = nombre
             m.capacidad = capacidad
+            m.sector = self.mesa_config_form_sector.strip() or "Salón"
             m.updated_at = _utcnow()
             session.add(m)
             session.commit()
@@ -2439,6 +2690,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     def set_mesa_config_form_capacidad(self, v: str) -> None:
         self.mesa_config_form_capacidad = v
 
+    def set_mesa_config_form_sector(self, v: str) -> None:
+        self.mesa_config_form_sector = v
+
     def _ticket_paper_width_mm(self) -> int:
         try:
             with self._tenant_session() as session:
@@ -2453,19 +2707,27 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     # ─── Polling ──────────────────────────────────────────────────────────────
 
-    def _refresh_mozos_slice(self) -> None:
+    def _refresh_mozos_slice(self) -> bool:
         if self.usuario_actual is None:
-            return
+            return False
+        prev = self._prev_mesas_alerta_entrega
         self.cargar_mesas()
         if self.mesa_seleccionada_id:
             self._cargar_carrito_mesa(self.mesa_seleccionada_id)
             self._cargar_historial_mesa(self.mesa_seleccionada_id)
+        current = sum(1 for m in self.mesas if m.tiene_items_listos)
+        self._prev_mesas_alerta_entrega = current
+        return self.sonidos_activos and prev >= 0 and current > prev
 
-    def _refresh_cocina_slice(self) -> None:
+    def _refresh_cocina_slice(self) -> bool:
         if self.usuario_actual is None:
-            return
+            return False
+        prev = self._prev_tickets_pendientes
         self.cargar_cocina()
         self.cargar_mesas()
+        current = len([t for t in self.tickets_cocina if t.estado_produccion == "pendiente"])
+        self._prev_tickets_pendientes = current
+        return self.sonidos_activos and prev >= 0 and current > prev
 
     def _refresh_caja_slice(self) -> None:
         if self.usuario_actual is None:
@@ -2592,7 +2854,23 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     @rx.event(background=True)
     async def start_mozos_polling(self) -> None:
-        await self._run_polling_loop("mozos_polling_enabled", 3, self._refresh_mozos_slice)
+        async with self:
+            if self.mozos_polling_enabled:
+                return
+            self.mozos_polling_enabled = True
+            self._refresh_mozos_slice()
+        while True:
+            await asyncio.sleep(3)
+            try:
+                play_sound = False
+                async with self:
+                    if not self.mozos_polling_enabled:
+                        break
+                    play_sound = self._refresh_mozos_slice()
+                if play_sound:
+                    yield rx.call_script(_SOUND_CHIME_JS)
+            except Exception:
+                break
 
     def stop_mozos_polling(self) -> None:
         self.mozos_polling_enabled = False
@@ -2608,18 +2886,28 @@ class FoodState(CajaTurnoMixin, rx.State):
             await asyncio.sleep(3)
             try:
                 print_html = ""
+                play_sound = False
                 async with self:
                     if not self.cocina_polling_enabled:
                         break
-                    self._refresh_cocina_slice()
+                    play_sound = self._refresh_cocina_slice()
                     print_html = self._check_cocina_auto_print()
                 if print_html:
                     yield rx.call_script(build_print_script(print_html))
+                if play_sound:
+                    yield rx.call_script(_SOUND_BELL_JS)
             except Exception:
                 break
 
     def stop_cocina_polling(self) -> None:
         self.cocina_polling_enabled = False
+
+    def toggle_cocina_fullscreen(self) -> None:
+        self.cocina_fullscreen = not self.cocina_fullscreen
+
+    def toggle_sonidos(self) -> None:
+        self.sonidos_activos = not self.sonidos_activos
+        return rx.toast.info("Sonidos activados" if self.sonidos_activos else "Sonidos desactivados")
 
     @rx.event(background=True)
     async def start_caja_polling(self) -> None:
@@ -2744,6 +3032,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     items_listos_count=items_listos_count,
                     items_total_count=items_total_count,
                     tiempo_abierto_texto=tiempo_abierto_texto,
+                    sector=mesa.sector or "Salón",
                 ))
             if hay_stuck:
                 session.commit()
@@ -2776,9 +3065,19 @@ class FoodState(CajaTurnoMixin, rx.State):
                     activa=c.activa,
                     productos_count=conteo_por_categoria.get(c.id or 0, 0),
                     emoji=_emoji_para_categoria(c.nombre),
+                    estacion=c.estacion or "cocina",
                 )
                 for c in categorias_db
             ]
+            productos_con_mods: set[int] = set()
+            if productos_db:
+                pids = [p.id for p in productos_db if p.id]
+                if pids:
+                    for pg in session.exec(
+                        select(ProductoGrupoModificador)
+                        .where(ProductoGrupoModificador.producto_id.in_(pids))
+                    ).all():
+                        productos_con_mods.add(pg.producto_id)
             self.productos = [
                 ProductoView(
                     id=p.id or 0,
@@ -2791,6 +3090,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     disponible=p.disponible,
                     imagen_url=p.imagen_url or "",
                     emoji=p.emoji or _emoji_para_producto(p.nombre),
+                    tiene_modificadores=(p.id or 0) in productos_con_mods,
                 )
                 for p in productos_db
             ]
@@ -2800,6 +3100,9 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def seleccionar_mostrador_categoria(self, categoria_id: int) -> None:
         self.mostrador_categoria_activa_id = categoria_id
+
+    def set_mozos_filtro_sector(self, v: str) -> None:
+        self.mozos_filtro_sector = v
 
     # ─── Mozos — Selección de mesa ────────────────────────────────────────────
 
@@ -2817,6 +3120,66 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.categoria_activa_id = 0
         self.modal_agregar_abierto = True
 
+    def abrir_transfer_modal(self) -> None:
+        self.transfer_modal_abierto = True
+
+    def cerrar_transfer_modal(self) -> None:
+        self.transfer_modal_abierto = False
+
+    def set_transfer_modal_abierto(self, v: bool) -> None:
+        self.transfer_modal_abierto = v
+
+    def transferir_a_mesa(self, mesa_destino_id: int) -> None:
+        if not self.mesa_seleccionada_id or self.mesa_seleccionada_id == mesa_destino_id:
+            return
+        with self._tenant_session() as session:
+            pedido_origen = _get_open_order(session, self.mesa_seleccionada_id, self._company_id())
+            if pedido_origen is None:
+                self.transfer_modal_abierto = False
+                return rx.toast.error("No hay pedido abierto en la mesa origen.")
+            mesa_origen = session.get(Mesa, self.mesa_seleccionada_id)
+            mesa_destino = session.get(Mesa, mesa_destino_id)
+            if mesa_destino is None:
+                self.transfer_modal_abierto = False
+                return rx.toast.error("Mesa destino no encontrada.")
+            pedido_destino = _get_open_order(session, mesa_destino_id, self._company_id())
+            now = _utcnow()
+            if pedido_destino is not None:
+                detalles = session.exec(
+                    select(DetallePedido).where(DetallePedido.pedido_id == pedido_origen.id)
+                ).all()
+                for d in detalles:
+                    d.pedido_id = pedido_destino.id
+                    d.updated_at = now
+                    session.add(d)
+                pedido_origen.estado = EstadoPedido.CANCELADO.value
+                pedido_origen.notas = f"Fusionado con pedido #{pedido_destino.id} (mesa {mesa_destino.numero})"
+                pedido_origen.updated_at = now
+                session.add(pedido_origen)
+                _sync_order_status(session, pedido_destino)
+                label_destino = mesa_destino.nombre or f"Mesa {mesa_destino.numero}"
+                msg = f"Pedido fusionado con {label_destino}."
+            else:
+                pedido_origen.mesa_id = mesa_destino_id
+                pedido_origen.updated_at = now
+                session.add(pedido_origen)
+                mesa_destino.estado = EstadoMesa.OCUPADA.value
+                mesa_destino.updated_at = now
+                session.add(mesa_destino)
+                label_destino = mesa_destino.nombre or f"Mesa {mesa_destino.numero}"
+                msg = f"Pedido transferido a {label_destino}."
+            if mesa_origen is not None:
+                mesa_origen.estado = EstadoMesa.LIBRE.value
+                mesa_origen.updated_at = now
+                session.add(mesa_origen)
+            session.commit()
+        self.transfer_modal_abierto = False
+        self.modal_agregar_abierto = False
+        self.mesa_seleccionada_id = 0
+        self.cargar_mesas()
+        self.cargar_cocina()
+        return rx.toast.success(msg)
+
     def _cargar_carrito_mesa(self, mesa_id: int) -> None:
         with self._tenant_session() as session:
             pedido = _get_open_order(session, mesa_id, self._company_id())
@@ -2825,8 +3188,20 @@ class FoodState(CajaTurnoMixin, rx.State):
                 return
             detalles = _get_unsent_details(session, pedido.id or 0)
             productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            self.carrito = [
-                CarritoItem(
+            items: list[CarritoItem] = []
+            for d in detalles:
+                mods_texto = ""
+                if d.modificadores_json:
+                    try:
+                        import json as _json
+                        mods_list = _json.loads(d.modificadores_json)
+                        mods_texto = ", ".join(
+                            m.get("opcion", "") + (f" +S/{m['precio_extra']:.2f}" if m.get("precio_extra", 0) > 0 else "")
+                            for m in mods_list
+                        )
+                    except Exception:
+                        pass
+                items.append(CarritoItem(
                     producto_id=d.producto_id,
                     nombre=(productos_map[d.producto_id].nombre if d.producto_id in productos_map else f"Producto {d.producto_id}"),
                     cantidad=d.cantidad,
@@ -2834,9 +3209,10 @@ class FoodState(CajaTurnoMixin, rx.State):
                     subtotal=float(_to_decimal(d.subtotal)),
                     subtotal_texto=_money_text(d.subtotal),
                     nota=d.notas or "",
-                )
-                for d in detalles
-            ]
+                    modificadores_texto=mods_texto,
+                    modificadores_json=d.modificadores_json or "",
+                ))
+            self.carrito = items
 
     def _cargar_historial_mesa(self, mesa_id: int) -> None:
         with self._tenant_session() as session:
@@ -2884,6 +3260,10 @@ class FoodState(CajaTurnoMixin, rx.State):
     def agregar_producto(self, producto_id: int) -> None:
         if self.mesa_seleccionada_id == 0:
             self.mensaje = "Selecciona una mesa antes de agregar productos."
+            return
+        prod_view = next((p for p in self.productos if p.id == producto_id), None)
+        if prod_view and prod_view.tiene_modificadores:
+            self._abrir_seleccion_modificadores(producto_id, prod_view.nombre, prod_view.precio)
             return
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
@@ -3161,6 +3541,10 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
 
+    def set_cocina_filtro_estacion(self, v: str) -> None:
+        self.cocina_filtro_estacion = v
+        self.cargar_cocina()
+
     def cargar_cocina(self) -> None:
         with self._tenant_session() as session:
             detalles = session.exec(
@@ -3175,11 +3559,19 @@ class FoodState(CajaTurnoMixin, rx.State):
             mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == self._company_id())).all()}
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            categorias = {c.id: c for c in session.exec(select(Categoria).where(Categoria.company_id == self._company_id())).all()}
+            filtro_est = self.cocina_filtro_estacion
             grupos: dict = {}
             for d in detalles:
                 pedido = pedidos.get(d.pedido_id)
                 if pedido is None or pedido.estado == EstadoPedido.CANCELADO.value:
                     continue
+                producto = productos.get(d.producto_id)
+                if filtro_est:
+                    cat = categorias.get(producto.categoria_id) if producto else None
+                    item_estacion = (producto.estacion if producto and producto.estacion else None) or (cat.estacion if cat else EstacionCocina.COCINA.value)
+                    if item_estacion != filtro_est:
+                        continue
                 marca = d.enviado_cocina_at or d.updated_at
                 lote = marca.isoformat()
                 estado_produccion = d.estado_produccion or EstadoProduccion.PENDIENTE.value
@@ -3206,12 +3598,23 @@ class FoodState(CajaTurnoMixin, rx.State):
                         "accent_border": KITCHEN_CARD_BORDERS.get(estado_produccion, "#FCD34D"),
                         "detalle_ids": [],
                         "items_lines": [],
+                        "items_ids": [],
                     }
                 producto = productos.get(d.producto_id)
                 line = f"{d.cantidad} x {producto.nombre if producto else f'Producto {d.producto_id}'}"
+                if d.modificadores_json:
+                    try:
+                        import json as _json
+                        mods_list = _json.loads(d.modificadores_json)
+                        mods_str = ", ".join(m.get("opcion", "") for m in mods_list if m.get("opcion"))
+                        if mods_str:
+                            line = f"{line} [{mods_str}]"
+                    except Exception:
+                        pass
                 if d.notas:
                     line = f"{line} · Nota: {d.notas}"
                 grupos[key]["items_lines"].append(line)
+                grupos[key]["items_ids"].append(str(d.id or 0))
                 grupos[key]["detalle_ids"].append(str(d.id or 0))
                 grupos[key]["marca"] = marca
             ahora = _utcnow()
@@ -3244,6 +3647,8 @@ class FoodState(CajaTurnoMixin, rx.State):
                     accent_border=data["accent_border"],
                     detalle_ids_csv=",".join(data["detalle_ids"]),
                     items_lines=data["items_lines"],
+                    items_ids=data["items_ids"],
+                    bumpable=data["estado_produccion"] == EstadoProduccion.EN_PREPARACION.value,
                     minutos_texto=data["minutos_texto"],
                     demorado=data["demorado"],
                 )
@@ -3300,6 +3705,14 @@ class FoodState(CajaTurnoMixin, rx.State):
         self._transition_ticket_state(
             detalle_ids_csv, EstadoProduccion.LISTO_PARA_ENTREGAR.value,
             EstadoProduccion.EN_PREPARACION.value, "Ticket devuelto a preparación.",
+        )
+
+    def bump_item_cocina(self, detalle_id: str) -> None:
+        self._transition_ticket_state(
+            detalle_id, EstadoProduccion.EN_PREPARACION.value,
+            EstadoProduccion.LISTO_PARA_ENTREGAR.value, "Ítem marcado como listo.",
+            actor_user_id=((self.usuario_actual.id or None) if self.usuario_actual else None),
+            actor_field_name="preparado_por_id",
         )
 
     def entregar_item_historial(self, detalle_id: int) -> None:
@@ -3366,6 +3779,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_total_override = 0.0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
+        self.caja_cobro_propina_pct = 0
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.mensaje = ""
@@ -3434,7 +3848,9 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_total_override = 0.0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
+        self.caja_cobro_propina_pct = 0
         self.caja_cobro_descuento = ""
+        self.caja_cobro_descuento_es_pct = False
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_cliente_nombre = ""
         self.caja_cobro_cliente_id = 0
@@ -3453,9 +3869,23 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def set_caja_cobro_propina(self, v: str) -> None:
         self.caja_cobro_propina = v
+        self.caja_cobro_propina_pct = 0
+
+    def seleccionar_propina_pct(self, pct: int) -> None:
+        if self.caja_cobro_propina_pct == pct:
+            self.caja_cobro_propina_pct = 0
+            self.caja_cobro_propina = ""
+            return
+        self.caja_cobro_propina_pct = pct
+        base = self.caja_cobro_total_base
+        self.caja_cobro_propina = f"{round(base * pct / 100, 2):.2f}"
 
     def set_caja_cobro_descuento(self, v: str) -> None:
         self.caja_cobro_descuento = v
+
+    def toggle_descuento_modo(self) -> None:
+        self.caja_cobro_descuento_es_pct = not self.caja_cobro_descuento_es_pct
+        self.caja_cobro_descuento = ""
 
     def set_caja_cobro_efectivo_recibido(self, v: str) -> None:
         self.caja_cobro_efectivo_recibido = v
@@ -3966,7 +4396,9 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_mesa_id = 0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
+        self.caja_cobro_propina_pct = 0
         self.caja_cobro_descuento = ""
+        self.caja_cobro_descuento_es_pct = False
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.mensaje = ""
@@ -4041,6 +4473,9 @@ class FoodState(CajaTurnoMixin, rx.State):
         if producto is None:
             self.mensaje = "Producto no disponible para mostrador."
             return
+        if producto.tiene_modificadores:
+            self._abrir_seleccion_modificadores(producto_id, producto.nombre, producto.precio, origen="mostrador")
+            return
         carrito = list(self.mostrador_carrito)
         for i, item in enumerate(carrito):
             if item.producto_id == producto_id:
@@ -4053,6 +4488,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     precio_unitario=producto.precio,
                     subtotal=subtotal,
                     subtotal_texto=_money_text(subtotal),
+                    nota=item.nota,
                 )
                 self.mostrador_carrito = carrito
                 self.mensaje = f"{producto.nombre} agregado a mostrador."
@@ -4064,6 +4500,26 @@ class FoodState(CajaTurnoMixin, rx.State):
             precio_unitario=producto.precio,
             subtotal=producto.precio,
             subtotal_texto=producto.precio_texto,
+        ))
+        self.mostrador_carrito = carrito
+        self.mensaje = f"{producto.nombre} agregado a mostrador."
+
+    def _agregar_producto_mostrador_con_mods(self, producto_id: int, mods_json: str, mods_texto: str, extra: Decimal) -> None:
+        producto = next((p for p in self.productos if p.id == producto_id and p.disponible), None)
+        if producto is None:
+            self.mensaje = "Producto no disponible para mostrador."
+            return
+        precio_unit = round(producto.precio + float(extra), 2)
+        carrito = list(self.mostrador_carrito)
+        carrito.append(CarritoItem(
+            producto_id=producto.id,
+            nombre=producto.nombre,
+            cantidad=1,
+            precio_unitario=precio_unit,
+            subtotal=precio_unit,
+            subtotal_texto=_money_text(precio_unit),
+            modificadores_texto=mods_texto,
+            modificadores_json=mods_json,
         ))
         self.mostrador_carrito = carrito
         self.mensaje = f"{producto.nombre} agregado a mostrador."
@@ -4086,6 +4542,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     precio_unitario=item.precio_unitario,
                     subtotal=subtotal,
                     subtotal_texto=_money_text(subtotal),
+                    nota=item.nota,
                 ))
         if not encontrado:
             self.mensaje = "Ese producto no está en el carrito de mostrador."
@@ -4097,7 +4554,33 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.mostrador_carrito = []
         self.mostrador_metodo_pago = "efectivo"
         self.busqueda_producto_mostrador = ""
+        self.nota_producto_activo_id = 0
+        self.nota_input_temporal = ""
         self.mensaje = "Carrito de mostrador limpio."
+
+    def abrir_nota_item_mostrador(self, producto_id: int) -> None:
+        item = next((i for i in self.mostrador_carrito if i.producto_id == producto_id), None)
+        self.nota_producto_activo_id = producto_id
+        self.nota_input_temporal = item.nota if item else ""
+
+    def guardar_nota_item_mostrador(self, producto_id: int) -> None:
+        nota = self.nota_input_temporal.strip()
+        carrito = list(self.mostrador_carrito)
+        for i, item in enumerate(carrito):
+            if item.producto_id == producto_id:
+                carrito[i] = CarritoItem(
+                    producto_id=item.producto_id,
+                    nombre=item.nombre,
+                    cantidad=item.cantidad,
+                    precio_unitario=item.precio_unitario,
+                    subtotal=item.subtotal,
+                    subtotal_texto=item.subtotal_texto,
+                    nota=nota,
+                )
+                break
+        self.mostrador_carrito = carrito
+        self.nota_producto_activo_id = 0
+        self.nota_input_temporal = ""
 
     def seleccionar_mostrador_metodo(self, metodo: str) -> None:
         self.mostrador_metodo_pago = metodo
@@ -4146,7 +4629,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.refresh(pedido)
             for item in self.mostrador_carrito:
                 producto = productos[item.producto_id]
-                precio = _to_decimal(producto.precio)
+                precio = _to_decimal(item.precio_unitario) if item.modificadores_json else _to_decimal(producto.precio)
                 subtotal = precio * item.cantidad
                 detalle = DetallePedido(
                     company_id=self._company_id(),
@@ -4155,14 +4638,17 @@ class FoodState(CajaTurnoMixin, rx.State):
                     cantidad=item.cantidad,
                     precio_unitario=precio,
                     subtotal=subtotal,
+                    notas=item.nota or None,
                     estado_produccion=EstadoProduccion.PENDIENTE.value,
                     impreso_cocina=True,
                     impreso_caja=True,
                     enviado_cocina_at=now,
+                    modificadores_json=item.modificadores_json or None,
                 )
                 session.add(detalle)
+                mod_note = f" ({item.modificadores_texto})" if item.modificadores_texto else ""
                 ticket_lines.append(TicketLine(
-                    name=producto.nombre,
+                    name=producto.nombre + mod_note,
                     quantity=item.cantidad,
                     unit_price=float(precio),
                     subtotal=float(subtotal),
@@ -4179,7 +4665,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.busqueda_producto_mostrador = ""
         self.cargar_cocina()
         self.cargar_pedidos_mostrador_pendientes()
-        self.mensaje = f"Pedido #{pedido_id} enviado a cocina. Cobrar en Caja."
+        return rx.toast.success(f"Pedido #{pedido_id} enviado a cocina")
 
     def cargar_pedidos_mostrador_pendientes(self) -> None:
         """Carga órdenes de mostrador sin cobrar (pagado=False) — usada en Mostrador y Caja."""
@@ -4510,7 +4996,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             MozoRankView(
                 nombre=f["nombre"],
                 pedidos=f["pedidos"],
+                total=float(f["total"]),
                 total_texto=_money_text(f["total"]),
+                propinas=float(f["propinas"]),
                 propinas_texto=_money_text(f["propinas"]) if f["propinas"] > 0 else "",
             )
             for f in mozos[:10]
@@ -4520,6 +5008,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             FranjaHoraView(
                 hora_label=f"{f['hora']:02d}:00",
                 pedidos=f["pedidos"],
+                total=float(f["total"]),
                 total_texto=_money_text(f["total"]),
                 barra_pct=int(float(f["total"]) / max_total * 100) if max_total > 0 else 0,
             )
@@ -4761,6 +5250,9 @@ class FoodState(CajaTurnoMixin, rx.State):
     def set_categoria_form_descripcion(self, v: str) -> None:
         self.categoria_form_descripcion = str(v)[:240]
 
+    def set_categoria_form_estacion(self, v: str) -> None:
+        self.categoria_form_estacion = v if v in ("cocina", "barra") else "cocina"
+
     def set_categoria_form_orden(self, v: str) -> None:
         self.categoria_form_orden = v
 
@@ -4812,6 +5304,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 cat.nombre = nombre
                 cat.descripcion = self.categoria_form_descripcion.strip() or None
                 cat.orden = orden
+                cat.estacion = self.categoria_form_estacion
                 cat.updated_at = _utcnow()
                 session.add(cat)
             else:
@@ -4820,6 +5313,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     nombre=nombre,
                     descripcion=self.categoria_form_descripcion.strip() or None,
                     orden=orden,
+                    estacion=self.categoria_form_estacion,
                 )
                 session.add(cat)
             session.commit()
@@ -4837,6 +5331,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.categoria_form_nombre = cat.nombre
         self.categoria_form_descripcion = cat.descripcion
         self.categoria_form_orden = str(cat.orden)
+        self.categoria_form_estacion = cat.estacion
         self.carta_cat_modal = True
 
     def toggle_categoria_activa(self, categoria_id: int) -> None:
@@ -4855,10 +5350,410 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.categoria_form_nombre = ""
         self.categoria_form_descripcion = ""
         self.categoria_form_orden = str(len(self.categorias) + 1)
+        self.categoria_form_estacion = "cocina"
 
     def cancelar_categoria_form(self) -> None:
         self._reset_categoria_form()
         self.carta_cat_modal = False
+
+    # ─── Admin Carta — Modificadores ─────────────────────────────────────────
+
+    def cargar_grupos_modificadores(self) -> None:
+        with self._tenant_session() as session:
+            grupos = session.exec(
+                select(GrupoModificador)
+                .where(GrupoModificador.company_id == self._company_id())
+                .order_by(GrupoModificador.orden, GrupoModificador.nombre)
+            ).all()
+            result: list[GrupoModificadorAdminView] = []
+            for g in grupos:
+                opciones_count = len(session.exec(
+                    select(OpcionModificador).where(OpcionModificador.grupo_id == g.id)
+                ).all())
+                productos_count = len(session.exec(
+                    select(ProductoGrupoModificador).where(ProductoGrupoModificador.grupo_id == g.id)
+                ).all())
+                result.append(GrupoModificadorAdminView(
+                    id=g.id or 0,
+                    nombre=g.nombre,
+                    min_selecciones=g.min_selecciones,
+                    max_selecciones=g.max_selecciones,
+                    activo=g.activo,
+                    orden=g.orden,
+                    opciones_count=opciones_count,
+                    productos_count=productos_count,
+                ))
+            self.grupos_modificadores = result
+
+    def abrir_mod_grupo_modal(self) -> None:
+        self._reset_mod_grupo_form()
+        self.mod_grupo_modal = True
+
+    def _reset_mod_grupo_form(self) -> None:
+        self.mod_grupo_form_id = 0
+        self.mod_grupo_form_nombre = ""
+        self.mod_grupo_form_min = "0"
+        self.mod_grupo_form_max = "1"
+        self.mod_opciones_form = []
+
+    def set_mod_grupo_form_nombre(self, v: str) -> None:
+        self.mod_grupo_form_nombre = v
+
+    def set_mod_grupo_form_min(self, v: str) -> None:
+        self.mod_grupo_form_min = v
+
+    def set_mod_grupo_form_max(self, v: str) -> None:
+        self.mod_grupo_form_max = v
+
+    def set_mod_grupo_modal(self, v: bool) -> None:
+        self.mod_grupo_modal = bool(v)
+
+    def agregar_opcion_mod_form(self) -> None:
+        self.mod_opciones_form = self.mod_opciones_form + [{"nombre": "", "precio_extra": "0"}]
+
+    def set_opcion_mod_nombre(self, idx_nombre: str) -> None:
+        parts = idx_nombre.split("|", 1)
+        if len(parts) != 2:
+            return
+        try:
+            idx = int(parts[0])
+        except ValueError:
+            return
+        opciones = list(self.mod_opciones_form)
+        if 0 <= idx < len(opciones):
+            opciones[idx] = {**opciones[idx], "nombre": parts[1]}
+            self.mod_opciones_form = opciones
+
+    def set_opcion_mod_precio(self, idx_precio: str) -> None:
+        parts = idx_precio.split("|", 1)
+        if len(parts) != 2:
+            return
+        try:
+            idx = int(parts[0])
+        except ValueError:
+            return
+        opciones = list(self.mod_opciones_form)
+        if 0 <= idx < len(opciones):
+            opciones[idx] = {**opciones[idx], "precio_extra": parts[1]}
+            self.mod_opciones_form = opciones
+
+    def eliminar_opcion_mod_form(self, idx: int) -> None:
+        opciones = list(self.mod_opciones_form)
+        if 0 <= idx < len(opciones):
+            opciones.pop(idx)
+            self.mod_opciones_form = opciones
+
+    def editar_grupo_modificador(self, grupo_id: int) -> None:
+        with self._tenant_session() as session:
+            g = session.get(GrupoModificador, grupo_id)
+            if g is None or g.company_id != self._company_id():
+                return
+            self.mod_grupo_form_id = g.id or 0
+            self.mod_grupo_form_nombre = g.nombre
+            self.mod_grupo_form_min = str(g.min_selecciones)
+            self.mod_grupo_form_max = str(g.max_selecciones)
+            opciones = session.exec(
+                select(OpcionModificador)
+                .where(OpcionModificador.grupo_id == g.id)
+                .order_by(OpcionModificador.orden)
+            ).all()
+            self.mod_opciones_form = [
+                {"nombre": o.nombre, "precio_extra": str(o.precio_extra)}
+                for o in opciones
+            ]
+        self.mod_grupo_modal = True
+
+    def guardar_grupo_modificador(self) -> None:
+        nombre = self.mod_grupo_form_nombre.strip()
+        if not nombre:
+            self.mensaje = "El nombre del grupo es obligatorio."
+            return
+        try:
+            min_sel = max(0, int(self.mod_grupo_form_min))
+        except ValueError:
+            min_sel = 0
+        try:
+            max_sel = max(1, int(self.mod_grupo_form_max))
+        except ValueError:
+            max_sel = 1
+        if min_sel > max_sel:
+            min_sel = max_sel
+
+        with self._tenant_session() as session:
+            if self.mod_grupo_form_id:
+                grupo = session.get(GrupoModificador, self.mod_grupo_form_id)
+                if grupo is None or grupo.company_id != self._company_id():
+                    self.mensaje = "Grupo no encontrado."
+                    return
+                grupo.nombre = nombre
+                grupo.min_selecciones = min_sel
+                grupo.max_selecciones = max_sel
+                grupo.updated_at = _utcnow()
+                session.exec(
+                    select(OpcionModificador)
+                    .where(OpcionModificador.grupo_id == grupo.id)
+                ).all()
+                for old_op in session.exec(
+                    select(OpcionModificador).where(OpcionModificador.grupo_id == grupo.id)
+                ).all():
+                    session.delete(old_op)
+                session.flush()
+            else:
+                grupo = GrupoModificador(
+                    company_id=self._company_id(),
+                    nombre=nombre,
+                    min_selecciones=min_sel,
+                    max_selecciones=max_sel,
+                    orden=len(self.grupos_modificadores),
+                )
+                session.add(grupo)
+                session.flush()
+
+            for i, op_data in enumerate(self.mod_opciones_form):
+                op_nombre = str(op_data.get("nombre", "")).strip()
+                if not op_nombre:
+                    continue
+                try:
+                    precio = max(Decimal("0"), Decimal(str(op_data.get("precio_extra", "0"))))
+                except Exception:
+                    precio = Decimal("0")
+                session.add(OpcionModificador(
+                    company_id=self._company_id(),
+                    grupo_id=grupo.id or 0,
+                    nombre=op_nombre,
+                    precio_extra=precio,
+                    orden=i,
+                ))
+            session.add(grupo)
+            session.commit()
+        self.mod_grupo_modal = False
+        self._reset_mod_grupo_form()
+        self.cargar_grupos_modificadores()
+        return rx.toast.success("Grupo de modificadores guardado")
+
+    def eliminar_grupo_modificador(self, grupo_id: int) -> None:
+        with self._tenant_session() as session:
+            g = session.get(GrupoModificador, grupo_id)
+            if g is None or g.company_id != self._company_id():
+                return
+            for op in session.exec(
+                select(OpcionModificador).where(OpcionModificador.grupo_id == grupo_id)
+            ).all():
+                session.delete(op)
+            for pg in session.exec(
+                select(ProductoGrupoModificador).where(ProductoGrupoModificador.grupo_id == grupo_id)
+            ).all():
+                session.delete(pg)
+            session.delete(g)
+            session.commit()
+        self.cargar_grupos_modificadores()
+        return rx.toast.success("Grupo eliminado")
+
+    def abrir_mod_asignar(self, producto_id: int) -> None:
+        with self._tenant_session() as session:
+            p = session.get(Producto, producto_id)
+            if p is None or p.company_id != self._company_id():
+                return
+            self.mod_asignar_producto_id = p.id or 0
+            self.mod_asignar_producto_nombre = p.nombre
+            asignados = session.exec(
+                select(ProductoGrupoModificador)
+                .where(ProductoGrupoModificador.producto_id == p.id)
+            ).all()
+            self.mod_asignar_grupo_ids = [a.grupo_id for a in asignados]
+        self.mod_asignar_modal = True
+
+    def set_mod_asignar_modal(self, v: bool) -> None:
+        self.mod_asignar_modal = bool(v)
+
+    def toggle_mod_asignar_grupo(self, grupo_id: int) -> None:
+        ids = list(self.mod_asignar_grupo_ids)
+        if grupo_id in ids:
+            ids.remove(grupo_id)
+        else:
+            ids.append(grupo_id)
+        self.mod_asignar_grupo_ids = ids
+
+    def guardar_mod_asignacion(self) -> None:
+        with self._tenant_session() as session:
+            for pg in session.exec(
+                select(ProductoGrupoModificador)
+                .where(ProductoGrupoModificador.producto_id == self.mod_asignar_producto_id)
+            ).all():
+                session.delete(pg)
+            session.flush()
+            for gid in self.mod_asignar_grupo_ids:
+                session.add(ProductoGrupoModificador(
+                    producto_id=self.mod_asignar_producto_id,
+                    grupo_id=gid,
+                ))
+            session.commit()
+        self.mod_asignar_modal = False
+        self.cargar_menu()
+        return rx.toast.success("Modificadores asignados")
+
+    # ─── Modificadores — Selección al pedir ───────────────────────────────────
+
+    def _abrir_seleccion_modificadores(self, producto_id: int, producto_nombre: str, precio: float, origen: str = "mozos") -> None:
+        import json as _json
+        with self._tenant_session() as session:
+            asignaciones = session.exec(
+                select(ProductoGrupoModificador)
+                .where(ProductoGrupoModificador.producto_id == producto_id)
+            ).all()
+            grupo_ids = [a.grupo_id for a in asignaciones]
+            if not grupo_ids:
+                return
+            grupos = session.exec(
+                select(GrupoModificador)
+                .where(GrupoModificador.id.in_(grupo_ids), GrupoModificador.activo.is_(True))
+                .order_by(GrupoModificador.orden)
+            ).all()
+            grupos_data: list[dict[str, object]] = []
+            for g in grupos:
+                opciones = session.exec(
+                    select(OpcionModificador)
+                    .where(OpcionModificador.grupo_id == g.id, OpcionModificador.activo.is_(True))
+                    .order_by(OpcionModificador.orden)
+                ).all()
+                grupos_data.append({
+                    "id": g.id or 0,
+                    "nombre": g.nombre,
+                    "min": g.min_selecciones,
+                    "max": g.max_selecciones,
+                    "opciones": [
+                        {"id": o.id or 0, "nombre": o.nombre, "precio_extra": float(o.precio_extra)}
+                        for o in opciones
+                    ],
+                })
+        self.mod_seleccion_producto_id = producto_id
+        self.mod_seleccion_producto_nombre = producto_nombre
+        self.mod_seleccion_producto_precio = precio
+        self.mod_seleccion_grupos = grupos_data
+        self.mod_seleccion_elegidos = {}
+        self.mod_seleccion_origen = origen
+        self.mod_seleccion_modal = True
+
+    def set_mod_seleccion_modal(self, v: bool) -> None:
+        self.mod_seleccion_modal = bool(v)
+
+    def toggle_mod_opcion(self, grupo_id_opcion_id: str) -> None:
+        parts = grupo_id_opcion_id.split("_")
+        if len(parts) != 2:
+            return
+        grupo_id_str, opcion_id_str = parts
+        elegidos = dict(self.mod_seleccion_elegidos)
+        lista = list(elegidos.get(grupo_id_str, []))
+        opcion_id = int(opcion_id_str)
+        grupo_max = 1
+        for g in self.mod_seleccion_grupos:
+            if str(g.get("id", "")) == grupo_id_str:
+                grupo_max = int(g.get("max", 1))
+                break
+        if opcion_id in lista:
+            lista.remove(opcion_id)
+        else:
+            if len(lista) >= grupo_max:
+                if grupo_max == 1:
+                    lista = [opcion_id]
+                else:
+                    return
+            else:
+                lista.append(opcion_id)
+        elegidos[grupo_id_str] = lista
+        self.mod_seleccion_elegidos = elegidos
+
+    def confirmar_mod_seleccion(self) -> None:
+        import json as _json
+        for g in self.mod_seleccion_grupos:
+            gid = str(g.get("id", ""))
+            elegidos = self.mod_seleccion_elegidos.get(gid, [])
+            min_req = int(g.get("min", 0))
+            if len(elegidos) < min_req:
+                self.mensaje = f"Seleccioná al menos {min_req} opción(es) en \"{g.get('nombre', '')}\"."
+                return
+
+        mods_snapshot: list[dict[str, object]] = []
+        extra_total = Decimal("0")
+        for g in self.mod_seleccion_grupos:
+            gid = str(g.get("id", ""))
+            elegidos = self.mod_seleccion_elegidos.get(gid, [])
+            opciones_data = g.get("opciones", [])
+            if not isinstance(opciones_data, list):
+                opciones_data = []
+            for oid in elegidos:
+                for op in opciones_data:
+                    if not isinstance(op, dict):
+                        continue
+                    if op.get("id") == oid:
+                        precio_extra = Decimal(str(op.get("precio_extra", 0)))
+                        extra_total += precio_extra
+                        mods_snapshot.append({
+                            "grupo": g.get("nombre", ""),
+                            "opcion": op.get("nombre", ""),
+                            "precio_extra": float(precio_extra),
+                        })
+
+        mods_json = _json.dumps(mods_snapshot, ensure_ascii=False)
+        mods_texto = ", ".join(
+            m.get("opcion", "") + (f" +S/{m['precio_extra']:.2f}" if m.get("precio_extra", 0) > 0 else "")
+            for m in mods_snapshot
+        ) if mods_snapshot else ""
+
+        self.mod_seleccion_modal = False
+        if self.mod_seleccion_origen == "mostrador":
+            self._agregar_producto_mostrador_con_mods(
+                self.mod_seleccion_producto_id,
+                mods_json,
+                mods_texto,
+                extra_total,
+            )
+        else:
+            self._agregar_producto_con_mods(
+                self.mod_seleccion_producto_id,
+                mods_json,
+                mods_texto,
+                extra_total,
+            )
+
+    def _agregar_producto_con_mods(self, producto_id: int, mods_json: str, mods_texto: str, extra: Decimal) -> None:
+        if self.mesa_seleccionada_id == 0:
+            self.mensaje = "Selecciona una mesa antes de agregar productos."
+            return
+        with self._tenant_session() as session:
+            mesa = session.get(Mesa, self.mesa_seleccionada_id)
+            if mesa is None or mesa.company_id != self._company_id():
+                self.mensaje = "La mesa seleccionada ya no existe."
+                return
+            producto = session.get(Producto, producto_id)
+            if producto is None or producto.company_id != self._company_id() or not producto.disponible:
+                self.mensaje = "Producto no disponible."
+                return
+            producto_nombre = producto.nombre
+            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=(self.usuario_actual.id or None) if self.usuario_actual else None)
+            precio = _to_decimal(producto.precio) + extra
+            detalle = DetallePedido(
+                company_id=self._company_id(),
+                pedido_id=pedido.id or 0,
+                producto_id=producto.id or 0,
+                cantidad=1,
+                precio_unitario=precio,
+                subtotal=precio,
+                estado_produccion=EstadoProduccion.PENDIENTE.value,
+                impreso_cocina=False,
+                impreso_caja=False,
+                modificadores_json=mods_json if mods_json else None,
+            )
+            session.add(detalle)
+            _recalculate_order_total(session, pedido)
+            mesa.estado = EstadoMesa.OCUPADA.value
+            mesa.updated_at = _utcnow()
+            session.add(mesa)
+            session.commit()
+        self._cargar_carrito_mesa(self.mesa_seleccionada_id)
+        self._cargar_historial_mesa(self.mesa_seleccionada_id)
+        self.cargar_mesas()
+        self.mensaje = f"{producto_nombre} agregado a {self.mesa_seleccionada_label}."
 
     # ─── Admin Carta — Productos ──────────────────────────────────────────────
 
@@ -4952,16 +5847,21 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
         self.carta_prod_modal = True
 
-    def toggle_producto_disponible(self, producto_id: int) -> None:
+    def toggle_producto_disponible(self, producto_id: int):
         with self._tenant_session() as session:
             prod = session.get(Producto, producto_id)
             if prod is None or prod.company_id != self._company_id():
                 return
             prod.disponible = not prod.disponible
             prod.updated_at = _utcnow()
+            nombre = prod.nombre
+            nuevo_estado = prod.disponible
             session.add(prod)
             session.commit()
         self.cargar_menu()
+        if nuevo_estado:
+            return rx.toast.success(f"{nombre} disponible nuevamente")
+        return rx.toast(f"{nombre} marcado como agotado (86)", variant="warning")
 
     def _reset_producto_form(self) -> None:
         self.producto_form_id = 0

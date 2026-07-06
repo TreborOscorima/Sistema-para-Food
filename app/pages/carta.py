@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import app_shell
-from app.states.food_state import CategoriaView, FoodState, ProductoView
+from app.states.food_state import CategoriaView, FoodState, GrupoModificadorAdminView, ProductoView
 
 
 def _categoria_row(cat: CategoriaView) -> rx.Component:
@@ -140,6 +140,23 @@ def _producto_row(prod: ProductoView) -> rx.Component:
         ),
         rx.button(
             rx.hstack(
+                rx.icon(tag="settings_2", size=12),
+                rx.text("Mods", font_size="11px"),
+                spacing="1", align="center",
+            ),
+            on_click=FoodState.abrir_mod_asignar(prod.id),
+            background=rx.cond(prod.tiene_modificadores, "#EDE9FE", "#F8FAFC"),
+            color=rx.cond(prod.tiene_modificadores, "#7C3AED", "#64748B"),
+            border=rx.cond(prod.tiene_modificadores, "1px solid #C4B5FD", "1px solid #E2E8F0"),
+            border_radius="6px",
+            font_size="11px",
+            cursor="pointer",
+            padding_x="8px",
+            padding_y="4px",
+            _hover={"opacity": "0.85"},
+        ),
+        rx.button(
+            rx.hstack(
                 rx.cond(
                     prod.disponible,
                     rx.icon(tag="toggle_right", size=14),
@@ -231,6 +248,21 @@ def _cat_modal() -> rx.Component:
                         font_size="13px",
                         width="80px",
                         type="number",
+                    ),
+                    spacing="2", align="center",
+                ),
+                rx.hstack(
+                    rx.text("Estación:", font_size="13px", color="#64748B", white_space="nowrap"),
+                    rx.select(
+                        ["cocina", "barra"],
+                        value=FoodState.categoria_form_estacion,
+                        on_change=FoodState.set_categoria_form_estacion,
+                        background="#FFFFFF",
+                        border="1px solid #E2E8F0",
+                        color="#0F172A",
+                        border_radius="8px",
+                        font_size="13px",
+                        width="140px",
                     ),
                     spacing="2", align="center",
                 ),
@@ -520,10 +552,296 @@ def _prod_modal() -> rx.Component:
     )
 
 
+def _grupo_mod_row(grupo: GrupoModificadorAdminView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.text(grupo.nombre, font_size="13px", font_weight="600", color="#0F172A"),
+            rx.hstack(
+                rx.text(
+                    grupo.opciones_count.to_string() + " opciones",
+                    font_size="11px", color="#64748B",
+                ),
+                rx.text("·", color="#CBD5E1", font_size="10px"),
+                rx.text(
+                    grupo.productos_count.to_string() + " productos",
+                    font_size="11px", color="#94A3B8",
+                ),
+                rx.text("·", color="#CBD5E1", font_size="10px"),
+                rx.text(
+                    "mín " + grupo.min_selecciones.to_string() + " / máx " + grupo.max_selecciones.to_string(),
+                    font_size="11px", color="#94A3B8",
+                ),
+                spacing="1", align="center",
+            ),
+            spacing="0", align="start", flex="1", min_width="0",
+        ),
+        rx.button(
+            "Editar",
+            on_click=FoodState.editar_grupo_modificador(grupo.id),
+            background="#FFF7ED", color="#EA580C",
+            border="1px solid #FED7AA", border_radius="6px",
+            font_size="10px", cursor="pointer",
+            padding_x="7px", padding_y="3px",
+            _hover={"opacity": "0.85"},
+        ),
+        rx.button(
+            rx.icon(tag="trash_2", size=12, color="#B91C1C"),
+            on_click=FoodState.eliminar_grupo_modificador(grupo.id),
+            background="#FEF2F2", border="1px solid #FECACA",
+            border_radius="6px", cursor="pointer",
+            padding_x="7px", padding_y="3px",
+            _hover={"opacity": "0.85"},
+        ),
+        width="100%", align="center",
+        padding="8px 10px", background="#FFFFFF",
+        border_radius="8px", border="1px solid #E2E8F0",
+        gap="8px",
+    )
+
+
+def _mod_grupo_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.text(
+                    rx.cond(FoodState.mod_grupo_form_id > 0, "Editar grupo", "Nuevo grupo de modificadores"),
+                    font_size="16px", font_weight="700", color="#0F172A",
+                ),
+                rx.input(
+                    placeholder="Nombre del grupo (ej: Tamaño, Extras, Término)",
+                    value=FoodState.mod_grupo_form_nombre,
+                    on_change=FoodState.set_mod_grupo_form_nombre,
+                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    color="#0F172A", border_radius="8px",
+                    padding="8px 12px", font_size="13px", width="100%",
+                    _focus={"border_color": "#EA580C"},
+                ),
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Mín selecciones", font_size="11px", color="#64748B"),
+                        rx.input(
+                            value=FoodState.mod_grupo_form_min,
+                            on_change=FoodState.set_mod_grupo_form_min,
+                            type="number", min="0", width="80px",
+                            background="#FFFFFF", border="1px solid #E2E8F0",
+                            color="#0F172A", border_radius="8px",
+                            padding="6px 10px", font_size="13px",
+                        ),
+                        spacing="1",
+                    ),
+                    rx.vstack(
+                        rx.text("Máx selecciones", font_size="11px", color="#64748B"),
+                        rx.input(
+                            value=FoodState.mod_grupo_form_max,
+                            on_change=FoodState.set_mod_grupo_form_max,
+                            type="number", min="1", width="80px",
+                            background="#FFFFFF", border="1px solid #E2E8F0",
+                            color="#0F172A", border_radius="8px",
+                            padding="6px 10px", font_size="13px",
+                        ),
+                        spacing="1",
+                    ),
+                    spacing="3",
+                ),
+                rx.text("Opciones", font_size="13px", font_weight="600", color="#334155"),
+                rx.vstack(
+                    rx.foreach(
+                        FoodState.mod_opciones_form,
+                        lambda op, idx: rx.hstack(
+                            rx.input(
+                                placeholder="Nombre opción",
+                                value=op["nombre"].to(str),
+                                on_change=lambda v: FoodState.set_opcion_mod_nombre(idx.to_string() + "|" + v),
+                                flex="1", min_width="100px",
+                                background="#FFFFFF", border="1px solid #E2E8F0",
+                                color="#0F172A", border_radius="6px",
+                                padding="5px 8px", font_size="12px",
+                            ),
+                            rx.input(
+                                placeholder="+S/",
+                                value=op["precio_extra"].to(str),
+                                on_change=lambda v: FoodState.set_opcion_mod_precio(idx.to_string() + "|" + v),
+                                type="number", step="0.50", width="80px",
+                                background="#FFFFFF", border="1px solid #E2E8F0",
+                                color="#0F172A", border_radius="6px",
+                                padding="5px 8px", font_size="12px",
+                            ),
+                            rx.button(
+                                rx.icon(tag="x", size=12, color="#B91C1C"),
+                                on_click=FoodState.eliminar_opcion_mod_form(idx),
+                                background="#FEF2F2", border="1px solid #FECACA",
+                                border_radius="6px", padding="4px", cursor="pointer",
+                            ),
+                            spacing="2", align="center", width="100%",
+                        ),
+                    ),
+                    spacing="2", width="100%",
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="plus", size=12),
+                        rx.text("Agregar opción", font_size="12px"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=FoodState.agregar_opcion_mod_form,
+                    background="#F8FAFC", color="#64748B",
+                    border="1px dashed #CBD5E1", border_radius="6px",
+                    font_size="12px", cursor="pointer", width="100%",
+                    padding_y="6px",
+                    _hover={"background": "#F1F5F9"},
+                ),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button(
+                            "Cancelar",
+                            background="#F1F5F9", color="#64748B",
+                            border="1px solid #E2E8F0", border_radius="8px",
+                            font_size="13px", cursor="pointer",
+                            padding_x="14px", padding_y="8px",
+                        ),
+                    ),
+                    rx.button(
+                        "Guardar",
+                        on_click=FoodState.guardar_grupo_modificador,
+                        background="#EA580C", color="#FFFFFF",
+                        border_radius="8px", font_size="13px",
+                        font_weight="700", cursor="pointer",
+                        padding_x="14px", padding_y="8px",
+                        _hover={"background": "#C2410C"},
+                    ),
+                    spacing="3", justify="end", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="500px", width="90vw",
+        ),
+        open=FoodState.mod_grupo_modal,
+        on_open_change=FoodState.set_mod_grupo_modal,
+    )
+
+
+def _mod_asignar_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.text(
+                    "Modificadores de " + FoodState.mod_asignar_producto_nombre,
+                    font_size="15px", font_weight="700", color="#0F172A",
+                ),
+                rx.text(
+                    "Seleccioná los grupos que aplican a este producto",
+                    font_size="12px", color="#64748B",
+                ),
+                rx.cond(
+                    FoodState.grupos_modificadores.length() == 0,
+                    rx.text(
+                        "No hay grupos definidos. Creá uno primero en la sección Modificadores.",
+                        font_size="12px", color="#94A3B8",
+                    ),
+                    rx.vstack(
+                        rx.foreach(
+                            FoodState.grupos_modificadores,
+                            lambda g: rx.hstack(
+                                rx.checkbox(
+                                    checked=FoodState.mod_asignar_grupo_ids.contains(g.id),
+                                    on_change=lambda _v: FoodState.toggle_mod_asignar_grupo(g.id),
+                                ),
+                                rx.text(g.nombre, font_size="13px", color="#0F172A", font_weight="500"),
+                                rx.text(
+                                    g.opciones_count.to_string() + " opc.",
+                                    font_size="11px", color="#94A3B8",
+                                ),
+                                spacing="2", align="center", width="100%",
+                                padding="6px 8px",
+                                border_radius="6px",
+                                cursor="pointer",
+                                _hover={"background": "#F8FAFC"},
+                            ),
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                ),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button(
+                            "Cancelar",
+                            background="#F1F5F9", color="#64748B",
+                            border="1px solid #E2E8F0", border_radius="8px",
+                            font_size="13px", cursor="pointer",
+                            padding_x="14px", padding_y="8px",
+                        ),
+                    ),
+                    rx.button(
+                        "Guardar",
+                        on_click=FoodState.guardar_mod_asignacion,
+                        background="#EA580C", color="#FFFFFF",
+                        border_radius="8px", font_size="13px",
+                        font_weight="700", cursor="pointer",
+                        padding_x="14px", padding_y="8px",
+                        _hover={"background": "#C2410C"},
+                    ),
+                    spacing="3", justify="end", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="420px", width="90vw",
+        ),
+        open=FoodState.mod_asignar_modal,
+        on_open_change=FoodState.set_mod_asignar_modal,
+    )
+
+
+def _modificadores_section() -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.text("Modificadores", font_size="15px", font_weight="700", color="#64748B"),
+            rx.badge(
+                FoodState.grupos_modificadores.length().to_string(),
+                background="#EDE9FE", color="#7C3AED",
+                border_radius="12px", font_size="11px", font_weight="700",
+                padding_x="8px",
+            ),
+            rx.spacer(),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="plus", size=12),
+                    rx.text("Nuevo Grupo", font_size="11px", font_weight="700"),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.abrir_mod_grupo_modal,
+                background="#EDE9FE", color="#7C3AED",
+                border="1px solid #C4B5FD", border_radius="6px",
+                cursor="pointer", padding_x="10px", padding_y="5px",
+                _hover={"background": "#DDD6FE"},
+            ),
+            spacing="2", align="center", width="100%",
+        ),
+        rx.cond(
+            FoodState.grupos_modificadores.length() == 0,
+            rx.box(
+                rx.text(
+                    "Sin grupos de modificadores. Creá uno para agregar opciones como tamaño, extras o término de cocción.",
+                    font_size="12px", color="#94A3B8", text_align="center",
+                ),
+                padding="24px 16px", width="100%",
+            ),
+            rx.vstack(
+                rx.foreach(FoodState.grupos_modificadores, _grupo_mod_row),
+                spacing="2", width="100%",
+            ),
+        ),
+        spacing="3",
+        width="100%",
+        class_name="twk-panel",
+    )
+
+
 def _carta_content() -> rx.Component:
     return rx.vstack(
         _cat_modal(),
         _prod_modal(),
+        _mod_grupo_modal(),
+        _mod_asignar_modal(),
         # ── Header ────────────────────────────────────────────────────────────
         rx.hstack(
             rx.vstack(
@@ -755,6 +1073,7 @@ def _carta_content() -> rx.Component:
             align="start",
             class_name="twk-cols-lg",
         ),
+        _modificadores_section(),
         spacing="5",
         width="100%",
     )

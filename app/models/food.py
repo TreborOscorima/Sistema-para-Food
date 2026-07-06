@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Column, Date, Numeric, UniqueConstraint, event
+from sqlalchemy import Column, Date, JSON, Numeric, Text, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -40,6 +40,11 @@ class RolUsuario(str, Enum):
     CAJA = "Caja"
     COCINA = "Cocina"
     ADMIN = "Admin"
+
+
+class EstacionCocina(str, Enum):
+    COCINA = "cocina"
+    BARRA = "barra"
 
 
 class TipoPromocion(str, Enum):
@@ -106,6 +111,7 @@ class Mesa(TimestampedModel, table=True):
         max_length=32,
         nullable=False,
     )
+    sector: str = Field(default="Salón", max_length=60, nullable=False)
     activa: bool = Field(default=True, nullable=False)
 
     pedidos: list["Pedido"] = Relationship(back_populates="mesa")
@@ -125,6 +131,7 @@ class Categoria(TimestampedModel, table=True):
     descripcion: str | None = Field(default=None, max_length=240)
     orden: int = Field(default=0, nullable=False)
     activa: bool = Field(default=True, nullable=False)
+    estacion: str = Field(default=EstacionCocina.COCINA.value, max_length=20, nullable=False)
 
     productos: list["Producto"] = Relationship(back_populates="categoria")
 
@@ -146,10 +153,61 @@ class Producto(TimestampedModel, table=True):
     disponible: bool = Field(default=True, nullable=False)
     imagen_url: str | None = Field(default=None, max_length=500)
     emoji: str | None = Field(default=None, max_length=16)
+    estacion: str | None = Field(default=None, max_length=20)
 
     categoria: Categoria | None = Relationship(back_populates="productos")
     detalles: list["DetallePedido"] = Relationship(back_populates="producto")
     receta_items: list["RecetaItem"] = Relationship(back_populates="producto")
+    producto_grupos: list["ProductoGrupoModificador"] = Relationship(back_populates="producto")
+
+
+class GrupoModificador(TimestampedModel, table=True):
+    """Grupo de opciones (ej: Tamaño, Extras, Término)."""
+
+    __tablename__ = "food_grupo_modificadores"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    min_selecciones: int = Field(default=0, nullable=False)
+    max_selecciones: int = Field(default=1, nullable=False)
+    activo: bool = Field(default=True, nullable=False)
+    orden: int = Field(default=0, nullable=False)
+
+    opciones: list["OpcionModificador"] = Relationship(back_populates="grupo")
+    producto_grupos: list["ProductoGrupoModificador"] = Relationship(back_populates="grupo")
+
+
+class OpcionModificador(TimestampedModel, table=True):
+    """Opción dentro de un grupo (ej: Pinta +S/5, Media +S/0)."""
+
+    __tablename__ = "food_opcion_modificadores"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    grupo_id: int = Field(foreign_key="food_grupo_modificadores.id", index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    precio_extra: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
+    activo: bool = Field(default=True, nullable=False)
+    orden: int = Field(default=0, nullable=False)
+
+    grupo: GrupoModificador | None = Relationship(back_populates="opciones")
+
+
+class ProductoGrupoModificador(TimestampedModel, table=True):
+    """Asignación de un grupo de modificadores a un producto."""
+
+    __tablename__ = "food_producto_grupo_modificadores"
+
+    id: int | None = Field(default=None, primary_key=True)
+    producto_id: int = Field(foreign_key="food_productos.id", index=True, nullable=False)
+    grupo_id: int = Field(foreign_key="food_grupo_modificadores.id", index=True, nullable=False)
+
+    producto: Producto | None = Relationship(back_populates="producto_grupos")
+    grupo: GrupoModificador | None = Relationship(back_populates="producto_grupos")
 
 
 class Pedido(TimestampedModel, table=True):
@@ -562,6 +620,10 @@ class DetallePedido(TimestampedModel, table=True):
     )
     impreso_cocina: bool = Field(default=False, nullable=False)
     impreso_caja: bool = Field(default=False, nullable=False)
+    modificadores_json: str | None = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+    )
 
     pedido: Pedido | None = Relationship(back_populates="detalles")
     producto: Producto | None = Relationship(back_populates="detalles")

@@ -918,7 +918,49 @@ def cumpleanos_banner() -> rx.Component:
     )
 
 
+# ─── SKELETON DE CARGA ────────────────────────────────────────────────────────
+
+def loading_placeholder(*, dark: bool = False) -> rx.Component:
+    bg = "#1E293B" if dark else "#F1F5F9"
+    accent = "#334155" if dark else "#E2E8F0"
+    text_color = "#64748B" if dark else "#94A3B8"
+    return rx.center(
+        rx.vstack(
+            rx.spinner(size="3", color="#EA580C"),
+            rx.text("Cargando…", font_size="13px", color=text_color, font_weight="500"),
+            spacing="3",
+            align="center",
+        ),
+        width="100%",
+        padding_y="60px",
+    )
+
+
 # ─── APP SHELL ────────────────────────────────────────────────────────────────────
+
+def _connection_banner_es() -> rx.Component:
+    return rx.connection_banner(
+        comp=rx.el.div(
+            rx.el.span(
+                "⚠ Sin conexión con el servidor — reintentando…",
+                color="white",
+                font_size="14px",
+                font_weight="600",
+            ),
+            display="flex",
+            justify_content="center",
+            align_items="center",
+            gap="8px",
+            background_color="#DC2626",
+            width="100vw",
+            padding="8px 16px",
+            position="fixed",
+            top="0",
+            left="0",
+            z_index="9999",
+        ),
+    )
+
 
 def app_shell(
     content: rx.Component,
@@ -932,6 +974,7 @@ def app_shell(
     _text = "#FFFFFF" if dark else TEXT_PRIMARY
     return rx.box(
         rx.script(_CSS_SCRIPT),
+        _connection_banner_es(),
         rx.hstack(
             _desktop_sidebar(_active),
             rx.box(

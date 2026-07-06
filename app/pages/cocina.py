@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import app_shell
+from app.components.shared import _connection_banner_es, app_shell, loading_placeholder
 from app.states.food_state import CocinaTicketView, FoodState
 
 
@@ -56,21 +56,47 @@ def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            rx.vstack(
-                rx.foreach(
-                    ticket.items_lines,
-                    lambda line: rx.text(
-                        line,
-                        font_size="17px",
-                        font_weight="700",
-                        color="#F1F5F9",
-                        letter_spacing="-0.3px",
-                        padding_y="2px",
+            rx.cond(
+                ticket.bumpable,
+                rx.vstack(
+                    rx.foreach(
+                        ticket.items_ids,
+                        lambda detalle_id, idx: rx.hstack(
+                            rx.icon(tag="circle_check", size=16, color="#475569", flex_shrink="0"),
+                            rx.text(
+                                ticket.items_lines[idx],
+                                font_size="17px", font_weight="700",
+                                color="#F1F5F9", letter_spacing="-0.3px",
+                            ),
+                            on_click=FoodState.bump_item_cocina(detalle_id),
+                            cursor="pointer",
+                            padding="4px 6px",
+                            border_radius="6px",
+                            width="100%",
+                            align="center",
+                            spacing="2",
+                            _hover={"background": "#1E293B"},
+                            transition="background 0.15s ease",
+                        ),
                     ),
+                    width="100%",
+                    spacing="2",
+                    align="start",
                 ),
-                width="100%",
-                spacing="2",
-                align="start",
+                rx.vstack(
+                    rx.foreach(
+                        ticket.items_lines,
+                        lambda line: rx.text(
+                            line,
+                            font_size="17px", font_weight="700",
+                            color="#F1F5F9", letter_spacing="-0.3px",
+                            padding_y="2px",
+                        ),
+                    ),
+                    width="100%",
+                    spacing="2",
+                    align="start",
+                ),
             ),
             rx.button(
                 ticket.action_label,
@@ -158,7 +184,7 @@ def _column(titulo: str, count, tickets, empty_msg: str) -> rx.Component:
             ),
             overflow_y="auto",
             overflow_x="auto",
-            max_height="72vh",
+            max_height=rx.cond(FoodState.cocina_fullscreen, "85vh", "72vh"),
             width="100%",
             padding_right="4px",
         ),
@@ -183,6 +209,39 @@ def _cocina_content() -> rx.Component:
             ),
             rx.spacer(),
             rx.hstack(
+                rx.button(
+                    "Todo",
+                    on_click=FoodState.set_cocina_filtro_estacion(""),
+                    background=rx.cond(FoodState.cocina_filtro_estacion == "", "#EA580C", "#1E293B"),
+                    color=rx.cond(FoodState.cocina_filtro_estacion == "", "#FFFFFF", "#94A3B8"),
+                    border=rx.cond(FoodState.cocina_filtro_estacion == "", "1px solid #EA580C", "1px solid #334155"),
+                    border_radius="6px", font_size="12px", font_weight="600",
+                    padding_x="10px", padding_y="5px", cursor="pointer",
+                    _hover={"border_color": "#EA580C"},
+                ),
+                rx.button(
+                    "Cocina",
+                    on_click=FoodState.set_cocina_filtro_estacion("cocina"),
+                    background=rx.cond(FoodState.cocina_filtro_estacion == "cocina", "#EA580C", "#1E293B"),
+                    color=rx.cond(FoodState.cocina_filtro_estacion == "cocina", "#FFFFFF", "#94A3B8"),
+                    border=rx.cond(FoodState.cocina_filtro_estacion == "cocina", "1px solid #EA580C", "1px solid #334155"),
+                    border_radius="6px", font_size="12px", font_weight="600",
+                    padding_x="10px", padding_y="5px", cursor="pointer",
+                    _hover={"border_color": "#EA580C"},
+                ),
+                rx.button(
+                    "Barra",
+                    on_click=FoodState.set_cocina_filtro_estacion("barra"),
+                    background=rx.cond(FoodState.cocina_filtro_estacion == "barra", "#EA580C", "#1E293B"),
+                    color=rx.cond(FoodState.cocina_filtro_estacion == "barra", "#FFFFFF", "#94A3B8"),
+                    border=rx.cond(FoodState.cocina_filtro_estacion == "barra", "1px solid #EA580C", "1px solid #334155"),
+                    border_radius="6px", font_size="12px", font_weight="600",
+                    padding_x="10px", padding_y="5px", cursor="pointer",
+                    _hover={"border_color": "#EA580C"},
+                ),
+                spacing="1", align="center",
+            ),
+            rx.hstack(
                 rx.hstack(
                     rx.box(width="10px", height="10px", border_radius="3px", background="#F59E0B"),
                     rx.text("Pendiente", font_size="13px", color="#94A3B8", font_weight="500"),
@@ -205,6 +264,40 @@ def _cocina_content() -> rx.Component:
                 ),
                 spacing="4", align="center",
                 display=rx.breakpoints(initial="none", lg="flex"),
+            ),
+            rx.button(
+                rx.icon(
+                    tag=rx.cond(FoodState.sonidos_activos, "volume_2", "volume_off"),
+                    size=16,
+                ),
+                on_click=FoodState.toggle_sonidos,
+                background=rx.cond(FoodState.sonidos_activos, "#1E293B", "#0F172A"),
+                color=rx.cond(FoodState.sonidos_activos, "#EA580C", "#475569"),
+                border=rx.cond(FoodState.sonidos_activos, "1px solid #334155", "1px solid #1E293B"),
+                border_radius="8px",
+                cursor="pointer",
+                padding="8px",
+                _hover={"border_color": "#EA580C"},
+            ),
+            rx.button(
+                rx.icon(
+                    tag=rx.cond(FoodState.cocina_fullscreen, "minimize_2", "maximize_2"),
+                    size=16,
+                ),
+                rx.text(rx.cond(FoodState.cocina_fullscreen, "Salir", "Expandir"),
+                        font_size="13px"),
+                on_click=FoodState.toggle_cocina_fullscreen,
+                background="#1E293B",
+                color="#EA580C",
+                border="1px solid #334155",
+                border_radius="8px",
+                font_size="13px",
+                font_weight="600",
+                cursor="pointer",
+                display="flex",
+                align_items="center",
+                gap="6px",
+                _hover={"border_color": "#EA580C"},
             ),
             rx.button(
                 "Actualizar",
@@ -239,10 +332,38 @@ def _cocina_content() -> rx.Component:
     )
 
 
+def _fullscreen_shell() -> rx.Component:
+    return rx.box(
+        _connection_banner_es(),
+        rx.box(
+            rx.vstack(
+                _cocina_content(),
+                width="100%",
+                align="start",
+                spacing="5",
+            ),
+            padding="16px 24px",
+            width="100%",
+        ),
+        min_height="100vh",
+        width="100%",
+        background="#0F172A",
+        color="#FFFFFF",
+    )
+
+
 @rx.page(
     route="/cocina",
     on_load=[FoodState.on_load_cocina, FoodState.start_cocina_polling],
     title="TUWAYKIFOOD | Cocina",
 )
 def cocina_page() -> rx.Component:
-    return app_shell(_cocina_content(), page_key="cocina", dark=True)
+    return rx.cond(
+        FoodState.pagina_cargada,
+        rx.cond(
+            FoodState.cocina_fullscreen,
+            _fullscreen_shell(),
+            app_shell(_cocina_content(), page_key="cocina", dark=True),
+        ),
+        app_shell(loading_placeholder(dark=True), page_key="cocina", dark=True),
+    )

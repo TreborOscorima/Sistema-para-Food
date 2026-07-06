@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import anulacion_modal, app_shell, cumpleanos_banner
+from app.components.shared import anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder
 from app.states.caja_turno_mixin import (
     DenominacionRow,
     MovimientoCajaView,
@@ -261,12 +261,32 @@ def _cobro_panel() -> rx.Component:
                 # ── Footer opcional: desc / propina / cupón ──────────────
                 rx.hstack(
                     rx.vstack(
-                        rx.text("Descuento S/", font_size="12px", color="#64748B", font_weight="600"),
+                        rx.hstack(
+                            rx.text(
+                                rx.cond(FoodState.caja_cobro_descuento_es_pct, "Descuento %", "Descuento S/"),
+                                font_size="12px", color="#64748B", font_weight="600",
+                            ),
+                            rx.box(
+                                rx.text(
+                                    rx.cond(FoodState.caja_cobro_descuento_es_pct, "S/", "%"),
+                                    font_size="10px", font_weight="700",
+                                    color=rx.cond(FoodState.caja_cobro_descuento_es_pct, "#64748B", "#EA580C"),
+                                ),
+                                on_click=FoodState.toggle_descuento_modo,
+                                padding="2px 6px",
+                                border="1px solid #CBD5E1",
+                                border_radius="4px",
+                                cursor="pointer",
+                                _hover={"background": "#F1F5F9"},
+                            ),
+                            align="center", spacing="2",
+                        ),
                         rx.input(
-                            placeholder="0.00",
+                            placeholder=rx.cond(FoodState.caja_cobro_descuento_es_pct, "0", "0.00"),
                             value=FoodState.caja_cobro_descuento,
                             on_change=FoodState.set_caja_cobro_descuento,
-                            type="number", min="0", step="0.50",
+                            type="number", min="0",
+                            step=rx.cond(FoodState.caja_cobro_descuento_es_pct, "1", "0.50"),
                             font_size="13px", padding="6px 10px",
                             border="1px solid #E2E8F0", border_radius="8px",
                             width="100%", text_align="right",
@@ -276,6 +296,22 @@ def _cobro_panel() -> rx.Component:
                     ),
                     rx.vstack(
                         rx.text("Propina S/", font_size="12px", color="#64748B", font_weight="600"),
+                        rx.hstack(
+                            *[
+                                rx.box(
+                                    rx.text(f"{p}%", font_size="11px", font_weight="700",
+                                            color=rx.cond(FoodState.caja_cobro_propina_pct == p, "#FFFFFF", "#64748B")),
+                                    on_click=FoodState.seleccionar_propina_pct(p),
+                                    padding="3px 8px",
+                                    background=rx.cond(FoodState.caja_cobro_propina_pct == p, "#EA580C", "#F1F5F9"),
+                                    border_radius="6px",
+                                    cursor="pointer",
+                                    _hover={"opacity": "0.8"},
+                                )
+                                for p in [5, 10, 15]
+                            ],
+                            spacing="1",
+                        ),
                         rx.input(
                             placeholder="0.00",
                             value=FoodState.caja_cobro_propina,
@@ -509,8 +545,13 @@ def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
         rx.box(
             rx.hstack(
                 rx.vstack(
-                    rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700",
-                            color=rx.cond(seleccionado, "#EA580C", "#334155")),
+                    rx.hstack(
+                        rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700",
+                                color=rx.cond(seleccionado, "#EA580C", "#334155")),
+                        rx.text("#" + pedido.pedido_id.to_string(),
+                                font_size="13px", font_weight="800", color="#EA580C"),
+                        spacing="2", align="center",
+                    ),
                     rx.text(pedido.items_resumen, font_size="11px", color="#64748B", no_of_lines=2),
                     spacing="0", align="start",
                 ),
@@ -1213,4 +1254,7 @@ def _caja_content() -> rx.Component:
     title="TUWAYKIFOOD | Caja",
 )
 def caja_page() -> rx.Component:
-    return app_shell(_caja_content(), page_key="caja", dark=False)
+    return app_shell(
+        rx.cond(FoodState.pagina_cargada, _caja_content(), loading_placeholder()),
+        page_key="caja",
+    )

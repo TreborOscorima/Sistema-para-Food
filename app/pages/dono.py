@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.states.food_state import AdminLocalState, FoodState
-from app.components.shared import _CSS_SCRIPT
+from app.components.shared import _CSS_SCRIPT, _connection_banner_es
 from app.components.theme import (
     ACCENT as _ORANGE,
     ACCENT_HOVER as _ORANGE_DK,
@@ -813,6 +813,7 @@ def _brand_banner() -> rx.Component:
 def dono_login_page() -> rx.Component:
     return rx.box(
         rx.script(_CSS_SCRIPT),
+        _connection_banner_es(),
         rx.center(
             rx.vstack(
                 _brand_banner(),
