@@ -784,6 +784,83 @@ def _reportes_content() -> rx.Component:
             background="#F8FAFC", border="1px solid #E2E8F0",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
+        # Comparativa entre períodos
+        rx.box(
+            rx.hstack(
+                rx.icon(tag="git_compare_arrows", size=14, color="#EA580C"),
+                rx.text("Comparativa con período anterior", font_size="13px",
+                        font_weight="700", color="#334155"),
+                spacing="2", align="center", margin_bottom="10px",
+            ),
+            rx.grid(
+                # Ventas
+                rx.box(
+                    rx.text("Ventas", font_size="11px", color="#94A3B8", margin_bottom="2px"),
+                    rx.text(FoodState.comp_ventas_actual, font_size="18px",
+                            font_weight="800", color="#0F172A"),
+                    rx.hstack(
+                        rx.text(
+                            "vs " + FoodState.comp_ventas_anterior,
+                            font_size="11px", color="#64748B",
+                        ),
+                        rx.text(
+                            rx.cond(FoodState.comp_ventas_pct >= 0, "+", "") + FoodState.comp_ventas_pct.to_string() + "%",
+                            font_size="11px", font_weight="700",
+                            color=rx.cond(FoodState.comp_ventas_pct >= 0, "#16A34A", "#DC2626"),
+                        ),
+                        spacing="1", align="center",
+                    ),
+                    rx.text(FoodState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
+                    padding="10px", background="#FFFFFF", border_radius="8px",
+                    border="1px solid #E2E8F0",
+                ),
+                # Pedidos
+                rx.box(
+                    rx.text("Pedidos", font_size="11px", color="#94A3B8", margin_bottom="2px"),
+                    rx.text(FoodState.comp_pedidos_actual.to_string(), font_size="18px",
+                            font_weight="800", color="#0F172A"),
+                    rx.hstack(
+                        rx.text(
+                            "vs " + FoodState.comp_pedidos_anterior.to_string(),
+                            font_size="11px", color="#64748B",
+                        ),
+                        rx.text(
+                            rx.cond(FoodState.comp_pedidos_diff >= 0, "+", "") + FoodState.comp_pedidos_diff.to_string(),
+                            font_size="11px", font_weight="700",
+                            color=rx.cond(FoodState.comp_pedidos_diff >= 0, "#16A34A", "#DC2626"),
+                        ),
+                        spacing="1", align="center",
+                    ),
+                    rx.text(FoodState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
+                    padding="10px", background="#FFFFFF", border_radius="8px",
+                    border="1px solid #E2E8F0",
+                ),
+                # Ticket promedio
+                rx.box(
+                    rx.text("Ticket promedio", font_size="11px", color="#94A3B8", margin_bottom="2px"),
+                    rx.text(FoodState.comp_ticket_actual, font_size="18px",
+                            font_weight="800", color="#0F172A"),
+                    rx.hstack(
+                        rx.text(
+                            "vs " + FoodState.comp_ticket_anterior,
+                            font_size="11px", color="#64748B",
+                        ),
+                        rx.text(
+                            rx.cond(FoodState.comp_ticket_pct >= 0, "+", "") + FoodState.comp_ticket_pct.to_string() + "%",
+                            font_size="11px", font_weight="700",
+                            color=rx.cond(FoodState.comp_ticket_pct >= 0, "#16A34A", "#DC2626"),
+                        ),
+                        spacing="1", align="center",
+                    ),
+                    rx.text(FoodState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
+                    padding="10px", background="#FFFFFF", border_radius="8px",
+                    border="1px solid #E2E8F0",
+                ),
+                columns="3", spacing="3", width="100%",
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", width="100%",
+        ),
         # Margen por plato
         rx.box(
             rx.hstack(

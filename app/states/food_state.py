@@ -370,6 +370,22 @@ def _emoji_para_categoria(nombre: str) -> str:
     return "🍽️"
 
 
+_TAG_LABELS: dict[str, str] = {
+    "picante": "🌶️ Picante",
+    "veggie": "🌱 Vegetariano",
+    "vegano": "🥦 Vegano",
+    "sin_gluten": "🚫🌾 Sin gluten",
+    "frutos_secos": "🥜 Frutos secos",
+    "lacteos": "🥛 Lácteos",
+}
+
+
+def _tags_to_text(tags: list[str] | None) -> str:
+    if not tags:
+        return ""
+    return " · ".join(_TAG_LABELS.get(t, t) for t in tags)
+
+
 def _parse_positive_price(raw: str) -> Decimal | None:
     try:
         value = Decimal(raw.replace(",", ".").strip())
@@ -1119,6 +1135,7 @@ class FoodState(
             yield session
 
     pagina_cargada: bool = False
+    ultima_actualizacion: str = ""
     mozos_polling_enabled: bool = False
     cocina_polling_enabled: bool = False
     cocina_fullscreen: bool = False
@@ -2146,6 +2163,58 @@ class FoodState(
         self.config_menu_qr_base64 = _generar_qr_base64(url)
         self.mensaje = "Configuración guardada."
 
+    @rx.var
+    def ticket_preview_text(self) -> str:
+        from app.services.receipt_service import (
+            _center, _chars_for_mm, _format_sale_line, _line, _money, _row,
+        )
+        try:
+            paper_mm = int(self.config_ticket_paper_width_mm.strip())
+        except (ValueError, AttributeError):
+            paper_mm = 80
+        w = _chars_for_mm(paper_mm)
+        nombre = self.config_nombre_local.strip() or "Mi Restaurante"
+        items_demo = [
+            TicketLine(name="Lomo Saltado", quantity=2, unit_price=32.0, subtotal=64.0),
+            TicketLine(name="Inka Cola 500ml", quantity=2, unit_price=5.0, subtotal=10.0, note="bien fría"),
+            TicketLine(name="Ceviche Clásico", quantity=1, unit_price=38.0, subtotal=38.0),
+        ]
+        lines: list[str] = [_center(nombre.upper(), w)]
+        suc = self.config_sucursal.strip()
+        if suc:
+            lines.append(_center(suc.upper(), w))
+        ruc = self.config_ruc.strip()
+        if ruc:
+            lines.append(_center(f"RUC: {ruc}", w))
+        direc = self.config_direccion.strip()
+        if direc:
+            lines.append(_center(direc, w))
+        tel = self.config_telefono.strip()
+        if tel:
+            lines.append(_center(f"Tel.: {tel}", w))
+        lines += ["", _center("COMPROBANTE DE PAGO", w), _line(w), "Mesa 1", "Pedido: #99",
+                   "Atendido por: Demo", _line(w)]
+        for item in items_demo:
+            lines.extend(_format_sale_line(item, w))
+            if item.note:
+                lines.append(f"  * {item.note}")
+        lines.append(_line(w))
+        if self.config_mostrar_iva:
+            try:
+                pct = float(self.config_porcentaje_iva.strip() or "18")
+            except ValueError:
+                pct = 18.0
+            tax_name = self.config_nombre_impuesto.strip() or "IGV"
+            iva_amount = 112.0 * pct / (100 + pct)
+            net = 112.0 - iva_amount
+            lines.append(_row("Subtotal:", _money(net), w))
+            lines.append(_row(f"{tax_name} ({pct:.4g}%):", _money(iva_amount), w))
+        lines.append(_row("TOTAL A PAGAR:", _money(112.0), w))
+        lines += [_line(w), _row("Método de pago:", "Efectivo", w), _line(w)]
+        footer = self.config_mensaje_ticket.strip() or "¡Gracias por su preferencia!"
+        lines.append(_center(footer, w))
+        return "\n".join(lines)
+
     def imprimir_ticket_prueba(self):
         try:
             paper_mm = int(self.config_ticket_paper_width_mm.strip())
@@ -2750,6 +2819,7 @@ class FoodState(
             if hay_stuck:
                 session.commit()
         self.mesas = mesas_ui
+        self.ultima_actualizacion = ahora_local_pe().strftime("%H:%M:%S")
         if self.mesa_seleccionada_id and not any(m.id == self.mesa_seleccionada_id for m in self.mesas):
             self.mesa_seleccionada_id = 0
             self.carrito = []
@@ -4884,6 +4954,15 @@ class ProductoPublicoView(BaseModel):
     precio_texto: str
     imagen_url: str
     emoji: str = "🍽️"
+    tags_texto: str = ""
+
+
+class PromoPublicaView(BaseModel):
+    nombre: str = ""
+    descripcion: str = ""
+    descuento_texto: str = ""
+    horario_texto: str = ""
+    dias_texto: str = ""
 
 
 class CategoriaPublicaView(BaseModel):
@@ -4898,6 +4977,7 @@ class MenuPublicoState(rx.State):
     nombre_local: str = ""
     logo_url_local: str = ""
     categorias_menu: list[CategoriaPublicaView] = []
+    promos_activas: list[PromoPublicaView] = []
     cargando: bool = True
     no_encontrado: bool = False
     busqueda_menu: str = ""
@@ -4929,6 +5009,7 @@ class MenuPublicoState(rx.State):
         self.nombre_local = ""
         self.logo_url_local = ""
         self.categorias_menu = []
+        self.promos_activas = []
         self.busqueda_menu = ""
 
         if not slug:
@@ -4989,6 +5070,7 @@ class MenuPublicoState(rx.State):
                                     precio_texto=_money_text(p.precio),
                                     imagen_url=p.imagen_url or "",
                                     emoji=p.emoji or _emoji_para_producto(p.nombre),
+                                    tags_texto=_tags_to_text(p.tags),
                                 )
                                 for p in prods
                             ],
@@ -4996,6 +5078,44 @@ class MenuPublicoState(rx.State):
                     )
 
             self.categorias_menu = result
+
+            ahora = ahora_local_pe()
+            promos_db = session.exec(
+                select(Promocion).where(
+                    Promocion.company_id == company_id,
+                    Promocion.activa.is_(True),
+                )
+            ).all()
+            promo_views: list[PromoPublicaView] = []
+            for p in promos_db:
+                if not promo_vigente(p, ahora):
+                    continue
+                val = Decimal(str(p.valor))
+                if p.tipo in (TipoPromocion.PORCENTAJE.value, TipoPromocion.HAPPY_HOUR.value):
+                    dtxt = f"{val:.0f}% OFF"
+                elif p.tipo == TipoPromocion.DOSXUNO.value:
+                    dtxt = "2x1"
+                else:
+                    dtxt = f"S/ {val:.2f} OFF"
+                if p.hora_inicio and p.hora_fin:
+                    htxt = f"{p.hora_inicio} – {p.hora_fin}"
+                else:
+                    htxt = "Todo el día"
+                mask = p.dias_semana_mask or 127
+                if mask >= 127:
+                    dias = "Todos los días"
+                else:
+                    dias = ", ".join(
+                        abrev.capitalize() for abrev, _, bit in PROMO_DIAS if mask & bit
+                    ) or "Todos los días"
+                promo_views.append(PromoPublicaView(
+                    nombre=p.nombre,
+                    descripcion=p.descripcion or "",
+                    descuento_texto=dtxt,
+                    horario_texto=htxt,
+                    dias_texto=dias,
+                ))
+            self.promos_activas = promo_views
 
         self.cargando = False
 

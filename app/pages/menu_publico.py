@@ -4,7 +4,64 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.states.food_state import CategoriaPublicaView, MenuPublicoState, ProductoPublicoView
+from app.states.food_state import CategoriaPublicaView, MenuPublicoState, ProductoPublicoView, PromoPublicaView
+
+
+def _promo_card(promo: PromoPublicaView) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.text("🔥", font_size="16px", line_height="1"),
+                rx.text(
+                    promo.descuento_texto,
+                    font_size="14px", font_weight="800", color="#FFFFFF",
+                    line_height="1",
+                ),
+                spacing="1", align="center",
+            ),
+            rx.text(
+                promo.nombre, font_size="12px", font_weight="700",
+                color="#FED7AA", line_height="1.2", no_of_lines=2,
+            ),
+            rx.cond(
+                promo.descripcion != "",
+                rx.text(
+                    promo.descripcion, font_size="10px", color="#FDBA74",
+                    line_height="1.3", no_of_lines=2,
+                ),
+                rx.fragment(),
+            ),
+            rx.text(
+                promo.horario_texto + " · " + promo.dias_texto,
+                font_size="9px", color="#FB923C", line_height="1",
+            ),
+            spacing="1", align="start",
+        ),
+        background="linear-gradient(135deg, #9A3412, #C2410C)",
+        border_radius="12px",
+        padding="10px 14px",
+        min_width="180px",
+        max_width="220px",
+        flex_shrink="0",
+    )
+
+
+def _promos_banner() -> rx.Component:
+    return rx.cond(
+        MenuPublicoState.promos_activas.length() > 0,
+        rx.box(
+            rx.hstack(
+                rx.foreach(MenuPublicoState.promos_activas, _promo_card),
+                spacing="2",
+                overflow_x="auto",
+                width="100%",
+                padding_bottom="4px",
+            ),
+            padding="0 16px 8px",
+            width="100%",
+        ),
+        rx.fragment(),
+    )
 
 
 def _categoria_chip(cat: CategoriaPublicaView, idx: int) -> rx.Component:
@@ -46,6 +103,12 @@ def _producto_item(prod: ProductoPublicoView) -> rx.Component:
                 prod.descripcion != "",
                 rx.text(prod.descripcion, font_size="12px", color="#64748B",
                         line_height="1.4", no_of_lines=2),
+                rx.fragment(),
+            ),
+            rx.cond(
+                prod.tags_texto != "",
+                rx.text(prod.tags_texto, font_size="10px", color="#94A3B8",
+                        line_height="1.3"),
                 rx.fragment(),
             ),
             rx.text(prod.precio_texto, font_size="18px", font_weight="800", color="#EA580C", margin_top="6px"),
@@ -148,6 +211,8 @@ def _menu_content() -> rx.Component:
                 position="sticky", top="0", z_index="10",
                 width="100%",
             ),
+            # Promos activas
+            _promos_banner(),
             # Loading
             rx.cond(
                 MenuPublicoState.cargando,
@@ -198,7 +263,7 @@ def _menu_content() -> rx.Component:
                                 rx.vstack(
                                     rx.icon(tag="search_x", size=40, color="#CBD5E1"),
                                     rx.text("Sin resultados", font_size="15px", font_weight="600", color="#475569"),
-                                    rx.text("Probá con otro término", font_size="13px", color="#94A3B8"),
+                                    rx.text("Pruebe con otro término", font_size="13px", color="#94A3B8"),
                                     spacing="2", align="center",
                                 ),
                                 padding_y="60px", width="100%",

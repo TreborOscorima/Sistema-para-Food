@@ -491,6 +491,44 @@ def _prod_modal() -> rx.Component:
                     ),
                     spacing="2", width="100%",
                 ),
+                # ── Etiquetas ────────────────────────────────────────────────
+                rx.vstack(
+                    rx.text("Etiquetas", font_size="12px", font_weight="600", color="#64748B"),
+                    rx.hstack(
+                        *[
+                            rx.box(
+                                f"{emoji} {label}",
+                                on_click=FoodState.toggle_producto_tag(tag),
+                                background=rx.cond(
+                                    FoodState.producto_form_tags.contains(tag),
+                                    "#FFF7ED", "#F8FAFC",
+                                ),
+                                color=rx.cond(
+                                    FoodState.producto_form_tags.contains(tag),
+                                    "#C2410C", "#64748B",
+                                ),
+                                border=rx.cond(
+                                    FoodState.producto_form_tags.contains(tag),
+                                    "1.5px solid #EA580C", "1px solid #E2E8F0",
+                                ),
+                                font_size="11px", font_weight="600",
+                                padding="4px 10px", border_radius="14px",
+                                cursor="pointer",
+                                _hover={"border_color": "#EA580C"},
+                            )
+                            for tag, emoji, label in [
+                                ("picante", "🌶️", "Picante"),
+                                ("veggie", "🌱", "Vegetariano"),
+                                ("vegano", "🥦", "Vegano"),
+                                ("sin_gluten", "🚫🌾", "Sin gluten"),
+                                ("frutos_secos", "🥜", "Frutos secos"),
+                                ("lacteos", "🥛", "Lácteos"),
+                            ]
+                        ],
+                        gap="6px", flex_wrap="wrap", width="100%",
+                    ),
+                    spacing="2", width="100%",
+                ),
                 # ── Imagen ───────────────────────────────────────────────────
                 rx.vstack(
                     rx.text("Imagen del plato", font_size="12px", font_weight="600", color="#64748B"),

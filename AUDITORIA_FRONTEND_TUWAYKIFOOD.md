@@ -335,16 +335,52 @@ El panel dono ya existe; una vista resumida mobile-first (ventas en vivo, mesas 
 - ✅ CF-01 (ticket de prueba en config — botón en sección Impresoras genera ticket demo con datos del local)
 - ✅ RP-01 (gráficos reales con rx.recharts — bar_chart para ventas por hora y por mozo con tooltip, responsive_container, loading_placeholder en reportes)
 
-**Sprint C — Modelo de producto profesional (P1 grande): EN PROGRESO**
+**Sprint C — Modelo de producto profesional (P1 grande): ✅ COMPLETADO**
 - ✅ FEAT-01 + BE-07 (modificadores de producto — 3 tablas: GrupoModificador, OpcionModificador, ProductoGrupoModificador + DetallePedido.modificadores_json; admin CRUD en /carta con modal grupo+opciones y asignación a productos; modal selección en mozos y mostrador con validación min/max; display en carrito, KDS y tickets; migración 72325b029491)
 - ✅ FEAT-02 (combos a precio fijo — 2 tablas: Combo, ComboItem + DetallePedido.combo_items_json; admin CRUD en /carta con modal nombre/precio/emoji/items; catálogo en mozos y mostrador con cards; display combo badge en carrito; KDS muestra componentes; stock se descuenta por componentes; ticket cobro muestra detalles combo; migración 211cb3440c87)
 - ✅ CJ-06 (confirmación post-cobro — ya implementado: toast success + auto-print ticket al confirmar cobro)
 - ✅ CJ-07 (ticket cierre turno — ya implementado: generate_cash_close_ticket_html + build_print_script al cerrar turno)
-- FEAT-03 (happy hour) → CJ-02 + BE-06 (split por ítems).
+- ✅ FEAT-03 (happy hour / promos por horario — ya implementado: modelo Promocion con hora_inicio/hora_fin/dias_semana_mask, TipoPromocion.HAPPY_HOUR, promo_service.promo_vigente() con validación día+hora+midnight crossing, form con time inputs y day toggles, auto-aplicación en cobro via mejor_promo(), cards con horario_texto/dias_texto y badge "Aplica ahora")
+- ✅ CJ-02 + BE-06 (split por ítems — ya implementado: _pagos_divididos_panel con toggle caja_split_por_items, selección individual de ítems, subtotal seleccionado, cobro parcial)
 
-**Continuo:** BE-01 (un mixin extraído por sprint), UI-01 fase d (migración de hex a constantes en cada página tocada), UI-14 (copy).
+**Extras implementados (sesión 2026-07-07):** (commit `1a45214`)
+- ✅ Recargo (surcharge) — campo recargo + recargo_concepto en Pedido, input en cobro panel, persistencia en confirmar_cobro, display en ticket; migración d7a3b9e2f401
+- ✅ Redistribución layout Caja — terminal 340px con ajustes (descuento/propina/cupón/recargo en grids 2×2), receipt solo items+subtotal, método pago 4 columnas
+- ✅ Fix TipoPedido.PARA_LLEVAR → MOSTRADOR en cargar_ultimos_cobros y reimprimir_comprobante
+- ✅ Fix input Efectivo recibido (height=44px, font-weight=800, border visible)
 
-**Fase 3 (a acordar con el usuario):** FEAT-04, FEAT-05, FEAT-06, FEAT-07, bcrypt de PINs.
+**Ítems P2 ya implementados (verificados 2026-07-07):**
+- ✅ MZ-04 (nombre del mozo en card de mesa — 👤 mozo_nombre visible en _mesa_card)
+- ✅ MZ-05 (leyenda de estados — Libre/Ocupada/Cuenta/Items listos con indicadores de color)
+- ✅ CT-02 (reordenar categorías con botones ↑/↓ — mover_categoria handler)
+- ✅ CT-03 (duplicar producto — duplicar_producto handler + botón en carta)
+- ✅ CT-04 (margen inline — margen_pct con badge % coloreado por rango en _producto_row)
+- ✅ RP-03 (desglose por método de pago — bar_chart con reporte_metodos en reportes)
+- ✅ UI-03 (responsive mobile — _mobile_nav_drawer con rx.drawer)
+- ✅ UI-12 (z-index scale — Z_STICKY_HEADER/Z_DRAWER/Z_MODAL en theme.py, importados en shared.py)
+- ✅ UI-14 (copy consistente — sin voseo ni tuteo regional, usted imperativo unificado)
+- ✅ BE-01 (6 mixins extraídos: caja_turno, carta, reportes, clientes_cuentas, inventario, promos_cupones)
+
+**Implementados (sesión 2026-07-07b):**
+- ✅ MP-03 (promos activas como banner en menú público — PromoPublicaView, query vigencia en on_load, banner horizontal scrollable con cards gradient)
+- ✅ UI-13 (indicador de actualización — timestamp ultima_actualizacion + ícono refresh compacto en caja y cocina, reemplaza botón "Actualizar" redundante)
+- ✅ MP-04 + BE-08 (etiquetas de producto — campo tags JSON en Producto, migración e8f1a2b3c4d5, toggle chips en form carta [picante/veggie/vegano/sin_gluten/frutos_secos/lácteos], tags_texto en menú público, _TAG_LABELS helper)
+- ✅ RP-02 (comparativa entre períodos — _cargar_comparativa calcula ventas/pedidos/ticket del período anterior simétrico, 3 cards con pct change verde/rojo en reportes)
+- ✅ CF-02 (preview del ticket — computed var ticket_preview_text con monospace preview en vivo al lado del form de configuración, se actualiza al editar campos)
+- ✅ Fix copy "Probá" → "Pruebe" en menú público (último voseo residual)
+- ✅ Fix es-toolkit patch script — TypeError en docker-entrypoint.sh línea 141 (.startswith sobre dict cuando exports usa formato condicional anidado)
+
+**AUDITORÍA COMPLETADA.** Todos los ítems P0, P1 y P2 de los Sprints A, B y C están implementados y verificados.
+
+**Pendiente continuo:**
+- UI-01d (migración de hex restantes a constantes de theme.py — se hace incrementalmente al tocar cada página)
+
+**Fase 3 (a acordar con el usuario):**
+- FEAT-04 · Reservas de mesa (CRUD fecha/hora/pax/cliente + indicador en mapa mozos)
+- FEAT-05 · Self-order desde QR (carrito + llamar mozo + cola de aprobación)
+- FEAT-06 · Facturación electrónica SUNAT (boleta/factura con IGV, integración PSE/OSE)
+- FEAT-07 · Módulo Delivery (canal delivery como TipoPedido, dirección/teléfono, estado reparto)
+- BE-10 · Deudas técnicas: bcrypt de PINs, cobrar_mesa descuente stock, on_unload polling
 
 ---
 

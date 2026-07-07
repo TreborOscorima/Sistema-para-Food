@@ -78,6 +78,7 @@ class CartaMixin(rx.State, mixin=True):
     producto_form_disponible: bool = True
     producto_form_imagen_url: str = ""
     producto_form_emoji: str = ""
+    producto_form_tags: list[str] = []
 
     # Modificadores (admin)
     grupos_modificadores: list[GrupoModificadorAdminView] = []
@@ -1051,6 +1052,12 @@ class CartaMixin(rx.State, mixin=True):
     def set_producto_form_emoji(self, v: str) -> None:
         self.producto_form_emoji = str(v)[:8]
 
+    def toggle_producto_tag(self, tag: str) -> None:
+        if tag in self.producto_form_tags:
+            self.producto_form_tags = [t for t in self.producto_form_tags if t != tag]
+        else:
+            self.producto_form_tags = self.producto_form_tags + [tag]
+
     def guardar_producto(self) -> None:
         nombre = self.producto_form_nombre.strip()
         if not nombre:
@@ -1082,6 +1089,7 @@ class CartaMixin(rx.State, mixin=True):
                 prod.disponible = self.producto_form_disponible
                 prod.imagen_url = self.producto_form_imagen_url or None
                 prod.emoji = self.producto_form_emoji.strip() or None
+                prod.tags = self.producto_form_tags or None
                 prod.updated_at = _utcnow()
                 session.add(prod)
             else:
@@ -1094,6 +1102,7 @@ class CartaMixin(rx.State, mixin=True):
                     disponible=self.producto_form_disponible,
                     imagen_url=self.producto_form_imagen_url or None,
                     emoji=self.producto_form_emoji.strip() or None,
+                    tags=self.producto_form_tags or None,
                 )
                 session.add(prod)
             session.commit()
@@ -1117,6 +1126,7 @@ class CartaMixin(rx.State, mixin=True):
         with self._tenant_session() as session:
             prod_db = session.get(Producto, producto_id)
             self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
+            self.producto_form_tags = list(prod_db.tags) if prod_db and prod_db.tags else []
         self.carta_prod_modal = True
 
     def duplicar_producto(self, producto_id: int) -> None:
@@ -1133,6 +1143,7 @@ class CartaMixin(rx.State, mixin=True):
         with self._tenant_session() as session:
             prod_db = session.get(Producto, producto_id)
             self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
+            self.producto_form_tags = list(prod_db.tags) if prod_db and prod_db.tags else []
         self.carta_prod_modal = True
 
     def toggle_producto_disponible(self, producto_id: int):
@@ -1159,6 +1170,7 @@ class CartaMixin(rx.State, mixin=True):
         self.producto_form_disponible = True
         self.producto_form_imagen_url = ""
         self.producto_form_emoji = ""
+        self.producto_form_tags = []
         if self.categorias:
             self.producto_form_categoria_nombre = self.categorias[0].nombre
 

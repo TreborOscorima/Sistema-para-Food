@@ -816,6 +816,33 @@ def _content_local() -> rx.Component:
                         ),
                         spacing="3", width="100%",
                     ),
+                    # Preview del ticket
+                    rx.box(
+                        rx.hstack(
+                            rx.icon(tag="eye", size=13, color="#64748B"),
+                            rx.text("Vista previa del ticket", font_size="12px",
+                                    font_weight="600", color="#64748B"),
+                            spacing="1", align="center", margin_bottom="6px",
+                        ),
+                        rx.box(
+                            rx.text(
+                                FoodState.ticket_preview_text,
+                                font_family="'Courier New', Courier, monospace",
+                                font_size="10px",
+                                line_height="1.35",
+                                color="#1E293B",
+                                white_space="pre",
+                            ),
+                            background="#FFFDF7",
+                            border="1px solid #E2E8F0",
+                            border_radius="6px",
+                            padding="10px",
+                            overflow_x="auto",
+                            max_height="340px",
+                            overflow_y="auto",
+                        ),
+                        width="100%",
+                    ),
                     rx.button(
                         rx.hstack(
                             rx.icon(tag="save", size=14, color="#FFFFFF"),

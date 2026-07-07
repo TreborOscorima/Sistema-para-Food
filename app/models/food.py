@@ -154,6 +154,7 @@ class Producto(TimestampedModel, table=True):
     imagen_url: str | None = Field(default=None, max_length=500)
     emoji: str | None = Field(default=None, max_length=16)
     estacion: str | None = Field(default=None, max_length=20)
+    tags: list[str] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
 
     categoria: Categoria | None = Relationship(back_populates="productos")
     detalles: list["DetallePedido"] = Relationship(back_populates="producto")

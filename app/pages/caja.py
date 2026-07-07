@@ -1411,13 +1411,18 @@ def _caja_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
-            rx.button(
-                "Actualizar",
-                on_click=FoodState.cargar_mesas,
-                background="#FFFFFF", color="#EA580C",
-                border="1px solid #E2E8F0", border_radius="8px",
-                font_size="13px", font_weight="600", cursor="pointer",
-                _hover={"border_color": "#EA580C"},
+            rx.hstack(
+                rx.text(
+                    FoodState.ultima_actualizacion,
+                    font_size="11px", color="#94A3B8",
+                ),
+                rx.icon(
+                    tag="refresh_cw", size=14, color="#EA580C",
+                    cursor="pointer",
+                    on_click=FoodState.cargar_mesas,
+                    _hover={"opacity": "0.7"},
+                ),
+                spacing="1", align="center",
             ),
             width="100%", align="center",
         ),

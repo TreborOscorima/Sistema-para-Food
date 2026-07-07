@@ -138,7 +138,8 @@ try:
         pkg = json.load(f)
 
     compat_exp = pkg.get('exports', {}).get('./compat/*', {})
-    if isinstance(compat_exp, dict) and compat_exp.get('import', '').startswith('./compat-esm/'):
+    import_val = compat_exp.get('import', '') if isinstance(compat_exp, dict) else ''
+    if isinstance(import_val, str) and import_val.startswith('./compat-esm/'):
         print('[PATCH-BG] es-toolkit ya parcheado — OK')
         sys.exit(0)
 

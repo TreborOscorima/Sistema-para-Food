@@ -67,6 +67,19 @@ class ReportesMixin(rx.State, mixin=True):
     reporte_margen: list[MargenPlatoView] = []
     reporte_metodos: list[dict[str, object]] = []
 
+    # ── State vars — Comparativa entre períodos ──────────────────────────────
+    comp_label_actual: str = "Período actual"
+    comp_label_anterior: str = "Período anterior"
+    comp_ventas_actual: str = "S/ 0.00"
+    comp_ventas_anterior: str = "S/ 0.00"
+    comp_ventas_pct: int = 0
+    comp_pedidos_actual: int = 0
+    comp_pedidos_anterior: int = 0
+    comp_pedidos_diff: int = 0
+    comp_ticket_actual: str = "S/ 0.00"
+    comp_ticket_anterior: str = "S/ 0.00"
+    comp_ticket_pct: int = 0
+
     # ── State vars — Historial filtros ───────────────────────────────────────
     historial_filtro_fecha_desde: str = ""
     historial_filtro_fecha_hasta: str = ""
@@ -404,6 +417,72 @@ class ReportesMixin(rx.State, mixin=True):
             {"metodo": labels.get(m, m.title()), "total": v["total"], "count": v["count"]}
             for m, v in sorted(pagos_por_metodo.items(), key=lambda x: -float(x[1]["total"]))
         ]
+        self._cargar_comparativa()
+
+    def _cargar_comparativa(self) -> None:
+        desde, hasta = self._rango_filtros_historial()
+        if desde is None:
+            desde = datetime.combine(_utcnow().date(), datetime.min.time())
+        if hasta is None:
+            hasta = datetime.combine(_utcnow().date(), datetime.max.time())
+        delta = hasta - desde
+        anterior_hasta = desde - timedelta(seconds=1)
+        anterior_desde = anterior_hasta - delta
+
+        dias_actual = max(delta.days, 1)
+        if dias_actual <= 1:
+            self.comp_label_actual = "Hoy"
+            self.comp_label_anterior = "Ayer"
+        elif dias_actual <= 7:
+            self.comp_label_actual = "Esta semana"
+            self.comp_label_anterior = "Semana anterior"
+        else:
+            self.comp_label_actual = f"Últimos {dias_actual} días"
+            self.comp_label_anterior = f"{dias_actual} días previos"
+
+        cobrado_filter = or_(
+            Pedido.pagado.is_(True),
+            Pedido.estado == EstadoPedido.COBRADO.value,
+        )
+        with self._tenant_session() as session:
+            pedidos_act = session.exec(
+                select(Pedido).where(
+                    Pedido.company_id == self._company_id(),
+                    cobrado_filter,
+                    Pedido.cerrado_en >= desde,
+                    Pedido.cerrado_en <= hasta,
+                )
+            ).all()
+            pedidos_ant = session.exec(
+                select(Pedido).where(
+                    Pedido.company_id == self._company_id(),
+                    cobrado_filter,
+                    Pedido.cerrado_en >= anterior_desde,
+                    Pedido.cerrado_en <= anterior_hasta,
+                )
+            ).all()
+
+        ventas_act = sum(_to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0)) for p in pedidos_act)
+        ventas_ant = sum(_to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0)) for p in pedidos_ant)
+        count_act = len(pedidos_act)
+        count_ant = len(pedidos_ant)
+        ticket_act = ventas_act / count_act if count_act else Decimal("0.00")
+        ticket_ant = ventas_ant / count_ant if count_ant else Decimal("0.00")
+
+        def _pct(a: Decimal, b: Decimal) -> int:
+            if b <= 0:
+                return 100 if a > 0 else 0
+            return int(round((a - b) / b * 100))
+
+        self.comp_ventas_actual = _money_text(ventas_act)
+        self.comp_ventas_anterior = _money_text(ventas_ant)
+        self.comp_ventas_pct = _pct(ventas_act, ventas_ant)
+        self.comp_pedidos_actual = count_act
+        self.comp_pedidos_anterior = count_ant
+        self.comp_pedidos_diff = count_act - count_ant
+        self.comp_ticket_actual = _money_text(ticket_act)
+        self.comp_ticket_anterior = _money_text(ticket_ant)
+        self.comp_ticket_pct = _pct(ticket_act, ticket_ant)
 
     def buscar_historial_manual(self) -> None:
         self.historial_filtro_rapido = "personalizado"
