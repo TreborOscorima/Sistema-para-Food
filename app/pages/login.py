@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import _CSS_SCRIPT, _connection_banner_es
+from app.components.shared import _connection_banner_es
 from app.states.food_state import CompanyOptionView, FoodState
 
 
@@ -254,9 +254,8 @@ def _login_card() -> rx.Component:
             gap="8px",
             margin_bottom="28px",
         ),
-        # Ingresa tu PIN
         rx.text(
-            "Ingresa tu PIN",
+            "Ingrese su PIN",
             font_size="11px",
             font_weight="700",
             color="#64748B",
@@ -420,7 +419,6 @@ def _brand_logo_box() -> rx.Component:
          title="TUWAYKIFOOD | Iniciar Sesión")
 def login_page() -> rx.Component:
     return rx.box(
-        rx.script(_CSS_SCRIPT),
         _connection_banner_es(),
         rx.el.input(
             id="login-key-capture",

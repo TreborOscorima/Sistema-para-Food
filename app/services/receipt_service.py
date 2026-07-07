@@ -128,6 +128,9 @@ def generate_cashier_ticket_html(
     company_direccion: str = "",
     company_telefono: str = "",
     descuento: float = 0.0,
+    propina: float = 0.0,
+    recargo: float = 0.0,
+    recargo_concepto: str = "",
     metodo_pago: str = "",
     mensaje_footer: str = "",
     mostrar_iva: bool = False,
@@ -170,6 +173,12 @@ def generate_cashier_ticket_html(
     lines.append(_line(width))
     if descuento > 0:
         lines.append(_row("Descuento:", "-" + _money(descuento), width))
+    if recargo > 0:
+        label = f"Recargo ({recargo_concepto}):" if recargo_concepto else "Recargo:"
+        lines.append(_row(label, "+" + _money(recargo), width))
+    if propina > 0:
+        lines.append(_row("Propina:", "+" + _money(propina), width))
+    if descuento > 0 or recargo > 0 or propina > 0:
         lines.append(_line(width))
     if mostrar_iva and porcentaje_iva > 0:
         iva_amount = total * porcentaje_iva / (100 + porcentaje_iva)

@@ -361,7 +361,7 @@ def _mesas_section() -> rx.Component:
                         rx.icon(tag="layout_grid", size=28, color="#CBD5E1"),
                         rx.text("Sin mesas configuradas", font_size="13px",
                                 color="#94A3B8"),
-                        rx.text("Agregá mesas usando el formulario de arriba.",
+                        rx.text("Agregue mesas usando el formulario de arriba.",
                                 font_size="11px", color="#CBD5E1"),
                         spacing="1", align="center",
                     ),
@@ -707,7 +707,7 @@ def _content_local() -> rx.Component:
                             rx.upload(
                                 rx.vstack(
                                     rx.icon(tag="image_plus", size=20, color="#94A3B8"),
-                                    rx.text("Arrastra o haz click", font_size="11px",
+                                    rx.text("Arrastre o haga clic", font_size="11px",
                                             color="#64748B"),
                                     rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px",
                                             color="#94A3B8"),

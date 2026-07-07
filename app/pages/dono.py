@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.states.food_state import AdminLocalState, FoodState
-from app.components.shared import _CSS_SCRIPT, _connection_banner_es
+from app.components.shared import _connection_banner_es
 from app.components.theme import (
     ACCENT as _ORANGE,
     ACCENT_HOVER as _ORANGE_DK,
@@ -708,7 +708,6 @@ def _dono_shell(content: rx.Component, with_sidebar: bool = False) -> rx.Compone
         )
 
     return rx.box(
-        rx.script(_CSS_SCRIPT),
         rx.vstack(
             _dono_topbar(show_hamburger=with_sidebar),
             body,
@@ -812,7 +811,6 @@ def _brand_banner() -> rx.Component:
          title="TUWAYKIFOOD | Acceso Administrativo")
 def dono_login_page() -> rx.Component:
     return rx.box(
-        rx.script(_CSS_SCRIPT),
         _connection_banner_es(),
         rx.center(
             rx.vstack(
@@ -821,7 +819,7 @@ def dono_login_page() -> rx.Component:
                     rx.text("Panel Administrativo", font_size="22px",
                             font_weight="800", color=_WHITE,
                             text_align="center"),
-                    rx.text("Ingresa con tu email y contraseña",
+                    rx.text("Ingrese con su email y contraseña",
                             font_size="13px", color="#475569",
                             text_align="center"),
                     spacing="1", align="center",

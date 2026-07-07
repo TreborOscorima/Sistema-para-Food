@@ -598,7 +598,7 @@ def _modal_transfer() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.text(
-                    "Selecciona la mesa destino. Si está ocupada, los pedidos se fusionarán.",
+                    "Seleccione la mesa destino. Si está ocupada, los pedidos se fusionarán.",
                     font_size="12px", color="#94A3B8",
                 ),
                 rx.flex(
@@ -714,7 +714,7 @@ def _modal_seleccion_mods() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.text(
-                    "Elegí las opciones para este producto",
+                    "Seleccione las opciones para este producto",
                     font_size="12px", color="#94A3B8",
                 ),
                 rx.box(

@@ -697,6 +697,15 @@ class CuponLoteView(BaseModel):
     vencido: bool = False
 
 
+class UltimoCobroView(BaseModel):
+    pedido_id: int = 0
+    hora: str = ""
+    referencia: str = ""
+    detalle: str = ""
+    total_texto: str = ""
+    metodo_pago: str = ""
+
+
 class UsuarioSesion(BaseModel):
     id: int
     nombre: str
@@ -1024,9 +1033,25 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
             registrar_consumo(session, ins, uso_total, pedido_id)
 
 
+# ─── Imports de mixins (después de ViewModels/helpers para evitar circular) ───
+from app.states.carta_mixin import CartaMixin
+from app.states.clientes_cuentas_mixin import ClientesCuentasMixin
+from app.states.inventario_mixin import InventarioMixin
+from app.states.promos_cupones_mixin import PromosCuponesMixin
+from app.states.reportes_mixin import ReportesMixin
+
+
 # ─── Estado principal ─────────────────────────────────────────────────────────
 
-class FoodState(CajaTurnoMixin, rx.State):
+class FoodState(
+    CajaTurnoMixin,
+    ReportesMixin,
+    CartaMixin,
+    InventarioMixin,
+    ClientesCuentasMixin,
+    PromosCuponesMixin,
+    rx.State,
+):
     """Estado global de la app TUWAYKIFOOD."""
 
     mesas: list[MesaView] = []
@@ -1093,59 +1118,6 @@ class FoodState(CajaTurnoMixin, rx.State):
             session.info["tenant_bypass"] = True
             yield session
 
-    carta_cat_modal: bool = False
-    carta_prod_modal: bool = False
-    carta_busqueda_productos: str = ""
-    carta_productos_pagina: int = 1
-
-    categoria_form_id: int = 0
-    categoria_form_nombre: str = ""
-    categoria_form_descripcion: str = ""
-    categoria_form_orden: str = "1"
-    categoria_form_estacion: str = "cocina"
-
-    producto_form_id: int = 0
-    producto_form_categoria_nombre: str = ""
-    producto_form_nombre: str = ""
-    producto_form_descripcion: str = ""
-    producto_form_precio: str = ""
-    producto_form_disponible: bool = True
-    producto_form_imagen_url: str = ""
-    producto_form_emoji: str = ""
-
-    # Modificadores (admin)
-    grupos_modificadores: list[GrupoModificadorAdminView] = []
-    mod_grupo_modal: bool = False
-    mod_grupo_form_id: int = 0
-    mod_grupo_form_nombre: str = ""
-    mod_grupo_form_min: str = "0"
-    mod_grupo_form_max: str = "1"
-    mod_opciones_form: list[dict[str, str]] = []
-    mod_asignar_modal: bool = False
-    mod_asignar_producto_id: int = 0
-    mod_asignar_producto_nombre: str = ""
-    mod_asignar_grupo_ids: list[int] = []
-
-    # Modificadores (selección al pedir)
-    mod_seleccion_modal: bool = False
-    mod_seleccion_producto_id: int = 0
-    mod_seleccion_producto_nombre: str = ""
-    mod_seleccion_producto_precio: float = 0.0
-    mod_seleccion_grupos: list[dict[str, object]] = []
-    mod_seleccion_elegidos: dict[str, list[int]] = {}
-    mod_seleccion_origen: str = "mozos"
-
-    # Combos
-    combos_admin: list[dict[str, object]] = []
-    combos_menu: list[dict[str, object]] = []
-    combo_modal: bool = False
-    combo_form_id: int = 0
-    combo_form_nombre: str = ""
-    combo_form_descripcion: str = ""
-    combo_form_precio: str = ""
-    combo_form_emoji: str = ""
-    combo_form_items: list[dict[str, str]] = []
-
     pagina_cargada: bool = False
     mozos_polling_enabled: bool = False
     cocina_polling_enabled: bool = False
@@ -1177,6 +1149,10 @@ class FoodState(CajaTurnoMixin, rx.State):
     nota_producto_activo_id: int = 0
     nota_input_temporal: str = ""
 
+    # Caja — cliente vinculado al cobro (fiado / facturación)
+    caja_cobro_cliente_nombre: str = ""
+    caja_cobro_cliente_id: int = 0
+
     # Caja — flujo de cobro con método de pago
     caja_cobro_mesa_id: int = 0
     caja_cobro_metodo: str = "efectivo"
@@ -1184,6 +1160,8 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_cobro_propina_pct: int = 0
     caja_cobro_descuento: str = ""
     caja_cobro_descuento_es_pct: bool = False
+    caja_cobro_recargo: str = ""
+    caja_cobro_recargo_concepto: str = "delivery"
     caja_cobro_efectivo_recibido: str = ""
     caja_cobro_error: str = ""
     caja_cobro_items: list[CajaItemView] = []
@@ -1199,6 +1177,10 @@ class FoodState(CajaTurnoMixin, rx.State):
     caja_pago_staged_monto: str = ""
     caja_pagos_staged: list[PagoStagedView] = []
 
+    # Últimos cobros — modal de reimpresión
+    ultimos_cobros_visible: bool = False
+    ultimos_cobros: list[UltimoCobroView] = []
+
     # Anulación auditada de pedidos/ventas
     anulacion_modal_visible: bool = False
     anulacion_pedido_id: int = 0
@@ -1206,44 +1188,6 @@ class FoodState(CajaTurnoMixin, rx.State):
     anulacion_referencia: str = ""
     anulacion_motivo: str = ""
     anulacion_error: str = ""
-
-    # Dashboard KPIs
-    dashboard_ventas_hoy_texto: str = "S/ 0.00"
-    dashboard_pedidos_hoy: int = 0
-    dashboard_mesas_ocupadas: int = 0
-    dashboard_propina_hoy_texto: str = "S/ 0.00"
-    dashboard_ticket_promedio_texto: str = "S/ 0.00"
-    dashboard_top_platos: list[TopPlatoView] = []
-    dashboard_ventas_trend_pct: int = 0
-    dashboard_pedidos_trend: int = 0
-    dashboard_ticket_trend_pct: int = 0
-    dashboard_propina_trend_pct: int = 0
-
-    # Historial — filtros
-    # Analítica de reportes (P6)
-    reporte_mozos: list[MozoRankView] = []
-    reporte_horas: list[FranjaHoraView] = []
-    reporte_margen: list[MargenPlatoView] = []
-    reporte_metodos: list[dict[str, object]] = []
-
-    historial_filtro_fecha_desde: str = ""
-    historial_filtro_fecha_hasta: str = ""
-    historial_filtro_metodo: str = ""
-    historial_filtro_rapido: str = "hoy"
-    historial_pagina: int = 0
-    historial_total: int = 0
-    _HISTORIAL_PAGE_SIZE: int = 50
-
-    # Historial — detalle de venta (modal)
-    venta_detalle_visible: bool = False
-    venta_detalle_pedido_id: int = 0
-    venta_detalle_mesa_label: str = ""
-    venta_detalle_metodo: str = ""
-    venta_detalle_mozo: str = ""
-    venta_detalle_cajero: str = ""
-    venta_detalle_total_texto: str = ""
-    venta_detalle_propina_texto: str = ""
-    venta_detalle_items: list[VentaDetalleItemView] = []
 
     # Nota global del pedido de mesa activo
     nota_pedido_mesa: str = ""
@@ -1278,149 +1222,8 @@ class FoodState(CajaTurnoMixin, rx.State):
     mesa_config_form_capacidad: str = "4"
     mesa_config_form_sector: str = "Salón"
 
-    # Inventario de insumos / recetas
-    inv_insumos: list[InsumoView] = []
-    inv_alertas_bajo_stock: list[str] = []
-    inv_form_id: int = 0
-    inv_form_nombre: str = ""
-    inv_form_unidad: str = "unidad"
-    inv_form_stock_actual: str = ""
-    inv_form_stock_minimo: str = ""
-    inv_form_vencimiento: str = ""
-    inv_form_costo: str = ""
-    inv_form_editando: bool = False
-    inv_form_visible: bool = False
-
-    # Kardex — movimiento manual (entrada / merma / ajuste) + historial
-    inv_mov_modal_visible: bool = False
-    inv_mov_insumo_id: int = 0
-    inv_mov_insumo_nombre: str = ""
-    inv_mov_tipo: str = "entrada"
-    inv_mov_cantidad: str = ""
-    inv_mov_merma_categoria: str = "Vencido"
-    inv_mov_motivo: str = ""
-    inv_mov_error: str = ""
-    inv_kardex_visible: bool = False
-    inv_kardex_insumo_nombre: str = ""
-    inv_kardex_movimientos: list[KardexView] = []
-    inv_alertas_vencimiento: list[str] = []
-    inv_search: str = ""
-    inv_producto_sel_nombre: str = ""
-    inv_producto_sel_id: int = 0
-    inv_receta_items: list[RecetaItemView] = []
-    inv_receta_insumo_sel_nombre: str = ""
-    inv_receta_cantidad: str = ""
-
-    # Clientes
-    clientes_lista: list[ClienteView] = []
-    cli_busqueda: str = ""
-    cli_form_id: int = 0
-    cli_form_nombre: str = ""
-    cli_form_telefono: str = ""
-    cli_form_email: str = ""
-    cli_form_fecha_nac: str = ""
-    cli_form_notas: str = ""
-    cli_form_editando: bool = False
-    cli_form_visible: bool = False
-    cli_dni_ruc: str = ""
-    cli_dni_ruc_buscando: bool = False
-    cli_dni_ruc_error: str = ""
-    caja_cobro_cliente_nombre: str = ""
-    caja_cobro_cliente_id: int = 0
-
-    # Cuentas corrientes
-    cuentas_lista: list[CuentaView] = []
-    cuenta_sel_id: int = 0
-    cuenta_movimientos: list[MovimientoView] = []
-    cc_pago_monto: str = ""
-    cc_pago_descripcion: str = ""
-    cc_cliente_sel_nombre: str = ""
-
-    # Promociones
-    promociones_lista: list[PromocionView] = []
-    promo_form_id: int = 0
-    promo_form_nombre: str = ""
-    promo_form_tipo: str = TipoPromocion.PORCENTAJE.value
-    promo_form_valor: str = ""
-    promo_form_descripcion: str = ""
-    promo_form_hora_inicio: str = ""
-    promo_form_hora_fin: str = ""
-    promo_form_dias_mask: int = 127
-    promo_form_alcance: str = "todo"  # todo | categoria | producto
-    promo_form_categoria_nombre: str = ""
-    promo_form_producto_nombre: str = ""
-    promo_form_auto: bool = True
-    promo_form_editando: bool = False
-    promo_form_visible: bool = False
-
-    # Promo aplicada automáticamente al cobro actual
-    caja_promo_aplicada_nombre: str = ""
-    caja_promo_aplicada_texto: str = ""
-
-    # Cupones — Caja (mesas)
-    caja_cupon_codigo: str = ""
-    caja_cupon_id_aplicado: int = 0      # 0 = ninguno
-    caja_cupon_nombre_aplicado: str = ""
-    caja_cupon_descuento_aplicado: str = ""   # valor decimal como string "10.00"
-    caja_cupon_error: str = ""
-
-    # Cupones — Mostrador
-    mostrador_cupon_codigo: str = ""
-    mostrador_cupon_id_aplicado: int = 0
-    mostrador_cupon_nombre_aplicado: str = ""
-    mostrador_cupon_descuento_aplicado: str = ""
-    mostrador_cupon_error: str = ""
-
-    # Cupones — gestión admin
-    cupones_lista: list[CuponLoteView] = []
-    cupon_form_visible: bool = False
-    cupon_form_editando: bool = False
-    cupon_form_id: int = 0
-    cupon_form_nombre: str = ""
-    cupon_form_codigo: str = ""
-    cupon_form_tipo: str = "porcentaje"
-    cupon_form_valor: str = ""
-    cupon_form_fecha_inicio: str = ""
-    cupon_form_fecha_fin: str = ""
-    cupon_form_usos_max: str = ""
-
     # ─── Computed vars ────────────────────────────────────────────────────────
 
-    @rx.var
-    def historial_ventas_recientes(self) -> list[VentaHistorialView]:
-        return self.historial_ventas[:5]
-
-    @rx.var
-    def reporte_horas_chart(self) -> list[dict[str, object]]:
-        return [{"hora_label": h.hora_label, "total": h.total, "pedidos": h.pedidos} for h in self.reporte_horas]
-
-    @rx.var
-    def reporte_mozos_chart(self) -> list[dict[str, object]]:
-        return [{"nombre": m.nombre, "total": m.total, "propinas": m.propinas} for m in self.reporte_mozos]
-
-    @rx.var
-    def inv_insumos_filtrados(self) -> list[InsumoView]:
-        q = self.inv_search.strip().lower()
-        if not q:
-            return self.inv_insumos
-        return [i for i in self.inv_insumos if q in i.nombre.lower()]
-
-    def set_inv_search(self, v: str) -> None:
-        self.inv_search = v
-
-    def set_inv_form_visible(self, v: bool) -> None:
-        self.inv_form_visible = v
-
-    def abrir_nuevo_insumo(self) -> None:
-        self.inv_form_id = 0
-        self.inv_form_nombre = ""
-        self.inv_form_unidad = "unidad"
-        self.inv_form_stock_actual = ""
-        self.inv_form_stock_minimo = ""
-        self.inv_form_vencimiento = ""
-        self.inv_form_costo = ""
-        self.inv_form_editando = False
-        self.inv_form_visible = True
 
     @rx.var
     def autenticado(self) -> bool:
@@ -1495,29 +1298,6 @@ class FoodState(CajaTurnoMixin, rx.State):
         dentro de /admin, donde el link "Panel Administrativo" es redundante."""
         return self.router.page.path != "/admin"
 
-    @rx.var
-    def historial_filtro_activo(self) -> bool:
-        return bool(
-            self.historial_filtro_fecha_desde
-            or self.historial_filtro_fecha_hasta
-            or self.historial_filtro_metodo
-        )
-
-    @rx.var
-    def historial_tiene_anterior(self) -> bool:
-        return self.historial_pagina > 0
-
-    @rx.var
-    def historial_tiene_siguiente(self) -> bool:
-        return (self.historial_pagina + 1) * self._HISTORIAL_PAGE_SIZE < self.historial_total
-
-    @rx.var
-    def historial_pagina_label(self) -> str:
-        if self.historial_total == 0:
-            return "Sin resultados"
-        desde = self.historial_pagina * self._HISTORIAL_PAGE_SIZE + 1
-        hasta = min((self.historial_pagina + 1) * self._HISTORIAL_PAGE_SIZE, self.historial_total)
-        return f"{desde}–{hasta} de {self.historial_total}"
 
     @rx.var
     def puede_ver_usuarios(self) -> bool:
@@ -1627,169 +1407,11 @@ class FoodState(CajaTurnoMixin, rx.State):
                 result.append(m.sector)
         return result
 
-    @rx.var
-    def mod_seleccion_items_flat(self) -> list[dict[str, object]]:
-        result: list[dict[str, object]] = []
-        for g in self.mod_seleccion_grupos:
-            gid = str(g.get("id", ""))
-            result.append({
-                "type": "header",
-                "nombre": str(g.get("nombre", "")),
-                "min": int(g.get("min", 0)),
-                "max": int(g.get("max", 1)),
-                "grupo_id": gid,
-                "opcion_id": 0,
-                "precio_extra": 0.0,
-                "selected": False,
-                "key": f"h_{gid}",
-            })
-            opciones = g.get("opciones", [])
-            if not isinstance(opciones, list):
-                opciones = []
-            elegidos = self.mod_seleccion_elegidos.get(gid, [])
-            for op in opciones:
-                if not isinstance(op, dict):
-                    continue
-                oid = int(op.get("id", 0))
-                result.append({
-                    "type": "option",
-                    "nombre": str(op.get("nombre", "")),
-                    "min": 0,
-                    "max": 0,
-                    "grupo_id": gid,
-                    "opcion_id": oid,
-                    "precio_extra": float(op.get("precio_extra", 0)),
-                    "selected": oid in elegidos,
-                    "key": f"o_{gid}_{oid}",
-                })
-        return result
-
-    @rx.var
-    def mod_seleccion_extra_total(self) -> float:
-        total = 0.0
-        for g in self.mod_seleccion_grupos:
-            gid = str(g.get("id", ""))
-            elegidos = self.mod_seleccion_elegidos.get(gid, [])
-            opciones = g.get("opciones", [])
-            if not isinstance(opciones, list):
-                continue
-            for op in opciones:
-                if not isinstance(op, dict):
-                    continue
-                if int(op.get("id", 0)) in elegidos:
-                    total += float(op.get("precio_extra", 0))
-        return total
-
-    @rx.var
-    def mod_seleccion_valido(self) -> bool:
-        for g in self.mod_seleccion_grupos:
-            gid = str(g.get("id", ""))
-            elegidos = self.mod_seleccion_elegidos.get(gid, [])
-            min_req = int(g.get("min", 0))
-            if len(elegidos) < min_req:
-                return False
-        return True
-
-    @rx.var
-    def categorias_activas(self) -> list[CategoriaView]:
-        return [c for c in self.categorias if c.activa]
-
-    @rx.var
-    def categorias_activas_nombres(self) -> list[str]:
-        return [c.nombre for c in self.categorias if c.activa]
-
-    @rx.var
-    def inv_insumos_activos_nombres(self) -> list[str]:
-        return [i.nombre for i in self.inv_insumos if i.activo]
-
-    @rx.var
-    def inv_productos_nombres(self) -> list[str]:
-        return [p.nombre for p in self.productos]
-
-    @rx.var
-    def inv_alertas_bajo_stock_texto(self) -> str:
-        return ", ".join(self.inv_alertas_bajo_stock)
-
-    @rx.var
-    def clientes_filtrados(self) -> list[ClienteView]:
-        q = self.cli_busqueda.lower().strip()
-        if not q:
-            return self.clientes_lista
-        return [c for c in self.clientes_lista if q in c.nombre.lower() or q in c.telefono]
-
-    @rx.var
-    def clientes_activos_nombres(self) -> list[str]:
-        """Opciones para el selector de fiado: "Nombre — tel" para evitar homónimos."""
-        opciones = []
-        for c in self.clientes_lista:
-            if not c.activo:
-                continue
-            label = c.nombre + (f" — {c.telefono}" if c.telefono else "")
-            opciones.append(label)
-        return opciones
-
-    @rx.var
-    def clientes_cumpleanos_hoy(self) -> list[ClienteView]:
-        return [c for c in self.clientes_lista if c.cumple_hoy]
-
-    @rx.var
-    def clientes_cumpleanos_pronto(self) -> list[ClienteView]:
-        return [c for c in self.clientes_lista if c.cumple_pronto and not c.cumple_hoy]
 
     @rx.var
     def caja_cobro_es_fiado(self) -> bool:
         return self.caja_cobro_metodo == "fiado"
 
-    @rx.var
-    def cuentas_con_deuda(self) -> list[CuentaView]:
-        return [c for c in self.cuentas_lista if c.saldo_deuda > 0]
-
-    @rx.var
-    def cuentas_total_deuda_texto(self) -> str:
-        total = sum(Decimal(str(c.saldo_deuda)) for c in self.cuentas_lista)
-        return _money_text(total)
-
-    @rx.var
-    def cuenta_sel_nombre(self) -> str:
-        c = next((x for x in self.cuentas_lista if x.id == self.cuenta_sel_id), None)
-        return c.cliente_nombre if c else ""
-
-    @rx.var
-    def cuenta_sel_saldo(self) -> str:
-        c = next((x for x in self.cuentas_lista if x.id == self.cuenta_sel_id), None)
-        return c.saldo_texto if c else "S/ 0.00"
-
-    @rx.var
-    def hay_promo_activa(self) -> bool:
-        return any(p.aplica_ahora and p.activa for p in self.promociones_lista)
-
-    @rx.var
-    def promo_activa_nombre(self) -> str:
-        for p in self.promociones_lista:
-            if p.aplica_ahora and p.activa:
-                return p.nombre
-        return ""
-
-    @rx.var
-    def promo_activa_descuento_texto(self) -> str:
-        for p in self.promociones_lista:
-            if p.aplica_ahora and p.activa:
-                return p.descuento_texto
-        return ""
-
-    @rx.var
-    def promo_activa_descuento_sugerido(self) -> float:
-        for p in self.promociones_lista:
-            if p.aplica_ahora and p.activa:
-                if p.tipo == TipoPromocion.PORCENTAJE.value or p.tipo == TipoPromocion.HAPPY_HOUR.value:
-                    return round(self.caja_cobro_total_base * p.valor / 100, 2)
-                elif p.tipo == TipoPromocion.MONTO_FIJO.value:
-                    return p.valor
-        return 0.0
-
-    @rx.var
-    def tipos_promo_disponibles(self) -> list[str]:
-        return [t.value for t in TipoPromocion]
 
     @rx.var
     def productos_filtrados(self) -> list[ProductoView]:
@@ -1807,40 +1429,6 @@ class FoodState(CajaTurnoMixin, rx.State):
             resultado = [p for p in resultado if q in p.nombre.lower()]
         return sorted(resultado, key=lambda p: (not p.disponible, p.nombre))
 
-    @rx.var
-    def carta_productos_filtrados_count(self) -> int:
-        q = self.carta_busqueda_productos.strip().lower()
-        if not q:
-            return len(self.productos)
-        return sum(
-            1 for p in self.productos
-            if q in p.nombre.lower() or q in p.categoria_nombre.lower()
-        )
-
-    @rx.var
-    def carta_productos_total_paginas(self) -> int:
-        q = self.carta_busqueda_productos.strip().lower()
-        if q:
-            total = sum(
-                1 for p in self.productos
-                if q in p.nombre.lower() or q in p.categoria_nombre.lower()
-            )
-        else:
-            total = len(self.productos)
-        return max(1, (total + 19) // 20)
-
-    @rx.var
-    def carta_productos_paginados(self) -> list[ProductoView]:
-        q = self.carta_busqueda_productos.strip().lower()
-        if q:
-            base: list[ProductoView] = [
-                p for p in self.productos
-                if q in p.nombre.lower() or q in p.categoria_nombre.lower()
-            ]
-        else:
-            base = list(self.productos)
-        inicio = (self.carta_productos_pagina - 1) * 20
-        return base[inicio:inicio + 20]
 
     @rx.var
     def mostrador_productos_filtrados(self) -> list[ProductoView]:
@@ -1912,8 +1500,16 @@ class FoodState(CajaTurnoMixin, rx.State):
             return 0.0
 
     @rx.var
+    def caja_cobro_recargo_decimal(self) -> float:
+        try:
+            v = float(self.caja_cobro_recargo.replace(",", ".").strip())
+            return round(max(v, 0.0), 2)
+        except (ValueError, AttributeError):
+            return 0.0
+
+    @rx.var
     def caja_cobro_total_final(self) -> float:
-        total = self.caja_cobro_total_base - self.caja_cobro_descuento_decimal + self.caja_cobro_propina_decimal
+        total = self.caja_cobro_total_base - self.caja_cobro_descuento_decimal + self.caja_cobro_propina_decimal + self.caja_cobro_recargo_decimal
         return round(max(total, 0.0), 2)
 
     @rx.var
@@ -1994,7 +1590,11 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_propina_pct = 0
+        self.caja_cobro_recargo = ""
+        self.caja_cobro_recargo_concepto = "delivery"
         self.caja_cobro_efectivo_recibido = ""
+        self.ultimos_cobros_visible = False
+        self.ultimos_cobros = []
         self.nota_pedido_mesa = ""
 
     # ─── Navegación / Shell ───────────────────────────────────────────────────
@@ -2025,7 +1625,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     def on_load_root(self):
         if self.usuario_actual is not None:
             return rx.redirect(self.usuario_home_route, replace=True)
-        # Usuario no autenticado: el componente index() ya hace window.location.href='/login'
+        return rx.redirect("/login", replace=True)
 
     def on_load_login(self):
         if self.usuario_actual is not None:
@@ -2211,7 +1811,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         normalized = _normalize_pin(pin)
         if len(normalized) < 4:
             self.login_pin_input = ""
-            self.login_error = "Ingresa un PIN válido de 4 a 6 dígitos."
+            self.login_error = "Ingrese un PIN válido de 4 a 6 dígitos."
             return
         bloqueo = _bloqueo_suscripcion(self._company_id())
         if bloqueo:
@@ -2239,7 +1839,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             self.login_pin_input = ""
             self.login_error = (
                 f"Ese PIN pertenece al rol {usuario.rol}. "
-                f"Seleccioná {usuario.rol} para ingresar."
+                f"Seleccione {usuario.rol} para ingresar."
             )
             return
         self.login_error = ""
@@ -2629,7 +2229,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     def guardar_admin_cuenta(self) -> None:
         email = self.config_admin_email.strip().lower()
         if not email or "@" not in email:
-            self.mensaje = "Ingresa un email válido."
+            self.mensaje = "Ingrese un email válido."
             return
         nueva = self.config_admin_password_nueva.strip()
         confirm = self.config_admin_password_confirm.strip()
@@ -2651,6 +2251,20 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.config_admin_password_nueva = ""
         self.config_admin_password_confirm = ""
         self.mensaje = "Cuenta del dueño guardada."
+
+    async def handle_upload_logo_empresa(self, files: list[rx.UploadFile]) -> None:
+        for file in files:
+            data = await file.read()
+            ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
+            filename = f"food_logo_{uuid.uuid4().hex[:12]}{ext}"
+            upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_empresas"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            (upload_dir / filename).write_bytes(data)
+            self.config_logo_url = f"{_FOOD_API_URL}/_upload/food_empresas/{filename}"
+            break
+
+    def quitar_logo_empresa(self) -> None:
+        self.config_logo_url = ""
 
     # ─── CRUD Mesas (admin config) ────────────────────────────────────────────
 
@@ -3397,7 +3011,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def agregar_producto(self, producto_id: int) -> None:
         if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Selecciona una mesa antes de agregar productos."
+            self.mensaje = "Seleccione una mesa antes de agregar productos."
             return
         prod_view = next((p for p in self.productos if p.id == producto_id), None)
         if prod_view and prod_view.tiene_modificadores:
@@ -3451,7 +3065,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def restar_producto(self, producto_id: int) -> None:
         if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Selecciona una mesa antes de editar el carrito."
+            self.mensaje = "Seleccione una mesa antes de editar el carrito."
             return
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
@@ -3605,7 +3219,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def solicitar_cuenta(self) -> None:
         if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Selecciona una mesa antes de solicitar cuenta."
+            self.mensaje = "Seleccione una mesa antes de solicitar cuenta."
             return
         if self.cantidad_items_carrito > 0:
             self.mensaje = "Primero envía a cocina los ítems pendientes."
@@ -3628,7 +3242,7 @@ class FoodState(CajaTurnoMixin, rx.State):
 
     def enviar_pedido(self) -> None:
         if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Selecciona una mesa antes de enviar el pedido."
+            self.mensaje = "Seleccione una mesa antes de enviar el pedido."
             return
         pedido_id = 0
         with self._tenant_session() as session:
@@ -3930,6 +3544,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_propina_pct = 0
+        self.caja_cobro_recargo = ""
+        self.caja_cobro_recargo_concepto = "delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.mensaje = ""
@@ -4003,6 +3619,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_propina_pct = 0
         self.caja_cobro_descuento = ""
         self.caja_cobro_descuento_es_pct = False
+        self.caja_cobro_recargo = ""
+        self.caja_cobro_recargo_concepto = "delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_cliente_nombre = ""
         self.caja_cobro_cliente_id = 0
@@ -4040,8 +3658,157 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_descuento_es_pct = not self.caja_cobro_descuento_es_pct
         self.caja_cobro_descuento = ""
 
+    def set_caja_cobro_recargo(self, v: str) -> None:
+        self.caja_cobro_recargo = v
+
+    def set_caja_cobro_recargo_concepto(self, v: str) -> None:
+        self.caja_cobro_recargo_concepto = v
+
     def set_caja_cobro_efectivo_recibido(self, v: str) -> None:
         self.caja_cobro_efectivo_recibido = v
+
+    # ─── Caja — Últimos cobros (reimpresión) ─────────────────────────────────
+
+    def set_ultimos_cobros_visible(self, v: bool) -> None:
+        self.ultimos_cobros_visible = v
+        if v:
+            self.cargar_ultimos_cobros()
+
+    def toggle_ultimos_cobros(self) -> None:
+        self.ultimos_cobros_visible = not self.ultimos_cobros_visible
+        if self.ultimos_cobros_visible:
+            self.cargar_ultimos_cobros()
+
+    def cargar_ultimos_cobros(self) -> None:
+        with self._tenant_session() as session:
+            turno = get_turno_abierto(session, self._company_id())
+            if turno is None:
+                self.ultimos_cobros = []
+                return
+            pedidos = session.exec(
+                select(Pedido)
+                .where(
+                    Pedido.company_id == self._company_id(),
+                    Pedido.turno_caja_id == turno.id,
+                    or_(
+                        Pedido.pagado.is_(True),
+                        Pedido.estado == EstadoPedido.COBRADO.value,
+                    ),
+                )
+                .order_by(Pedido.cerrado_en.desc())
+                .limit(20)
+            ).all()
+            mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == self._company_id())).all()}
+            result = []
+            for p in pedidos:
+                if p.tipo_pedido == TipoPedido.MOSTRADOR.value:
+                    ref = f"Para llevar — {_actor_name(p.nombre_cliente) or 'Sin nombre'}"
+                elif p.mesa_id and p.mesa_id in mesas:
+                    m = mesas[p.mesa_id]
+                    ref = m.nombre or f"Mesa {m.numero}"
+                else:
+                    ref = f"Pedido #{p.id}"
+                detalles = session.exec(
+                    select(DetallePedido).where(DetallePedido.pedido_id == p.id)
+                ).all()
+                productos = {pr.id: pr for pr in session.exec(
+                    select(Producto).where(Producto.company_id == self._company_id())
+                ).all()}
+                items_txt = ", ".join(
+                    f"{d.cantidad}x {productos[d.producto_id].nombre if d.producto_id in productos else '?'}"
+                    for d in detalles[:3]
+                )
+                if len(detalles) > 3:
+                    items_txt += f" +{len(detalles) - 3} más"
+                metodo = (p.metodo_pago or "efectivo").capitalize()
+                total_final = _to_decimal(p.total) - _to_decimal(p.descuento) + _to_decimal(p.propina) + _to_decimal(p.recargo)
+                hora = p.cerrado_en.strftime("%H:%M") if p.cerrado_en else ""
+                result.append(UltimoCobroView(
+                    pedido_id=p.id or 0,
+                    hora=hora,
+                    referencia=ref,
+                    detalle=f"{metodo} – {items_txt}",
+                    total_texto=_money_text(total_final),
+                    metodo_pago=metodo,
+                ))
+            self.ultimos_cobros = result
+
+    def reimprimir_comprobante(self, pedido_id: int):
+        with self._tenant_session() as session:
+            pedido = session.get(Pedido, pedido_id)
+            if pedido is None:
+                self.mensaje = "El pedido no existe."
+                return
+            detalles = session.exec(
+                select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)
+            ).all()
+            productos = {pr.id: pr for pr in session.exec(
+                select(Producto).where(Producto.company_id == self._company_id())
+            ).all()}
+            ticket_lines = []
+            for d in detalles:
+                if d.combo_items_json:
+                    import json as _json
+                    try:
+                        combo_items = _json.loads(d.combo_items_json)
+                        name = "Combo: " + " + ".join(
+                            f"{ci.get('cantidad', 1)}x {ci.get('nombre', '?')}" for ci in combo_items
+                        )
+                    except Exception:
+                        name = "Combo"
+                else:
+                    name = productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}"
+                ticket_lines.append(TicketLine(
+                    name=name,
+                    quantity=d.cantidad,
+                    unit_price=float(_to_decimal(d.precio_unitario)),
+                    subtotal=float(_to_decimal(d.subtotal)),
+                    note=d.notas or "",
+                ))
+            if pedido.tipo_pedido == TipoPedido.MOSTRADOR.value:
+                mesa_label = f"Para llevar — {_actor_name(pedido.nombre_cliente) or 'Sin nombre'}"
+            elif pedido.mesa_id:
+                mesa = session.get(Mesa, pedido.mesa_id)
+                mesa_label = (mesa.nombre or f"Mesa {mesa.numero}") if mesa else f"Pedido #{pedido.id}"
+            else:
+                mesa_label = f"Pedido #{pedido.id}"
+            usuarios = {u.id: u for u in session.exec(
+                select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())
+            ).all()}
+            mozo = usuarios.get(pedido.mozo_id)
+            attended_by = _actor_name(mozo.nombre if mozo else "") or "Sin asignar"
+            descuento = float(_to_decimal(pedido.descuento))
+            propina = float(_to_decimal(pedido.propina))
+            recargo = float(_to_decimal(pedido.recargo))
+            recargo_concepto = pedido.recargo_concepto or ""
+            total_final = float(_to_decimal(pedido.total)) - descuento + propina + recargo
+        try:
+            _pct_iva = float(self.config_porcentaje_iva or "18.0")
+        except (ValueError, AttributeError):
+            _pct_iva = 18.0
+        html_ticket = generate_cashier_ticket_html(
+            order_reference=mesa_label,
+            pedido_id=pedido_id,
+            items=ticket_lines,
+            total=total_final,
+            attended_by=attended_by,
+            company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            company_ruc=self.config_ruc,
+            company_sucursal=self.config_sucursal,
+            company_direccion=self.config_direccion,
+            company_telefono=self.config_telefono,
+            descuento=descuento,
+            propina=propina,
+            recargo=recargo,
+            recargo_concepto=recargo_concepto,
+            metodo_pago=(pedido.metodo_pago or "efectivo"),
+            mensaje_footer=self.config_mensaje_ticket,
+            mostrar_iva=self.config_mostrar_iva,
+            nombre_impuesto=self.config_nombre_impuesto or "IGV",
+            porcentaje_iva=_pct_iva,
+            paper_width_mm=self._ticket_paper_width_mm(),
+        )
+        return rx.call_script(build_print_script(html_ticket))
 
     # ─── Caja — Cobro dividido / pago mixto ──────────────────────────────────
 
@@ -4149,7 +3916,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             items = list(self.caja_cobro_items)
             sel_indices = [i for i, it in enumerate(items) if it.seleccionado]
             if not sel_indices:
-                self.caja_cobro_error = "Selecciona al menos un ítem."
+                self.caja_cobro_error = "Seleccione al menos un ítem."
                 return
             monto = round(sum(items[i].subtotal_float for i in sel_indices), 2)
             if monto <= 0:
@@ -4346,6 +4113,12 @@ class FoodState(CajaTurnoMixin, rx.State):
             descuento = Decimal(str(round(max(desc_raw, 0.0), 2)))
         except (ValueError, AttributeError, InvalidOperation):
             descuento = Decimal("0.00")
+        try:
+            rec_raw = float(self.caja_cobro_recargo.replace(",", ".").strip())
+            recargo = Decimal(str(round(max(rec_raw, 0.0), 2)))
+        except (ValueError, AttributeError, InvalidOperation):
+            recargo = Decimal("0.00")
+        recargo_concepto = (self.caja_cobro_recargo_concepto or "").strip() or None
 
         pedido_id = 0
         mesa_label = ""
@@ -4423,7 +4196,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                 ):
                     self.caja_cobro_error = "Asigna todos los ítems antes de confirmar."
                     return
-                total_final = max(total_base - descuento + propina, Decimal("0.00"))
+                total_final = max(total_base - descuento + propina + recargo, Decimal("0.00"))
                 pagos_lista = [
                     (p.metodo, Decimal(str(round(p.monto, 2))))
                     for p in self.caja_pagos_staged
@@ -4431,7 +4204,7 @@ class FoodState(CajaTurnoMixin, rx.State):
             else:
                 if metodo == "fiado":
                     propina = Decimal("0.00")
-                total_final = max(total_base - descuento + propina, Decimal("0.00"))
+                total_final = max(total_base - descuento + propina + recargo, Decimal("0.00"))
                 pagos_lista = [(metodo, total_final)] if total_final > 0 else []
             resultado_pagos = None
             if pagos_lista:
@@ -4442,7 +4215,7 @@ class FoodState(CajaTurnoMixin, rx.State):
                     return
             total_fiado = resultado_pagos.total_fiado if resultado_pagos else Decimal("0.00")
             if total_fiado > 0 and self.caja_cobro_cliente_id <= 0:
-                self.caja_cobro_error = "Selecciona el cliente para registrar el fiado."
+                self.caja_cobro_error = "Seleccione el cliente para registrar el fiado."
                 return
             now = _utcnow()
             for d in session.exec(
@@ -4463,6 +4236,8 @@ class FoodState(CajaTurnoMixin, rx.State):
             pedido.turno_caja_id = turno.id
             pedido.propina = propina
             pedido.descuento = descuento
+            pedido.recargo = recargo
+            pedido.recargo_concepto = recargo_concepto if recargo > 0 else None
             if self.caja_cobro_cliente_id > 0:
                 pedido.cliente_id = self.caja_cobro_cliente_id
             session.add(pedido)
@@ -4541,7 +4316,7 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_historial_ventas()
         if es_mostrador:
             self.cargar_pedidos_mostrador_pendientes()
-        total_final = max(total_base - descuento + propina, Decimal("0.00"))
+        total_final = max(total_base - descuento + propina + recargo, Decimal("0.00"))
         try:
             _pct_iva = float(self.config_porcentaje_iva or "18.0")
         except (ValueError, AttributeError):
@@ -4558,6 +4333,9 @@ class FoodState(CajaTurnoMixin, rx.State):
             company_direccion=self.config_direccion,
             company_telefono=self.config_telefono,
             descuento=float(descuento),
+            propina=float(propina),
+            recargo=float(recargo),
+            recargo_concepto=recargo_concepto or "",
             metodo_pago=metodo_final,
             mensaje_footer=self.config_mensaje_ticket,
             mostrar_iva=self.config_mostrar_iva,
@@ -4567,7 +4345,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         )
         desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
         propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
-        self.mensaje = f"{mesa_label} cobrado ({metodo_final}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}."
+        recargo_txt = f" + recargo {_money_text(recargo)}" if recargo > 0 else ""
+        self.mensaje = f"{mesa_label} cobrado ({metodo_final}). Total: {_money_text(total_final)}{desc_txt}{propina_txt}{recargo_txt}."
         return [
             rx.toast.success(f"{mesa_label} cobrado — {_money_text(total_final)}"),
             rx.call_script(build_print_script(html_ticket)),
@@ -4583,7 +4362,7 @@ class FoodState(CajaTurnoMixin, rx.State):
     def imprimir_precuenta(self, mesa_id: int = 0):
         objetivo = mesa_id or self.caja_cobro_mesa_id or self.mesa_seleccionada_id
         if objetivo <= 0:
-            self.mensaje = "Seleccioná una mesa para imprimir la pre-cuenta."
+            self.mensaje = "Seleccione una mesa para imprimir la pre-cuenta."
             return
         ticket_lines: list[TicketLine] = []
         mesa_label = ""
@@ -4687,6 +4466,8 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.caja_cobro_propina_pct = 0
         self.caja_cobro_descuento = ""
         self.caja_cobro_descuento_es_pct = False
+        self.caja_cobro_recargo = ""
+        self.caja_cobro_recargo_concepto = "delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.mensaje = ""
@@ -5094,2945 +4875,6 @@ class FoodState(CajaTurnoMixin, rx.State):
         self.cargar_historial_ventas()
         self.mensaje = "Pedido de mostrador entregado al cliente."
 
-    # ─── Dashboard KPIs ───────────────────────────────────────────────────────
-
-    def cargar_dashboard(self) -> None:
-        hoy = _utcnow().date()
-        inicio_hoy = datetime(hoy.year, hoy.month, hoy.day)
-        fin_hoy = inicio_hoy + timedelta(days=1)
-        inicio_ayer = inicio_hoy - timedelta(days=1)
-        with self._tenant_session() as session:
-            pedidos_hoy = session.exec(
-                select(Pedido).where(
-                    Pedido.company_id == self._company_id(),
-                    or_(
-                        Pedido.pagado.is_(True),
-                        Pedido.estado == EstadoPedido.COBRADO.value,
-                    ),
-                    Pedido.cerrado_en >= inicio_hoy,
-                    Pedido.cerrado_en < fin_hoy,
-                )
-            ).all()
-            pedidos_ayer = session.exec(
-                select(Pedido).where(
-                    Pedido.company_id == self._company_id(),
-                    or_(
-                        Pedido.pagado.is_(True),
-                        Pedido.estado == EstadoPedido.COBRADO.value,
-                    ),
-                    Pedido.cerrado_en >= inicio_ayer,
-                    Pedido.cerrado_en < inicio_hoy,
-                )
-            ).all()
-            ventas = sum(
-                _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
-                for p in pedidos_hoy
-            )
-            propina_total = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_hoy)
-            ventas_ayer = sum(
-                _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
-                for p in pedidos_ayer
-            )
-            propina_ayer = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_ayer)
-            mesas_no_libres = session.exec(
-                select(Mesa).where(
-                    Mesa.company_id == self._company_id(),
-                    Mesa.estado != EstadoMesa.LIBRE.value,
-                    Mesa.activa.is_(True),
-                )
-            ).all()
-            pedido_ids_hoy = {p.id for p in pedidos_hoy}
-            top_data: dict[int, dict] = {}
-            if pedido_ids_hoy:
-                detalles = session.exec(
-                    select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids_hoy))
-                ).all()
-                productos = {
-                    p.id: p
-                    for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()
-                }
-                for d in detalles:
-                    pid = d.producto_id
-                    if pid not in top_data:
-                        prod = productos.get(pid)
-                        top_data[pid] = {
-                            "nombre": prod.nombre if prod else f"Producto {pid}",
-                            "cantidad": 0,
-                            "total": Decimal("0.00"),
-                        }
-                    top_data[pid]["cantidad"] += d.cantidad
-                    top_data[pid]["total"] += _to_decimal(d.subtotal)
-            top_sorted = sorted(top_data.values(), key=lambda x: x["cantidad"], reverse=True)[:5]
-
-        def _pct_change(hoy_val: Decimal, ayer_val: Decimal) -> int:
-            if ayer_val <= 0:
-                return 100 if hoy_val > 0 else 0
-            return int(round((hoy_val - ayer_val) / ayer_val * 100))
-
-        pedidos_count_hoy = len(pedidos_hoy)
-        pedidos_count_ayer = len(pedidos_ayer)
-        ticket_promedio = ventas / pedidos_count_hoy if pedidos_count_hoy else Decimal("0.00")
-        ticket_promedio_ayer = (
-            ventas_ayer / pedidos_count_ayer if pedidos_count_ayer else Decimal("0.00")
-        )
-        self.dashboard_ventas_hoy_texto = _money_text(ventas)
-        self.dashboard_pedidos_hoy = pedidos_count_hoy
-        self.dashboard_mesas_ocupadas = len(mesas_no_libres)
-        self.dashboard_propina_hoy_texto = _money_text(propina_total)
-        self.dashboard_ticket_promedio_texto = _money_text(ticket_promedio)
-        self.dashboard_ventas_trend_pct = _pct_change(ventas, ventas_ayer)
-        self.dashboard_pedidos_trend = pedidos_count_hoy - pedidos_count_ayer
-        self.dashboard_ticket_trend_pct = _pct_change(ticket_promedio, ticket_promedio_ayer)
-        self.dashboard_propina_trend_pct = _pct_change(propina_total, propina_ayer)
-        self.dashboard_top_platos = [
-            TopPlatoView(
-                nombre=p["nombre"],
-                cantidad=p["cantidad"],
-                total_generado=float(p["total"]),
-                total_texto=_money_text(p["total"]),
-            )
-            for p in top_sorted
-        ]
-
-    # ─── Historial de ventas ──────────────────────────────────────────────────
-
-    def cargar_historial_ventas(self) -> None:
-        with self._tenant_session() as session:
-            query = (
-                select(Pedido)
-                .where(
-                    Pedido.company_id == self._company_id(),
-                    or_(
-                        Pedido.pagado.is_(True),
-                        Pedido.estado == EstadoPedido.COBRADO.value,
-                        # Ventas anuladas: visibles con badge, no desaparecen
-                        and_(
-                            Pedido.estado == EstadoPedido.CANCELADO.value,
-                            Pedido.cerrado_en.isnot(None),
-                        ),
-                    ),
-                )
-            )
-            if self.historial_filtro_fecha_desde:
-                try:
-                    desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
-                    query = query.where(Pedido.cerrado_en >= desde)
-                except ValueError:
-                    pass
-            if self.historial_filtro_fecha_hasta:
-                try:
-                    hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
-                    hasta = hasta.replace(hour=23, minute=59, second=59)
-                    query = query.where(Pedido.cerrado_en <= hasta)
-                except ValueError:
-                    pass
-            if self.historial_filtro_metodo:
-                from app.models.food import PagoPedido as _PP
-                # Captura ventas con método exacto en Pedido + ventas mixtas que
-                # incluyen ese método en alguno de sus PagoPedido.
-                query = query.where(
-                    or_(
-                        Pedido.metodo_pago == self.historial_filtro_metodo,
-                        Pedido.id.in_(
-                            select(_PP.pedido_id).where(
-                                _PP.company_id == self._company_id(),
-                                _PP.metodo == self.historial_filtro_metodo,
-                            )
-                        ),
-                    )
-                )
-            query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
-            total_count = len(session.exec(query).all())
-            self.historial_total = total_count
-            offset = self.historial_pagina * self._HISTORIAL_PAGE_SIZE
-            pedidos = session.exec(query.offset(offset).limit(self._HISTORIAL_PAGE_SIZE)).all()
-            mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == self._company_id())).all()}
-            usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
-            historial: list[VentaHistorialView] = []
-            for p in pedidos:
-                total_base = _to_decimal(p.total)
-                propina = _to_decimal(getattr(p, "propina", Decimal("0.00")))
-                total_con_propina = total_base + propina
-                anulada = p.estado == EstadoPedido.CANCELADO.value
-                anulacion_texto = ""
-                if anulada:
-                    quien = usuarios.get(p.cancelado_por_id)
-                    anulacion_texto = (p.motivo_cancelacion or "Sin motivo") + (
-                        f" — {quien.nombre}" if quien else ""
-                    )
-                historial.append(VentaHistorialView(
-                    pedido_id=p.id or 0,
-                    mesa_label=_pedido_sales_label(p, mesas),
-                    total=float(total_base),
-                    total_texto=_money_text(total_base),
-                    propina=float(propina),
-                    propina_texto=_money_text(propina) if propina > 0 else "",
-                    total_con_propina=float(total_con_propina),
-                    total_con_propina_texto=_money_text(total_con_propina),
-                    metodo_pago=getattr(p, "metodo_pago", None) or "—",
-                    mozo_nombre=_actor_name(usuarios[p.mozo_id].nombre if p.mozo_id in usuarios else "Sin asignar"),
-                    cajero_nombre=_actor_name(usuarios[p.cajero_id].nombre if p.cajero_id in usuarios else "Sin asignar"),
-                    anulada=anulada,
-                    anulacion_texto=anulacion_texto,
-                ))
-            self.historial_ventas = historial
-
-    def set_historial_filtro_fecha_desde(self, v: str) -> None:
-        self.historial_filtro_fecha_desde = v
-
-    def set_historial_filtro_fecha_hasta(self, v: str) -> None:
-        self.historial_filtro_fecha_hasta = v
-
-    def set_historial_filtro_metodo(self, v: str) -> None:
-        self.historial_filtro_metodo = v
-
-    def aplicar_filtros_historial(self) -> None:
-        self.historial_pagina = 0
-        self.cargar_historial_ventas()
-        self.cargar_analitica()
-
-    def _rango_filtros_historial(self) -> tuple[datetime | None, datetime | None]:
-        desde = hasta = None
-        if self.historial_filtro_fecha_desde:
-            try:
-                desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
-            except ValueError:
-                pass
-        if self.historial_filtro_fecha_hasta:
-            try:
-                hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
-                hasta = hasta.replace(hour=23, minute=59, second=59)
-            except ValueError:
-                pass
-        return desde, hasta
-
-    def cargar_analitica(self) -> None:
-        """Ranking por mozo, ventas por hora, margen por plato y desglose por método."""
-        desde, hasta = self._rango_filtros_historial()
-        pagos_por_metodo: dict[str, dict[str, object]] = {}
-        with self._tenant_session() as session:
-            mozos = ventas_por_mozo(session, self._company_id(), desde, hasta)
-            horas = ventas_por_hora(session, self._company_id(), desde, hasta)
-            margenes = margen_por_plato(session, self._company_id())
-            q_pagos = select(PagoPedido).where(PagoPedido.company_id == self._company_id())
-            if desde is not None:
-                q_pagos = q_pagos.where(PagoPedido.created_at >= desde)
-            if hasta is not None:
-                q_pagos = q_pagos.where(PagoPedido.created_at <= hasta)
-            for pago in session.exec(q_pagos).all():
-                m = pago.metodo or "otro"
-                if m not in pagos_por_metodo:
-                    pagos_por_metodo[m] = {"total": 0.0, "count": 0}
-                pagos_por_metodo[m]["total"] = round(float(pagos_por_metodo[m]["total"]) + float(pago.monto), 2)
-                pagos_por_metodo[m]["count"] = int(pagos_por_metodo[m]["count"]) + 1
-        self.reporte_mozos = [
-            MozoRankView(
-                nombre=f["nombre"],
-                pedidos=f["pedidos"],
-                total=float(f["total"]),
-                total_texto=_money_text(f["total"]),
-                propinas=float(f["propinas"]),
-                propinas_texto=_money_text(f["propinas"]) if f["propinas"] > 0 else "",
-            )
-            for f in mozos[:10]
-        ]
-        max_total = max((float(f["total"]) for f in horas), default=0.0)
-        self.reporte_horas = [
-            FranjaHoraView(
-                hora_label=f"{f['hora']:02d}:00",
-                pedidos=f["pedidos"],
-                total=float(f["total"]),
-                total_texto=_money_text(f["total"]),
-                barra_pct=int(float(f["total"]) / max_total * 100) if max_total > 0 else 0,
-            )
-            for f in horas
-        ]
-        vistas_margen: list[MargenPlatoView] = []
-        for f in margenes:
-            pct = f["margen_pct"]
-            if not f["costo_completo"]:
-                color = "#94A3B8"
-            elif pct < 30:
-                color = "#DC2626"
-            elif pct < 60:
-                color = "#D97706"
-            else:
-                color = "#16A34A"
-            vistas_margen.append(MargenPlatoView(
-                nombre=f["nombre"],
-                precio_texto=_money_text(f["precio"]),
-                costo_texto=_money_text(f["costo"]),
-                margen_texto=_money_text(f["margen"]),
-                margen_pct_texto=f"{pct:.1f}%",
-                color=color,
-                costo_completo=f["costo_completo"],
-            ))
-        self.reporte_margen = vistas_margen
-        labels = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "qr": "QR / Yape", "fiado": "Fiado"}
-        self.reporte_metodos = [
-            {"metodo": labels.get(m, m.title()), "total": v["total"], "count": v["count"]}
-            for m, v in sorted(pagos_por_metodo.items(), key=lambda x: -float(x[1]["total"]))
-        ]
-
-    def buscar_historial_manual(self) -> None:
-        self.historial_filtro_rapido = "personalizado"
-        self.aplicar_filtros_historial()
-
-    def limpiar_filtros_historial(self) -> None:
-        self.historial_filtro_fecha_desde = ""
-        self.historial_filtro_fecha_hasta = ""
-        self.historial_filtro_metodo = ""
-        self.historial_filtro_rapido = ""
-        self.historial_pagina = 0
-        self.cargar_historial_ventas()
-        self.cargar_analitica()
-
-    def filtro_rapido_hoy(self) -> None:
-        hoy = _utcnow().date().isoformat()
-        self.historial_filtro_fecha_desde = hoy
-        self.historial_filtro_fecha_hasta = hoy
-        self.historial_filtro_rapido = "hoy"
-        self.aplicar_filtros_historial()
-
-    def filtro_rapido_semana(self) -> None:
-        hoy = _utcnow().date()
-        inicio_semana = hoy - timedelta(days=hoy.weekday())
-        self.historial_filtro_fecha_desde = inicio_semana.isoformat()
-        self.historial_filtro_fecha_hasta = hoy.isoformat()
-        self.historial_filtro_rapido = "semana"
-        self.aplicar_filtros_historial()
-
-    def filtro_rapido_mes(self) -> None:
-        hoy = _utcnow().date()
-        inicio_mes = hoy.replace(day=1)
-        self.historial_filtro_fecha_desde = inicio_mes.isoformat()
-        self.historial_filtro_fecha_hasta = hoy.isoformat()
-        self.historial_filtro_rapido = "mes"
-        self.aplicar_filtros_historial()
-
-    def abrir_detalle_venta(self, pedido_id: int) -> None:
-        venta = next((v for v in self.historial_ventas if v.pedido_id == pedido_id), None)
-        if venta is None:
-            return
-        with self._tenant_session() as session:
-            detalles = session.exec(
-                select(DetallePedido).where(
-                    DetallePedido.company_id == self._company_id(),
-                    DetallePedido.pedido_id == pedido_id,
-                )
-            ).all()
-            productos = {
-                p.id: p for p in session.exec(
-                    select(Producto).where(Producto.company_id == self._company_id())
-                ).all()
-            }
-        self.venta_detalle_items = [
-            VentaDetalleItemView(
-                nombre=productos[d.producto_id].nombre if d.producto_id in productos else f"Producto {d.producto_id}",
-                cantidad=d.cantidad,
-                precio_unitario_texto=_money_text(d.precio_unitario),
-                subtotal_texto=_money_text(d.subtotal),
-                notas=d.notas or "",
-            )
-            for d in detalles
-        ]
-        self.venta_detalle_pedido_id = pedido_id
-        self.venta_detalle_mesa_label = venta.mesa_label
-        self.venta_detalle_metodo = venta.metodo_pago
-        self.venta_detalle_mozo = venta.mozo_nombre
-        self.venta_detalle_cajero = venta.cajero_nombre
-        self.venta_detalle_total_texto = venta.total_con_propina_texto
-        self.venta_detalle_propina_texto = venta.propina_texto
-        self.venta_detalle_visible = True
-
-    def set_venta_detalle_visible(self, v: bool) -> None:
-        self.venta_detalle_visible = v
-
-    def historial_pagina_anterior(self) -> None:
-        if self.historial_pagina > 0:
-            self.historial_pagina -= 1
-            self.cargar_historial_ventas()
-
-    def historial_pagina_siguiente(self) -> None:
-        if self.historial_tiene_siguiente:
-            self.historial_pagina += 1
-            self.cargar_historial_ventas()
-
-    def exportar_ventas_excel(self):
-        from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
-
-        with self._tenant_session() as session:
-            query = (
-                select(Pedido)
-                .where(
-                    Pedido.company_id == self._company_id(),
-                    or_(
-                        Pedido.pagado.is_(True),
-                        Pedido.estado == EstadoPedido.COBRADO.value,
-                    ),
-                )
-            )
-            if self.historial_filtro_fecha_desde:
-                try:
-                    desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
-                    query = query.where(Pedido.cerrado_en >= desde)
-                except ValueError:
-                    pass
-            if self.historial_filtro_fecha_hasta:
-                try:
-                    hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
-                    hasta = hasta.replace(hour=23, minute=59, second=59)
-                    query = query.where(Pedido.cerrado_en <= hasta)
-                except ValueError:
-                    pass
-            if self.historial_filtro_metodo:
-                from app.models.food import PagoPedido as _PP
-                query = query.where(
-                    or_(
-                        Pedido.metodo_pago == self.historial_filtro_metodo,
-                        Pedido.id.in_(
-                            select(_PP.pedido_id).where(
-                                _PP.company_id == self._company_id(),
-                                _PP.metodo == self.historial_filtro_metodo,
-                            )
-                        ),
-                    )
-                )
-            query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
-            pedidos = session.exec(query).all()
-            mesas = {m.id: m for m in session.exec(
-                select(Mesa).where(Mesa.company_id == self._company_id())
-            ).all()}
-            usuarios = {u.id: u for u in session.exec(
-                select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())
-            ).all()}
-            pedido_ids = [p.id for p in pedidos if p.id is not None]
-            detalles_por_pedido: dict[int, list] = {}
-            productos_map: dict[int, Producto] = {}
-            if pedido_ids:
-                detalles = session.exec(
-                    select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids))
-                ).all()
-                for d in detalles:
-                    detalles_por_pedido.setdefault(d.pedido_id, []).append(d)
-                productos_map = {
-                    pr.id: pr for pr in session.exec(
-                        select(Producto).where(Producto.company_id == self._company_id())
-                    ).all()
-                }
-
-        if not pedidos:
-            self.mensaje = "No hay ventas para exportar con estos filtros."
-            return None
-
-        wb = Workbook()
-        ws1 = wb.active
-        ws1.title = "Ventas"
-        ws1.append([
-            "Fecha", "Hora", "Pedido #", "Mesa", "Método de pago",
-            "Mozo", "Cajero", "Subtotal", "Propina", "Total",
-        ])
-        for p in pedidos:
-            fecha = p.cerrado_en
-            subtotal = float(_to_decimal(p.total))
-            propina = float(_to_decimal(getattr(p, "propina", 0)))
-            mozo = usuarios.get(p.mozo_id)
-            cajero = usuarios.get(p.cajero_id)
-            ws1.append([
-                fecha.strftime("%Y-%m-%d") if fecha else "",
-                fecha.strftime("%H:%M") if fecha else "",
-                p.id,
-                _pedido_sales_label(p, mesas),
-                getattr(p, "metodo_pago", None) or "",
-                _actor_name(mozo.nombre) if mozo else "Sin asignar",
-                _actor_name(cajero.nombre) if cajero else "Sin asignar",
-                subtotal, propina, subtotal + propina,
-            ])
-
-        ws2 = wb.create_sheet("Detalle de items")
-        ws2.append(["Fecha", "Pedido #", "Mesa", "Producto", "Cantidad",
-                     "Precio unitario", "Subtotal"])
-        for p in pedidos:
-            fecha = p.cerrado_en
-            mesa_label = _pedido_sales_label(p, mesas)
-            for d in detalles_por_pedido.get(p.id or 0, []):
-                prod = productos_map.get(d.producto_id)
-                ws2.append([
-                    fecha.strftime("%Y-%m-%d") if fecha else "",
-                    p.id,
-                    mesa_label,
-                    prod.nombre if prod else f"Producto {d.producto_id}",
-                    d.cantidad,
-                    float(_to_decimal(d.precio_unitario)),
-                    float(_to_decimal(d.subtotal)),
-                ])
-
-        for ws in (ws1, ws2):
-            for i, col in enumerate(ws.columns, start=1):
-                max_len = max(
-                    (len(str(c.value)) if c.value is not None else 0) for c in col
-                )
-                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
-
-        buf = io.BytesIO()
-        wb.save(buf)
-        filename = f"ventas_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
-        return rx.download(data=buf.getvalue(), filename=filename)
-
-    # ─── Admin Carta — Categorías ─────────────────────────────────────────────
-
-    def set_categoria_form_nombre(self, v: str) -> None:
-        self.categoria_form_nombre = str(v)[:120]
-
-    def set_categoria_form_descripcion(self, v: str) -> None:
-        self.categoria_form_descripcion = str(v)[:240]
-
-    def set_categoria_form_estacion(self, v: str) -> None:
-        self.categoria_form_estacion = v if v in ("cocina", "barra") else "cocina"
-
-    def set_categoria_form_orden(self, v: str) -> None:
-        self.categoria_form_orden = v
-
-    def set_carta_busqueda_productos(self, v: str) -> None:
-        self.carta_busqueda_productos = v
-        self.carta_productos_pagina = 1
-
-    def carta_pagina_anterior(self) -> None:
-        if self.carta_productos_pagina > 1:
-            self.carta_productos_pagina -= 1
-
-    def carta_pagina_siguiente(self) -> None:
-        if self.carta_productos_pagina < self.carta_productos_total_paginas:
-            self.carta_productos_pagina += 1
-
-    def set_carta_cat_modal(self, v: bool) -> None:
-        self.carta_cat_modal = bool(v)
-        if not v:
-            self._reset_categoria_form()
-
-    def set_carta_prod_modal(self, v: bool) -> None:
-        self.carta_prod_modal = bool(v)
-        if not v:
-            self._reset_producto_form()
-
-    def abrir_cat_modal(self) -> None:
-        self._reset_categoria_form()
-        self.carta_cat_modal = True
-
-    def abrir_prod_modal(self) -> None:
-        self._reset_producto_form()
-        self.carta_prod_modal = True
-
-    def guardar_categoria(self) -> None:
-        nombre = self.categoria_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El nombre de la categoría es obligatorio."
-            return
-        try:
-            orden = int(self.categoria_form_orden)
-        except ValueError:
-            orden = len(self.categorias) + 1
-        with self._tenant_session() as session:
-            if self.categoria_form_id:
-                cat = session.get(Categoria, self.categoria_form_id)
-                if cat is None or cat.company_id != self._company_id():
-                    self.mensaje = "Categoría no encontrada."
-                    return
-                cat.nombre = nombre
-                cat.descripcion = self.categoria_form_descripcion.strip() or None
-                cat.orden = orden
-                cat.estacion = self.categoria_form_estacion
-                cat.updated_at = _utcnow()
-                session.add(cat)
-            else:
-                cat = Categoria(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    descripcion=self.categoria_form_descripcion.strip() or None,
-                    orden=orden,
-                    estacion=self.categoria_form_estacion,
-                )
-                session.add(cat)
-            session.commit()
-        self.cargar_menu()
-        self._reset_categoria_form()
-        self.carta_cat_modal = False
-        self.mensaje = "Categoría guardada."
-        return rx.toast.success("Categoría guardada")
-
-    def editar_categoria(self, categoria_id: int) -> None:
-        cat = next((c for c in self.categorias if c.id == categoria_id), None)
-        if cat is None:
-            return
-        self.categoria_form_id = cat.id
-        self.categoria_form_nombre = cat.nombre
-        self.categoria_form_descripcion = cat.descripcion
-        self.categoria_form_orden = str(cat.orden)
-        self.categoria_form_estacion = cat.estacion
-        self.carta_cat_modal = True
-
-    def toggle_categoria_activa(self, categoria_id: int) -> None:
-        with self._tenant_session() as session:
-            cat = session.get(Categoria, categoria_id)
-            if cat is None or cat.company_id != self._company_id():
-                return
-            cat.activa = not cat.activa
-            cat.updated_at = _utcnow()
-            session.add(cat)
-            session.commit()
-        self.cargar_menu()
-
-    def mover_categoria(self, categoria_id: int, direccion: str) -> None:
-        cats = list(self.categorias)
-        idx = next((i for i, c in enumerate(cats) if c.id == categoria_id), -1)
-        if idx < 0:
-            return
-        swap_idx = idx - 1 if direccion == "arriba" else idx + 1
-        if swap_idx < 0 or swap_idx >= len(cats):
-            return
-        with self._tenant_session() as session:
-            cat_a = session.get(Categoria, cats[idx].id)
-            cat_b = session.get(Categoria, cats[swap_idx].id)
-            if cat_a is None or cat_b is None:
-                return
-            cat_a.orden, cat_b.orden = cat_b.orden, cat_a.orden
-            now = _utcnow()
-            cat_a.updated_at = now
-            cat_b.updated_at = now
-            session.add(cat_a)
-            session.add(cat_b)
-            session.commit()
-        self.cargar_menu()
-
-    def _reset_categoria_form(self) -> None:
-        self.categoria_form_id = 0
-        self.categoria_form_nombre = ""
-        self.categoria_form_descripcion = ""
-        self.categoria_form_orden = str(len(self.categorias) + 1)
-        self.categoria_form_estacion = "cocina"
-
-    def cancelar_categoria_form(self) -> None:
-        self._reset_categoria_form()
-        self.carta_cat_modal = False
-
-    # ─── Admin Carta — Modificadores ─────────────────────────────────────────
-
-    def cargar_grupos_modificadores(self) -> None:
-        with self._tenant_session() as session:
-            grupos = session.exec(
-                select(GrupoModificador)
-                .where(GrupoModificador.company_id == self._company_id())
-                .order_by(GrupoModificador.orden, GrupoModificador.nombre)
-            ).all()
-            result: list[GrupoModificadorAdminView] = []
-            for g in grupos:
-                opciones_count = len(session.exec(
-                    select(OpcionModificador).where(OpcionModificador.grupo_id == g.id)
-                ).all())
-                productos_count = len(session.exec(
-                    select(ProductoGrupoModificador).where(ProductoGrupoModificador.grupo_id == g.id)
-                ).all())
-                result.append(GrupoModificadorAdminView(
-                    id=g.id or 0,
-                    nombre=g.nombre,
-                    min_selecciones=g.min_selecciones,
-                    max_selecciones=g.max_selecciones,
-                    activo=g.activo,
-                    orden=g.orden,
-                    opciones_count=opciones_count,
-                    productos_count=productos_count,
-                ))
-            self.grupos_modificadores = result
-
-    def abrir_mod_grupo_modal(self) -> None:
-        self._reset_mod_grupo_form()
-        self.mod_grupo_modal = True
-
-    def _reset_mod_grupo_form(self) -> None:
-        self.mod_grupo_form_id = 0
-        self.mod_grupo_form_nombre = ""
-        self.mod_grupo_form_min = "0"
-        self.mod_grupo_form_max = "1"
-        self.mod_opciones_form = []
-
-    def set_mod_grupo_form_nombre(self, v: str) -> None:
-        self.mod_grupo_form_nombre = v
-
-    def set_mod_grupo_form_min(self, v: str) -> None:
-        self.mod_grupo_form_min = v
-
-    def set_mod_grupo_form_max(self, v: str) -> None:
-        self.mod_grupo_form_max = v
-
-    def set_mod_grupo_modal(self, v: bool) -> None:
-        self.mod_grupo_modal = bool(v)
-
-    def agregar_opcion_mod_form(self) -> None:
-        self.mod_opciones_form = self.mod_opciones_form + [{"nombre": "", "precio_extra": "0"}]
-
-    def set_opcion_mod_nombre(self, idx_nombre: str) -> None:
-        parts = idx_nombre.split("|", 1)
-        if len(parts) != 2:
-            return
-        try:
-            idx = int(parts[0])
-        except ValueError:
-            return
-        opciones = list(self.mod_opciones_form)
-        if 0 <= idx < len(opciones):
-            opciones[idx] = {**opciones[idx], "nombre": parts[1]}
-            self.mod_opciones_form = opciones
-
-    def set_opcion_mod_precio(self, idx_precio: str) -> None:
-        parts = idx_precio.split("|", 1)
-        if len(parts) != 2:
-            return
-        try:
-            idx = int(parts[0])
-        except ValueError:
-            return
-        opciones = list(self.mod_opciones_form)
-        if 0 <= idx < len(opciones):
-            opciones[idx] = {**opciones[idx], "precio_extra": parts[1]}
-            self.mod_opciones_form = opciones
-
-    def eliminar_opcion_mod_form(self, idx: int) -> None:
-        opciones = list(self.mod_opciones_form)
-        if 0 <= idx < len(opciones):
-            opciones.pop(idx)
-            self.mod_opciones_form = opciones
-
-    def editar_grupo_modificador(self, grupo_id: int) -> None:
-        with self._tenant_session() as session:
-            g = session.get(GrupoModificador, grupo_id)
-            if g is None or g.company_id != self._company_id():
-                return
-            self.mod_grupo_form_id = g.id or 0
-            self.mod_grupo_form_nombre = g.nombre
-            self.mod_grupo_form_min = str(g.min_selecciones)
-            self.mod_grupo_form_max = str(g.max_selecciones)
-            opciones = session.exec(
-                select(OpcionModificador)
-                .where(OpcionModificador.grupo_id == g.id)
-                .order_by(OpcionModificador.orden)
-            ).all()
-            self.mod_opciones_form = [
-                {"nombre": o.nombre, "precio_extra": str(o.precio_extra)}
-                for o in opciones
-            ]
-        self.mod_grupo_modal = True
-
-    def guardar_grupo_modificador(self) -> None:
-        nombre = self.mod_grupo_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El nombre del grupo es obligatorio."
-            return
-        try:
-            min_sel = max(0, int(self.mod_grupo_form_min))
-        except ValueError:
-            min_sel = 0
-        try:
-            max_sel = max(1, int(self.mod_grupo_form_max))
-        except ValueError:
-            max_sel = 1
-        if min_sel > max_sel:
-            min_sel = max_sel
-
-        with self._tenant_session() as session:
-            if self.mod_grupo_form_id:
-                grupo = session.get(GrupoModificador, self.mod_grupo_form_id)
-                if grupo is None or grupo.company_id != self._company_id():
-                    self.mensaje = "Grupo no encontrado."
-                    return
-                grupo.nombre = nombre
-                grupo.min_selecciones = min_sel
-                grupo.max_selecciones = max_sel
-                grupo.updated_at = _utcnow()
-                session.exec(
-                    select(OpcionModificador)
-                    .where(OpcionModificador.grupo_id == grupo.id)
-                ).all()
-                for old_op in session.exec(
-                    select(OpcionModificador).where(OpcionModificador.grupo_id == grupo.id)
-                ).all():
-                    session.delete(old_op)
-                session.flush()
-            else:
-                grupo = GrupoModificador(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    min_selecciones=min_sel,
-                    max_selecciones=max_sel,
-                    orden=len(self.grupos_modificadores),
-                )
-                session.add(grupo)
-                session.flush()
-
-            for i, op_data in enumerate(self.mod_opciones_form):
-                op_nombre = str(op_data.get("nombre", "")).strip()
-                if not op_nombre:
-                    continue
-                try:
-                    precio = max(Decimal("0"), Decimal(str(op_data.get("precio_extra", "0"))))
-                except Exception:
-                    precio = Decimal("0")
-                session.add(OpcionModificador(
-                    company_id=self._company_id(),
-                    grupo_id=grupo.id or 0,
-                    nombre=op_nombre,
-                    precio_extra=precio,
-                    orden=i,
-                ))
-            session.add(grupo)
-            session.commit()
-        self.mod_grupo_modal = False
-        self._reset_mod_grupo_form()
-        self.cargar_grupos_modificadores()
-        return rx.toast.success("Grupo de modificadores guardado")
-
-    def eliminar_grupo_modificador(self, grupo_id: int) -> None:
-        with self._tenant_session() as session:
-            g = session.get(GrupoModificador, grupo_id)
-            if g is None or g.company_id != self._company_id():
-                return
-            for op in session.exec(
-                select(OpcionModificador).where(OpcionModificador.grupo_id == grupo_id)
-            ).all():
-                session.delete(op)
-            for pg in session.exec(
-                select(ProductoGrupoModificador).where(ProductoGrupoModificador.grupo_id == grupo_id)
-            ).all():
-                session.delete(pg)
-            session.delete(g)
-            session.commit()
-        self.cargar_grupos_modificadores()
-        return rx.toast.success("Grupo eliminado")
-
-    def abrir_mod_asignar(self, producto_id: int) -> None:
-        with self._tenant_session() as session:
-            p = session.get(Producto, producto_id)
-            if p is None or p.company_id != self._company_id():
-                return
-            self.mod_asignar_producto_id = p.id or 0
-            self.mod_asignar_producto_nombre = p.nombre
-            asignados = session.exec(
-                select(ProductoGrupoModificador)
-                .where(ProductoGrupoModificador.producto_id == p.id)
-            ).all()
-            self.mod_asignar_grupo_ids = [a.grupo_id for a in asignados]
-        self.mod_asignar_modal = True
-
-    def set_mod_asignar_modal(self, v: bool) -> None:
-        self.mod_asignar_modal = bool(v)
-
-    def toggle_mod_asignar_grupo(self, grupo_id: int) -> None:
-        ids = list(self.mod_asignar_grupo_ids)
-        if grupo_id in ids:
-            ids.remove(grupo_id)
-        else:
-            ids.append(grupo_id)
-        self.mod_asignar_grupo_ids = ids
-
-    def guardar_mod_asignacion(self) -> None:
-        with self._tenant_session() as session:
-            for pg in session.exec(
-                select(ProductoGrupoModificador)
-                .where(ProductoGrupoModificador.producto_id == self.mod_asignar_producto_id)
-            ).all():
-                session.delete(pg)
-            session.flush()
-            for gid in self.mod_asignar_grupo_ids:
-                session.add(ProductoGrupoModificador(
-                    producto_id=self.mod_asignar_producto_id,
-                    grupo_id=gid,
-                ))
-            session.commit()
-        self.mod_asignar_modal = False
-        self.cargar_menu()
-        return rx.toast.success("Modificadores asignados")
-
-    # ─── Combos Admin ─────────────────────────────────────────────────────────
-
-    def cargar_combos(self) -> None:
-        with self._tenant_session() as session:
-            combos = session.exec(
-                select(Combo).where(Combo.company_id == self._company_id()).order_by(Combo.orden, Combo.nombre)
-            ).all()
-            admin_list: list[dict[str, object]] = []
-            menu_list: list[dict[str, object]] = []
-            for c in combos:
-                items_db = session.exec(
-                    select(ComboItem).where(ComboItem.combo_id == c.id)
-                ).all()
-                prod_ids = [ci.producto_id for ci in items_db]
-                productos = {p.id: p for p in session.exec(select(Producto).where(Producto.id.in_(prod_ids))).all()} if prod_ids else {}
-                items_texto = ", ".join(
-                    f"{ci.cantidad}x {productos.get(ci.producto_id, Producto(nombre='?')).nombre}"
-                    for ci in items_db
-                )
-                precio_f = float(_to_decimal(c.precio))
-                entry: dict[str, object] = {
-                    "id": c.id or 0,
-                    "nombre": c.nombre,
-                    "descripcion": c.descripcion or "",
-                    "precio": precio_f,
-                    "precio_texto": _money_text(c.precio),
-                    "emoji": c.emoji or "🍱",
-                    "activo": c.activo,
-                    "orden": c.orden,
-                    "items_count": len(items_db),
-                    "items_texto": items_texto,
-                }
-                admin_list.append(entry)
-                if c.activo:
-                    menu_list.append(entry)
-            self.combos_admin = admin_list
-            self.combos_menu = menu_list
-
-    def abrir_combo_modal(self) -> None:
-        self.combo_form_id = 0
-        self.combo_form_nombre = ""
-        self.combo_form_descripcion = ""
-        self.combo_form_precio = ""
-        self.combo_form_emoji = ""
-        self.combo_form_items = [{"producto_id": "", "cantidad": "1"}]
-        self.combo_modal = True
-
-    def set_combo_modal(self, v: bool) -> None:
-        self.combo_modal = bool(v)
-
-    def set_combo_form_nombre(self, v: str) -> None:
-        self.combo_form_nombre = str(v)[:160]
-
-    def set_combo_form_descripcion(self, v: str) -> None:
-        self.combo_form_descripcion = str(v)[:240]
-
-    def set_combo_form_precio(self, v: str) -> None:
-        self.combo_form_precio = v
-
-    def set_combo_form_emoji(self, v: str) -> None:
-        self.combo_form_emoji = str(v)[:16]
-
-    def combo_add_item(self) -> None:
-        items = list(self.combo_form_items)
-        items.append({"producto_id": "", "cantidad": "1"})
-        self.combo_form_items = items
-
-    def combo_remove_item(self, idx: int) -> None:
-        items = list(self.combo_form_items)
-        if 0 <= idx < len(items) and len(items) > 1:
-            items.pop(idx)
-        self.combo_form_items = items
-
-    def combo_set_item_field(self, payload: str) -> None:
-        parts = payload.split("|", 2)
-        if len(parts) != 3:
-            return
-        idx_str, field, value = parts
-        try:
-            idx = int(idx_str)
-        except ValueError:
-            return
-        items = list(self.combo_form_items)
-        if 0 <= idx < len(items):
-            item = dict(items[idx])
-            item[field] = value
-            items[idx] = item
-        self.combo_form_items = items
-
-    def editar_combo(self, combo_id: int) -> None:
-        with self._tenant_session() as session:
-            combo = session.get(Combo, combo_id)
-            if combo is None or combo.company_id != self._company_id():
-                return
-            self.combo_form_id = combo.id or 0
-            self.combo_form_nombre = combo.nombre
-            self.combo_form_descripcion = combo.descripcion or ""
-            self.combo_form_precio = str(combo.precio)
-            self.combo_form_emoji = combo.emoji or ""
-            items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
-            self.combo_form_items = [
-                {"producto_id": str(ci.producto_id), "cantidad": str(ci.cantidad)}
-                for ci in items_db
-            ] or [{"producto_id": "", "cantidad": "1"}]
-        self.combo_modal = True
-
-    def guardar_combo(self) -> None:
-        nombre = self.combo_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El combo necesita un nombre."
-            return
-        try:
-            precio = Decimal(self.combo_form_precio.replace(",", ".").strip())
-        except (ValueError, InvalidOperation):
-            self.mensaje = "Precio inválido para el combo."
-            return
-        if precio < 0:
-            self.mensaje = "El precio no puede ser negativo."
-            return
-        items_validos: list[tuple[int, int]] = []
-        for item in self.combo_form_items:
-            pid_str = str(item.get("producto_id", "")).strip()
-            cant_str = str(item.get("cantidad", "1")).strip()
-            if not pid_str:
-                continue
-            try:
-                pid = int(pid_str)
-                cant = max(int(cant_str), 1)
-            except ValueError:
-                continue
-            items_validos.append((pid, cant))
-        if not items_validos:
-            self.mensaje = "Agrega al menos un producto al combo."
-            return
-        with self._tenant_session() as session:
-            if self.combo_form_id > 0:
-                combo = session.get(Combo, self.combo_form_id)
-                if combo is None or combo.company_id != self._company_id():
-                    self.mensaje = "Combo no encontrado."
-                    return
-                combo.nombre = nombre
-                combo.descripcion = self.combo_form_descripcion.strip() or None
-                combo.precio = precio
-                combo.emoji = self.combo_form_emoji.strip() or None
-                for old_item in session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all():
-                    session.delete(old_item)
-                session.flush()
-            else:
-                combo = Combo(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    descripcion=self.combo_form_descripcion.strip() or None,
-                    precio=precio,
-                    emoji=self.combo_form_emoji.strip() or None,
-                )
-                session.add(combo)
-                session.flush()
-            for pid, cant in items_validos:
-                session.add(ComboItem(combo_id=combo.id or 0, producto_id=pid, cantidad=cant))
-            session.commit()
-        self.combo_modal = False
-        self.cargar_combos()
-        action = "actualizado" if self.combo_form_id > 0 else "creado"
-        return rx.toast.success(f"Combo \"{nombre}\" {action}")
-
-    def toggle_combo_activo(self, combo_id: int) -> None:
-        with self._tenant_session() as session:
-            combo = session.get(Combo, combo_id)
-            if combo is None or combo.company_id != self._company_id():
-                return
-            combo.activo = not combo.activo
-            session.commit()
-        self.cargar_combos()
-
-    def eliminar_combo(self, combo_id: int) -> None:
-        with self._tenant_session() as session:
-            combo = session.get(Combo, combo_id)
-            if combo is None or combo.company_id != self._company_id():
-                return
-            for ci in session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all():
-                session.delete(ci)
-            session.delete(combo)
-            session.commit()
-        self.cargar_combos()
-        return rx.toast.success("Combo eliminado")
-
-    def agregar_combo(self, combo_id: int) -> None:
-        import json as _json
-        combo_data = next((c for c in self.combos_menu if c.get("id") == combo_id), None)
-        if combo_data is None:
-            self.mensaje = "Combo no disponible."
-            return
-        if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Selecciona una mesa antes de agregar combos."
-            return
-        with self._tenant_session() as session:
-            mesa = session.get(Mesa, self.mesa_seleccionada_id)
-            if mesa is None or mesa.company_id != self._company_id():
-                self.mensaje = "La mesa seleccionada ya no existe."
-                return
-            combo = session.get(Combo, combo_id)
-            if combo is None or combo.company_id != self._company_id() or not combo.activo:
-                self.mensaje = "Combo no disponible."
-                return
-            items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            combo_snapshot = [
-                {
-                    "producto_id": ci.producto_id,
-                    "nombre": productos.get(ci.producto_id, Producto(nombre="?")).nombre,
-                    "cantidad": ci.cantidad,
-                }
-                for ci in items_db
-            ]
-            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=(self.usuario_actual.id or None) if self.usuario_actual else None)
-            precio = _to_decimal(combo.precio)
-            first_pid = items_db[0].producto_id if items_db else 0
-            detalle = DetallePedido(
-                company_id=self._company_id(),
-                pedido_id=pedido.id or 0,
-                producto_id=first_pid,
-                cantidad=1,
-                precio_unitario=precio,
-                subtotal=precio,
-                estado_produccion=EstadoProduccion.PENDIENTE.value,
-                impreso_cocina=False,
-                impreso_caja=False,
-                combo_items_json=_json.dumps(combo_snapshot, ensure_ascii=False),
-            )
-            session.add(detalle)
-            _recalculate_order_total(session, pedido)
-            mesa.estado = EstadoMesa.OCUPADA.value
-            mesa.updated_at = _utcnow()
-            session.add(mesa)
-            session.commit()
-        self._cargar_carrito_mesa(self.mesa_seleccionada_id)
-        self._cargar_historial_mesa(self.mesa_seleccionada_id)
-        self.cargar_mesas()
-        self.mensaje = f"Combo \"{combo_data.get('nombre', '')}\" agregado."
-
-    def agregar_combo_mostrador(self, combo_id: int) -> None:
-        import json as _json
-        combo_data = next((c for c in self.combos_menu if c.get("id") == combo_id), None)
-        if combo_data is None:
-            self.mensaje = "Combo no disponible."
-            return
-        with self._tenant_session() as session:
-            combo = session.get(Combo, combo_id)
-            if combo is None or not combo.activo:
-                self.mensaje = "Combo no disponible."
-                return
-            items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
-            combo_snapshot = [
-                {
-                    "producto_id": ci.producto_id,
-                    "nombre": productos.get(ci.producto_id, Producto(nombre="?")).nombre,
-                    "cantidad": ci.cantidad,
-                }
-                for ci in items_db
-            ]
-        precio_f = float(combo_data.get("precio", 0))
-        carrito = list(self.mostrador_carrito)
-        carrito.append(CarritoItem(
-            producto_id=0,
-            nombre=str(combo_data.get("nombre", "")),
-            cantidad=1,
-            precio_unitario=precio_f,
-            subtotal=precio_f,
-            subtotal_texto=_money_text(precio_f),
-            combo_items_json=_json.dumps(combo_snapshot, ensure_ascii=False),
-            es_combo=True,
-        ))
-        self.mostrador_carrito = carrito
-        self.mensaje = f"Combo \"{combo_data.get('nombre', '')}\" agregado a mostrador."
-
-    # ─── Modificadores — Selección al pedir ───────────────────────────────────
-
-    def _abrir_seleccion_modificadores(self, producto_id: int, producto_nombre: str, precio: float, origen: str = "mozos") -> None:
-        import json as _json
-        with self._tenant_session() as session:
-            asignaciones = session.exec(
-                select(ProductoGrupoModificador)
-                .where(ProductoGrupoModificador.producto_id == producto_id)
-            ).all()
-            grupo_ids = [a.grupo_id for a in asignaciones]
-            if not grupo_ids:
-                return
-            grupos = session.exec(
-                select(GrupoModificador)
-                .where(GrupoModificador.id.in_(grupo_ids), GrupoModificador.activo.is_(True))
-                .order_by(GrupoModificador.orden)
-            ).all()
-            grupos_data: list[dict[str, object]] = []
-            for g in grupos:
-                opciones = session.exec(
-                    select(OpcionModificador)
-                    .where(OpcionModificador.grupo_id == g.id, OpcionModificador.activo.is_(True))
-                    .order_by(OpcionModificador.orden)
-                ).all()
-                grupos_data.append({
-                    "id": g.id or 0,
-                    "nombre": g.nombre,
-                    "min": g.min_selecciones,
-                    "max": g.max_selecciones,
-                    "opciones": [
-                        {"id": o.id or 0, "nombre": o.nombre, "precio_extra": float(o.precio_extra)}
-                        for o in opciones
-                    ],
-                })
-        self.mod_seleccion_producto_id = producto_id
-        self.mod_seleccion_producto_nombre = producto_nombre
-        self.mod_seleccion_producto_precio = precio
-        self.mod_seleccion_grupos = grupos_data
-        self.mod_seleccion_elegidos = {}
-        self.mod_seleccion_origen = origen
-        self.mod_seleccion_modal = True
-
-    def set_mod_seleccion_modal(self, v: bool) -> None:
-        self.mod_seleccion_modal = bool(v)
-
-    def toggle_mod_opcion(self, grupo_id_opcion_id: str) -> None:
-        parts = grupo_id_opcion_id.split("_")
-        if len(parts) != 2:
-            return
-        grupo_id_str, opcion_id_str = parts
-        elegidos = dict(self.mod_seleccion_elegidos)
-        lista = list(elegidos.get(grupo_id_str, []))
-        opcion_id = int(opcion_id_str)
-        grupo_max = 1
-        for g in self.mod_seleccion_grupos:
-            if str(g.get("id", "")) == grupo_id_str:
-                grupo_max = int(g.get("max", 1))
-                break
-        if opcion_id in lista:
-            lista.remove(opcion_id)
-        else:
-            if len(lista) >= grupo_max:
-                if grupo_max == 1:
-                    lista = [opcion_id]
-                else:
-                    return
-            else:
-                lista.append(opcion_id)
-        elegidos[grupo_id_str] = lista
-        self.mod_seleccion_elegidos = elegidos
-
-    def confirmar_mod_seleccion(self) -> None:
-        import json as _json
-        for g in self.mod_seleccion_grupos:
-            gid = str(g.get("id", ""))
-            elegidos = self.mod_seleccion_elegidos.get(gid, [])
-            min_req = int(g.get("min", 0))
-            if len(elegidos) < min_req:
-                self.mensaje = f"Seleccioná al menos {min_req} opción(es) en \"{g.get('nombre', '')}\"."
-                return
-
-        mods_snapshot: list[dict[str, object]] = []
-        extra_total = Decimal("0")
-        for g in self.mod_seleccion_grupos:
-            gid = str(g.get("id", ""))
-            elegidos = self.mod_seleccion_elegidos.get(gid, [])
-            opciones_data = g.get("opciones", [])
-            if not isinstance(opciones_data, list):
-                opciones_data = []
-            for oid in elegidos:
-                for op in opciones_data:
-                    if not isinstance(op, dict):
-                        continue
-                    if op.get("id") == oid:
-                        precio_extra = Decimal(str(op.get("precio_extra", 0)))
-                        extra_total += precio_extra
-                        mods_snapshot.append({
-                            "grupo": g.get("nombre", ""),
-                            "opcion": op.get("nombre", ""),
-                            "precio_extra": float(precio_extra),
-                        })
-
-        mods_json = _json.dumps(mods_snapshot, ensure_ascii=False)
-        mods_texto = ", ".join(
-            m.get("opcion", "") + (f" +S/{m['precio_extra']:.2f}" if m.get("precio_extra", 0) > 0 else "")
-            for m in mods_snapshot
-        ) if mods_snapshot else ""
-
-        self.mod_seleccion_modal = False
-        if self.mod_seleccion_origen == "mostrador":
-            self._agregar_producto_mostrador_con_mods(
-                self.mod_seleccion_producto_id,
-                mods_json,
-                mods_texto,
-                extra_total,
-            )
-        else:
-            self._agregar_producto_con_mods(
-                self.mod_seleccion_producto_id,
-                mods_json,
-                mods_texto,
-                extra_total,
-            )
-
-    def _agregar_producto_con_mods(self, producto_id: int, mods_json: str, mods_texto: str, extra: Decimal) -> None:
-        if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Selecciona una mesa antes de agregar productos."
-            return
-        with self._tenant_session() as session:
-            mesa = session.get(Mesa, self.mesa_seleccionada_id)
-            if mesa is None or mesa.company_id != self._company_id():
-                self.mensaje = "La mesa seleccionada ya no existe."
-                return
-            producto = session.get(Producto, producto_id)
-            if producto is None or producto.company_id != self._company_id() or not producto.disponible:
-                self.mensaje = "Producto no disponible."
-                return
-            producto_nombre = producto.nombre
-            pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=(self.usuario_actual.id or None) if self.usuario_actual else None)
-            precio = _to_decimal(producto.precio) + extra
-            detalle = DetallePedido(
-                company_id=self._company_id(),
-                pedido_id=pedido.id or 0,
-                producto_id=producto.id or 0,
-                cantidad=1,
-                precio_unitario=precio,
-                subtotal=precio,
-                estado_produccion=EstadoProduccion.PENDIENTE.value,
-                impreso_cocina=False,
-                impreso_caja=False,
-                modificadores_json=mods_json if mods_json else None,
-            )
-            session.add(detalle)
-            _recalculate_order_total(session, pedido)
-            mesa.estado = EstadoMesa.OCUPADA.value
-            mesa.updated_at = _utcnow()
-            session.add(mesa)
-            session.commit()
-        self._cargar_carrito_mesa(self.mesa_seleccionada_id)
-        self._cargar_historial_mesa(self.mesa_seleccionada_id)
-        self.cargar_mesas()
-        self.mensaje = f"{producto_nombre} agregado a {self.mesa_seleccionada_label}."
-
-    # ─── Admin Carta — Productos ──────────────────────────────────────────────
-
-    def set_producto_form_nombre(self, v: str) -> None:
-        self.producto_form_nombre = str(v)[:160]
-
-    def set_producto_form_descripcion(self, v: str) -> None:
-        self.producto_form_descripcion = str(v)[:240]
-
-    def set_producto_form_precio(self, v: str) -> None:
-        self.producto_form_precio = v
-
-    def set_producto_form_categoria(self, v: str) -> None:
-        self.producto_form_categoria_nombre = v
-
-    def set_producto_form_disponible(self, v: bool) -> None:
-        self.producto_form_disponible = v
-
-    def set_producto_form_emoji(self, v: str) -> None:
-        self.producto_form_emoji = str(v)[:8]
-
-    @rx.var
-    def producto_form_emoji_sugerido(self) -> str:
-        return _emoji_para_producto(self.producto_form_nombre or "")
-
-    def guardar_producto(self) -> None:
-        nombre = self.producto_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El nombre del producto es obligatorio."
-            return
-        precio = _parse_positive_price(self.producto_form_precio)
-        if precio is None:
-            self.mensaje = "El precio debe ser un número mayor a 0."
-            return
-        with self._tenant_session() as session:
-            cat = session.exec(
-                select(Categoria).where(
-                    Categoria.company_id == self._company_id(),
-                    Categoria.nombre == self.producto_form_categoria_nombre,
-                )
-            ).first()
-            if cat is None:
-                self.mensaje = f"Categoría '{self.producto_form_categoria_nombre}' no encontrada."
-                return
-            if self.producto_form_id:
-                prod = session.get(Producto, self.producto_form_id)
-                if prod is None or prod.company_id != self._company_id():
-                    self.mensaje = "Producto no encontrado."
-                    return
-                prod.nombre = nombre
-                prod.descripcion = self.producto_form_descripcion.strip() or None
-                prod.precio = precio
-                prod.categoria_id = cat.id or 0
-                prod.disponible = self.producto_form_disponible
-                prod.imagen_url = self.producto_form_imagen_url or None
-                prod.emoji = self.producto_form_emoji.strip() or None
-                prod.updated_at = _utcnow()
-                session.add(prod)
-            else:
-                prod = Producto(
-                    company_id=self._company_id(),
-                    categoria_id=cat.id or 0,
-                    nombre=nombre,
-                    descripcion=self.producto_form_descripcion.strip() or None,
-                    precio=precio,
-                    disponible=self.producto_form_disponible,
-                    imagen_url=self.producto_form_imagen_url or None,
-                    emoji=self.producto_form_emoji.strip() or None,
-                )
-                session.add(prod)
-            session.commit()
-        self.cargar_menu()
-        self._reset_producto_form()
-        self.carta_prod_modal = False
-        self.mensaje = "Producto guardado."
-        return rx.toast.success("Producto guardado")
-
-    def editar_producto(self, producto_id: int) -> None:
-        prod = next((p for p in self.productos if p.id == producto_id), None)
-        if prod is None:
-            return
-        self.producto_form_id = prod.id
-        self.producto_form_nombre = prod.nombre
-        self.producto_form_descripcion = prod.descripcion
-        self.producto_form_precio = str(prod.precio)
-        self.producto_form_categoria_nombre = prod.categoria_nombre
-        self.producto_form_disponible = prod.disponible
-        self.producto_form_imagen_url = prod.imagen_url
-        with self._tenant_session() as session:
-            prod_db = session.get(Producto, producto_id)
-            self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
-        self.carta_prod_modal = True
-
-    def duplicar_producto(self, producto_id: int) -> None:
-        prod = next((p for p in self.productos if p.id == producto_id), None)
-        if prod is None:
-            return
-        self.producto_form_id = 0
-        self.producto_form_nombre = f"Copia de {prod.nombre}"
-        self.producto_form_descripcion = prod.descripcion
-        self.producto_form_precio = str(prod.precio)
-        self.producto_form_categoria_nombre = prod.categoria_nombre
-        self.producto_form_disponible = prod.disponible
-        self.producto_form_imagen_url = prod.imagen_url
-        with self._tenant_session() as session:
-            prod_db = session.get(Producto, producto_id)
-            self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
-        self.carta_prod_modal = True
-
-    def toggle_producto_disponible(self, producto_id: int):
-        with self._tenant_session() as session:
-            prod = session.get(Producto, producto_id)
-            if prod is None or prod.company_id != self._company_id():
-                return
-            prod.disponible = not prod.disponible
-            prod.updated_at = _utcnow()
-            nombre = prod.nombre
-            nuevo_estado = prod.disponible
-            session.add(prod)
-            session.commit()
-        self.cargar_menu()
-        if nuevo_estado:
-            return rx.toast.success(f"{nombre} disponible nuevamente")
-        return rx.toast(f"{nombre} marcado como agotado (86)", variant="warning")
-
-    def _reset_producto_form(self) -> None:
-        self.producto_form_id = 0
-        self.producto_form_nombre = ""
-        self.producto_form_descripcion = ""
-        self.producto_form_precio = ""
-        self.producto_form_disponible = True
-        self.producto_form_imagen_url = ""
-        self.producto_form_emoji = ""
-        if self.categorias:
-            self.producto_form_categoria_nombre = self.categorias[0].nombre
-
-    def cancelar_producto_form(self) -> None:
-        self._reset_producto_form()
-        self.carta_prod_modal = False
-
-    async def handle_upload_imagen_producto(self, files: list[rx.UploadFile]) -> None:
-        for file in files:
-            data = await file.read()
-            ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
-            filename = f"food_prod_{uuid.uuid4().hex[:12]}{ext}"
-            upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_productos"
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            (upload_dir / filename).write_bytes(data)
-            self.producto_form_imagen_url = f"{_FOOD_API_URL}/_upload/food_productos/{filename}"
-            break  # solo primera imagen
-
-    def quitar_imagen_producto(self) -> None:
-        self.producto_form_imagen_url = ""
-
-    async def handle_upload_logo_empresa(self, files: list[rx.UploadFile]) -> None:
-        for file in files:
-            data = await file.read()
-            ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
-            filename = f"food_logo_{uuid.uuid4().hex[:12]}{ext}"
-            upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_empresas"
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            (upload_dir / filename).write_bytes(data)
-            self.config_logo_url = f"{_FOOD_API_URL}/_upload/food_empresas/{filename}"
-            break
-
-    def quitar_logo_empresa(self) -> None:
-        self.config_logo_url = ""
-
-
-    # ─── Inventario ───────────────────────────────────────────────────────────
-
-    def on_load_inventario(self) -> None:
-        self.cargar_inventario()
-        if not self.productos:
-            self.cargar_menu()
-
-    def cargar_inventario(self) -> None:
-        with self._tenant_session() as session:
-            insumos_db = session.exec(
-                select(Insumo)
-                .where(Insumo.company_id == self._company_id())
-                .order_by(Insumo.nombre)
-            ).all()
-            views: list[InsumoView] = []
-            alertas: list[str] = []
-            alertas_venc: list[str] = []
-            hoy = ahora_local_pe().date()
-            for ins in insumos_db:
-                stock = Decimal(str(ins.stock_actual))
-                minimo = Decimal(str(ins.stock_minimo))
-                bajo = ins.activo and minimo > 0 and stock <= minimo
-                venc_texto = ""
-                venc_estado = ""
-                if ins.fecha_vencimiento:
-                    venc_texto = ins.fecha_vencimiento.strftime("%d/%m/%Y")
-                    dias = (ins.fecha_vencimiento - hoy).days
-                    if ins.activo and dias < 0:
-                        venc_estado = "vencido"
-                        alertas_venc.append(f"{ins.nombre} (vencido)")
-                    elif ins.activo and dias <= 7:
-                        venc_estado = "por_vencer"
-                        alertas_venc.append(f"{ins.nombre} (vence en {dias} día{'s' if dias != 1 else ''})")
-                views.append(InsumoView(
-                    id=ins.id or 0,
-                    nombre=ins.nombre,
-                    unidad=ins.unidad,
-                    stock_actual=float(stock),
-                    stock_minimo=float(minimo),
-                    activo=ins.activo,
-                    bajo_stock=bajo,
-                    stock_texto=f"{stock:.3f} {ins.unidad}".rstrip("0").rstrip(".").strip(),
-                    stock_minimo_texto=f"{minimo:.3f} {ins.unidad}".rstrip("0").rstrip(".").strip(),
-                    vencimiento_texto=venc_texto,
-                    vencimiento_estado=venc_estado,
-                ))
-                if bajo:
-                    alertas.append(ins.nombre)
-            self.inv_insumos = views
-            self.inv_alertas_bajo_stock = alertas
-            self.inv_alertas_vencimiento = alertas_venc
-
-    def set_inv_form_nombre(self, v: str) -> None:
-        self.inv_form_nombre = v
-
-    def set_inv_form_unidad(self, v: str) -> None:
-        self.inv_form_unidad = v
-
-    def set_inv_form_stock_actual(self, v: str) -> None:
-        self.inv_form_stock_actual = v
-
-    def set_inv_form_stock_minimo(self, v: str) -> None:
-        self.inv_form_stock_minimo = v
-
-    def set_inv_form_vencimiento(self, v: str) -> None:
-        self.inv_form_vencimiento = v
-
-    def set_inv_form_costo(self, v: str) -> None:
-        self.inv_form_costo = v
-
-    # ─── Kardex de insumos ───────────────────────────────────────────────────
-
-    @rx.var
-    def inv_categorias_merma(self) -> list[str]:
-        return CATEGORIAS_MERMA
-
-    @rx.var
-    def inv_alertas_vencimiento_texto(self) -> str:
-        return " · ".join(self.inv_alertas_vencimiento)
-
-    def set_inv_mov_modal_visible(self, v: bool) -> None:
-        self.inv_mov_modal_visible = bool(v)
-
-    def set_inv_mov_tipo(self, v: str) -> None:
-        self.inv_mov_tipo = v
-        self.inv_mov_error = ""
-
-    def set_inv_mov_cantidad(self, v: str) -> None:
-        self.inv_mov_cantidad = v
-
-    def set_inv_mov_merma_categoria(self, v: str) -> None:
-        self.inv_mov_merma_categoria = v
-
-    def set_inv_mov_motivo(self, v: str) -> None:
-        self.inv_mov_motivo = v
-
-    def abrir_mov_insumo(self, insumo_id: int, tipo: str) -> None:
-        insumo = next((i for i in self.inv_insumos if i.id == insumo_id), None)
-        if insumo is None:
-            return
-        self.inv_mov_insumo_id = insumo_id
-        self.inv_mov_insumo_nombre = insumo.nombre
-        self.inv_mov_tipo = tipo
-        self.inv_mov_cantidad = ""
-        self.inv_mov_merma_categoria = "Vencido"
-        self.inv_mov_motivo = ""
-        self.inv_mov_error = ""
-        self.inv_mov_modal_visible = True
-
-    def guardar_mov_insumo(self) -> None:
-        self.inv_mov_error = ""
-        raw = (self.inv_mov_cantidad or "").replace(",", ".").strip()
-        try:
-            cantidad = Decimal(raw) if raw else Decimal("0")
-        except InvalidOperation:
-            self.inv_mov_error = "Cantidad inválida."
-            return
-        usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
-        try:
-            with self._tenant_session() as session:
-                ins = session.get(Insumo, self.inv_mov_insumo_id)
-                if ins is None or ins.company_id != self._company_id():
-                    self.inv_mov_error = "Insumo no encontrado."
-                    return
-                if self.inv_mov_tipo == "entrada":
-                    registrar_entrada(
-                        session, ins, usuario_id, cantidad,
-                        self.inv_mov_motivo or "Compra de mercadería",
-                    )
-                elif self.inv_mov_tipo == "merma":
-                    motivo = self.inv_mov_merma_categoria
-                    if self.inv_mov_motivo.strip():
-                        motivo = f"{motivo}: {self.inv_mov_motivo.strip()}"
-                    registrar_merma(session, ins, usuario_id, cantidad, motivo)
-                elif self.inv_mov_tipo == "ajuste":
-                    registrar_ajuste(
-                        session, ins, usuario_id, cantidad,
-                        self.inv_mov_motivo or "Conteo físico",
-                    )
-                else:
-                    self.inv_mov_error = "Tipo de movimiento inválido."
-                    return
-                session.commit()
-        except ValueError as exc:
-            self.inv_mov_error = str(exc)
-            return
-        self.inv_mov_modal_visible = False
-        self.cargar_inventario()
-        self.mensaje = f"Movimiento registrado para '{self.inv_mov_insumo_nombre}'."
-
-    def set_inv_kardex_visible(self, v: bool) -> None:
-        self.inv_kardex_visible = bool(v)
-
-    def abrir_kardex_insumo(self, insumo_id: int) -> None:
-        tipo_labels = {
-            TipoMovimientoInsumo.ENTRADA.value: "Entrada",
-            TipoMovimientoInsumo.CONSUMO.value: "Consumo por venta",
-            TipoMovimientoInsumo.MERMA.value: "Merma",
-            TipoMovimientoInsumo.AJUSTE.value: "Ajuste de conteo",
-            TipoMovimientoInsumo.REPOSICION.value: "Reposición por anulación",
-        }
-        vistas: list[KardexView] = []
-        with self._tenant_session() as session:
-            ins = session.get(Insumo, insumo_id)
-            if ins is None or ins.company_id != self._company_id():
-                return
-            movimientos = session.exec(
-                select(MovimientoInsumo)
-                .where(
-                    MovimientoInsumo.company_id == self._company_id(),
-                    MovimientoInsumo.insumo_id == insumo_id,
-                )
-                .order_by(MovimientoInsumo.id.desc())
-                .limit(50)
-            ).all()
-            usuarios = {
-                u.id: u.nombre
-                for u in session.exec(
-                    select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())
-                ).all()
-            }
-            unidad = ins.unidad
-            for m in movimientos:
-                cantidad = Decimal(str(m.cantidad))
-                signo = "+" if cantidad >= 0 else ""
-                vistas.append(KardexView(
-                    id=m.id or 0,
-                    fecha_texto=format_local_datetime(m.created_at, "%d/%m %H:%M", "PE"),
-                    tipo=m.tipo,
-                    tipo_label=tipo_labels.get(m.tipo, m.tipo),
-                    cantidad_texto=f"{signo}{cantidad:.3f}".rstrip("0").rstrip(".") + f" {unidad}",
-                    es_entrada=cantidad >= 0,
-                    stock_resultante_texto=f"{Decimal(str(m.stock_resultante)):.3f}".rstrip("0").rstrip(".") + f" {unidad}",
-                    motivo=m.motivo or "",
-                    usuario=usuarios.get(m.usuario_id or 0, "Sistema"),
-                ))
-            self.inv_kardex_insumo_nombre = ins.nombre
-        self.inv_kardex_movimientos = vistas
-        self.inv_kardex_visible = True
-
-    def guardar_insumo(self) -> None:
-        nombre = self.inv_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El nombre del insumo es obligatorio."
-            return
-        unidad = self.inv_form_unidad.strip() or "unidad"
-        try:
-            stock_actual = Decimal(self.inv_form_stock_actual.replace(",", ".").strip() or "0")
-            stock_minimo = Decimal(self.inv_form_stock_minimo.replace(",", ".").strip() or "0")
-            if stock_actual < 0 or stock_minimo < 0:
-                raise ValueError
-        except (InvalidOperation, ValueError):
-            self.mensaje = "Stock inválido. Ingresa números positivos."
-            return
-        fecha_venc = None
-        if self.inv_form_vencimiento.strip():
-            try:
-                fecha_venc = datetime.strptime(self.inv_form_vencimiento.strip(), "%Y-%m-%d").date()
-            except ValueError:
-                self.mensaje = "Fecha de vencimiento inválida."
-                return
-        try:
-            costo = Decimal(self.inv_form_costo.replace(",", ".").strip() or "0")
-            if costo < 0:
-                raise ValueError
-        except (InvalidOperation, ValueError):
-            self.mensaje = "Costo inválido. Ingresa un número positivo."
-            return
-        with self._tenant_session() as session:
-            if self.inv_form_id == 0:
-                existente = session.exec(
-                    select(Insumo).where(
-                        Insumo.company_id == self._company_id(),
-                        Insumo.nombre == nombre,
-                    )
-                ).first()
-                if existente:
-                    self.mensaje = f"Ya existe un insumo llamado '{nombre}'."
-                    return
-                ins = Insumo(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    unidad=unidad,
-                    stock_actual=stock_actual,
-                    stock_minimo=stock_minimo,
-                    fecha_vencimiento=fecha_venc,
-                    costo_unitario=costo,
-                    activo=True,
-                )
-                session.add(ins)
-                session.flush()
-                if stock_actual > 0:
-                    registrar_entrada(
-                        session, ins,
-                        (self.usuario_actual.id or None) if self.usuario_actual else None,
-                        stock_actual, "Stock inicial",
-                    )
-                self.mensaje = f"Insumo '{nombre}' creado."
-            else:
-                ins = session.get(Insumo, self.inv_form_id)
-                if ins is None or ins.company_id != self._company_id():
-                    self.mensaje = "Insumo no encontrado."
-                    return
-                ins.nombre = nombre
-                ins.unidad = unidad
-                ins.stock_minimo = stock_minimo
-                ins.fecha_vencimiento = fecha_venc
-                ins.costo_unitario = costo
-                ins.updated_at = _utcnow()
-                session.add(ins)
-                # El stock no se pisa directo: la diferencia queda en el kardex
-                if stock_actual != Decimal(str(ins.stock_actual)):
-                    registrar_ajuste(
-                        session, ins,
-                        (self.usuario_actual.id or None) if self.usuario_actual else None,
-                        stock_actual, "Edición manual del insumo",
-                    )
-                self.mensaje = f"Insumo '{nombre}' actualizado."
-            session.commit()
-        self.inv_form_id = 0
-        self.inv_form_nombre = ""
-        self.inv_form_unidad = "unidad"
-        self.inv_form_stock_actual = ""
-        self.inv_form_stock_minimo = ""
-        self.inv_form_vencimiento = ""
-        self.inv_form_costo = ""
-        self.inv_form_editando = False
-        self.inv_form_visible = False
-        self.cargar_inventario()
-
-    def editar_insumo(self, insumo_id: int) -> None:
-        with self._tenant_session() as session:
-            ins = session.get(Insumo, insumo_id)
-            if ins is None or ins.company_id != self._company_id():
-                return
-            self.inv_form_id = ins.id or 0
-            self.inv_form_nombre = ins.nombre
-            self.inv_form_unidad = ins.unidad
-            stock = Decimal(str(ins.stock_actual))
-            minimo = Decimal(str(ins.stock_minimo))
-            self.inv_form_stock_actual = f"{stock:.3f}".rstrip("0").rstrip(".")
-            self.inv_form_stock_minimo = f"{minimo:.3f}".rstrip("0").rstrip(".")
-            self.inv_form_vencimiento = (
-                ins.fecha_vencimiento.strftime("%Y-%m-%d") if ins.fecha_vencimiento else ""
-            )
-            costo_dec = Decimal(str(ins.costo_unitario))
-            self.inv_form_costo = f"{costo_dec:.2f}" if costo_dec > 0 else ""
-        self.inv_form_editando = True
-        self.inv_form_visible = True
-
-    def cancelar_insumo_form(self) -> None:
-        self.inv_form_id = 0
-        self.inv_form_nombre = ""
-        self.inv_form_unidad = "unidad"
-        self.inv_form_stock_actual = ""
-        self.inv_form_stock_minimo = ""
-        self.inv_form_vencimiento = ""
-        self.inv_form_costo = ""
-        self.inv_form_editando = False
-        self.inv_form_visible = False
-
-    def toggle_insumo_activo(self, insumo_id: int) -> None:
-        with self._tenant_session() as session:
-            ins = session.get(Insumo, insumo_id)
-            if ins is None or ins.company_id != self._company_id():
-                return
-            ins.activo = not ins.activo
-            ins.updated_at = _utcnow()
-            session.add(ins)
-            session.commit()
-        self.cargar_inventario()
-
-    def set_inv_producto_sel_nombre(self, v: str) -> None:
-        self.inv_producto_sel_nombre = v
-        prod = next((p for p in self.productos if p.nombre == v), None)
-        self.inv_producto_sel_id = prod.id if prod else 0
-        self.cargar_receta_producto()
-
-    def cargar_receta_producto(self) -> None:
-        pid = self.inv_producto_sel_id
-        if pid == 0:
-            self.inv_receta_items = []
-            return
-        with self._tenant_session() as session:
-            ris = session.exec(
-                select(RecetaItem)
-                .where(RecetaItem.company_id == self._company_id(), RecetaItem.producto_id == pid)
-                .order_by(RecetaItem.id)
-            ).all()
-            insumos = {
-                i.id: i
-                for i in session.exec(
-                    select(Insumo).where(Insumo.company_id == self._company_id())
-                ).all()
-            }
-            items: list[RecetaItemView] = []
-            for ri in ris:
-                ins = insumos.get(ri.insumo_id)
-                cant = Decimal(str(ri.cantidad))
-                unidad = ins.unidad if ins else ""
-                items.append(RecetaItemView(
-                    id=ri.id or 0,
-                    producto_id=pid,
-                    insumo_id=ri.insumo_id,
-                    insumo_nombre=ins.nombre if ins else "?",
-                    insumo_unidad=unidad,
-                    cantidad=float(cant),
-                    cantidad_texto=f"{cant:.3f}".rstrip("0").rstrip(".") + f" {unidad}",
-                ))
-            self.inv_receta_items = items
-
-    def set_inv_receta_insumo_sel_nombre(self, v: str) -> None:
-        self.inv_receta_insumo_sel_nombre = v
-
-    def set_inv_receta_cantidad(self, v: str) -> None:
-        self.inv_receta_cantidad = v
-
-    def guardar_receta_item(self) -> None:
-        if self.inv_producto_sel_id == 0:
-            self.mensaje = "Selecciona un producto primero."
-            return
-        insumo_match = next(
-            (i for i in self.inv_insumos if i.nombre == self.inv_receta_insumo_sel_nombre), None
-        )
-        if insumo_match is None:
-            self.mensaje = "Selecciona un insumo válido."
-            return
-        try:
-            cantidad = Decimal(self.inv_receta_cantidad.replace(",", ".").strip() or "0")
-            if cantidad <= 0:
-                raise ValueError
-        except (InvalidOperation, ValueError):
-            self.mensaje = "Cantidad inválida. Ingresa un número mayor a 0."
-            return
-        insumo_id = insumo_match.id
-        with self._tenant_session() as session:
-            existente = session.exec(
-                select(RecetaItem).where(
-                    RecetaItem.company_id == self._company_id(),
-                    RecetaItem.producto_id == self.inv_producto_sel_id,
-                    RecetaItem.insumo_id == insumo_id,
-                )
-            ).first()
-            if existente:
-                existente.cantidad = cantidad
-                existente.updated_at = _utcnow()
-                session.add(existente)
-                self.mensaje = "Cantidad actualizada en receta."
-            else:
-                ri = RecetaItem(
-                    company_id=self._company_id(),
-                    producto_id=self.inv_producto_sel_id,
-                    insumo_id=insumo_id,
-                    cantidad=cantidad,
-                )
-                session.add(ri)
-                self.mensaje = "Insumo agregado a la receta."
-            session.commit()
-        self.inv_receta_cantidad = ""
-        self.inv_receta_insumo_sel_nombre = ""
-        self.cargar_receta_producto()
-
-    def eliminar_receta_item(self, item_id: int) -> None:
-        with self._tenant_session() as session:
-            ri = session.get(RecetaItem, item_id)
-            if ri is None or ri.company_id != self._company_id():
-                return
-            session.delete(ri)
-            session.commit()
-        self.cargar_receta_producto()
-        self.mensaje = "Insumo eliminado de la receta."
-
-    # ─── Clientes ─────────────────────────────────────────────────────────────
-
-    def on_load_clientes(self) -> None:
-        self.mensaje = ""
-        self.cargar_clientes()
-
-    def cargar_clientes(self) -> None:
-        hoy = _utcnow()
-        with self._tenant_session() as session:
-            clientes_db = session.exec(
-                select(Cliente)
-                .where(Cliente.company_id == self._company_id())
-                .order_by(Cliente.nombre)
-            ).all()
-            pedidos_pagados = session.exec(
-                select(Pedido).where(
-                    Pedido.company_id == self._company_id(),
-                    Pedido.cliente_id.is_not(None),
-                    or_(
-                        Pedido.pagado.is_(True),
-                        Pedido.estado == EstadoPedido.COBRADO.value,
-                    ),
-                )
-            ).all()
-        stats_por_cliente: dict[int, dict] = {}
-        for p in pedidos_pagados:
-            cid = p.cliente_id
-            if cid is None:
-                continue
-            stats = stats_por_cliente.setdefault(cid, {"visitas": 0, "gastado": Decimal("0.00"), "ultima": None})
-            stats["visitas"] += 1
-            stats["gastado"] += _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
-            fecha = p.cerrado_en
-            if fecha and (stats["ultima"] is None or fecha > stats["ultima"]):
-                stats["ultima"] = fecha
-        hoy_fecha = hoy.date()
-        views: list[ClienteView] = []
-        for c in clientes_db:
-            fn = c.fecha_nacimiento
-            cumple_hoy = False
-            cumple_pronto = False
-            dias = 999
-            nac_texto = ""
-            nac_iso = ""
-            if fn:
-                nac_iso = fn.isoformat()
-                meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
-                nac_texto = f"{fn.day} {meses[fn.month - 1]}"
-                cumple_este_anio = datetime(hoy.year, fn.month, fn.day)
-                if cumple_este_anio < hoy.replace(hour=0, minute=0, second=0, microsecond=0):
-                    cumple_este_anio = datetime(hoy.year + 1, fn.month, fn.day)
-                dias = (cumple_este_anio - hoy.replace(hour=0, minute=0, second=0, microsecond=0)).days
-                cumple_hoy = dias == 0
-                cumple_pronto = 0 < dias <= 7
-            stats = stats_por_cliente.get(c.id or 0, {"visitas": 0, "gastado": Decimal("0.00"), "ultima": None})
-            ultima = stats["ultima"]
-            if ultima is None:
-                ultima_texto = "Sin visitas"
-            else:
-                dias_desde = (hoy_fecha - ultima.date()).days
-                if dias_desde <= 0:
-                    ultima_texto = "Hoy"
-                elif dias_desde == 1:
-                    ultima_texto = "Ayer"
-                else:
-                    ultima_texto = f"Hace {dias_desde} días"
-            views.append(ClienteView(
-                id=c.id or 0,
-                nombre=c.nombre,
-                telefono=c.telefono or "",
-                email=c.email or "",
-                fecha_nac_iso=nac_iso,
-                fecha_nac_texto=nac_texto,
-                notas=c.notas or "",
-                puntos=c.puntos,
-                activo=c.activo,
-                cumple_hoy=cumple_hoy,
-                cumple_pronto=cumple_pronto,
-                dias_para_cumple=dias,
-                visitas_count=stats["visitas"],
-                gastado_texto=_money_text(stats["gastado"]),
-                ultima_visita_texto=ultima_texto,
-                es_vip=stats["visitas"] >= CLIENTE_VIP_VISITAS_MIN,
-            ))
-        self.clientes_lista = views
-
-    def set_cli_busqueda(self, v: str) -> None:
-        self.cli_busqueda = v
-
-    def set_cli_form_nombre(self, v: str) -> None:
-        self.cli_form_nombre = v
-
-    def set_cli_form_telefono(self, v: str) -> None:
-        self.cli_form_telefono = v
-
-    def set_cli_form_email(self, v: str) -> None:
-        self.cli_form_email = v
-
-    def set_cli_form_fecha_nac(self, v: str) -> None:
-        self.cli_form_fecha_nac = v
-
-    def set_cli_form_notas(self, v: str) -> None:
-        self.cli_form_notas = v
-
-    def set_caja_cobro_cliente_nombre(self, v: str) -> None:
-        self.caja_cobro_cliente_nombre = v
-        # v puede ser "Nombre" o "Nombre — tel" — buscar por el par exacto
-        nombre_parte = v.split(" — ")[0].strip()
-        tel_parte = v.split(" — ")[1].strip() if " — " in v else ""
-        cli = next(
-            (c for c in self.clientes_lista
-             if c.nombre == nombre_parte and (not tel_parte or c.telefono == tel_parte)),
-            None,
-        )
-        self.caja_cobro_cliente_id = cli.id if cli else 0
-
-    def guardar_cliente(self) -> None:
-        nombre = self.cli_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El nombre del cliente es obligatorio."
-            return
-        tel = self.cli_form_telefono.strip() or None
-        email = self.cli_form_email.strip() or None
-        notas = self.cli_form_notas.strip() or None
-        fn: date | None = None
-        if self.cli_form_fecha_nac:
-            try:
-                from datetime import date as _date
-                parts = self.cli_form_fecha_nac.split("-")
-                fn = _date(int(parts[0]), int(parts[1]), int(parts[2]))
-            except (ValueError, IndexError):
-                self.mensaje = "Fecha de nacimiento inválida. Usa el formato AAAA-MM-DD."
-                return
-        with self._tenant_session() as session:
-            if self.cli_form_id == 0:
-                existente = session.exec(
-                    select(Cliente).where(
-                        Cliente.company_id == self._company_id(),
-                        Cliente.nombre == nombre,
-                    )
-                ).first()
-                if existente:
-                    self.mensaje = f"Ya existe un cliente con ese nombre."
-                    return
-                c = Cliente(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    telefono=tel,
-                    email=email,
-                    fecha_nacimiento=fn,
-                    notas=notas,
-                    activo=True,
-                )
-                session.add(c)
-                self.mensaje = f"Cliente '{nombre}' registrado."
-            else:
-                c = session.get(Cliente, self.cli_form_id)
-                if c is None or c.company_id != self._company_id():
-                    self.mensaje = "Cliente no encontrado."
-                    return
-                c.nombre = nombre
-                c.telefono = tel
-                c.email = email
-                c.fecha_nacimiento = fn
-                c.notas = notas
-                c.updated_at = _utcnow()
-                session.add(c)
-                self.mensaje = f"Cliente '{nombre}' actualizado."
-            session.commit()
-        self.cli_form_id = 0
-        self.cli_form_nombre = ""
-        self.cli_form_telefono = ""
-        self.cli_form_email = ""
-        self.cli_form_fecha_nac = ""
-        self.cli_form_notas = ""
-        self.cli_form_editando = False
-        self.cli_form_visible = False
-        self.cargar_clientes()
-
-    def abrir_nuevo_cliente(self) -> None:
-        self.cli_form_id = 0
-        self.cli_form_nombre = ""
-        self.cli_form_telefono = ""
-        self.cli_form_email = ""
-        self.cli_form_fecha_nac = ""
-        self.cli_form_notas = ""
-        self.cli_form_editando = False
-        self.cli_form_visible = True
-        self.cli_dni_ruc = ""
-        self.cli_dni_ruc_error = ""
-
-    def editar_cliente(self, cliente_id: int) -> None:
-        with self._tenant_session() as session:
-            c = session.get(Cliente, cliente_id)
-            if c is None or c.company_id != self._company_id():
-                return
-            self.cli_form_id = c.id or 0
-            self.cli_form_nombre = c.nombre
-            self.cli_form_telefono = c.telefono or ""
-            self.cli_form_email = c.email or ""
-            self.cli_form_fecha_nac = c.fecha_nacimiento.isoformat() if c.fecha_nacimiento else ""
-            self.cli_form_notas = c.notas or ""
-        self.cli_form_editando = True
-        self.cli_form_visible = True
-
-    def cancelar_cli_form(self) -> None:
-        self.cli_form_id = 0
-        self.cli_form_nombre = ""
-        self.cli_form_telefono = ""
-        self.cli_form_email = ""
-        self.cli_form_fecha_nac = ""
-        self.cli_form_notas = ""
-        self.cli_form_editando = False
-        self.cli_form_visible = False
-        self.cli_dni_ruc = ""
-        self.cli_dni_ruc_error = ""
-
-    def set_cli_dni_ruc(self, v: str) -> None:
-        self.cli_dni_ruc = re.sub(r"\D", "", v)[:11]
-        self.cli_dni_ruc_error = ""
-
-    async def buscar_dni_ruc(self) -> None:
-        import os
-        numero = self.cli_dni_ruc.strip()
-        if not numero:
-            self.cli_dni_ruc_error = "Ingresa un DNI (8 dígitos) o RUC (11 dígitos)."
-            return
-        if len(numero) not in (8, 11):
-            self.cli_dni_ruc_error = "DNI debe tener 8 dígitos y RUC 11 dígitos."
-            return
-        token = (os.getenv("RENIEC_API_TOKEN") or "").strip()
-        if not token:
-            self.cli_dni_ruc_error = "Servicio no configurado (falta RENIEC_API_TOKEN)."
-            return
-        self.cli_dni_ruc_buscando = True
-        self.cli_dni_ruc_error = ""
-        yield
-        try:
-            import httpx
-            tipo = "dni" if len(numero) == 8 else "ruc"
-            url = f"https://apiperu.dev/api/{tipo}/{numero}"
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
-            if resp.status_code == 200:
-                data = resp.json()
-                if tipo == "dni":
-                    nombre = data.get("nombre_completo") or data.get("nombre") or ""
-                else:
-                    nombre = data.get("nombre_o_razon_social") or data.get("razon_social") or ""
-                if nombre:
-                    self.cli_form_nombre = nombre
-                    self.cli_dni_ruc_error = ""
-                else:
-                    self.cli_dni_ruc_error = "No se encontraron datos para ese número."
-            elif resp.status_code == 404:
-                self.cli_dni_ruc_error = "Número no encontrado en el registro."
-            else:
-                self.cli_dni_ruc_error = f"Error del servicio ({resp.status_code})."
-        except Exception:
-            self.cli_dni_ruc_error = "No se pudo conectar al servicio de consulta."
-        finally:
-            self.cli_dni_ruc_buscando = False
-
-    def set_cli_form_visible(self, v: bool) -> None:
-        self.cli_form_visible = v
-
-    def toggle_cliente_activo(self, cliente_id: int) -> None:
-        with self._tenant_session() as session:
-            c = session.get(Cliente, cliente_id)
-            if c is None or c.company_id != self._company_id():
-                return
-            c.activo = not c.activo
-            c.updated_at = _utcnow()
-            session.add(c)
-            session.commit()
-        self.cargar_clientes()
-
-    # ─── Cuentas corrientes ───────────────────────────────────────────────────
-
-    def on_load_cuentas(self) -> None:
-        self.mensaje = ""
-        if not self.clientes_lista:
-            self.cargar_clientes()
-        self.cargar_cuentas()
-
-    def cargar_cuentas(self) -> None:
-        with self._tenant_session() as session:
-            cuentas_db = session.exec(
-                select(CuentaCorriente)
-                .where(CuentaCorriente.company_id == self._company_id())
-                .order_by(CuentaCorriente.saldo_deuda.desc())
-            ).all()
-            clientes_map = {
-                c.id: c
-                for c in session.exec(
-                    select(Cliente).where(Cliente.company_id == self._company_id())
-                ).all()
-            }
-        views: list[CuentaView] = []
-        for cc in cuentas_db:
-            cli = clientes_map.get(cc.cliente_id)
-            saldo = Decimal(str(cc.saldo_deuda))
-            views.append(CuentaView(
-                id=cc.id or 0,
-                cliente_id=cc.cliente_id,
-                cliente_nombre=cli.nombre if cli else "?",
-                cliente_telefono=cli.telefono or "" if cli else "",
-                saldo_deuda=float(saldo),
-                saldo_texto=_money_text(saldo),
-                limite_credito=float(Decimal(str(cc.limite_credito))),
-            ))
-        self.cuentas_lista = views
-
-    def set_cc_cliente_sel_nombre(self, v: str) -> None:
-        self.cc_cliente_sel_nombre = v
-        cli = next((c for c in self.clientes_lista if c.nombre == v), None)
-        if cli:
-            self._ver_o_crear_cuenta(cli.id)
-
-    def _ver_o_crear_cuenta(self, cliente_id: int) -> None:
-        with self._tenant_session() as session:
-            cc = session.exec(
-                select(CuentaCorriente).where(
-                    CuentaCorriente.company_id == self._company_id(),
-                    CuentaCorriente.cliente_id == cliente_id,
-                )
-            ).first()
-            if cc:
-                self.cuenta_sel_id = cc.id or 0
-                movs = session.exec(
-                    select(MovimientoCuenta)
-                    .where(MovimientoCuenta.cuenta_id == cc.id)
-                    .order_by(MovimientoCuenta.created_at.desc())
-                ).all()
-                self.cuenta_movimientos = [
-                    MovimientoView(
-                        id=m.id or 0,
-                        tipo=m.tipo,
-                        tipo_label="Cargo" if m.tipo == "cargo" else "Pago",
-                        monto=float(Decimal(str(m.monto))),
-                        monto_texto=_money_text(m.monto),
-                        descripcion=m.descripcion or "",
-                        fecha_texto=m.created_at.strftime("%d/%m %H:%M"),
-                    )
-                    for m in movs
-                ]
-            else:
-                self.cuenta_sel_id = 0
-                self.cuenta_movimientos = []
-
-    def set_cc_pago_monto(self, v: str) -> None:
-        self.cc_pago_monto = v
-
-    def set_cc_pago_descripcion(self, v: str) -> None:
-        self.cc_pago_descripcion = v
-
-    def registrar_pago_cc(self) -> None:
-        if self.cuenta_sel_id == 0:
-            self.mensaje = "Selecciona un cliente con cuenta corriente."
-            return
-        try:
-            monto = Decimal(self.cc_pago_monto.replace(",", ".").strip() or "0")
-            if monto <= 0:
-                raise ValueError
-        except (InvalidOperation, ValueError):
-            self.mensaje = "Monto de pago inválido."
-            return
-        with self._tenant_session() as session:
-            cc = session.get(CuentaCorriente, self.cuenta_sel_id)
-            if cc is None or cc.company_id != self._company_id():
-                self.mensaje = "Cuenta no encontrada."
-                return
-            pago = MovimientoCuenta(
-                company_id=self._company_id(),
-                cuenta_id=cc.id or 0,
-                tipo="pago",
-                monto=monto,
-                descripcion=self.cc_pago_descripcion.strip() or "Pago en caja",
-            )
-            session.add(pago)
-            saldo_actual = Decimal(str(cc.saldo_deuda))
-            cc.saldo_deuda = max(saldo_actual - monto, Decimal("0.00"))
-            cc.updated_at = _utcnow()
-            session.add(cc)
-            session.commit()
-            cliente_id = cc.cliente_id
-        self.cc_pago_monto = ""
-        self.cc_pago_descripcion = ""
-        self.mensaje = f"Pago de {_money_text(monto)} registrado."
-        self.cargar_cuentas()
-        self._ver_o_crear_cuenta(cliente_id)
-
-    def _registrar_cargo_cc(self, session, cliente_id: int, monto: Decimal, pedido_id: int | None, descripcion: str) -> None:
-        cc = session.exec(
-            select(CuentaCorriente).where(
-                CuentaCorriente.company_id == self._company_id(),
-                CuentaCorriente.cliente_id == cliente_id,
-            )
-        ).first()
-        if cc is None:
-            cc = CuentaCorriente(
-                company_id=self._company_id(),
-                cliente_id=cliente_id,
-                saldo_deuda=Decimal("0.00"),
-                limite_credito=Decimal("0.00"),
-            )
-            session.add(cc)
-            session.flush()
-        saldo_actual = Decimal(str(cc.saldo_deuda))
-        limite = Decimal(str(cc.limite_credito))
-        if limite > Decimal("0.00") and saldo_actual + monto > limite:
-            raise ValueError(
-                f"Límite de crédito excedido. Deuda actual: {_money_text(saldo_actual)}, "
-                f"límite: {_money_text(limite)}, cargo solicitado: {_money_text(monto)}."
-            )
-        cargo = MovimientoCuenta(
-            company_id=self._company_id(),
-            cuenta_id=cc.id or 0,
-            pedido_id=pedido_id,
-            tipo="cargo",
-            monto=monto,
-            descripcion=descripcion,
-        )
-        session.add(cargo)
-        cc.saldo_deuda = saldo_actual + monto
-        cc.updated_at = _utcnow()
-        session.add(cc)
-
-    def exportar_cuentas_excel(self):
-        from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
-
-        with self._tenant_session() as session:
-            cuentas_db = session.exec(
-                select(CuentaCorriente)
-                .where(CuentaCorriente.company_id == self._company_id())
-                .order_by(CuentaCorriente.saldo_deuda.desc())
-            ).all()
-            clientes_map = {
-                c.id: c
-                for c in session.exec(
-                    select(Cliente).where(Cliente.company_id == self._company_id())
-                ).all()
-            }
-            cuenta_ids = [c.id for c in cuentas_db if c.id is not None]
-            movimientos: list = []
-            if cuenta_ids:
-                movimientos = session.exec(
-                    select(MovimientoCuenta)
-                    .where(MovimientoCuenta.cuenta_id.in_(cuenta_ids))
-                    .order_by(MovimientoCuenta.created_at.desc())
-                ).all()
-
-        if not cuentas_db and not movimientos:
-            self.mensaje = "No hay cuentas corrientes para exportar."
-            return None
-
-        cuentas_por_id = {c.id: c for c in cuentas_db}
-
-        wb = Workbook()
-        ws1 = wb.active
-        ws1.title = "Cuentas"
-        ws1.append(["Cliente", "Teléfono", "Saldo deuda", "Límite de crédito"])
-        for cc in cuentas_db:
-            cli = clientes_map.get(cc.cliente_id)
-            ws1.append([
-                cli.nombre if cli else "?",
-                (cli.telefono or "") if cli else "",
-                float(Decimal(str(cc.saldo_deuda))),
-                float(Decimal(str(cc.limite_credito))),
-            ])
-
-        ws2 = wb.create_sheet("Movimientos")
-        ws2.append(["Fecha", "Hora", "Cliente", "Tipo", "Monto", "Descripción"])
-        for m in movimientos:
-            cc = cuentas_por_id.get(m.cuenta_id)
-            cli = clientes_map.get(cc.cliente_id) if cc else None
-            ws2.append([
-                m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
-                m.created_at.strftime("%H:%M") if m.created_at else "",
-                cli.nombre if cli else "?",
-                "Cargo" if m.tipo == "cargo" else "Pago",
-                float(Decimal(str(m.monto))),
-                m.descripcion or "",
-            ])
-
-        for ws in (ws1, ws2):
-            for i, col in enumerate(ws.columns, start=1):
-                max_len = max(
-                    (len(str(c.value)) if c.value is not None else 0) for c in col
-                )
-                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
-
-        buf = io.BytesIO()
-        wb.save(buf)
-        filename = f"cuentas_corrientes_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
-        return rx.download(data=buf.getvalue(), filename=filename)
-
-    # ─── Promociones ──────────────────────────────────────────────────────────
-
-    def on_load_promociones(self) -> None:
-        self.mensaje = ""
-        self.cargar_menu()  # productos/categorías para los selectores de alcance
-        self.cargar_promociones()
-
-    def cargar_promociones(self) -> None:
-        # Vigencia evaluada en hora local del país (no UTC): un happy hour de
-        # 18:00 configurado por el usuario es 18:00 en Perú.
-        ahora = ahora_local_pe()
-        tipo_labels = {
-            TipoPromocion.PORCENTAJE.value: "% Descuento",
-            TipoPromocion.MONTO_FIJO.value: "Monto fijo",
-            TipoPromocion.HAPPY_HOUR.value: "Happy Hour",
-            TipoPromocion.DOSXUNO.value: "2x1",
-        }
-        with self._tenant_session() as session:
-            promos_db = session.exec(
-                select(Promocion)
-                .where(Promocion.company_id == self._company_id())
-                .order_by(Promocion.activa.desc(), Promocion.nombre)
-            ).all()
-            productos = {p.id: p.nombre for p in session.exec(
-                select(Producto).where(Producto.company_id == self._company_id())
-            ).all()}
-            categorias = {c.id: c.nombre for c in session.exec(
-                select(Categoria).where(Categoria.company_id == self._company_id())
-            ).all()}
-        views: list[PromocionView] = []
-        for p in promos_db:
-            val = Decimal(str(p.valor))
-            if p.tipo in (TipoPromocion.PORCENTAJE.value, TipoPromocion.HAPPY_HOUR.value):
-                desc_txt = f"{val:.0f}% off"
-            elif p.tipo == TipoPromocion.DOSXUNO.value:
-                desc_txt = "2x1"
-            else:
-                desc_txt = f"- {_money_text(val)}"
-            if p.hora_inicio and p.hora_fin:
-                horario = f"{p.hora_inicio} – {p.hora_fin}"
-            else:
-                horario = "Todo el día"
-            mask = p.dias_semana_mask or 127
-            if mask >= 127:
-                dias_texto = "Todos los días"
-            else:
-                dias_texto = ", ".join(
-                    abrev.capitalize() for abrev, _nombre, bit in PROMO_DIAS if mask & bit
-                ) or "Todos los días"
-            if p.producto_id:
-                alcance = productos.get(p.producto_id, f"Producto #{p.producto_id}")
-            elif p.categoria_id:
-                alcance = "Cat. " + categorias.get(p.categoria_id, f"#{p.categoria_id}")
-            else:
-                alcance = "Toda la carta"
-            views.append(PromocionView(
-                id=p.id or 0,
-                nombre=p.nombre,
-                tipo=p.tipo,
-                tipo_label=tipo_labels.get(p.tipo, p.tipo),
-                valor=float(val),
-                descripcion=p.descripcion or "",
-                hora_inicio=p.hora_inicio or "",
-                hora_fin=p.hora_fin or "",
-                activa=p.activa,
-                aplica_ahora=promo_vigente(p, ahora),
-                descuento_texto=desc_txt,
-                horario_texto=horario,
-                dias_texto=dias_texto,
-                alcance_texto=alcance,
-                auto_aplicar=p.auto_aplicar,
-            ))
-        self.promociones_lista = views
-
-    def set_promo_form_nombre(self, v: str) -> None:
-        self.promo_form_nombre = v
-
-    def set_promo_form_tipo(self, v: str) -> None:
-        self.promo_form_tipo = v
-
-    def set_promo_form_valor(self, v: str) -> None:
-        self.promo_form_valor = v
-
-    def set_promo_form_descripcion(self, v: str) -> None:
-        self.promo_form_descripcion = v
-
-    def set_promo_form_hora_inicio(self, v: str) -> None:
-        self.promo_form_hora_inicio = v
-
-    def set_promo_form_hora_fin(self, v: str) -> None:
-        self.promo_form_hora_fin = v
-
-    def set_promo_form_alcance(self, v: str) -> None:
-        self.promo_form_alcance = v
-
-    def set_promo_form_categoria_nombre(self, v: str) -> None:
-        self.promo_form_categoria_nombre = v
-
-    def set_promo_form_producto_nombre(self, v: str) -> None:
-        self.promo_form_producto_nombre = v
-
-    def set_promo_form_auto(self, v: bool) -> None:
-        self.promo_form_auto = bool(v)
-
-    def toggle_promo_dia(self, bit: int) -> None:
-        self.promo_form_dias_mask ^= bit
-
-    @rx.var
-    def promo_form_dias_ui(self) -> list[dict]:
-        return [
-            {
-                "abrev": abrev.capitalize(),
-                "bit": bit,
-                "activo": bool(self.promo_form_dias_mask & bit),
-            }
-            for abrev, _nombre, bit in PROMO_DIAS
-        ]
-
-    @rx.var
-    def promo_categorias_nombres(self) -> list[str]:
-        return [c.nombre for c in self.categorias]
-
-    @rx.var
-    def promo_productos_nombres(self) -> list[str]:
-        return [p.nombre for p in self.productos]
-
-    def _reset_promo_form(self) -> None:
-        self.promo_form_id = 0
-        self.promo_form_nombre = ""
-        self.promo_form_tipo = TipoPromocion.PORCENTAJE.value
-        self.promo_form_valor = ""
-        self.promo_form_descripcion = ""
-        self.promo_form_hora_inicio = ""
-        self.promo_form_hora_fin = ""
-        self.promo_form_dias_mask = 127
-        self.promo_form_alcance = "todo"
-        self.promo_form_categoria_nombre = ""
-        self.promo_form_producto_nombre = ""
-        self.promo_form_auto = True
-        self.promo_form_editando = False
-
-    def guardar_promocion(self) -> None:
-        nombre = self.promo_form_nombre.strip()
-        if not nombre:
-            self.mensaje = "El nombre de la promoción es obligatorio."
-            return
-        es_dosxuno = self.promo_form_tipo == TipoPromocion.DOSXUNO.value
-        if es_dosxuno:
-            valor = Decimal("0.00")  # el 2x1 no usa valor: regala 1 de cada 2
-        else:
-            try:
-                valor = Decimal(self.promo_form_valor.replace(",", ".").strip() or "0")
-                if valor <= 0:
-                    raise ValueError
-            except (InvalidOperation, ValueError):
-                self.mensaje = "Valor inválido. Ingresa un número mayor a 0."
-                return
-        if self.promo_form_dias_mask == 0:
-            self.mensaje = "Selecciona al menos un día de la semana."
-            return
-        producto_id = None
-        categoria_id = None
-        if self.promo_form_alcance == "producto":
-            prod = next(
-                (p for p in self.productos if p.nombre == self.promo_form_producto_nombre),
-                None,
-            )
-            if prod is None:
-                self.mensaje = "Selecciona el producto para la promoción."
-                return
-            producto_id = prod.id
-        elif self.promo_form_alcance == "categoria":
-            cat = next(
-                (c for c in self.categorias if c.nombre == self.promo_form_categoria_nombre),
-                None,
-            )
-            if cat is None:
-                self.mensaje = "Selecciona la categoría para la promoción."
-                return
-            categoria_id = cat.id
-        if es_dosxuno and producto_id is None and categoria_id is None:
-            self.mensaje = "El 2x1 necesita un producto o una categoría como alcance."
-            return
-        hora_ini = self.promo_form_hora_inicio.strip() or None
-        hora_fin = self.promo_form_hora_fin.strip() or None
-        with self._tenant_session() as session:
-            if self.promo_form_id == 0:
-                p = Promocion(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    tipo=self.promo_form_tipo,
-                    valor=valor,
-                    descripcion=self.promo_form_descripcion.strip() or None,
-                    hora_inicio=hora_ini,
-                    hora_fin=hora_fin,
-                    dias_semana_mask=self.promo_form_dias_mask,
-                    producto_id=producto_id,
-                    categoria_id=categoria_id,
-                    auto_aplicar=self.promo_form_auto,
-                    activa=True,
-                )
-                session.add(p)
-                self.mensaje = f"Promoción '{nombre}' creada."
-            else:
-                p = session.get(Promocion, self.promo_form_id)
-                if p is None or p.company_id != self._company_id():
-                    self.mensaje = "Promoción no encontrada."
-                    return
-                p.nombre = nombre
-                p.tipo = self.promo_form_tipo
-                p.valor = valor
-                p.descripcion = self.promo_form_descripcion.strip() or None
-                p.hora_inicio = hora_ini
-                p.hora_fin = hora_fin
-                p.dias_semana_mask = self.promo_form_dias_mask
-                p.producto_id = producto_id
-                p.categoria_id = categoria_id
-                p.auto_aplicar = self.promo_form_auto
-                p.updated_at = _utcnow()
-                session.add(p)
-                self.mensaje = f"Promoción '{nombre}' actualizada."
-            session.commit()
-        self._reset_promo_form()
-        self.promo_form_visible = False
-        self.cargar_promociones()
-
-    def abrir_nueva_promo(self) -> None:
-        self._reset_promo_form()
-        self.promo_form_visible = True
-
-    def set_promo_form_visible(self, v: bool) -> None:
-        self.promo_form_visible = v
-
-    def editar_promocion(self, promo_id: int) -> None:
-        with self._tenant_session() as session:
-            p = session.get(Promocion, promo_id)
-            if p is None or p.company_id != self._company_id():
-                return
-            self.promo_form_id = p.id or 0
-            self.promo_form_nombre = p.nombre
-            self.promo_form_tipo = p.tipo
-            self.promo_form_valor = str(Decimal(str(p.valor)).normalize())
-            self.promo_form_descripcion = p.descripcion or ""
-            self.promo_form_hora_inicio = p.hora_inicio or ""
-            self.promo_form_hora_fin = p.hora_fin or ""
-            self.promo_form_dias_mask = p.dias_semana_mask or 127
-            self.promo_form_auto = p.auto_aplicar
-            if p.producto_id:
-                self.promo_form_alcance = "producto"
-                prod = session.get(Producto, p.producto_id)
-                self.promo_form_producto_nombre = prod.nombre if prod else ""
-                self.promo_form_categoria_nombre = ""
-            elif p.categoria_id:
-                self.promo_form_alcance = "categoria"
-                cat = session.get(Categoria, p.categoria_id)
-                self.promo_form_categoria_nombre = cat.nombre if cat else ""
-                self.promo_form_producto_nombre = ""
-            else:
-                self.promo_form_alcance = "todo"
-                self.promo_form_producto_nombre = ""
-                self.promo_form_categoria_nombre = ""
-        self.promo_form_editando = True
-        self.promo_form_visible = True
-
-    def cancelar_promo_form(self) -> None:
-        self._reset_promo_form()
-        self.promo_form_visible = False
-
-    def toggle_promo_activa(self, promo_id: int) -> None:
-        with self._tenant_session() as session:
-            p = session.get(Promocion, promo_id)
-            if p is None or p.company_id != self._company_id():
-                return
-            p.activa = not p.activa
-            p.updated_at = _utcnow()
-            session.add(p)
-            session.commit()
-        self.cargar_promociones()
-
-    def aplicar_promo_al_cobro(self) -> None:
-        desc = self.promo_activa_descuento_sugerido
-        if desc > 0:
-            self.caja_cobro_descuento = str(round(desc, 2))
-
-    def quitar_promo_aplicada(self) -> None:
-        self.caja_cobro_descuento = ""
-        self.caja_promo_aplicada_nombre = ""
-        self.caja_promo_aplicada_texto = ""
-
-    def refrescar_promos(self) -> None:
-        self.cargar_promociones()
-
-    # ─── Cupones — Caja (mesas) ────────────────────────────────────────────────
-
-    def set_caja_cupon_codigo(self, v: str) -> None:
-        self.caja_cupon_codigo = v.upper()
-        self.caja_cupon_error = ""
-
-    def aplicar_cupon_caja(self) -> None:
-        """Valida el código de cupón y aplica el descuento al cobro de caja."""
-        self.caja_cupon_error = ""
-        try:
-            total_base = Decimal(str(self.caja_cobro_total_base))
-            with self._tenant_session() as session:
-                cupon, descuento = validar_cupon(
-                    session, self.caja_cupon_codigo, self._company_id(), total_base
-                )
-            self.caja_cupon_id_aplicado = cupon.id or 0
-            self.caja_cupon_nombre_aplicado = cupon.nombre
-            self.caja_cupon_descuento_aplicado = str(round(float(descuento), 2))
-            self.caja_cobro_descuento = self.caja_cupon_descuento_aplicado
-        except ValueError as exc:
-            self.caja_cupon_error = str(exc)
-
-    def quitar_cupon_caja(self) -> None:
-        self.caja_cupon_codigo = ""
-        self.caja_cupon_id_aplicado = 0
-        self.caja_cupon_nombre_aplicado = ""
-        self.caja_cupon_descuento_aplicado = ""
-        self.caja_cupon_error = ""
-        self.caja_cobro_descuento = ""
-
-    # ─── Cupones — Mostrador ───────────────────────────────────────────────────
-
-    def set_mostrador_cupon_codigo(self, v: str) -> None:
-        self.mostrador_cupon_codigo = v.upper()
-        self.mostrador_cupon_error = ""
-
-    def aplicar_cupon_mostrador(self) -> None:
-        """Valida el código de cupón para el carrito de mostrador."""
-        self.mostrador_cupon_error = ""
-        try:
-            total_base = sum(_to_decimal(item.subtotal) for item in self.mostrador_carrito)
-            if total_base <= 0:
-                self.mostrador_cupon_error = "Agrega productos antes de aplicar un cupón."
-                return
-            with self._tenant_session() as session:
-                cupon, descuento = validar_cupon(
-                    session, self.mostrador_cupon_codigo, self._company_id(), total_base
-                )
-            self.mostrador_cupon_id_aplicado = cupon.id or 0
-            self.mostrador_cupon_nombre_aplicado = cupon.nombre
-            self.mostrador_cupon_descuento_aplicado = str(round(float(descuento), 2))
-        except ValueError as exc:
-            self.mostrador_cupon_error = str(exc)
-
-    def quitar_cupon_mostrador(self) -> None:
-        self.mostrador_cupon_codigo = ""
-        self.mostrador_cupon_id_aplicado = 0
-        self.mostrador_cupon_nombre_aplicado = ""
-        self.mostrador_cupon_descuento_aplicado = ""
-        self.mostrador_cupon_error = ""
-
-    # ─── Cupones — Gestión admin ───────────────────────────────────────────────
-
-    def on_load_cupones(self) -> None:
-        self.mensaje = ""
-        self.cargar_cupones()
-
-    def cargar_cupones(self) -> None:
-        from datetime import date as _date
-        hoy = _date.today()
-        with self._tenant_session() as session:
-            lotes = session.exec(
-                select(CuponLote)
-                .where(CuponLote.company_id == self._company_id())
-                .order_by(CuponLote.activo.desc(), CuponLote.nombre)
-            ).all()
-        views: list[CuponLoteView] = []
-        for c in lotes:
-            tipo_label = "% Porcentaje" if c.tipo == "porcentaje" else "S/ Monto fijo"
-            valor_txt = f"{Decimal(str(c.valor)):.0f}%" if c.tipo == "porcentaje" else _money_text(Decimal(str(c.valor)))
-            fi = c.fecha_inicio.strftime("%d/%m/%Y") if c.fecha_inicio else "Sin inicio"
-            ff = c.fecha_fin.strftime("%d/%m/%Y") if c.fecha_fin else "Sin vence"
-            usos_max_txt = str(c.usos_max) if c.usos_max is not None else "Ilimitado"
-            usos_txt = f"{c.usos_actuales} / {c.usos_max}" if c.usos_max is not None else f"{c.usos_actuales} usos"
-            vencido = bool(c.fecha_fin and hoy > c.fecha_fin)
-            views.append(CuponLoteView(
-                id=c.id or 0,
-                nombre=c.nombre,
-                codigo=c.codigo,
-                tipo=tipo_label,
-                valor_texto=valor_txt,
-                fecha_inicio_texto=fi,
-                fecha_fin_texto=ff,
-                usos_actuales=c.usos_actuales,
-                usos_max_texto=usos_max_txt,
-                usos_texto=usos_txt,
-                activo=c.activo,
-                vencido=vencido,
-            ))
-        self.cupones_lista = views
-
-    def set_cupon_form_nombre(self, v: str) -> None:
-        self.cupon_form_nombre = v
-
-    def set_cupon_form_codigo(self, v: str) -> None:
-        self.cupon_form_codigo = v.upper().strip()
-
-    def set_cupon_form_tipo(self, v: str) -> None:
-        self.cupon_form_tipo = v
-
-    def set_cupon_form_valor(self, v: str) -> None:
-        self.cupon_form_valor = v
-
-    def set_cupon_form_fecha_inicio(self, v: str) -> None:
-        self.cupon_form_fecha_inicio = v
-
-    def set_cupon_form_fecha_fin(self, v: str) -> None:
-        self.cupon_form_fecha_fin = v
-
-    def set_cupon_form_usos_max(self, v: str) -> None:
-        self.cupon_form_usos_max = v
-
-    def set_cupon_form_visible(self, v: bool) -> None:
-        self.cupon_form_visible = bool(v)
-        if not v:
-            self._reset_cupon_form()
-
-    def abrir_nuevo_cupon(self) -> None:
-        self._reset_cupon_form()
-        self.cupon_form_visible = True
-
-    def _reset_cupon_form(self) -> None:
-        self.cupon_form_id = 0
-        self.cupon_form_nombre = ""
-        self.cupon_form_codigo = ""
-        self.cupon_form_tipo = "porcentaje"
-        self.cupon_form_valor = ""
-        self.cupon_form_fecha_inicio = ""
-        self.cupon_form_fecha_fin = ""
-        self.cupon_form_usos_max = ""
-        self.cupon_form_editando = False
-
-    def editar_cupon(self, cupon_id: int) -> None:
-        with self._tenant_session() as session:
-            c = session.get(CuponLote, cupon_id)
-            if c is None or c.company_id != self._company_id():
-                return
-        self.cupon_form_id = c.id or 0
-        self.cupon_form_nombre = c.nombre
-        self.cupon_form_codigo = c.codigo
-        self.cupon_form_tipo = c.tipo
-        self.cupon_form_valor = str(Decimal(str(c.valor)))
-        self.cupon_form_fecha_inicio = c.fecha_inicio.strftime("%Y-%m-%d") if c.fecha_inicio else ""
-        self.cupon_form_fecha_fin = c.fecha_fin.strftime("%Y-%m-%d") if c.fecha_fin else ""
-        self.cupon_form_usos_max = str(c.usos_max) if c.usos_max is not None else ""
-        self.cupon_form_editando = True
-        self.cupon_form_visible = True
-
-    def guardar_cupon(self) -> None:
-        from datetime import date as _date
-        nombre = self.cupon_form_nombre.strip()
-        codigo = self.cupon_form_codigo.strip().upper()
-        if not nombre:
-            self.mensaje = "El nombre es obligatorio."
-            return
-        if not codigo:
-            self.mensaje = "El código es obligatorio."
-            return
-        try:
-            valor = Decimal(str(self.cupon_form_valor.replace(",", ".")))
-            if valor <= 0:
-                raise ValueError
-        except (ValueError, InvalidOperation):
-            self.mensaje = "Valor inválido. Ingresa un número mayor a cero."
-            return
-        if self.cupon_form_tipo == "porcentaje" and valor > 100:
-            self.mensaje = "El porcentaje no puede superar 100%."
-            return
-        usos_max: int | None = None
-        if self.cupon_form_usos_max.strip():
-            try:
-                usos_max = int(self.cupon_form_usos_max.strip())
-                if usos_max <= 0:
-                    raise ValueError
-            except ValueError:
-                self.mensaje = "Usos máximos debe ser un número entero positivo."
-                return
-        fecha_inicio: _date | None = None
-        fecha_fin: _date | None = None
-        try:
-            if self.cupon_form_fecha_inicio:
-                fecha_inicio = _date.fromisoformat(self.cupon_form_fecha_inicio)
-            if self.cupon_form_fecha_fin:
-                fecha_fin = _date.fromisoformat(self.cupon_form_fecha_fin)
-        except ValueError:
-            self.mensaje = "Fechas inválidas."
-            return
-        with self._tenant_session() as session:
-            if self.cupon_form_editando and self.cupon_form_id:
-                c = session.get(CuponLote, self.cupon_form_id)
-                if c is None or c.company_id != self._company_id():
-                    self.mensaje = "Cupón no encontrado."
-                    return
-                c.nombre = nombre
-                c.codigo = codigo
-                c.tipo = self.cupon_form_tipo
-                c.valor = valor
-                c.fecha_inicio = fecha_inicio
-                c.fecha_fin = fecha_fin
-                c.usos_max = usos_max
-                c.updated_at = _utcnow()
-                session.add(c)
-            else:
-                c = CuponLote(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    codigo=codigo,
-                    tipo=self.cupon_form_tipo,
-                    valor=valor,
-                    fecha_inicio=fecha_inicio,
-                    fecha_fin=fecha_fin,
-                    usos_max=usos_max,
-                    usos_actuales=0,
-                    activo=True,
-                )
-                session.add(c)
-            try:
-                session.commit()
-            except Exception:
-                session.rollback()
-                self.mensaje = f"El código '{codigo}' ya existe."
-                return
-        self.mensaje = f"Cupón '{nombre}' guardado."
-        self.cupon_form_visible = False
-        self._reset_cupon_form()
-        self.cargar_cupones()
-
-    def toggle_cupon_activo(self, cupon_id: int) -> None:
-        with self._tenant_session() as session:
-            c = session.get(CuponLote, cupon_id)
-            if c is None or c.company_id != self._company_id():
-                return
-            c.activo = not c.activo
-            c.updated_at = _utcnow()
-            session.add(c)
-            session.commit()
-        self.cargar_cupones()
-
-    def cancelar_cupon_form(self) -> None:
-        self._reset_cupon_form()
-        self.cupon_form_visible = False
-
 
 # ─── Estado público (sin auth) ────────────────────────────────────────────────
 
@@ -8223,7 +5065,7 @@ class AdminLocalState(rx.State):
         password = self.password_input.strip()
         self.error_msg = ""
         if not email or not password:
-            self.error_msg = "Ingresa email y contraseña."
+            self.error_msg = "Ingrese email y contraseña."
             return
         # El email de admin es único globalmente (migración 0014), así que esta
         # búsqueda es la única legítimamente cross-tenant: todavía no sabemos a

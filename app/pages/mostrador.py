@@ -648,7 +648,7 @@ def _modal_seleccion_mods_m() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.text(
-                    "Elegí las opciones para este producto",
+                    "Seleccione las opciones para este producto",
                     font_size="12px", color="#94A3B8",
                 ),
                 rx.box(

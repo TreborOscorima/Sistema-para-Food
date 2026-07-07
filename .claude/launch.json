@@ -2,10 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "tuwaykifood-docker",
+      "name": "tuwayki-docker",
       "runtimeExecutable": "docker",
-      "runtimeArgs": ["start", "tuwayki_food"],
-      "port": 3003
+      "runtimeArgs": ["compose", "-f", "docker-compose.yml", "-f", "docker-compose.local.yml", "up"],
+      "port": 3003,
+      "autoPort": false
     }
   ]
 }

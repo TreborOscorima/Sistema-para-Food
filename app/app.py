@@ -17,20 +17,25 @@ from app.api import health_app
 
 
 def index() -> rx.Component:
-    return rx.fragment(
-        rx.cond(
-            FoodState.autenticado,
-            rx.script("window.location.href = '/mozos';"),
-            rx.script("window.location.href = '/login';"),
-        )
-    )
+    return rx.fragment()
 
 
 app = rx.App(
     api_transformer=health_app,
+    stylesheets=["/twk.css"],
     head_components=[
         rx.el.link(rel="icon", type="image/png", href="/TUWAYKIFOODFAVICON.png"),
         rx.el.link(rel="shortcut icon", href="/TUWAYKIFOODFAVICON.png"),
+        rx.el.link(rel="preconnect", href="https://fonts.googleapis.com"),
+        rx.el.link(
+            rel="preconnect",
+            href="https://fonts.gstatic.com",
+            crossorigin="",
+        ),
+        rx.el.link(
+            rel="stylesheet",
+            href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&display=swap",
+        ),
     ],
 )
 

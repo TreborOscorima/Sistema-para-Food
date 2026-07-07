@@ -521,7 +521,7 @@ def _prod_modal() -> rx.Component:
                         rx.upload(
                             rx.vstack(
                                 rx.icon(tag="image_plus", size=20, color="#94A3B8"),
-                                rx.text("Arrastra o haz click", font_size="11px", color="#64748B"),
+                                rx.text("Arrastre o haga clic", font_size="11px", color="#64748B"),
                                 rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px", color="#94A3B8"),
                                 spacing="1", align="center",
                             ),
@@ -775,7 +775,7 @@ def _mod_asignar_modal() -> rx.Component:
                     font_size="15px", font_weight="700", color="#0F172A",
                 ),
                 rx.text(
-                    "Seleccioná los grupos que aplican a este producto",
+                    "Seleccione los grupos que aplican a este producto",
                     font_size="12px", color="#64748B",
                 ),
                 rx.cond(
@@ -1204,7 +1204,7 @@ def _carta_content() -> rx.Component:
                 rx.cond(
                     FoodState.categorias.length() == 0,
                     rx.box(
-                        rx.text("Sin categorías. Hacé clic en «Nueva Categoría» para empezar.",
+                        rx.text("Sin categorías. Haga clic en «Nueva Categoría» para empezar.",
                                 font_size="13px", color="#94A3B8", text_align="center"),
                         padding="32px 16px",
                         width="100%",
@@ -1283,7 +1283,7 @@ def _carta_content() -> rx.Component:
                                 font_size="13px", color="#94A3B8", text_align="center",
                             ),
                             rx.text(
-                                "Sin productos. Hacé clic en «Nuevo Producto» para empezar.",
+                                "Sin productos. Haga clic en «Nuevo Producto» para empezar.",
                                 font_size="13px", color="#94A3B8", text_align="center",
                             ),
                         ),

@@ -32,7 +32,7 @@ def validar_cupon(
     """
     codigo_upper = codigo.strip().upper()
     if not codigo_upper:
-        raise ValueError("Ingresa un código de cupón.")
+        raise ValueError("Ingrese un código de cupón.")
 
     cupon = session.exec(
         select(CuponLote).where(

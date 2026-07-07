@@ -221,7 +221,7 @@ def _menu_content() -> rx.Component:
             # Footer
             rx.center(
                 rx.text(
-                    "Powered by TUWAYKIFOOD · Escaneá el QR de la mesa",
+                    "Powered by TUWAYKIFOOD · Escanee el QR de la mesa",
                     font_size="12px", color="#CBD5E1",
                 ),
                 padding="24px 16px",

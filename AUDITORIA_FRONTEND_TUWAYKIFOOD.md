@@ -160,7 +160,7 @@ Cocina/caja tienen botón "Actualizar" aunque hay polling. No molesta, pero desi
 **Tarea:** reemplazar por indicador pasivo "Actualizado hace Xs" + ícono refresh chico. Mantener el refresh manual como fallback.
 
 ### UI-14 · Consistencia de copy — **P2**
-Convive "Selecciona una mesa" (tuteo, `mozos.py:559`) con "Hacé clic" (voseo, `carta.py:588`) y "Escaneá" (`menu_publico.py:179`). Elegir **una** variante (recomendado: voseo, ya domina en textos nuevos) y unificar en pasada única con grep.
+Convive "Selecciona una mesa" (tuteo, `mozos.py:559`) con "Hacé clic" (voseo, `carta.py:588`) y "Escaneá" (`menu_publico.py:179`). Unificar a **español neutro**: infinitivos o tercera persona impersonal ("Seleccionar una mesa", "Haga clic", "Escanear"). Sin voseo, sin tuteo regional.
 
 ---
 
