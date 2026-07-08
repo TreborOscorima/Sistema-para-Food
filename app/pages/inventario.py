@@ -1,10 +1,16 @@
-"""Página de gestión de inventario — insumos y recetas."""
+"""Página de gestión de inventario — insumos, recetas y planificador de producción."""
 
 from __future__ import annotations
 
 import reflex as rx
 
-from app.states.food_state import FoodState, InsumoView, RecetaItemView
+from app.states.food_state import (
+    FoodState,
+    InsumoView,
+    ProduccionNecesidadView,
+    ProduccionPlanItem,
+    RecetaItemView,
+)
 from app.states.food_state import AdminLocalState
 from app.pages.dono import _dono_shell
 
@@ -757,6 +763,215 @@ def _recetas_section() -> rx.Component:
     )
 
 
+# ── Planificador de producción ───────────────────────────────────────────────
+
+def _plan_item_row(item: ProduccionPlanItem) -> rx.Component:
+    return rx.hstack(
+        rx.text(item.nombre, font_size="13px", color="#0F172A", font_weight="600", flex="1"),
+        rx.badge(
+            rx.text(item.cantidad, font_size="12px"),
+            background="#EFF6FF", color="#1D4ED8",
+            border_radius="5px", padding="2px 10px",
+        ),
+        rx.button(
+            rx.icon(tag="x", size=12),
+            on_click=FoodState.prod_quitar_item(item.producto_id),
+            background="#FEF2F2", color="#B91C1C",
+            border="1px solid #FECACA", border_radius="6px",
+            padding="4px 7px", cursor="pointer",
+            _hover={"opacity": "0.8"},
+        ),
+        width="100%", align="center",
+        padding="6px 8px", background="#FFFFFF",
+        border_radius="7px", border="1px solid #F1F5F9", gap="8px",
+    )
+
+
+def _resultado_row(nec: ProduccionNecesidadView) -> rx.Component:
+    es_faltante = nec.estado == "faltante"
+    return rx.grid(
+        rx.text(nec.nombre, font_size="13px", font_weight="600", color="#0F172A",
+                overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
+        rx.text(nec.cantidad_necesaria_texto, font_size="13px", color="#334155",
+                text_align="right"),
+        rx.text(nec.stock_actual_texto, font_size="13px", color="#64748B",
+                text_align="right"),
+        rx.text(
+            nec.faltante_texto, font_size="13px", font_weight="700",
+            color=rx.cond(es_faltante, "#DC2626", "#16A34A"),
+            text_align="right",
+        ),
+        rx.text(nec.costo_estimado_texto, font_size="13px", color="#334155",
+                text_align="right"),
+        rx.box(
+            width="10px", height="10px", border_radius="full",
+            background=rx.cond(es_faltante, "#EF4444", "#22C55E"),
+            flex_shrink="0",
+        ),
+        columns="2fr 1fr 1fr 1fr 1fr 30px",
+        gap="8px", width="100%", align_items="center",
+        padding="8px 10px", border_radius="6px",
+        background=rx.cond(es_faltante, "#FEF2F2", "#FFFFFF"),
+        border=rx.cond(es_faltante, "1px solid #FECACA", "1px solid #F1F5F9"),
+    )
+
+
+def _resultado_header() -> rx.Component:
+    cols = ["Insumo", "Necesario", "En stock", "Faltante", "Costo est.", ""]
+    return rx.grid(
+        *[rx.text(c, font_size="11px", font_weight="600", color="#94A3B8",
+                  text_transform="uppercase", letter_spacing="0.05em",
+                  text_align="right" if i > 0 else "left")
+          for i, c in enumerate(cols)],
+        columns="2fr 1fr 1fr 1fr 1fr 30px",
+        gap="8px", width="100%",
+        padding="0 10px 6px", border_bottom="1px solid #F1F5F9",
+        display=rx.breakpoints(initial="none", md="grid"),
+    )
+
+
+def _produccion_section() -> rx.Component:
+    return _section_card(
+        "Planificador de producción",
+        "calculator",
+        rx.text(
+            "Arme el plan del día: seleccione productos con sus cantidades y calcule los insumos necesarios.",
+            font_size="12px", color="#64748B",
+        ),
+        # Formulario para agregar productos al plan
+        rx.hstack(
+            rx.select(
+                FoodState.prod_opciones_productos,
+                placeholder="Seleccione producto o combo…",
+                value=FoodState.prod_agregar_nombre,
+                on_change=FoodState.set_prod_agregar_nombre,
+                background="#F8FAFC", border="1px solid #E2E8F0",
+                border_radius="7px", font_size="13px", flex="2",
+            ),
+            rx.input(
+                placeholder="Cant.",
+                value=FoodState.prod_agregar_cantidad,
+                on_change=FoodState.set_prod_agregar_cantidad,
+                type="number", min="1", step="1",
+                background="#F8FAFC", border="1px solid #E2E8F0",
+                border_radius="7px", font_size="13px",
+                padding_x="10px", padding_y="8px",
+                width="80px",
+                _focus={"border": "1px solid #EA580C"},
+            ),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="plus", size=13),
+                    rx.text("Agregar", font_size="13px", font_weight="700"),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.prod_agregar_item,
+                background="#EA580C", color="#FFFFFF",
+                border_radius="7px", padding_x="14px", padding_y="8px",
+                cursor="pointer", _hover={"background": "#C2410C"},
+                flex_shrink="0",
+            ),
+            spacing="2", width="100%", align="center", wrap="wrap",
+        ),
+        # Lista del plan actual
+        rx.cond(
+            FoodState.prod_plan_items.length() > 0,
+            rx.vstack(
+                rx.hstack(
+                    rx.text("Plan del día", font_size="12px", font_weight="700", color="#0F172A"),
+                    rx.spacer(),
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="trash_2", size=11),
+                            rx.text("Limpiar", font_size="11px"),
+                            spacing="1", align="center",
+                        ),
+                        on_click=FoodState.prod_limpiar_plan,
+                        background="#F1F5F9", color="#64748B",
+                        border="1px solid #E2E8F0", border_radius="6px",
+                        padding="4px 10px", cursor="pointer",
+                        _hover={"background": "#E2E8F0"},
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.foreach(FoodState.prod_plan_items, _plan_item_row),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="calculator", size=14),
+                        rx.text("Calcular insumos necesarios", font_size="13px", font_weight="700"),
+                        spacing="2", align="center",
+                    ),
+                    on_click=FoodState.prod_calcular,
+                    background="#1D4ED8", color="#FFFFFF",
+                    border_radius="8px", padding_x="20px", padding_y="10px",
+                    cursor="pointer", width="100%",
+                    _hover={"background": "#1E40AF"},
+                ),
+                spacing="2", width="100%",
+            ),
+            rx.fragment(),
+        ),
+        # Resultados
+        rx.cond(
+            FoodState.prod_calculado,
+            rx.vstack(
+                rx.hstack(
+                    rx.text("Resultado de explosión", font_size="14px", font_weight="800", color="#0F172A"),
+                    rx.spacer(),
+                    rx.cond(
+                        FoodState.prod_faltantes_count > 0,
+                        rx.badge(
+                            rx.text(FoodState.prod_faltantes_count, font_size="11px"),
+                            " faltante(s)",
+                            background="#FEE2E2", color="#DC2626",
+                            border_radius="20px", font_size="11px", font_weight="700",
+                            padding="3px 10px",
+                        ),
+                        rx.badge(
+                            "Stock suficiente",
+                            background="#DCFCE7", color="#166534",
+                            border_radius="20px", font_size="11px", font_weight="700",
+                            padding="3px 10px",
+                        ),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.cond(
+                    FoodState.prod_resultado.length() > 0,
+                    rx.vstack(
+                        _resultado_header(),
+                        rx.foreach(FoodState.prod_resultado, _resultado_row),
+                        spacing="1", width="100%",
+                    ),
+                    rx.center(
+                        rx.text(
+                            "Sin resultados. Verifique que los productos tengan recetas cargadas.",
+                            font_size="13px", color="#94A3B8",
+                        ),
+                        padding_y="12px", width="100%",
+                    ),
+                ),
+                rx.box(
+                    rx.hstack(
+                        rx.text("Costo total estimado del plan:", font_size="14px",
+                                font_weight="700", color="#0F172A"),
+                        rx.spacer(),
+                        rx.text(FoodState.prod_costo_total_texto, font_size="18px",
+                                font_weight="800", color="#1D4ED8"),
+                        width="100%", align="center",
+                    ),
+                    background="#EFF6FF", border="1px solid #BFDBFE",
+                    border_radius="10px", padding="12px 16px", width="100%",
+                ),
+                spacing="3", width="100%",
+                background="#F8FAFC", border="1px solid #E2E8F0",
+                border_radius="10px", padding="14px 16px",
+            ),
+            rx.fragment(),
+        ),
+    )
+
+
 # ── Contenido principal ──────────────────────────────────────────────────────
 
 def _inventario_content() -> rx.Component:
@@ -807,6 +1022,7 @@ def _inventario_content() -> rx.Component:
         _alerta_vencimientos(),
         _insumos_section(),
         _recetas_section(),
+        _produccion_section(),
         _mov_insumo_modal(),
         _kardex_modal(),
         spacing="4",

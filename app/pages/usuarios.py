@@ -215,6 +215,30 @@ def _permisos_section() -> rx.Component:
                 FoodState.usuario_form_perm_reportes,
                 FoodState.toggle_uf_perm_reportes,
             ),
+            _perm_toggle(
+                "Abrir/cerrar turno",
+                "Puede abrir y cerrar turnos de caja",
+                FoodState.usuario_form_perm_turno,
+                FoodState.toggle_uf_perm_turno,
+            ),
+            _perm_toggle(
+                "Gestionar inventario",
+                "Puede crear insumos, registrar entradas, mermas y ajustes",
+                FoodState.usuario_form_perm_inventario,
+                FoodState.toggle_uf_perm_inventario,
+            ),
+            _perm_toggle(
+                "Ver costos y márgenes",
+                "Acceso a costos de recetas y margen por plato",
+                FoodState.usuario_form_perm_costos,
+                FoodState.toggle_uf_perm_costos,
+            ),
+            _perm_toggle(
+                "Reimprimir comprobantes",
+                "Puede reimprimir tickets de cobro",
+                FoodState.usuario_form_perm_reimprimir,
+                FoodState.toggle_uf_perm_reimprimir,
+            ),
             rx.cond(
                 FoodState.usuario_form_rol == "Caja",
                 _perm_toggle(

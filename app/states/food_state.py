@@ -81,6 +81,12 @@ from app.services.pago_service import (
     validar_pagos,
 )
 from app.services.suscripcion_service import evaluar_bloqueo
+from tuwayki_core.utils.rate_limit import (
+    clear_login_attempts as _clear_login_attempts,
+    is_rate_limited as _is_rate_limited,
+    record_failed_attempt as _record_failed_attempt,
+    remaining_lockout_time as _remaining_lockout_time,
+)
 from app.services.promo_service import (
     DIAS_SEMANA as PROMO_DIAS,
     ItemCobro,
@@ -92,6 +98,22 @@ from app.services.cupon_service import redimir_cupon, validar_cupon
 from app.states.caja_turno_mixin import CajaTurnoMixin, get_turno_abierto
 from app.utils.db import get_session
 from app.utils.tenant import set_tenant_context, tenant_bypass
+
+# ─── Helpers de polling (compare-before-assign para evitar reenvío innecesario
+# de listas completas por websocket cada 3s) ──────────────────────────────────
+
+def _mesas_fingerprint(mesas: list) -> tuple:
+    """Fingerprint estable de mesas — excluye tiempo_abierto_texto (cambia cada tick)."""
+    return tuple(
+        (m.id, m.estado, m.total_abierto, m.items_listos_count, m.items_total_count)
+        for m in mesas
+    )
+
+
+def _list_fingerprint(items: list) -> tuple:
+    """Fingerprint genérico para listas de BaseModel (tickets cocina, mostrador)."""
+    return tuple(item.model_dump_json() for item in items)
+
 
 # ─── Constantes de negocio ───────────────────────────────────────────────────
 CURRENCY_SYMBOL = "S/"
@@ -207,10 +229,10 @@ _ROL_BADGE_TEXT: dict[str, str] = {
     RolUsuario.COCINA.value: "#B45309",
 }
 _ROL_PERM_DEFAULTS: dict[str, dict[str, bool]] = {
-    RolUsuario.ADMIN.value:  {"descuento": True,  "anular": True,  "reportes": True},
-    RolUsuario.CAJA.value:   {"descuento": True,  "anular": False, "reportes": False},
-    RolUsuario.MOZO.value:   {"descuento": False, "anular": False, "reportes": False},
-    RolUsuario.COCINA.value: {"descuento": False, "anular": False, "reportes": False},
+    RolUsuario.ADMIN.value:  {"descuento": True,  "anular": True,  "reportes": True,  "turno": True,  "inventario": True,  "costos": True,  "reimprimir": True},
+    RolUsuario.CAJA.value:   {"descuento": True,  "anular": False, "reportes": False, "turno": True,  "inventario": False, "costos": False, "reimprimir": True},
+    RolUsuario.MOZO.value:   {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False},
+    RolUsuario.COCINA.value: {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False},
 }
 
 # Base URLs leídas del entorno en tiempo de importación. El company_id ya no es
@@ -222,6 +244,21 @@ _FOOD_API_URL: str = os.getenv("PUBLIC_API_URL", "http://localhost:3004").rstrip
 def _utcnow() -> datetime:
     """Datetime UTC naive compatible con columnas MySQL sin TZ."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+# Operativo: 8 horas (turno completo). Admin local: 2 horas.
+_SESSION_TIMEOUT_OPERATIVO_S = 8 * 3600
+_SESSION_TIMEOUT_ADMIN_S = 2 * 3600
+
+
+def _session_expired(ultima_actividad_iso: str, rol: str) -> bool:
+    if not ultima_actividad_iso:
+        return False
+    try:
+        last = datetime.fromisoformat(ultima_actividad_iso)
+    except ValueError:
+        return True
+    timeout = _SESSION_TIMEOUT_ADMIN_S if rol == RolUsuario.ADMIN.value else _SESSION_TIMEOUT_OPERATIVO_S
+    return (_utcnow() - last).total_seconds() > timeout
 
 
 def _bloqueo_suscripcion(company_id: int) -> str:
@@ -641,6 +678,27 @@ class RecetaItemView(BaseModel):
     cantidad_texto: str = ""
 
 
+class ProduccionPlanItem(BaseModel):
+    producto_id: int = 0
+    nombre: str = ""
+    cantidad: int = 1
+
+
+class ProduccionNecesidadView(BaseModel):
+    insumo_id: int = 0
+    nombre: str = ""
+    unidad: str = ""
+    cantidad_necesaria: float = 0.0
+    cantidad_necesaria_texto: str = ""
+    stock_actual: float = 0.0
+    stock_actual_texto: str = ""
+    faltante: float = 0.0
+    faltante_texto: str = ""
+    costo_estimado: float = 0.0
+    costo_estimado_texto: str = ""
+    estado: str = "ok"
+
+
 class ClienteView(BaseModel):
     id: int = 0
     nombre: str = ""
@@ -730,6 +788,10 @@ class UsuarioSesion(BaseModel):
     perm_descuento: bool = True
     perm_anular: bool = False
     perm_reportes: bool = False
+    perm_turno: bool = False
+    perm_inventario: bool = False
+    perm_costos: bool = False
+    perm_reimprimir: bool = False
 
 
 class CompanyOptionView(BaseModel):
@@ -938,6 +1000,10 @@ class UsuarioAdminView(BaseModel):
     perm_descuento: bool = True
     perm_anular: bool = False
     perm_reportes: bool = False
+    perm_turno: bool = False
+    perm_inventario: bool = False
+    perm_costos: bool = False
+    perm_reimprimir: bool = False
 
 
 # ─── Helpers de inventario ───────────────────────────────────────────────────
@@ -1053,6 +1119,7 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
 from app.states.carta_mixin import CartaMixin
 from app.states.clientes_cuentas_mixin import ClientesCuentasMixin
 from app.states.inventario_mixin import InventarioMixin
+from app.states.produccion_mixin import ProduccionMixin
 from app.states.promos_cupones_mixin import PromosCuponesMixin
 from app.states.reportes_mixin import ReportesMixin
 
@@ -1064,6 +1131,7 @@ class FoodState(
     ReportesMixin,
     CartaMixin,
     InventarioMixin,
+    ProduccionMixin,
     ClientesCuentasMixin,
     PromosCuponesMixin,
     rx.State,
@@ -1094,6 +1162,7 @@ class FoodState(
     mensaje: str = ""
     login_error: str = ""
     usuario_actual: UsuarioSesion | None = None
+    ultima_actividad: str = ""
     login_pin_input: str = ""
     login_rol_seleccionado: str = RolUsuario.MOZO.value
     sidebar_collapsed: bool = False
@@ -1159,6 +1228,10 @@ class FoodState(
     usuario_form_perm_descuento: bool = False
     usuario_form_perm_anular: bool = False
     usuario_form_perm_reportes: bool = False
+    usuario_form_perm_turno: bool = False
+    usuario_form_perm_inventario: bool = False
+    usuario_form_perm_costos: bool = False
+    usuario_form_perm_reimprimir: bool = False
 
     mozos_tab_activa: str = "salon"
     modal_agregar_abierto: bool = False
@@ -1329,6 +1402,45 @@ class FoodState(
     @rx.var
     def usuario_form_es_edicion(self) -> bool:
         return self.usuario_form_id > 0
+
+    @rx.var
+    def tiene_perm_turno(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_turno
+
+    @rx.var
+    def tiene_perm_inventario(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_inventario
+
+    @rx.var
+    def tiene_perm_costos(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_costos
+
+    @rx.var
+    def tiene_perm_reimprimir(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_reimprimir
+
+    def _touch_actividad(self) -> None:
+        self.ultima_actividad = _utcnow().isoformat()
+
+    def _check_session_expiry(self) -> bool:
+        """Returns True if session expired and user was logged out."""
+        if self.usuario_actual is None:
+            return False
+        if _session_expired(self.ultima_actividad, self.usuario_actual.rol):
+            self.usuario_actual = None
+            self.ultima_actividad = ""
+            self._clear_operational_context()
+            self.mensaje = "Sesión expirada por inactividad. Ingrese nuevamente."
+            return True
+        return False
 
     @rx.var
     def mesa_seleccionada_label(self) -> str:
@@ -1622,6 +1734,12 @@ class FoodState(
     def _route_access_result(self, route_key: str, also_allowed: bool = False):
         if self.usuario_actual is None:
             return rx.redirect("/login", replace=True)
+        if _session_expired(self.ultima_actividad, self.usuario_actual.rol):
+            self.usuario_actual = None
+            self.ultima_actividad = ""
+            self._clear_operational_context()
+            self.login_error = "Sesión expirada por inactividad."
+            return rx.redirect("/login", replace=True)
         if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES[route_key] and not also_allowed:
             return [
                 rx.window_alert("No tienes permiso para este módulo."),
@@ -1636,6 +1754,7 @@ class FoodState(
                 rx.window_alert(bloqueo),
                 rx.redirect("/login", replace=True),
             ]
+        self._touch_actividad()
         self.cargar_datos_iniciales()
         return None
 
@@ -1830,7 +1949,14 @@ class FoodState(
             self.login_pin_input = ""
             self.login_error = "Ingrese un PIN válido de 4 a 6 dígitos."
             return
-        bloqueo = _bloqueo_suscripcion(self._company_id())
+        company_id = self._company_id()
+        rate_key = f"pin:company:{company_id}"
+        if _is_rate_limited(rate_key):
+            remaining = _remaining_lockout_time(rate_key)
+            self.login_pin_input = ""
+            self.login_error = f"Demasiados intentos. Espere {remaining} minuto(s)."
+            return
+        bloqueo = _bloqueo_suscripcion(company_id)
         if bloqueo:
             self.login_pin_input = ""
             self.login_error = bloqueo
@@ -1839,14 +1965,15 @@ class FoodState(
         with self._tenant_session() as session:
             candidatos = session.exec(
                 select(UsuarioFood).where(
-                    UsuarioFood.company_id == self._company_id(),
+                    UsuarioFood.company_id == company_id,
                     UsuarioFood.activo.is_(True),
                 )
             ).all()
             usuario = next((u for u in candidatos if _verify_pin(normalized, u.pin)), None)
         if usuario is None:
+            _record_failed_attempt(rate_key)
             self.login_pin_input = ""
-            self.login_error = "PIN incorrecto. Intenta nuevamente."
+            self.login_error = "PIN incorrecto. Intente nuevamente."
             return
         if (
             self.login_rol_seleccionado
@@ -1859,6 +1986,7 @@ class FoodState(
                 f"Seleccione {usuario.rol} para ingresar."
             )
             return
+        _clear_login_attempts(rate_key)
         self.login_error = ""
         self.usuario_actual = UsuarioSesion(
             id=usuario.id or 0,
@@ -1868,7 +1996,12 @@ class FoodState(
             perm_descuento=usuario.perm_descuento,
             perm_anular=usuario.perm_anular,
             perm_reportes=usuario.perm_reportes,
+            perm_turno=usuario.perm_turno,
+            perm_inventario=usuario.perm_inventario,
+            perm_costos=usuario.perm_costos,
+            perm_reimprimir=usuario.perm_reimprimir,
         )
+        self.ultima_actividad = _utcnow().isoformat()
         self.login_pin_input = ""
         self.mensaje = f"Sesion iniciada como {usuario.nombre}."
         return rx.redirect(_role_home_route(usuario.rol), replace=True)
@@ -1895,6 +2028,10 @@ class FoodState(
         self.usuario_form_perm_descuento = _defs.get("descuento", False)
         self.usuario_form_perm_anular = _defs.get("anular", False)
         self.usuario_form_perm_reportes = _defs.get("reportes", False)
+        self.usuario_form_perm_turno = _defs.get("turno", False)
+        self.usuario_form_perm_inventario = _defs.get("inventario", False)
+        self.usuario_form_perm_costos = _defs.get("costos", False)
+        self.usuario_form_perm_reimprimir = _defs.get("reimprimir", False)
 
     def toggle_uf_perm_descuento(self) -> None:
         self.usuario_form_perm_descuento = not self.usuario_form_perm_descuento
@@ -1904,6 +2041,18 @@ class FoodState(
 
     def toggle_uf_perm_reportes(self) -> None:
         self.usuario_form_perm_reportes = not self.usuario_form_perm_reportes
+
+    def toggle_uf_perm_turno(self) -> None:
+        self.usuario_form_perm_turno = not self.usuario_form_perm_turno
+
+    def toggle_uf_perm_inventario(self) -> None:
+        self.usuario_form_perm_inventario = not self.usuario_form_perm_inventario
+
+    def toggle_uf_perm_costos(self) -> None:
+        self.usuario_form_perm_costos = not self.usuario_form_perm_costos
+
+    def toggle_uf_perm_reimprimir(self) -> None:
+        self.usuario_form_perm_reimprimir = not self.usuario_form_perm_reimprimir
 
     def on_change_uf_pin(self, value: str) -> None:
         self.usuario_form_pin = value
@@ -1926,6 +2075,10 @@ class FoodState(
         self.usuario_form_perm_descuento = _defs["descuento"]
         self.usuario_form_perm_anular = _defs["anular"]
         self.usuario_form_perm_reportes = _defs["reportes"]
+        self.usuario_form_perm_turno = _defs["turno"]
+        self.usuario_form_perm_inventario = _defs["inventario"]
+        self.usuario_form_perm_costos = _defs["costos"]
+        self.usuario_form_perm_reimprimir = _defs["reimprimir"]
 
     def set_usuario_form_visible(self, v: bool) -> None:
         self.usuario_form_visible = v
@@ -1952,6 +2105,10 @@ class FoodState(
                 perm_descuento=u.perm_descuento,
                 perm_anular=u.perm_anular,
                 perm_reportes=u.perm_reportes,
+                perm_turno=u.perm_turno,
+                perm_inventario=u.perm_inventario,
+                perm_costos=u.perm_costos,
+                perm_reimprimir=u.perm_reimprimir,
             )
             for u in rows
         ]
@@ -1976,6 +2133,10 @@ class FoodState(
         self.usuario_form_perm_descuento = u.perm_descuento
         self.usuario_form_perm_anular = u.perm_anular
         self.usuario_form_perm_reportes = u.perm_reportes
+        self.usuario_form_perm_turno = u.perm_turno
+        self.usuario_form_perm_inventario = u.perm_inventario
+        self.usuario_form_perm_costos = u.perm_costos
+        self.usuario_form_perm_reimprimir = u.perm_reimprimir
         self.usuario_form_visible = True
         self.mensaje = ""
 
@@ -2031,6 +2192,10 @@ class FoodState(
                 u.perm_descuento = self.usuario_form_perm_descuento
                 u.perm_anular = self.usuario_form_perm_anular
                 u.perm_reportes = self.usuario_form_perm_reportes
+                u.perm_turno = self.usuario_form_perm_turno
+                u.perm_inventario = self.usuario_form_perm_inventario
+                u.perm_costos = self.usuario_form_perm_costos
+                u.perm_reimprimir = self.usuario_form_perm_reimprimir
                 u.updated_at = _utcnow()
                 session.add(u)
                 session.commit()
@@ -2049,6 +2214,10 @@ class FoodState(
                     perm_descuento=self.usuario_form_perm_descuento,
                     perm_anular=self.usuario_form_perm_anular,
                     perm_reportes=self.usuario_form_perm_reportes,
+                    perm_turno=self.usuario_form_perm_turno,
+                    perm_inventario=self.usuario_form_perm_inventario,
+                    perm_costos=self.usuario_form_perm_costos,
+                    perm_reimprimir=self.usuario_form_perm_reimprimir,
                 )
                 session.add(u)
                 session.commit()
@@ -2617,6 +2786,9 @@ class FoodState(
                 async with self:
                     if not getattr(self, flag_name):
                         break
+                    if self._check_session_expiry():
+                        setattr(self, flag_name, False)
+                        break
                     refresh_callback()
             except Exception:
                 break
@@ -2634,6 +2806,9 @@ class FoodState(
                 play_sound = False
                 async with self:
                     if not self.mozos_polling_enabled:
+                        break
+                    if self._check_session_expiry():
+                        self.mozos_polling_enabled = False
                         break
                     play_sound = self._refresh_mozos_slice()
                 if play_sound:
@@ -2658,6 +2833,9 @@ class FoodState(
                 play_sound = False
                 async with self:
                     if not self.cocina_polling_enabled:
+                        break
+                    if self._check_session_expiry():
+                        self.cocina_polling_enabled = False
                         break
                     play_sound = self._refresh_cocina_slice()
                     print_html = self._check_cocina_auto_print()
@@ -2691,6 +2869,9 @@ class FoodState(
                 print_html = ""
                 async with self:
                     if not self.caja_polling_enabled:
+                        break
+                    if self._check_session_expiry():
+                        self.caja_polling_enabled = False
                         break
                     self._refresh_caja_slice()
                     print_html = self._check_cocina_auto_print()
@@ -2818,7 +2999,8 @@ class FoodState(
                 ))
             if hay_stuck:
                 session.commit()
-        self.mesas = mesas_ui
+        if _mesas_fingerprint(mesas_ui) != _mesas_fingerprint(self.mesas):
+            self.mesas = mesas_ui
         self.ultima_actualizacion = ahora_local_pe().strftime("%H:%M:%S")
         if self.mesa_seleccionada_id and not any(m.id == self.mesa_seleccionada_id for m in self.mesas):
             self.mesa_seleccionada_id = 0
@@ -3466,7 +3648,7 @@ class FoodState(
                     data["accent_border"] = KITCHEN_DEMORADO_COLOR
                     data["estado_bg"] = KITCHEN_DEMORADO_COLOR
                     data["estado_color"] = "#FEE2E2"
-            self.tickets_cocina = [
+            nuevos_tickets = [
                 CocinaTicketView(
                     pedido_id=data["pedido_id"],
                     mesa_label=data["mesa_label"],
@@ -3488,6 +3670,8 @@ class FoodState(
                 )
                 for _, data in grupos.items()
             ]
+            if _list_fingerprint(nuevos_tickets) != _list_fingerprint(self.tickets_cocina):
+                self.tickets_cocina = nuevos_tickets
 
     def _transition_ticket_state(self, detalle_ids_csv: str, source_state: str, target_state: str, success_message: str, actor_user_id: int | None = None, actor_field_name: str | None = None) -> None:
         ids = [int(x) for x in detalle_ids_csv.split(",") if x.strip()]
@@ -3804,6 +3988,11 @@ class FoodState(
             self.ultimos_cobros = result
 
     def reimprimir_comprobante(self, pedido_id: int):
+        if self.usuario_actual is not None and not (
+            self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_reimprimir
+        ):
+            self.mensaje = "No tiene permiso para reimprimir comprobantes."
+            return
         with self._tenant_session() as session:
             pedido = session.get(Pedido, pedido_id)
             if pedido is None:
@@ -4219,7 +4408,8 @@ class FoodState(
                 self.caja_cobro_error = "No hay turno de caja abierto. Abre el turno antes de cobrar."
                 return
             detalles = session.exec(select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)).all()
-            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
+            prod_ids = {d.producto_id for d in detalles}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.id.in_(list(prod_ids)))).all()} if prod_ids else {}
             ticket_lines = []
             for d in detalles:
                 if d.combo_items_json:
@@ -4460,12 +4650,8 @@ class FoodState(
                     DetallePedido.pedido_id == pedido.id
                 ).order_by(DetallePedido.id)
             ).all()
-            productos_map = {
-                p.id: p
-                for p in session.exec(
-                    select(Producto).where(Producto.company_id == self._company_id())
-                ).all()
-            }
+            pids = {d.producto_id for d in detalles}
+            productos_map = {p.id: p for p in session.exec(select(Producto).where(Producto.id.in_(list(pids)))).all()} if pids else {}
             for d in detalles:
                 prod = productos_map.get(d.producto_id)
                 ticket_lines.append(TicketLine(
@@ -4508,12 +4694,8 @@ class FoodState(
                     DetallePedido.pedido_id == pedido_id
                 ).order_by(DetallePedido.id)
             ).all()
-            productos = {
-                p.id: p
-                for p in session.exec(
-                    select(Producto).where(Producto.company_id == self._company_id())
-                ).all()
-            }
+            pids = {d.producto_id for d in detalles}
+            productos = {p.id: p for p in session.exec(select(Producto).where(Producto.id.in_(list(pids)))).all()} if pids else {}
             for d in detalles:
                 prod = productos.get(d.producto_id)
                 items_ui.append(CajaItemView(
@@ -4851,7 +5033,8 @@ class FoodState(
                 ).order_by(Pedido.abierto_en.desc(), Pedido.id.desc())
             ).all()
             if not pedidos:
-                self.pedidos_mostrador_pendientes = []
+                if self.pedidos_mostrador_pendientes:
+                    self.pedidos_mostrador_pendientes = []
                 return
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             result: list[MostradorPendienteView] = []
@@ -4877,7 +5060,8 @@ class FoodState(
                     total=float(_to_decimal(pedido.total)),
                     en_cocina=en_cocina,
                 ))
-            self.pedidos_mostrador_pendientes = result
+            if _list_fingerprint(result) != _list_fingerprint(self.pedidos_mostrador_pendientes):
+                self.pedidos_mostrador_pendientes = result
 
     def cargar_pedidos_mostrador_entregados(self) -> None:
         with self._tenant_session() as session:
@@ -4889,7 +5073,8 @@ class FoodState(
                 ).order_by(Pedido.updated_at.desc(), Pedido.id.desc())
             ).all()
             if not pedidos:
-                self.pedidos_mostrador_entregados = []
+                if self.pedidos_mostrador_entregados:
+                    self.pedidos_mostrador_entregados = []
                 return
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             historial: list = []
@@ -4913,7 +5098,9 @@ class FoodState(
                     ),
                 ))
             historial.sort(key=lambda x: x[0], reverse=True)
-            self.pedidos_mostrador_entregados = [item for _, item in historial[:10]]
+            nuevos_entregados = [item for _, item in historial[:10]]
+            if _list_fingerprint(nuevos_entregados) != _list_fingerprint(self.pedidos_mostrador_entregados):
+                self.pedidos_mostrador_entregados = nuevos_entregados
 
     def entregar_pedido_mostrador(self, pedido_id: int) -> None:
         with self._tenant_session() as session:
@@ -5175,9 +5362,9 @@ class AdminLocalState(rx.State):
             return None
         return rx.redirect("/admin/login")
 
-    def login_on_enter(self, key: str) -> None:
+    def login_on_enter(self, key: str):
         if key == "Enter":
-            return self.login_admin_local()
+            return type(self).login_admin_local
 
     async def login_admin_local(self) -> None:
         import hashlib
@@ -5187,9 +5374,10 @@ class AdminLocalState(rx.State):
         if not email or not password:
             self.error_msg = "Ingrese email y contraseña."
             return
-        # El email de admin es único globalmente (migración 0014), así que esta
-        # búsqueda es la única legítimamente cross-tenant: todavía no sabemos a
-        # qué empresa pertenece este login hasta encontrar el email.
+        if _is_rate_limited(email):
+            remaining = _remaining_lockout_time(email)
+            self.error_msg = f"Demasiados intentos. Espere {remaining} minuto(s)."
+            return
         with tenant_bypass():
             with get_session() as session:
                 cfg = session.exec(
@@ -5198,17 +5386,17 @@ class AdminLocalState(rx.State):
                     )
                 ).first()
                 if cfg is None or not cfg.admin_password_hash:
+                    _record_failed_attempt(email)
                     self.error_msg = "Credenciales incorrectas."
                     return
                 stored = cfg.admin_password_hash
-                # Detectar hash legacy SHA-256 (64 hex chars) vs bcrypt ($2b$ prefix).
-                # Si es legacy y la contraseña coincide, actualizar silenciosamente a bcrypt.
                 is_bcrypt = stored.startswith("$2b$") or stored.startswith("$2a$")
                 if is_bcrypt:
-                    ok = _verify_pin(password, stored)  # _verify_pin usa bcrypt.checkpw
+                    ok = _verify_pin(password, stored)
                 else:
                     ok = hashlib.sha256(password.encode()).hexdigest() == stored
                 if not ok:
+                    _record_failed_attempt(email)
                     self.error_msg = "Credenciales incorrectas."
                     return
                 if not is_bcrypt:
@@ -5216,6 +5404,7 @@ class AdminLocalState(rx.State):
                     session.add(cfg)
                     session.commit()
                 company_id = cfg.company_id
+        _clear_login_attempts(email)
         bloqueo = _bloqueo_suscripcion(company_id)
         if bloqueo:
             self.error_msg = bloqueo
@@ -5246,6 +5435,10 @@ class AdminLocalState(rx.State):
                 perm_descuento=True,
                 perm_anular=True,
                 perm_reportes=True,
+                perm_turno=True,
+                perm_inventario=True,
+                perm_costos=True,
+                perm_reimprimir=True,
             )
         else:
             food_state.usuario_actual = UsuarioSesion(

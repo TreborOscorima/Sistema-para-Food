@@ -90,6 +90,10 @@ class UsuarioFood(TimestampedModel, table=True):
     perm_descuento: bool = Field(default=True, nullable=False)
     perm_anular: bool = Field(default=False, nullable=False)
     perm_reportes: bool = Field(default=False, nullable=False)
+    perm_turno: bool = Field(default=False, nullable=False)
+    perm_inventario: bool = Field(default=False, nullable=False)
+    perm_costos: bool = Field(default=False, nullable=False)
+    perm_reimprimir: bool = Field(default=False, nullable=False)
 
 
 class Mesa(TimestampedModel, table=True):

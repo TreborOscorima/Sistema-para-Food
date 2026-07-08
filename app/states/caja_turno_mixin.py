@@ -514,6 +514,9 @@ class CajaTurnoMixin(rx.State, mixin=True):
         if self.usuario_actual is None:
             self.turno_error = "Inicia sesión para abrir el turno."
             return
+        if not (self.usuario_actual.rol == "Admin" or self.usuario_actual.perm_turno):
+            self.turno_error = "No tiene permiso para abrir turno de caja."
+            return
         raw = (self.turno_apertura_monto or "").replace(",", ".").strip()
         try:
             monto = Decimal(raw) if raw else Decimal("0.00")
@@ -645,6 +648,11 @@ class CajaTurnoMixin(rx.State, mixin=True):
 
     def confirmar_cierre_turno(self):
         self.turno_cierre_error = ""
+        if self.usuario_actual is not None and not (
+            self.usuario_actual.rol == "Admin" or self.usuario_actual.perm_turno
+        ):
+            self.turno_cierre_error = "No tiene permiso para cerrar turno de caja."
+            return
         conteo_limpio: dict[str, int] = {}
         for key, _valor, _etiqueta in DENOMINACIONES_PEN:
             raw = (self.turno_cierre_conteo.get(key) or "").strip()

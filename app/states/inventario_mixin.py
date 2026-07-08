@@ -108,6 +108,7 @@ class InventarioMixin(rx.State, mixin=True):
         self.cargar_inventario()
         if not self.productos:
             self.cargar_menu()
+        self.cargar_opciones_produccion()
 
     def cargar_inventario(self) -> None:
         with self._tenant_session() as session:
@@ -190,6 +191,11 @@ class InventarioMixin(rx.State, mixin=True):
         self.inv_form_costo = v
 
     def guardar_insumo(self) -> None:
+        if self.usuario_actual is not None and not (
+            self.usuario_actual.rol == "Admin" or self.usuario_actual.perm_inventario
+        ):
+            self.mensaje = "No tiene permiso para gestionar inventario."
+            return
         nombre = self.inv_form_nombre.strip()
         if not nombre:
             self.mensaje = "El nombre del insumo es obligatorio."
@@ -354,6 +360,11 @@ class InventarioMixin(rx.State, mixin=True):
 
     def guardar_mov_insumo(self) -> None:
         self.inv_mov_error = ""
+        if self.usuario_actual is not None and not (
+            self.usuario_actual.rol == "Admin" or self.usuario_actual.perm_inventario
+        ):
+            self.inv_mov_error = "No tiene permiso para movimientos de inventario."
+            return
         raw = (self.inv_mov_cantidad or "").replace(",", ".").strip()
         try:
             cantidad = Decimal(raw) if raw else Decimal("0")

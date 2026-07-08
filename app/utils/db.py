@@ -25,6 +25,8 @@ def get_engine():
             _build_url(),
             pool_pre_ping=True,
             pool_recycle=1800,
+            pool_size=15,
+            max_overflow=15,
             echo=False,
         )
     return _engine
