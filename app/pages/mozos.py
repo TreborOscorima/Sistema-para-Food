@@ -506,33 +506,79 @@ def _modal_carrito_item(item: CarritoItem) -> rx.Component:
     )
 
 
-def _modal_historial_item(item: HistorialItem) -> rx.Component:
+def _modal_historial_item(item: HistorialItem, idx: int) -> rx.Component:
     return rx.hstack(
-        rx.text(
-            item.cantidad.to_string() + "x " + item.nombre,
-            font_size="11px", font_weight="500", color="#CBD5E1",
-            flex="1", min_width="0", no_of_lines=1,
-        ),
         rx.cond(
-            item.nota != "",
-            rx.text(
-                "📝 " + item.nota,
-                font_size="10px", color="#64748B",
-                no_of_lines=1, max_width="100px",
+            FoodState.precuenta_parcial_modo,
+            rx.box(
+                rx.cond(
+                    item.sel_precuenta,
+                    rx.icon(tag="square_check", size=14, color="#22C55E"),
+                    rx.icon(tag="square", size=14, color="#475569"),
+                ),
+                cursor="pointer",
+                flex_shrink="0",
             ),
             rx.fragment(),
         ),
-        rx.badge(
-            item.estado_label,
-            background=item.estado_bg,
-            color=item.estado_color,
-            font_size="9px",
-            padding_x="6px", padding_y="1px",
-            border_radius="4px",
+        rx.text(
+            item.cantidad.to_string() + "x " + item.nombre,
+            font_size="11px", font_weight="500",
+            color=rx.cond(
+                FoodState.precuenta_parcial_modo & item.sel_precuenta,
+                "#22C55E", "#CBD5E1",
+            ),
+            flex="1", min_width="0", no_of_lines=1,
+        ),
+        rx.cond(
+            FoodState.precuenta_parcial_modo,
+            rx.text(
+                item.subtotal_texto,
+                font_size="10px", font_weight="600",
+                color=rx.cond(item.sel_precuenta, "#22C55E", "#64748B"),
+                flex_shrink="0",
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            item.nota != "",
+            rx.cond(
+                FoodState.precuenta_parcial_modo,
+                rx.fragment(),
+                rx.text(
+                    item.nota,
+                    font_size="10px", color="#64748B",
+                    no_of_lines=1, max_width="100px",
+                ),
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            FoodState.precuenta_parcial_modo,
+            rx.fragment(),
+            rx.badge(
+                item.estado_label,
+                background=item.estado_bg,
+                color=item.estado_color,
+                font_size="9px",
+                padding_x="6px", padding_y="1px",
+                border_radius="4px",
+            ),
         ),
         width="100%", align="center", spacing="2",
         padding="4px 0",
         border_bottom="1px solid #1E293B",
+        cursor=rx.cond(FoodState.precuenta_parcial_modo, "pointer", "default"),
+        on_click=rx.cond(
+            FoodState.precuenta_parcial_modo,
+            FoodState.toggle_precuenta_item(idx),
+            None,
+        ),
+        _hover=rx.cond(
+            FoodState.precuenta_parcial_modo,
+            {"background": "#0F172A"},
+            {},
+        ),
     )
 
 
@@ -953,21 +999,109 @@ def _modal_agregar_productos() -> rx.Component:
                             rx.vstack(
                                 rx.hstack(
                                     rx.icon(tag="chef_hat", size=14, color="#38BDF8"),
-                                    rx.text("Enviado a cocina", font_size="12px", font_weight="700", color="#38BDF8"),
+                                    rx.text(
+                                        rx.cond(
+                                            FoodState.precuenta_parcial_modo,
+                                            "Seleccione ítems para precuenta",
+                                            "Enviado a cocina",
+                                        ),
+                                        font_size="12px", font_weight="700",
+                                        color=rx.cond(FoodState.precuenta_parcial_modo, "#22C55E", "#38BDF8"),
+                                    ),
+                                    rx.spacer(),
+                                    rx.cond(
+                                        FoodState.precuenta_parcial_modo,
+                                        rx.hstack(
+                                            rx.button(
+                                                "Todos",
+                                                on_click=FoodState.seleccionar_todos_precuenta,
+                                                background="transparent",
+                                                color="#94A3B8",
+                                                border="1px solid #334155",
+                                                border_radius="6px",
+                                                font_size="10px",
+                                                padding="2px 8px",
+                                                cursor="pointer",
+                                                height="auto",
+                                                _hover={"color": "#FFFFFF", "border_color": "#64748B"},
+                                            ),
+                                            rx.button(
+                                                rx.icon(tag="x", size=12),
+                                                on_click=FoodState.cancelar_precuenta_parcial,
+                                                background="transparent",
+                                                color="#EF4444",
+                                                border="none",
+                                                padding="2px",
+                                                cursor="pointer",
+                                                _hover={"opacity": "0.8"},
+                                            ),
+                                            spacing="1", align="center",
+                                        ),
+                                        rx.button(
+                                            rx.hstack(
+                                                rx.icon(tag="receipt", size=11),
+                                                rx.text("Precuenta", font_size="10px", font_weight="600"),
+                                                spacing="1", align="center",
+                                            ),
+                                            on_click=FoodState.activar_precuenta_parcial,
+                                            background="transparent",
+                                            color="#94A3B8",
+                                            border="1px solid #334155",
+                                            border_radius="6px",
+                                            padding="2px 8px",
+                                            cursor="pointer",
+                                            height="auto",
+                                            _hover={"color": "#22C55E", "border_color": "#22C55E"},
+                                        ),
+                                    ),
                                     width="100%", align="center",
                                 ),
                                 rx.box(
                                     rx.vstack(
-                                        rx.foreach(FoodState.historial_pedido, _modal_historial_item),
+                                        rx.foreach(FoodState.historial_pedido, lambda item, idx: _modal_historial_item(item, idx)),
                                         width="100%", spacing="0",
                                     ),
                                     overflow_y="auto",
                                     max_height=rx.breakpoints(initial="12vh", md="20vh"),
                                     width="100%",
                                 ),
+                                # Barra de precuenta parcial
+                                rx.cond(
+                                    FoodState.precuenta_parcial_modo & FoodState.precuenta_parcial_hay_seleccion,
+                                    rx.hstack(
+                                        rx.text(
+                                            "Subtotal: " + FoodState.precuenta_parcial_subtotal_texto,
+                                            font_size="12px", font_weight="700", color="#22C55E",
+                                        ),
+                                        rx.spacer(),
+                                        rx.button(
+                                            rx.hstack(
+                                                rx.icon(tag="printer", size=12),
+                                                rx.text("Imprimir", font_size="11px", font_weight="700"),
+                                                spacing="1", align="center",
+                                            ),
+                                            on_click=FoodState.imprimir_precuenta_parcial,
+                                            background="#22C55E",
+                                            color="#FFFFFF",
+                                            border_radius="6px",
+                                            padding="4px 12px",
+                                            cursor="pointer",
+                                            height="auto",
+                                            _hover={"background": "#16A34A"},
+                                        ),
+                                        width="100%", align="center",
+                                        padding_top="6px",
+                                        border_top="1px solid #1E3A5F",
+                                    ),
+                                    rx.fragment(),
+                                ),
                                 spacing="2", width="100%",
                                 background="#0F172A",
-                                border="1px solid #1E3A5F",
+                                border=rx.cond(
+                                    FoodState.precuenta_parcial_modo,
+                                    "1px solid #22C55E",
+                                    "1px solid #1E3A5F",
+                                ),
                                 border_radius="8px",
                                 padding="8px 10px",
                             ),

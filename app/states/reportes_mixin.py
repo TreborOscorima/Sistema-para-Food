@@ -31,10 +31,21 @@ from app.services.analitica_service import (
     ventas_por_hora,
     ventas_por_mozo,
 )
+from app.services.finanzas_service import (
+    pyl_mensual,
+    reporte_anulaciones,
+    reporte_descuentos,
+    reporte_mermas,
+)
 from app.states.food_state import (
+    AnulacionView,
+    DescuentoRankView,
     FranjaHoraView,
     MargenPlatoView,
+    MermaCategoriaView,
+    MermaInsumoView,
     MozoRankView,
+    PylLineView,
     TopPlatoView,
     VentaDetalleItemView,
     VentaHistorialView,
@@ -88,6 +99,22 @@ class ReportesMixin(rx.State, mixin=True):
     historial_pagina: int = 0
     historial_total: int = 0
     _HISTORIAL_PAGE_SIZE: int = 50
+
+    # ── State vars — P&L mensual (ADM-01) ──────────────────────────────────
+    pyl_lineas: list[PylLineView] = []
+    pyl_anio: int = 0
+    pyl_mes: int = 0
+
+    # ── State vars — Descuentos y anulaciones (ADM-02) ───────────────────
+    descuentos_rank: list[DescuentoRankView] = []
+    anulaciones_lista: list[AnulacionView] = []
+    anulaciones_total_texto: str = "S/ 0.00"
+    descuentos_total_texto: str = "S/ 0.00"
+
+    # ── State vars — Mermas valorizado (ADM-03) ─────────────────────────
+    mermas_por_categoria: list[MermaCategoriaView] = []
+    mermas_por_insumo: list[MermaInsumoView] = []
+    mermas_total_texto: str = "S/ 0.00"
 
     # ── State vars — Detalle de venta (modal) ────────────────────────────────
     venta_detalle_visible: bool = False
@@ -334,6 +361,8 @@ class ReportesMixin(rx.State, mixin=True):
         self.historial_pagina = 0
         self.cargar_historial_ventas()
         self.cargar_analitica()
+        self.cargar_descuentos_anulaciones()
+        self.cargar_mermas()
 
     def _rango_filtros_historial(self) -> tuple[datetime | None, datetime | None]:
         desde = hasta = None
@@ -689,3 +718,137 @@ class ReportesMixin(rx.State, mixin=True):
         wb.save(buf)
         filename = f"ventas_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
         return rx.download(data=buf.getvalue(), filename=filename)
+
+    # ─── ADM-01: P&L mensual ────────────────────────────────────────────────
+
+    def cargar_pyl(self) -> None:
+        now = _utcnow()
+        anio = self.pyl_anio or now.year
+        mes = self.pyl_mes or now.month
+        self.pyl_anio = anio
+        self.pyl_mes = mes
+
+        with self._tenant_session() as session:
+            data = pyl_mensual(session, self._company_id(), anio, mes)
+
+        meses_nombre = [
+            "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+        ]
+        self.pyl_lineas = [
+            PylLineView(
+                concepto="Ventas brutas",
+                valor_texto=_money_text(data["ventas_brutas"]),
+            ),
+            PylLineView(
+                concepto="Descuentos otorgados",
+                valor_texto=f"- {_money_text(data['descuentos'])}",
+                es_negativo=True,
+            ),
+            PylLineView(
+                concepto="Ventas netas",
+                valor_texto=_money_text(data["ventas_netas"]),
+                es_total=True,
+            ),
+            PylLineView(
+                concepto="Costo de insumos consumidos",
+                valor_texto=f"- {_money_text(data['costo_consumo'])}",
+                es_negativo=True,
+            ),
+            PylLineView(
+                concepto="Egresos de caja",
+                valor_texto=f"- {_money_text(data['egresos_caja'])}",
+                es_negativo=True,
+            ),
+            PylLineView(
+                concepto="Utilidad bruta operativa",
+                valor_texto=_money_text(data["utilidad"]),
+                es_total=True,
+                es_negativo=data["utilidad"] < 0,
+                margen_pct_texto=f"{data['margen_pct']}%",
+            ),
+        ]
+
+    def set_pyl_anio(self, v: str) -> None:
+        try:
+            self.pyl_anio = int(v)
+        except (ValueError, TypeError):
+            pass
+
+    def set_pyl_mes(self, v: str) -> None:
+        try:
+            self.pyl_mes = int(v)
+        except (ValueError, TypeError):
+            pass
+
+    def actualizar_pyl(self) -> None:
+        self.cargar_pyl()
+
+    # ─── ADM-02: Descuentos y anulaciones ────────────────────────────────────
+
+    def cargar_descuentos_anulaciones(self) -> None:
+        desde, hasta = self._rango_filtros_historial()
+        if hasta is not None:
+            hasta = hasta + timedelta(seconds=1)
+
+        with self._tenant_session() as session:
+            desc_data = reporte_descuentos(session, self._company_id(), desde, hasta)
+            anul_data = reporte_anulaciones(session, self._company_id(), desde, hasta)
+
+        self.descuentos_rank = [
+            DescuentoRankView(
+                cajero=d["cajero"],
+                pedidos=d["pedidos"],
+                total_descuento_texto=_money_text(d["total_descuento"]),
+                total_ventas_texto=_money_text(d["total_ventas"]),
+                pct_descuento_texto=f"{d['pct_descuento']}%",
+            )
+            for d in desc_data
+        ]
+        total_desc = sum(d["total_descuento"] for d in desc_data)
+        self.descuentos_total_texto = _money_text(total_desc)
+
+        from tuwayki_core.utils.timezone import format_local_datetime
+        self.anulaciones_lista = [
+            AnulacionView(
+                pedido_id=a["pedido_id"],
+                total_texto=_money_text(a["total"]),
+                motivo=a["motivo"],
+                cancelado_por=a["cancelado_por"],
+                cancelado_en_texto=format_local_datetime(a["cancelado_en"], "%d/%m %H:%M", "PE") if a["cancelado_en"] else "",
+                cajero_original=a["cajero_original"],
+            )
+            for a in anul_data
+        ]
+        total_anul = sum(a["total"] for a in anul_data)
+        self.anulaciones_total_texto = _money_text(total_anul)
+
+    # ─── ADM-03: Mermas valorizado ───────────────────────────────────────────
+
+    def cargar_mermas(self) -> None:
+        desde, hasta = self._rango_filtros_historial()
+        if hasta is not None:
+            hasta = hasta + timedelta(seconds=1)
+
+        with self._tenant_session() as session:
+            data = reporte_mermas(session, self._company_id(), desde, hasta)
+
+        self.mermas_por_categoria = [
+            MermaCategoriaView(
+                categoria=c["categoria"],
+                registros=c["registros"],
+                valor_texto=_money_text(c["valor"]),
+            )
+            for c in data["por_categoria"]
+        ]
+        self.mermas_por_insumo = [
+            MermaInsumoView(
+                nombre=i["nombre"],
+                unidad=i["unidad"],
+                cantidad_texto=f"{i['cantidad_total']:.3f}",
+                valor_texto=_money_text(i["valor"]),
+                registros=i["registros"],
+            )
+            for i in data["por_insumo"][:20]
+        ]
+        self.mermas_total_texto = _money_text(data["total"])

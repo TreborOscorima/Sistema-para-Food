@@ -209,6 +209,10 @@ def generate_precuenta_html(
     total: float,
     attended_by: str = "",
     company_name: str = "TUWAYKIFOOD",
+    company_ruc: str = "",
+    company_sucursal: str = "",
+    company_direccion: str = "",
+    company_telefono: str = "",
     descuento: float = 0.0,
     paper_width_mm: int = 80,
     width: int = 0,
@@ -219,6 +223,17 @@ def generate_precuenta_html(
     now = datetime.now()
     lines: list[str] = [
         _center(company_name.upper(), width),
+    ]
+    if company_sucursal:
+        lines.append(_center(company_sucursal.upper(), width))
+    if company_ruc:
+        lines.append(_center(f"RUC: {company_ruc}", width))
+    if company_direccion:
+        for dl in _wrap(company_direccion, width):
+            lines.append(_center(dl, width))
+    if company_telefono:
+        lines.append(_center(f"Tel.: {company_telefono}", width))
+    lines += [
         "",
         _center("PRE-CUENTA", width),
         _center("*** NO ES COMPROBANTE ***", width),

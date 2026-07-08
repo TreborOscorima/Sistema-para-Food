@@ -286,8 +286,8 @@ Cobertura actual: servicios core (pagos, kardex, anulación, promos, analítica,
 7. SEC-04 expiración de sesión · SEC-05 permisos granulares
 
 ### Sprint S3 — Admin financiero (P1)
-8. ADM-01 P&L mensual · ADM-02 reporte descuentos/anulaciones · ADM-03 mermas valorizado
-9. OP-01 transferir/unir mesas · OP-02 split desde mozos
+8. ~~ADM-01 P&L mensual · ADM-02 reporte descuentos/anulaciones · ADM-03 mermas valorizado~~ ✅ DONE (2026-07-08)
+9. ~~OP-01 transferir/unir mesas~~ ✅ DONE (implementado previamente) · ~~OP-02 precuenta parcial desde mozos~~ ✅ DONE (2026-07-08)
 10. MT-01/MT-02 planes standard/profesional + gating
 
 ### Fase 3 — Features mayores (acordados previamente, orden sugerido)

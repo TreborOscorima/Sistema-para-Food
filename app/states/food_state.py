@@ -898,6 +898,7 @@ class HistorialItem(BaseModel):
     cantidad: int
     precio_unitario_texto: str
     subtotal_texto: str
+    subtotal_float: float = 0.0
     nota: str
     enviado_en_texto: str
     estado_clave: str
@@ -907,6 +908,7 @@ class HistorialItem(BaseModel):
     preparado_por_nombre: str
     puede_entregar: bool
     puede_cancelar: bool
+    sel_precuenta: bool = False
 
 
 class CocinaTicketView(BaseModel):
@@ -958,6 +960,45 @@ class TopPlatoView(BaseModel):
     cantidad: int
     total_generado: float
     total_texto: str
+
+
+class PylLineView(BaseModel):
+    concepto: str
+    valor_texto: str
+    es_total: bool = False
+    es_negativo: bool = False
+    margen_pct_texto: str = ""
+
+
+class DescuentoRankView(BaseModel):
+    cajero: str
+    pedidos: int
+    total_descuento_texto: str
+    total_ventas_texto: str
+    pct_descuento_texto: str
+
+
+class AnulacionView(BaseModel):
+    pedido_id: int
+    total_texto: str
+    motivo: str
+    cancelado_por: str
+    cancelado_en_texto: str
+    cajero_original: str
+
+
+class MermaCategoriaView(BaseModel):
+    categoria: str
+    registros: int
+    valor_texto: str
+
+
+class MermaInsumoView(BaseModel):
+    nombre: str
+    unidad: str
+    cantidad_texto: str
+    valor_texto: str
+    registros: int
 
 
 class MostradorEntregaView(BaseModel):
@@ -1151,6 +1192,7 @@ class FoodState(
 
     mesa_seleccionada_id: int = 0
     transfer_modal_abierto: bool = False
+    precuenta_parcial_modo: bool = False
     mozos_filtro_sector: str = ""
     mesa_atendida_por_nombre: str = ""
     categoria_activa_id: int = 0
@@ -1873,6 +1915,9 @@ class FoodState(
         self.cargar_dashboard()
         self.cargar_historial_ventas()
         self.cargar_analitica()
+        self.cargar_pyl()
+        self.cargar_descuentos_anulaciones()
+        self.cargar_mermas()
         self.pagina_cargada = True
         return None
 
@@ -2003,6 +2048,7 @@ class FoodState(
         )
         self.ultima_actividad = _utcnow().isoformat()
         self.login_pin_input = ""
+        self.cargar_config_impresora()
         self.mensaje = f"Sesion iniciada como {usuario.nombre}."
         return rx.redirect(_role_home_route(usuario.rol), replace=True)
 
@@ -2652,7 +2698,8 @@ class FoodState(
         self.cargar_mesas()
         if self.mesa_seleccionada_id:
             self._cargar_carrito_mesa(self.mesa_seleccionada_id)
-            self._cargar_historial_mesa(self.mesa_seleccionada_id)
+            if not self.precuenta_parcial_modo:
+                self._cargar_historial_mesa(self.mesa_seleccionada_id)
         current = sum(1 for m in self.mesas if m.tiene_items_listos)
         self._prev_mesas_alerta_entrega = current
         return self.sonidos_activos and prev >= 0 and current > prev
@@ -3119,6 +3166,99 @@ class FoodState(
     def set_transfer_modal_abierto(self, v: bool) -> None:
         self.transfer_modal_abierto = v
 
+    # ─── Precuenta parcial desde mozos (OP-02) ──────────────────────────────
+
+    def activar_precuenta_parcial(self) -> None:
+        self.precuenta_parcial_modo = True
+        items = list(self.historial_pedido)
+        for i in range(len(items)):
+            items[i] = items[i].model_copy(update={"sel_precuenta": False})
+        self.historial_pedido = items
+
+    def cancelar_precuenta_parcial(self) -> None:
+        self.precuenta_parcial_modo = False
+        items = list(self.historial_pedido)
+        for i in range(len(items)):
+            items[i] = items[i].model_copy(update={"sel_precuenta": False})
+        self.historial_pedido = items
+
+    def toggle_precuenta_item(self, idx: int) -> None:
+        if not self.precuenta_parcial_modo:
+            return
+        items = list(self.historial_pedido)
+        if 0 <= idx < len(items):
+            items[idx] = items[idx].model_copy(update={"sel_precuenta": not items[idx].sel_precuenta})
+            self.historial_pedido = items
+
+    def seleccionar_todos_precuenta(self) -> None:
+        items = list(self.historial_pedido)
+        all_selected = all(it.sel_precuenta for it in items)
+        for i in range(len(items)):
+            items[i] = items[i].model_copy(update={"sel_precuenta": not all_selected})
+        self.historial_pedido = items
+
+    @rx.var
+    def precuenta_parcial_subtotal(self) -> float:
+        if not self.precuenta_parcial_modo:
+            return 0.0
+        return round(sum(it.subtotal_float for it in self.historial_pedido if it.sel_precuenta), 2)
+
+    @rx.var
+    def precuenta_parcial_subtotal_texto(self) -> str:
+        return _money_text(self.precuenta_parcial_subtotal)
+
+    @rx.var
+    def precuenta_parcial_hay_seleccion(self) -> bool:
+        return any(it.sel_precuenta for it in self.historial_pedido)
+
+    def imprimir_precuenta_parcial(self):
+        seleccionados = [it for it in self.historial_pedido if it.sel_precuenta]
+        if not seleccionados:
+            return rx.toast.error("Seleccione al menos un ítem.")
+        ticket_lines = [
+            TicketLine(
+                name=it.nombre,
+                quantity=it.cantidad,
+                unit_price=float(_to_decimal(it.precio_unitario_texto.replace("S/ ", "").replace(",", ""))),
+                subtotal=it.subtotal_float,
+                note=it.nota,
+            )
+            for it in seleccionados
+        ]
+        total_parcial = sum(it.subtotal_float for it in seleccionados)
+        mesa_label = self.mesa_seleccionada_label or "Mesa"
+        pedido_id = 0
+        attended_by = _actor_name(self.usuario_actual.nombre) if self.usuario_actual else ""
+        if self.mesa_seleccionada_id:
+            with self._tenant_session() as session:
+                pedido = _get_open_order(session, self.mesa_seleccionada_id, self._company_id())
+                if pedido:
+                    pedido_id = pedido.id or 0
+                    mozo = session.get(UsuarioFood, pedido.mozo_id) if pedido.mozo_id else None
+                    if mozo:
+                        attended_by = _actor_name(mozo.nombre)
+        html_ticket = generate_precuenta_html(
+            order_reference=mesa_label,
+            pedido_id=pedido_id,
+            items=ticket_lines,
+            total=total_parcial,
+            attended_by=attended_by,
+            company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            company_ruc=self.config_ruc,
+            company_sucursal=self.config_sucursal,
+            company_direccion=self.config_direccion,
+            company_telefono=self.config_telefono,
+            descuento=0.0,
+            paper_width_mm=self._ticket_paper_width_mm(),
+        )
+        self.precuenta_parcial_modo = False
+        items = list(self.historial_pedido)
+        for i in range(len(items)):
+            items[i] = items[i].model_copy(update={"sel_precuenta": False})
+        self.historial_pedido = items
+        return rx.call_script(build_print_script(html_ticket))
+        self.transfer_modal_abierto = v
+
     def transferir_a_mesa(self, mesa_destino_id: int) -> None:
         if not self.mesa_seleccionada_id or self.mesa_seleccionada_id == mesa_destino_id:
             return
@@ -3249,6 +3389,7 @@ class FoodState(
                     cantidad=d.cantidad,
                     precio_unitario_texto=_money_text(d.precio_unitario),
                     subtotal_texto=_money_text(d.subtotal),
+                    subtotal_float=float(_to_decimal(d.subtotal)),
                     nota=d.notas or "",
                     enviado_en_texto=enviado_en.strftime("%H:%M"),
                     estado_clave=estado_produccion,
@@ -3404,6 +3545,7 @@ class FoodState(
     def cerrar_modal_agregar(self) -> None:
         self.modal_agregar_abierto = False
         self.busqueda_producto_modal = ""
+        self.precuenta_parcial_modo = False
 
     def set_busqueda_producto_modal(self, value: str) -> None:
         self.busqueda_producto_modal = value
@@ -4671,6 +4813,10 @@ class FoodState(
             total=total,
             attended_by=attended_by,
             company_name=self.config_nombre_local or "TUWAYKIFOOD",
+            company_ruc=self.config_ruc,
+            company_sucursal=self.config_sucursal,
+            company_direccion=self.config_direccion,
+            company_telefono=self.config_telefono,
             descuento=descuento,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
@@ -5450,6 +5596,7 @@ class AdminLocalState(rx.State):
                 perm_anular=True,
                 perm_reportes=True,
             )
+        food_state.cargar_config_impresora()
         return rx.redirect("/admin")
 
     async def logout_admin_local(self) -> None:

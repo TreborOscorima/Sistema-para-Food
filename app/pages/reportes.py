@@ -5,7 +5,17 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import anulacion_modal, app_shell, loading_placeholder
-from app.states.food_state import FoodState, TopPlatoView, VentaDetalleItemView, VentaHistorialView
+from app.states.food_state import (
+    AnulacionView,
+    DescuentoRankView,
+    FoodState,
+    MermaCategoriaView,
+    MermaInsumoView,
+    PylLineView,
+    TopPlatoView,
+    VentaDetalleItemView,
+    VentaHistorialView,
+)
 
 _METODOS_FILTRO = [
     ("", "Todos los métodos"),
@@ -580,6 +590,337 @@ def _historial_header() -> rx.Component:
     )
 
 
+# ─── P&L mensual (ADM-01) ────────────────────────────────────────────────────
+
+_MESES = [
+    ("1", "Enero"), ("2", "Febrero"), ("3", "Marzo"), ("4", "Abril"),
+    ("5", "Mayo"), ("6", "Junio"), ("7", "Julio"), ("8", "Agosto"),
+    ("9", "Septiembre"), ("10", "Octubre"), ("11", "Noviembre"), ("12", "Diciembre"),
+]
+
+
+def _pyl_line_row(line: PylLineView) -> rx.Component:
+    return rx.hstack(
+        rx.text(
+            line.concepto,
+            font_size="13px",
+            font_weight=rx.cond(line.es_total, "800", "500"),
+            color=rx.cond(line.es_total, "#0F172A", "#475569"),
+            flex="1",
+        ),
+        rx.hstack(
+            rx.text(
+                line.valor_texto,
+                font_size=rx.cond(line.es_total, "15px", "13px"),
+                font_weight=rx.cond(line.es_total, "800", "600"),
+                color=rx.cond(
+                    line.es_negativo, "#DC2626",
+                    rx.cond(line.es_total, "#0F172A", "#334155"),
+                ),
+                min_width="100px",
+                text_align="right",
+            ),
+            rx.cond(
+                line.margen_pct_texto != "",
+                rx.badge(
+                    line.margen_pct_texto,
+                    background=rx.cond(line.es_negativo, "#FEE2E2", "#DCFCE7"),
+                    color=rx.cond(line.es_negativo, "#DC2626", "#15803D"),
+                    border_radius="6px",
+                    font_size="11px",
+                    font_weight="800",
+                    padding="2px 8px",
+                ),
+                rx.fragment(),
+            ),
+            spacing="2", align="center",
+        ),
+        width="100%",
+        align="center",
+        padding="8px 4px",
+        border_top=rx.cond(line.es_total, "2px solid #E2E8F0", "1px solid #F1F5F9"),
+    )
+
+
+def _pyl_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.icon(tag="file_text", size=14, color="#EA580C"),
+                rx.text("Estado de resultados (P&L)", font_size="13px",
+                        font_weight="700", color="#334155"),
+                rx.spacer(),
+                rx.hstack(
+                    rx.select(
+                        [label for _, label in _MESES],
+                        value=rx.cond(
+                            FoodState.pyl_mes == 1, "Enero",
+                            rx.cond(FoodState.pyl_mes == 2, "Febrero",
+                            rx.cond(FoodState.pyl_mes == 3, "Marzo",
+                            rx.cond(FoodState.pyl_mes == 4, "Abril",
+                            rx.cond(FoodState.pyl_mes == 5, "Mayo",
+                            rx.cond(FoodState.pyl_mes == 6, "Junio",
+                            rx.cond(FoodState.pyl_mes == 7, "Julio",
+                            rx.cond(FoodState.pyl_mes == 8, "Agosto",
+                            rx.cond(FoodState.pyl_mes == 9, "Septiembre",
+                            rx.cond(FoodState.pyl_mes == 10, "Octubre",
+                            rx.cond(FoodState.pyl_mes == 11, "Noviembre",
+                            "Diciembre",
+                            ))))))))))),
+                        on_change=lambda v: FoodState.set_pyl_mes(
+                            rx.cond(v == "Enero", "1",
+                            rx.cond(v == "Febrero", "2",
+                            rx.cond(v == "Marzo", "3",
+                            rx.cond(v == "Abril", "4",
+                            rx.cond(v == "Mayo", "5",
+                            rx.cond(v == "Junio", "6",
+                            rx.cond(v == "Julio", "7",
+                            rx.cond(v == "Agosto", "8",
+                            rx.cond(v == "Septiembre", "9",
+                            rx.cond(v == "Octubre", "10",
+                            rx.cond(v == "Noviembre", "11",
+                            "12",
+                            )))))))))))
+                        ),
+                        background="#FFFFFF",
+                        border="1px solid #E2E8F0",
+                        border_radius="8px",
+                        font_size="12px",
+                        width="130px",
+                    ),
+                    rx.input(
+                        value=FoodState.pyl_anio.to_string(),
+                        on_change=FoodState.set_pyl_anio,
+                        type="number",
+                        background="#FFFFFF",
+                        border="1px solid #E2E8F0",
+                        border_radius="8px",
+                        font_size="12px",
+                        width="80px",
+                        padding_x="8px",
+                    ),
+                    rx.button(
+                        rx.icon(tag="refresh_cw", size=13),
+                        on_click=FoodState.actualizar_pyl,
+                        background="#FFF7ED",
+                        color="#EA580C",
+                        border="1px solid #FED7AA",
+                        border_radius="8px",
+                        padding="6px 10px",
+                        cursor="pointer",
+                        _hover={"opacity": "0.85"},
+                    ),
+                    spacing="2", align="center",
+                ),
+                spacing="2", align="center", width="100%", wrap="wrap",
+            ),
+            rx.cond(
+                FoodState.pyl_lineas.length() > 0,
+                rx.vstack(
+                    rx.foreach(FoodState.pyl_lineas, _pyl_line_row),
+                    spacing="0", width="100%",
+                ),
+                rx.text("Sin datos para el mes seleccionado.", font_size="12px", color="#94A3B8"),
+            ),
+            spacing="3", width="100%",
+        ),
+        background="#F8FAFC", border="1px solid #E2E8F0",
+        border_radius="10px", padding="12px 14px", width="100%",
+    )
+
+
+# ─── Descuentos y anulaciones (ADM-02) ──────────────────────────────────────
+
+
+def _descuento_rank_row(d: DescuentoRankView) -> rx.Component:
+    return rx.hstack(
+        rx.text(d.cajero, font_size="13px", font_weight="600", color="#0F172A", flex="1"),
+        rx.text(d.pedidos.to_string() + " ped.", font_size="12px", color="#64748B",
+                min_width="52px", text_align="right"),
+        rx.text(d.total_descuento_texto, font_size="13px", font_weight="700",
+                color="#DC2626", min_width="86px", text_align="right"),
+        rx.badge(
+            d.pct_descuento_texto,
+            background="#FEE2E2", color="#B91C1C",
+            border_radius="6px", font_size="11px", font_weight="800",
+            padding="2px 6px",
+        ),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+    )
+
+
+def _anulacion_row(a: AnulacionView) -> rx.Component:
+    return rx.hstack(
+        rx.text("#" + a.pedido_id.to_string(), font_size="11px", color="#94A3B8",
+                min_width="36px", flex_shrink="0"),
+        rx.vstack(
+            rx.text(a.motivo, font_size="13px", color="#334155", width="100%",
+                    text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
+            rx.text(
+                a.cancelado_por + " — " + a.cancelado_en_texto,
+                font_size="10px", color="#94A3B8",
+            ),
+            spacing="0", flex="1", min_width="0",
+        ),
+        rx.text(a.total_texto, font_size="13px", font_weight="700", color="#DC2626",
+                min_width="80px", text_align="right", flex_shrink="0"),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+    )
+
+
+def _descuentos_anulaciones_section() -> rx.Component:
+    return rx.flex(
+        # Descuentos por cajero
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="percent", size=14, color="#DC2626"),
+                    rx.text("Descuentos por cajero", font_size="13px",
+                            font_weight="700", color="#334155"),
+                    rx.spacer(),
+                    rx.badge(
+                        FoodState.descuentos_total_texto,
+                        background="#FEE2E2", color="#B91C1C",
+                        border_radius="6px", font_size="11px", font_weight="800",
+                        padding="2px 8px",
+                    ),
+                    spacing="2", align="center", width="100%",
+                ),
+                rx.cond(
+                    FoodState.descuentos_rank.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.descuentos_rank, _descuento_rank_row),
+                        spacing="0", width="100%",
+                    ),
+                    rx.text("Sin descuentos en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+        ),
+        # Anulaciones
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="ban", size=14, color="#DC2626"),
+                    rx.text("Anulaciones", font_size="13px",
+                            font_weight="700", color="#334155"),
+                    rx.spacer(),
+                    rx.badge(
+                        FoodState.anulaciones_total_texto,
+                        background="#FEE2E2", color="#B91C1C",
+                        border_radius="6px", font_size="11px", font_weight="800",
+                        padding="2px 8px",
+                    ),
+                    spacing="2", align="center", width="100%",
+                ),
+                rx.cond(
+                    FoodState.anulaciones_lista.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.anulaciones_lista, _anulacion_row),
+                        spacing="0", width="100%", max_height="300px", overflow_y="auto",
+                    ),
+                    rx.text("Sin anulaciones en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+        ),
+        gap="12px", width="100%",
+        direction=rx.breakpoints(initial="column", md="row"),
+    )
+
+
+# ─── Mermas valorizado (ADM-03) ─────────────────────────────────────────────
+
+
+def _merma_cat_row(c: MermaCategoriaView) -> rx.Component:
+    return rx.hstack(
+        rx.text(c.categoria, font_size="13px", font_weight="600", color="#0F172A", flex="1"),
+        rx.text(c.registros.to_string() + " reg.", font_size="12px", color="#64748B",
+                min_width="52px", text_align="right"),
+        rx.text(c.valor_texto, font_size="13px", font_weight="700", color="#DC2626",
+                min_width="86px", text_align="right"),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+    )
+
+
+def _merma_insumo_row(i: MermaInsumoView) -> rx.Component:
+    return rx.hstack(
+        rx.text(i.nombre, font_size="13px", font_weight="600", color="#0F172A", flex="1",
+                min_width="0", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
+        rx.text(i.cantidad_texto + " " + i.unidad, font_size="12px", color="#64748B",
+                min_width="80px", text_align="right"),
+        rx.text(i.valor_texto, font_size="13px", font_weight="700", color="#DC2626",
+                min_width="86px", text_align="right"),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+    )
+
+
+def _mermas_section() -> rx.Component:
+    return rx.flex(
+        # Por categoría
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="trash_2", size=14, color="#B45309"),
+                    rx.text("Mermas por categoría", font_size="13px",
+                            font_weight="700", color="#334155"),
+                    rx.spacer(),
+                    rx.badge(
+                        FoodState.mermas_total_texto,
+                        background="#FEF3C7", color="#92400E",
+                        border_radius="6px", font_size="11px", font_weight="800",
+                        padding="2px 8px",
+                    ),
+                    spacing="2", align="center", width="100%",
+                ),
+                rx.cond(
+                    FoodState.mermas_por_categoria.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.mermas_por_categoria, _merma_cat_row),
+                        spacing="0", width="100%",
+                    ),
+                    rx.text("Sin mermas en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+        ),
+        # Por insumo (top 20)
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="package_x", size=14, color="#B45309"),
+                    rx.text("Mermas por insumo (top 20)", font_size="13px",
+                            font_weight="700", color="#334155"),
+                    spacing="2", align="center",
+                ),
+                rx.cond(
+                    FoodState.mermas_por_insumo.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.mermas_por_insumo, _merma_insumo_row),
+                        spacing="0", width="100%", max_height="300px", overflow_y="auto",
+                    ),
+                    rx.text("Sin mermas en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#F8FAFC", border="1px solid #E2E8F0",
+            border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+        ),
+        gap="12px", width="100%",
+        direction=rx.breakpoints(initial="column", md="row"),
+    )
+
+
 # ─── Contenido principal ─────────────────────────────────────────────────────
 
 def _reportes_content() -> rx.Component:
@@ -861,6 +1202,15 @@ def _reportes_content() -> rx.Component:
             background="#F8FAFC", border="1px solid #E2E8F0",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
+        # ── P&L mensual (ADM-01) ─────────────────────────────────────────────
+        _pyl_section(),
+
+        # ── Descuentos y anulaciones (ADM-02) ────────────────────────────────
+        _descuentos_anulaciones_section(),
+
+        # ── Mermas valorizado (ADM-03) ───────────────────────────────────────
+        _mermas_section(),
+
         # Margen por plato
         rx.box(
             rx.hstack(
