@@ -33,7 +33,7 @@ def _birthday_badge(c: ClienteView) -> rx.Component:
             c.cumple_pronto,
             rx.badge(
                 "en " + c.dias_para_cumple.to_string() + "d",
-                background="#DBEAFE", color="#1D4ED8",
+                background="rgba(59,130,246,0.12)", color="#60A5FA",
                 border="1px solid #BFDBFE", border_radius="5px", font_size="10px", padding="2px 6px",
             ),
             rx.fragment(),
@@ -54,7 +54,7 @@ def _cliente_card(c: ClienteView) -> rx.Component:
                 ),
                 rx.vstack(
                     rx.hstack(
-                        rx.text(c.nombre, font_size="15px", font_weight="700", color="#0F172A"),
+                        rx.text(c.nombre, font_size="15px", font_weight="700", color="#F1F5F9"),
                         _birthday_badge(c),
                         spacing="1", align="center", flex_wrap="wrap",
                     ),
@@ -72,7 +72,7 @@ def _cliente_card(c: ClienteView) -> rx.Component:
                     on_click=FoodState.editar_cliente(c.id),
                     background="transparent", border="none",
                     color="#94A3B8", padding="2px", cursor="pointer",
-                    _hover={"color": "#64748B"},
+                    _hover={"color": "#94A3B8"},
                 ),
                 rx.button(
                     rx.icon(
@@ -93,20 +93,20 @@ def _cliente_card(c: ClienteView) -> rx.Component:
                 rx.text("Visitas", font_size="11px", color="#94A3B8", font_weight="600",
                         text_transform="uppercase", letter_spacing="0.05em"),
                 rx.text(c.visitas_count.to_string(), font_size="18px", font_weight="800",
-                        color="#0F172A", margin_top="2px"),
-                background="#F8FAFC", border_radius="8px", padding="10px", text_align="center",
+                        color="#F1F5F9", margin_top="2px"),
+                background="#0F172A", border_radius="8px", padding="10px", text_align="center",
             ),
             rx.box(
                 rx.text("Gastado", font_size="11px", color="#94A3B8", font_weight="600",
                         text_transform="uppercase", letter_spacing="0.05em"),
                 rx.text(c.gastado_texto, font_size="18px", font_weight="800",
                         color="#EA580C", margin_top="2px"),
-                background="#F8FAFC", border_radius="8px", padding="10px", text_align="center",
+                background="#0F172A", border_radius="8px", padding="10px", text_align="center",
             ),
             columns="2", gap="8px", width="100%",
         ),
         rx.hstack(
-            rx.text("Última visita: " + c.ultima_visita_texto, font_size="12px", color="#64748B"),
+            rx.text("Última visita: " + c.ultima_visita_texto, font_size="12px", color="#94A3B8"),
             rx.cond(
                 c.es_vip,
                 rx.badge("VIP ⭐", background="#FEF9C3", color="#A16207",
@@ -116,8 +116,8 @@ def _cliente_card(c: ClienteView) -> rx.Component:
             ),
             spacing="2", align="center", margin_top="12px",
         ),
-        background=rx.cond(c.cumple_hoy, "#FFFBEB", "#FFFFFF"),
-        border=rx.cond(c.cumple_hoy, "1px solid #FDE68A", "1px solid #E2E8F0"),
+        background=rx.cond(c.cumple_hoy, "rgba(245,158,11,0.10)", "#1E293B"),
+        border=rx.cond(c.cumple_hoy, "1px solid rgba(245,158,11,0.25)", "1px solid #334155"),
         border_radius="14px", padding="18px", width="100%",
         opacity=rx.cond(c.activo, "1", "0.6"),
     )
@@ -133,20 +133,20 @@ def _cli_form() -> rx.Component:
                 ),
                 rx.text(
                     rx.cond(FoodState.cli_form_editando, "Editar cliente", "Nuevo cliente"),
-                    font_size="13px", font_weight="700", color="#0F172A",
+                    font_size="13px", font_weight="700", color="#F1F5F9",
                 ),
                 spacing="1", align="center",
             ),
             rx.cond(
                 ~FoodState.cli_form_editando,
                 rx.vstack(
-                    rx.text("DNI / RUC (opcional)", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("DNI / RUC (opcional)", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.hstack(
                         rx.input(
                             placeholder="DNI (8 dígitos) o RUC (11 dígitos)",
                             value=FoodState.cli_dni_ruc,
                             on_change=FoodState.set_cli_dni_ruc,
-                            background="#F8FAFC", border="1px solid #E2E8F0",
+                            background="#0F172A", border="1px solid #334155",
                             border_radius="7px", font_size="13px",
                             padding_x="10px", padding_y="8px",
                             _focus={"border": "1px solid #EA580C"},
@@ -172,12 +172,12 @@ def _cli_form() -> rx.Component:
             ),
             rx.hstack(
                 rx.vstack(
-                    rx.text("Nombre *", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Nombre *", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="Nombre completo",
                         value=FoodState.cli_form_nombre,
                         on_change=FoodState.set_cli_form_nombre,
-                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        background="#0F172A", border="1px solid #334155",
                         border_radius="7px", font_size="13px",
                         padding_x="10px", padding_y="8px", width="100%",
                         _focus={"border": "1px solid #EA580C"},
@@ -185,12 +185,12 @@ def _cli_form() -> rx.Component:
                     spacing="1", align="start", flex="2",
                 ),
                 rx.vstack(
-                    rx.text("Teléfono", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Teléfono", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="Ej: 987654321",
                         value=FoodState.cli_form_telefono,
                         on_change=FoodState.set_cli_form_telefono,
-                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        background="#0F172A", border="1px solid #334155",
                         border_radius="7px", font_size="13px",
                         padding_x="10px", padding_y="8px", width="100%",
                         _focus={"border": "1px solid #EA580C"},
@@ -202,12 +202,12 @@ def _cli_form() -> rx.Component:
             ),
             rx.hstack(
                 rx.vstack(
-                    rx.text("Email", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Email", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="cliente@email.com",
                         value=FoodState.cli_form_email,
                         on_change=FoodState.set_cli_form_email,
-                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        background="#0F172A", border="1px solid #334155",
                         border_radius="7px", font_size="13px",
                         padding_x="10px", padding_y="8px", width="100%",
                         _focus={"border": "1px solid #EA580C"},
@@ -215,12 +215,12 @@ def _cli_form() -> rx.Component:
                     spacing="1", align="start", flex="2",
                 ),
                 rx.vstack(
-                    rx.text("Fecha de nacimiento", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Fecha de nacimiento", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         value=FoodState.cli_form_fecha_nac,
                         on_change=FoodState.set_cli_form_fecha_nac,
                         type="date",
-                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        background="#0F172A", border="1px solid #334155",
                         border_radius="7px", font_size="13px",
                         padding_x="10px", padding_y="8px", width="100%",
                         _focus={"border": "1px solid #EA580C"},
@@ -231,12 +231,12 @@ def _cli_form() -> rx.Component:
                 class_name="twk-form-row",
             ),
             rx.vstack(
-                rx.text("Notas internas", font_size="11px", font_weight="600", color="#64748B"),
+                rx.text("Notas internas", font_size="11px", font_weight="600", color="#94A3B8"),
                 rx.text_area(
                     placeholder="Preferencias, alergias, notas…",
                     value=FoodState.cli_form_notas,
                     on_change=FoodState.set_cli_form_notas,
-                    background="#F8FAFC", border="1px solid #E2E8F0",
+                    background="#0F172A", border="1px solid #334155",
                     border_radius="7px", font_size="13px",
                     padding_x="10px", padding_y="8px", width="100%", rows="2",
                     _focus={"border": "1px solid #EA580C"},
@@ -247,10 +247,10 @@ def _cli_form() -> rx.Component:
                 rx.button(
                     "Cancelar",
                     on_click=FoodState.cancelar_cli_form,
-                    background="#F1F5F9", color="#64748B",
-                    border="1px solid #E2E8F0", border_radius="7px",
+                    background="#1E293B", color="#94A3B8",
+                    border="1px solid #334155", border_radius="7px",
                     font_size="13px", padding_x="16px", padding_y="8px",
-                    cursor="pointer", _hover={"background": "#E2E8F0"},
+                    cursor="pointer", _hover={"background": "#334155"},
                 ),
                 rx.button(
                     rx.cond(FoodState.cli_form_editando, "Actualizar", "Registrar"),
@@ -264,7 +264,7 @@ def _cli_form() -> rx.Component:
             ),
             spacing="3", width="100%",
         ),
-        background="#FFFFFF", padding="4px", width="100%",
+        background="#1E293B", padding="4px", width="100%",
     )
 
 
@@ -274,27 +274,27 @@ def _cumpleanos_section() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="cake", size=14, color="#B45309"),
-                    rx.text("Cumpleaños", font_size="14px", font_weight="700", color="#0F172A"),
+                    rx.icon(tag="cake", size=14, color="#F59E0B"),
+                    rx.text("Cumpleaños", font_size="14px", font_weight="700", color="#F1F5F9"),
                     spacing="2", align="center",
                 ),
                 rx.cond(
                     FoodState.clientes_cumpleanos_hoy.length() > 0,
                     rx.vstack(
-                        rx.text("Hoy", font_size="11px", font_weight="700", color="#B45309",
+                        rx.text("Hoy", font_size="11px", font_weight="700", color="#F59E0B",
                                 text_transform="uppercase", letter_spacing="0.05em"),
                         rx.foreach(
                             FoodState.clientes_cumpleanos_hoy,
                             lambda c: rx.hstack(
                                 rx.text("🎂", font_size="16px"),
                                 rx.vstack(
-                                    rx.text(c.nombre, font_size="13px", font_weight="700", color="#0F172A"),
-                                    rx.text(c.telefono, font_size="11px", color="#64748B"),
+                                    rx.text(c.nombre, font_size="13px", font_weight="700", color="#F1F5F9"),
+                                    rx.text(c.telefono, font_size="11px", color="#94A3B8"),
                                     spacing="0", align="start",
                                 ),
                                 spacing="2", align="center", width="100%",
-                                padding="6px 8px", background="#FFFBEB",
-                                border_radius="7px", border="1px solid #FDE68A",
+                                padding="6px 8px", background="rgba(245,158,11,0.10)",
+                                border_radius="7px", border="1px solid rgba(245,158,11,0.25)",
                             ),
                         ),
                         spacing="2", width="100%",
@@ -304,25 +304,25 @@ def _cumpleanos_section() -> rx.Component:
                 rx.cond(
                     FoodState.clientes_cumpleanos_pronto.length() > 0,
                     rx.vstack(
-                        rx.text("Próximos 7 días", font_size="11px", font_weight="700", color="#64748B",
+                        rx.text("Próximos 7 días", font_size="11px", font_weight="700", color="#94A3B8",
                                 text_transform="uppercase", letter_spacing="0.05em"),
                         rx.foreach(
                             FoodState.clientes_cumpleanos_pronto,
                             lambda c: rx.hstack(
                                 rx.text("🎁", font_size="14px"),
-                                rx.text(c.nombre, font_size="12px", color="#334155", flex="1"),
+                                rx.text(c.nombre, font_size="12px", color="#CBD5E1", flex="1"),
                                 rx.badge(
                                     rx.cond(
                                         c.dias_para_cumple == 1,
                                         "mañana",
                                         "en " + c.dias_para_cumple.to_string() + " días",
                                     ),
-                                    background="#DBEAFE", color="#1D4ED8",
+                                    background="rgba(59,130,246,0.12)", color="#60A5FA",
                                     border_radius="5px", font_size="10px", padding="2px 6px",
                                 ),
                                 spacing="2", align="center", width="100%",
-                                padding="5px 8px", background="#FFFFFF",
-                                border_radius="6px", border="1px solid #F1F5F9",
+                                padding="5px 8px", background="#1E293B",
+                                border_radius="6px", border="1px solid #1E293B",
                             ),
                         ),
                         spacing="1", width="100%",
@@ -331,7 +331,7 @@ def _cumpleanos_section() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            background="#FFFBEB", border="1px solid #FDE68A",
+            background="rgba(245,158,11,0.10)", border="1px solid rgba(245,158,11,0.25)",
             border_radius="10px", padding="14px 16px", width="100%",
         ),
         rx.fragment(),
@@ -345,8 +345,8 @@ def _clientes_content() -> rx.Component:
             rx.hstack(
                 rx.link(
                     rx.hstack(
-                        rx.icon(tag="arrow_left", size=13, color="#64748B"),
-                        rx.text("Panel Administrativo", font_size="12px", color="#64748B"),
+                        rx.icon(tag="arrow_left", size=13, color="#94A3B8"),
+                        rx.text("Panel Administrativo", font_size="12px", color="#94A3B8"),
                         spacing="1", align="center",
                     ),
                     href="/admin", _hover={"opacity": "0.7"},
@@ -358,8 +358,8 @@ def _clientes_content() -> rx.Component:
         ),
         rx.hstack(
             rx.vstack(
-                rx.text("Clientes", font_size="22px", font_weight="800", color="#0F172A"),
-                rx.text("Base de clientes del local", font_size="13px", color="#64748B"),
+                rx.text("Clientes", font_size="22px", font_weight="800", color="#F1F5F9"),
+                rx.text("Base de clientes del local", font_size="13px", color="#94A3B8"),
                 spacing="0",
             ),
             rx.spacer(),
@@ -367,7 +367,7 @@ def _clientes_content() -> rx.Component:
                 placeholder="Buscar cliente...",
                 value=FoodState.cli_busqueda,
                 on_change=FoodState.set_cli_busqueda,
-                background="#FFFFFF", border="1px solid #E2E8F0",
+                background="#1E293B", border="1px solid #334155",
                 border_radius="9px", font_size="13px",
                 padding_x="14px", padding_y="8px",
                 width=rx.breakpoints(initial="100%", sm="220px"),
@@ -387,22 +387,13 @@ def _clientes_content() -> rx.Component:
                 ),
                 rx.dialog.content(
                     _cli_form(),
-                    class_name="light",
                     max_width="560px",
+                    background="#0F172A", border="1px solid #1E293B",
                 ),
                 open=FoodState.cli_form_visible,
                 on_open_change=FoodState.set_cli_form_visible,
             ),
             width="100%", align="center", gap="10px", flex_wrap="wrap",
-        ),
-        rx.cond(
-            FoodState.mensaje != "",
-            rx.box(
-                rx.text(FoodState.mensaje, font_size="13px", color="#15803D", font_weight="600"),
-                background="#F0FDF4", border="1px solid #BBF7D0",
-                border_radius="8px", padding="10px 14px", width="100%",
-            ),
-            rx.fragment(),
         ),
         _cumpleanos_section(),
         rx.cond(

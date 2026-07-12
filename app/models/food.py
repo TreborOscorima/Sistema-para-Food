@@ -6,6 +6,7 @@ from enum import Enum
 
 from sqlalchemy import Column, Date, JSON, Numeric, Text, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
+from tuwayki_core.utils.timezone import utc_now_naive
 
 
 class EstadoMesa(str, Enum):
@@ -33,6 +34,14 @@ class EstadoProduccion(str, Enum):
 class TipoPedido(str, Enum):
     MESA = "Mesa"
     MOSTRADOR = "Mostrador"
+    DELIVERY = "Delivery"
+
+
+class EstadoDelivery(str, Enum):
+    PENDIENTE = "pendiente"
+    EN_CAMINO = "en_camino"
+    ENTREGADO = "entregado"
+    CANCELADO = "cancelado"
 
 
 class RolUsuario(str, Enum):
@@ -40,6 +49,7 @@ class RolUsuario(str, Enum):
     CAJA = "Caja"
     COCINA = "Cocina"
     ADMIN = "Admin"
+    REPARTIDOR = "Repartidor"
 
 
 class EstacionCocina(str, Enum):
@@ -72,9 +82,35 @@ class TipoMovimientoCaja(str, Enum):
     EGRESO = "egreso"
 
 
+class EstadoReserva(str, Enum):
+    PENDIENTE = "pendiente"
+    CONFIRMADA = "confirmada"
+    SENTADA = "sentada"
+    CANCELADA = "cancelada"
+    NO_SHOW = "no_show"
+
+
 class TimestampedModel(SQLModel):
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = Field(default_factory=utc_now_naive, nullable=False)
+    updated_at: datetime = Field(default_factory=utc_now_naive, nullable=False)
+
+
+class Sucursal(TimestampedModel, table=True):
+    """Sucursal / local de un restaurante. Retrocompat: tablas operativas
+    usan sucursal_id=NULL cuando la empresa opera en modo single-location."""
+
+    __tablename__ = "food_sucursales"
+    __table_args__ = (
+        UniqueConstraint("company_id", "nombre", name="uq_food_sucursales_company_nombre"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    nombre: str = Field(max_length=120, nullable=False)
+    direccion: str = Field(default="", max_length=200, nullable=False)
+    telefono: str = Field(default="", max_length=40, nullable=False)
+    activa: bool = Field(default=True, nullable=False)
+    es_principal: bool = Field(default=False, nullable=False)
 
 
 class UsuarioFood(TimestampedModel, table=True):
@@ -83,6 +119,7 @@ class UsuarioFood(TimestampedModel, table=True):
     __tablename__ = "food_usuarios"
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, foreign_key="food_sucursales.id", index=True)
     nombre: str = Field(max_length=120, nullable=False)
     pin: str = Field(max_length=72, nullable=False)
     rol: str = Field(index=True, max_length=32, nullable=False)
@@ -106,6 +143,7 @@ class Mesa(TimestampedModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, foreign_key="food_sucursales.id", index=True)
     numero: int = Field(index=True, nullable=False)
     nombre: str = Field(default="", max_length=80, nullable=False)
     capacidad: int = Field(default=4, ge=1, nullable=False)
@@ -117,6 +155,7 @@ class Mesa(TimestampedModel, table=True):
     )
     sector: str = Field(default="Salón", max_length=60, nullable=False)
     activa: bool = Field(default=True, nullable=False)
+    qr_token: str | None = Field(default=None, max_length=64, index=True)
 
     pedidos: list["Pedido"] = Relationship(back_populates="mesa")
 
@@ -256,6 +295,7 @@ class Pedido(TimestampedModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, foreign_key="food_sucursales.id", index=True)
     mesa_id: int | None = Field(default=None, foreign_key="food_mesas.id", index=True)
     mozo_id: int | None = Field(default=None, foreign_key="food_usuarios.id", index=True)
     cajero_id: int | None = Field(default=None, foreign_key="food_usuarios.id", index=True)
@@ -292,7 +332,7 @@ class Pedido(TimestampedModel, table=True):
     )
     recargo_concepto: str | None = Field(default=None, max_length=60)
     metodo_pago: str | None = Field(default=None, max_length=24)
-    abierto_en: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    abierto_en: datetime = Field(default_factory=utc_now_naive, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
 
     cliente_id: int | None = Field(default=None, foreign_key="food_clientes.id", index=True)
@@ -302,6 +342,15 @@ class Pedido(TimestampedModel, table=True):
     motivo_cancelacion: str | None = Field(default=None, max_length=240)
     cancelado_por_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
     cancelado_en: datetime | None = Field(default=None)
+
+    # Delivery (FEAT-07)
+    delivery_direccion: str | None = Field(default=None, max_length=240)
+    delivery_telefono: str | None = Field(default=None, max_length=20)
+    delivery_repartidor_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
+    delivery_estado: str | None = Field(default=None, max_length=20)
+    delivery_notas: str | None = Field(default=None, max_length=240)
+    self_order: bool = Field(default=False, nullable=False)
+    self_order_aprobado: bool = Field(default=False, nullable=False)
 
     mesa: Mesa | None = Relationship(back_populates="pedidos")
     detalles: list["DetallePedido"] = Relationship(back_populates="pedido")
@@ -446,6 +495,7 @@ class Insumo(TimestampedModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, foreign_key="food_sucursales.id", index=True)
     nombre: str = Field(max_length=120, nullable=False)
     unidad: str = Field(default="unidad", max_length=30, nullable=False)
     stock_actual: Decimal = Field(
@@ -526,6 +576,7 @@ class TurnoCaja(TimestampedModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, foreign_key="food_sucursales.id", index=True)
     abierto_por_id: int | None = Field(default=None, foreign_key="food_usuarios.id", index=True)
     cerrado_por_id: int | None = Field(default=None, foreign_key="food_usuarios.id")
     estado: str = Field(
@@ -538,7 +589,7 @@ class TurnoCaja(TimestampedModel, table=True):
         default=Decimal("0.00"),
         sa_column=Column(Numeric(10, 2), nullable=False),
     )
-    abierto_en: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    abierto_en: datetime = Field(default_factory=utc_now_naive, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
 
     # Snapshot congelado al cierre del turno
@@ -705,6 +756,47 @@ class CuponLote(TimestampedModel, table=True):
     activo: bool = Field(default=True, nullable=False)
 
 
+class Reserva(TimestampedModel, table=True):
+    """Reserva de mesa — fecha, hora, pax, cliente opcional."""
+
+    __tablename__ = "food_reservas"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, foreign_key="food_sucursales.id", index=True)
+    mesa_id: int | None = Field(default=None, foreign_key="food_mesas.id", index=True)
+    cliente_id: int | None = Field(default=None, foreign_key="food_clientes.id", index=True)
+    nombre_cliente: str = Field(max_length=120, nullable=False)
+    telefono: str = Field(default="", max_length=20, nullable=False)
+    fecha: date = Field(sa_column=Column(Date, nullable=False, index=True))
+    hora: str = Field(max_length=5, nullable=False)
+    pax: int = Field(default=2, ge=1, nullable=False)
+    estado: str = Field(
+        default=EstadoReserva.PENDIENTE.value,
+        index=True,
+        max_length=20,
+        nullable=False,
+    )
+    notas: str | None = Field(default=None, max_length=240)
+
+
+class Auditoria(SQLModel, table=True):
+    """Log de auditoría transversal — cambios sensibles registrados de forma inmutable."""
+
+    __tablename__ = "food_auditoria"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    usuario_id: int | None = Field(default=None, index=True)
+    usuario_nombre: str = Field(default="", max_length=120)
+    accion: str = Field(max_length=60, nullable=False, index=True)
+    entidad: str = Field(default="", max_length=60)
+    entidad_id: int | None = Field(default=None)
+    detalle: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    ip: str | None = Field(default=None, max_length=45)
+    created_at: datetime = Field(default_factory=utc_now_naive, nullable=False, index=True)
+
+
 @event.listens_for(TimestampedModel, "before_update", propagate=True)
 def _auto_updated_at(mapper, connection, target) -> None:
-    target.updated_at = datetime.utcnow()
+    target.updated_at = utc_now_naive()

@@ -37,6 +37,7 @@ from app.models.food import (
     Producto,
     ProductoGrupoModificador,
 )
+from app.services.auditoria_service import registrar_auditoria
 from app.states.food_state import (
     CarritoItem,
     CategoriaView,
@@ -272,8 +273,7 @@ class CartaMixin(rx.State, mixin=True):
     def guardar_categoria(self) -> None:
         nombre = self.categoria_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre de la categoria es obligatorio."
-            return
+            return rx.toast.error("El nombre de la categoria es obligatorio.")
         try:
             orden = int(self.categoria_form_orden)
         except ValueError:
@@ -282,8 +282,7 @@ class CartaMixin(rx.State, mixin=True):
             if self.categoria_form_id:
                 cat = session.get(Categoria, self.categoria_form_id)
                 if cat is None or cat.company_id != self._company_id():
-                    self.mensaje = "Categoria no encontrada."
-                    return
+                    return rx.toast.error("Categoria no encontrada.")
                 cat.nombre = nombre
                 cat.descripcion = self.categoria_form_descripcion.strip() or None
                 cat.orden = orden
@@ -303,7 +302,6 @@ class CartaMixin(rx.State, mixin=True):
         self.cargar_menu()
         self._reset_categoria_form()
         self.carta_cat_modal = False
-        self.mensaje = "Categoria guardada."
         return rx.toast.success("Categoria guardada")
 
     def editar_categoria(self, categoria_id: int) -> None:
@@ -471,8 +469,7 @@ class CartaMixin(rx.State, mixin=True):
     def guardar_grupo_modificador(self) -> None:
         nombre = self.mod_grupo_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre del grupo es obligatorio."
-            return
+            return rx.toast.error("El nombre del grupo es obligatorio.")
         try:
             min_sel = max(0, int(self.mod_grupo_form_min))
         except ValueError:
@@ -488,8 +485,7 @@ class CartaMixin(rx.State, mixin=True):
             if self.mod_grupo_form_id:
                 grupo = session.get(GrupoModificador, self.mod_grupo_form_id)
                 if grupo is None or grupo.company_id != self._company_id():
-                    self.mensaje = "Grupo no encontrado."
-                    return
+                    return rx.toast.error("Grupo no encontrado.")
                 grupo.nombre = nombre
                 grupo.min_selecciones = min_sel
                 grupo.max_selecciones = max_sel
@@ -706,16 +702,13 @@ class CartaMixin(rx.State, mixin=True):
     def guardar_combo(self) -> None:
         nombre = self.combo_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El combo necesita un nombre."
-            return
+            return rx.toast.error("El combo necesita un nombre.")
         try:
             precio = Decimal(self.combo_form_precio.replace(",", ".").strip())
         except (ValueError, InvalidOperation):
-            self.mensaje = "Precio invalido para el combo."
-            return
+            return rx.toast.error("Precio invalido para el combo.")
         if precio < 0:
-            self.mensaje = "El precio no puede ser negativo."
-            return
+            return rx.toast.error("El precio no puede ser negativo.")
         items_validos: list[tuple[int, int]] = []
         for item in self.combo_form_items:
             pid_str = str(item.get("producto_id", "")).strip()
@@ -729,14 +722,12 @@ class CartaMixin(rx.State, mixin=True):
                 continue
             items_validos.append((pid, cant))
         if not items_validos:
-            self.mensaje = "Agrega al menos un producto al combo."
-            return
+            return rx.toast.error("Agrega al menos un producto al combo.")
         with self._tenant_session() as session:
             if self.combo_form_id > 0:
                 combo = session.get(Combo, self.combo_form_id)
                 if combo is None or combo.company_id != self._company_id():
-                    self.mensaje = "Combo no encontrado."
-                    return
+                    return rx.toast.error("Combo no encontrado.")
                 combo.nombre = nombre
                 combo.descripcion = self.combo_form_descripcion.strip() or None
                 combo.precio = precio
@@ -786,20 +777,16 @@ class CartaMixin(rx.State, mixin=True):
     def agregar_combo(self, combo_id: int) -> None:
         combo_data = next((c for c in self.combos_menu if c.get("id") == combo_id), None)
         if combo_data is None:
-            self.mensaje = "Combo no disponible."
-            return
+            return rx.toast.error("Combo no disponible.")
         if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Seleccione una mesa antes de agregar combos."
-            return
+            return rx.toast.error("Seleccione una mesa antes de agregar combos.")
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None or mesa.company_id != self._company_id():
-                self.mensaje = "La mesa seleccionada ya no existe."
-                return
+                return rx.toast.error("La mesa seleccionada ya no existe.")
             combo = session.get(Combo, combo_id)
             if combo is None or combo.company_id != self._company_id() or not combo.activo:
-                self.mensaje = "Combo no disponible."
-                return
+                return rx.toast.error("Combo no disponible.")
             items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             combo_snapshot = [
@@ -834,18 +821,16 @@ class CartaMixin(rx.State, mixin=True):
         self._cargar_carrito_mesa(self.mesa_seleccionada_id)
         self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.cargar_mesas()
-        self.mensaje = f"Combo \"{combo_data.get('nombre', '')}\" agregado."
+        return rx.toast.success(f"Combo \"{combo_data.get('nombre', '')}\" agregado")
 
     def agregar_combo_mostrador(self, combo_id: int) -> None:
         combo_data = next((c for c in self.combos_menu if c.get("id") == combo_id), None)
         if combo_data is None:
-            self.mensaje = "Combo no disponible."
-            return
+            return rx.toast.error("Combo no disponible.")
         with self._tenant_session() as session:
             combo = session.get(Combo, combo_id)
             if combo is None or not combo.activo:
-                self.mensaje = "Combo no disponible."
-                return
+                return rx.toast.error("Combo no disponible.")
             items_db = session.exec(select(ComboItem).where(ComboItem.combo_id == combo.id)).all()
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             combo_snapshot = [
@@ -869,7 +854,7 @@ class CartaMixin(rx.State, mixin=True):
             es_combo=True,
         ))
         self.mostrador_carrito = carrito
-        self.mensaje = f"Combo \"{combo_data.get('nombre', '')}\" agregado a mostrador."
+        return rx.toast.success(f"Combo \"{combo_data.get('nombre', '')}\" agregado a mostrador")
 
     # ─── Modificadores -- Seleccion al pedir ────────────────────────────────
 
@@ -947,8 +932,7 @@ class CartaMixin(rx.State, mixin=True):
             elegidos = self.mod_seleccion_elegidos.get(gid, [])
             min_req = int(g.get("min", 0))
             if len(elegidos) < min_req:
-                self.mensaje = f"Seleccione al menos {min_req} opcion(es) en \"{g.get('nombre', '')}\"."
-                return
+                return rx.toast.error(f"Seleccione al menos {min_req} opcion(es) en \"{g.get('nombre', '')}\".")
 
         mods_snapshot: list[dict[str, object]] = []
         extra_total = Decimal("0")
@@ -995,17 +979,14 @@ class CartaMixin(rx.State, mixin=True):
 
     def _agregar_producto_con_mods(self, producto_id: int, mods_json: str, mods_texto: str, extra: Decimal) -> None:
         if self.mesa_seleccionada_id == 0:
-            self.mensaje = "Seleccione una mesa antes de agregar productos."
-            return
+            return rx.toast.error("Seleccione una mesa antes de agregar productos.")
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None or mesa.company_id != self._company_id():
-                self.mensaje = "La mesa seleccionada ya no existe."
-                return
+                return rx.toast.error("La mesa seleccionada ya no existe.")
             producto = session.get(Producto, producto_id)
             if producto is None or producto.company_id != self._company_id() or not producto.disponible:
-                self.mensaje = "Producto no disponible."
-                return
+                return rx.toast.error("Producto no disponible.")
             producto_nombre = producto.nombre
             pedido = _ensure_open_order(session, mesa, self._company_id(), mozo_id=(self.usuario_actual.id or None) if self.usuario_actual else None)
             precio = _to_decimal(producto.precio) + extra
@@ -1030,7 +1011,7 @@ class CartaMixin(rx.State, mixin=True):
         self._cargar_carrito_mesa(self.mesa_seleccionada_id)
         self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.cargar_mesas()
-        self.mensaje = f"{producto_nombre} agregado a {self.mesa_seleccionada_label}."
+        return rx.toast.success(f"{producto_nombre} agregado a {self.mesa_seleccionada_label}")
 
     # ─── Admin Carta -- Productos ───────────────────────────────────────────
 
@@ -1061,12 +1042,10 @@ class CartaMixin(rx.State, mixin=True):
     def guardar_producto(self) -> None:
         nombre = self.producto_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre del producto es obligatorio."
-            return
+            return rx.toast.error("El nombre del producto es obligatorio.")
         precio = _parse_positive_price(self.producto_form_precio)
         if precio is None:
-            self.mensaje = "El precio debe ser un numero mayor a 0."
-            return
+            return rx.toast.error("El precio debe ser un numero mayor a 0.")
         with self._tenant_session() as session:
             cat = session.exec(
                 select(Categoria).where(
@@ -1075,13 +1054,12 @@ class CartaMixin(rx.State, mixin=True):
                 )
             ).first()
             if cat is None:
-                self.mensaje = f"Categoria '{self.producto_form_categoria_nombre}' no encontrada."
-                return
+                return rx.toast.error(f"Categoria '{self.producto_form_categoria_nombre}' no encontrada.")
             if self.producto_form_id:
                 prod = session.get(Producto, self.producto_form_id)
                 if prod is None or prod.company_id != self._company_id():
-                    self.mensaje = "Producto no encontrado."
-                    return
+                    return rx.toast.error("Producto no encontrado.")
+                precio_anterior = prod.precio
                 prod.nombre = nombre
                 prod.descripcion = self.producto_form_descripcion.strip() or None
                 prod.precio = precio
@@ -1092,6 +1070,14 @@ class CartaMixin(rx.State, mixin=True):
                 prod.tags = self.producto_form_tags or None
                 prod.updated_at = _utcnow()
                 session.add(prod)
+                if precio != precio_anterior:
+                    registrar_auditoria(
+                        session, self._company_id(), "cambio_precio",
+                        usuario_id=(self.usuario_actual.id or None) if self.usuario_actual else None,
+                        usuario_nombre=(self.usuario_actual.nombre if self.usuario_actual else ""),
+                        entidad="producto", entidad_id=prod.id,
+                        detalle={"nombre": nombre, "anterior": str(precio_anterior), "nuevo": str(precio)},
+                    )
             else:
                 prod = Producto(
                     company_id=self._company_id(),
@@ -1109,7 +1095,6 @@ class CartaMixin(rx.State, mixin=True):
         self.cargar_menu()
         self._reset_producto_form()
         self.carta_prod_modal = False
-        self.mensaje = "Producto guardado."
         return rx.toast.success("Producto guardado")
 
     def editar_producto(self, producto_id: int) -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import app_shell
-from app.states.food_state import FoodState, MesaAdminView
+from app.states.food_state import FoodState, MesaAdminView, SucursalView
 
 
 # ─── Estado local para la sección activa ──────────────────────────────────────
@@ -23,6 +23,7 @@ _SECCIONES = [
     ("local",       "Local",          "store",        "Nombre del restaurante"),
     ("carta",       "Carta digital",  "qr_code",      "Slug URL y código QR"),
     ("mesas",       "Mesas",          "layout_grid",  "Salón y sectores"),
+    ("sucursales",  "Sucursales",     "map_pin",      "Multi-local"),
     ("impresoras",  "Impresoras",     "printer",      "Cocina y caja"),
     ("cuenta",      "Cuenta Admin",   "key_round",    "Email y contraseña"),
 ]
@@ -37,21 +38,21 @@ def _toggle_btn(activo: bool, on_click) -> rx.Component:
                 width="16px",
                 height="16px",
                 border_radius="full",
-                background=rx.cond(activo, "#FFFFFF", "#CBD5E1"),
+                background=rx.cond(activo, "#FFFFFF", "#475569"),
                 transition="all 0.15s",
             ),
             rx.text(
                 rx.cond(activo, "Activada", "Desactivada"),
                 font_size="13px",
                 font_weight="600",
-                color=rx.cond(activo, "#FFFFFF", "#64748B"),
+                color=rx.cond(activo, "#FFFFFF", "#94A3B8"),
             ),
             spacing="2",
             align="center",
         ),
         on_click=on_click,
-        background=rx.cond(activo, "#15803D", "#F1F5F9"),
-        border=rx.cond(activo, "1px solid #15803D", "1px solid #E2E8F0"),
+        background=rx.cond(activo, "#22C55E", "#1E293B"),
+        border=rx.cond(activo, "1px solid #15803D", "1px solid #334155"),
         border_radius="8px",
         padding="6px 14px",
         cursor="pointer",
@@ -67,13 +68,13 @@ def _section_header(title: str, icon: str, emoji: str = "") -> rx.Component:
             width="32px",
             height="32px",
             border_radius="8px",
-            background="#FFF7ED",
-            border="1px solid #FED7AA",
+            background="rgba(234,88,12,0.08)",
+            border="1px solid rgba(234,88,12,0.40)",
             display="flex",
             align_items="center",
             justify_content="center",
         ),
-        rx.text(title, font_size="16px", font_weight="700", color="#0F172A"),
+        rx.text(title, font_size="16px", font_weight="700", color="#F1F5F9"),
         spacing="3",
         align="center",
     )
@@ -82,16 +83,16 @@ def _section_header(title: str, icon: str, emoji: str = "") -> rx.Component:
 def _field_row(label: str, value, on_change,
                placeholder: str = "", tipo: str = "text") -> rx.Component:
     return rx.hstack(
-        rx.text(label, font_size="13px", color="#334155", font_weight="600",
+        rx.text(label, font_size="13px", color="#CBD5E1", font_weight="600",
                 min_width="130px"),
         rx.input(
             placeholder=placeholder,
             value=value,
             on_change=on_change,
             type=tipo,
-            background="#FFFFFF",
-            border="1px solid #E2E8F0",
-            color="#0F172A",
+            background="#1E293B",
+            border="1px solid #334155",
+            color="#F1F5F9",
             border_radius="8px",
             padding_x="12px",
             padding_y="8px",
@@ -120,8 +121,8 @@ def _qr_section() -> rx.Component:
                     rx.hstack(
                         rx.link(
                             rx.hstack(
-                                rx.icon(tag="download", size=13, color="#15803D"),
-                                rx.text("Descargar QR", font_size="12px", color="#15803D",
+                                rx.icon(tag="download", size=13, color="#22C55E"),
+                                rx.text("Descargar QR", font_size="12px", color="#22C55E",
                                         font_weight="600"),
                                 spacing="1", align="center",
                             ),
@@ -130,8 +131,8 @@ def _qr_section() -> rx.Component:
                         ),
                         rx.link(
                             rx.hstack(
-                                rx.icon(tag="external_link", size=13, color="#1D4ED8"),
-                                rx.text("Abrir", font_size="12px", color="#1D4ED8",
+                                rx.icon(tag="external_link", size=13, color="#60A5FA"),
+                                rx.text("Abrir", font_size="12px", color="#60A5FA",
                                         font_weight="600"),
                                 spacing="1", align="center",
                             ),
@@ -154,19 +155,19 @@ def _qr_section() -> rx.Component:
                             rx.image(
                                 src=FoodState.config_menu_qr_base64,
                                 width="120px", height="120px",
-                                border_radius="8px", border="1px solid #E2E8F0",
+                                border_radius="8px", border="1px solid #334155",
                             ),
-                            padding="4px", background="#FFFFFF",
-                            border="1px solid #E2E8F0", border_radius="10px",
+                            padding="4px", background="#1E293B",
+                            border="1px solid #334155", border_radius="10px",
                         ),
                         rx.vstack(
                             rx.text("URL de la carta:", font_size="11px",
-                                    color="#64748B", font_weight="600"),
+                                    color="#94A3B8", font_weight="600"),
                             rx.box(
                                 rx.text(FoodState.config_menu_url, font_size="11px",
-                                        color="#334155", word_break="break-all",
+                                        color="#CBD5E1", word_break="break-all",
                                         font_family="monospace"),
-                                background="#F8FAFC", border="1px solid #E2E8F0",
+                                background="#0F172A", border="1px solid #334155",
                                 border_radius="6px", padding="8px 10px",
                             ),
                             rx.text("Guarda para regenerar el QR con el slug actual.",
@@ -181,10 +182,40 @@ def _qr_section() -> rx.Component:
                 rx.text("Guarda la configuración para generar el QR.",
                         font_size="12px", color="#94A3B8", font_style="italic"),
             ),
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="smartphone", size=16, color="#7C3AED"),
+                    rx.text("Self-Order QR", font_size="13px",
+                            font_weight="700", color="#F1F5F9"),
+                    spacing="2", align="center",
+                ),
+                rx.text(
+                    "Genera un token QR para cada mesa. Los clientes escanean y hacen "
+                    "pedidos que van a la cola de aprobación del mozo.",
+                    font_size="12px", color="#94A3B8", margin_top="4px",
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="qr_code", size=14),
+                        rx.text("Generar tokens QR para todas las mesas",
+                                font_size="12px", font_weight="700"),
+                        spacing="2", align="center",
+                    ),
+                    on_click=FoodState.generar_qr_tokens_mesas,
+                    background="#7C3AED", color="#FFFFFF",
+                    border_radius="8px", padding_x="14px", padding_y="8px",
+                    cursor="pointer", margin_top="8px",
+                    _hover={"background": "#6D28D9"},
+                ),
+                padding="14px", background="rgba(124,58,237,0.08)",
+                border="1px solid rgba(124,58,237,0.20)",
+                border_radius="10px", width="100%",
+                margin_top="4px",
+            ),
             spacing="4", width="100%",
         ),
-        background="#FFFFFF",
-        border="1px solid #E2E8F0",
+        background="#1E293B",
+        border="1px solid #334155",
         border_radius="12px",
         padding="20px",
         width="100%",
@@ -192,32 +223,72 @@ def _qr_section() -> rx.Component:
     )
 
 
+def _mesa_qr_card(mesa: MesaAdminView) -> rx.Component:
+    return rx.cond(
+        mesa.qr_base64 != "",
+        rx.vstack(
+            rx.image(
+                src=mesa.qr_base64,
+                width="120px", height="120px",
+                border_radius="6px",
+            ),
+            rx.text(mesa.nombre, font_size="12px", font_weight="700",
+                    color="#F1F5F9", text_align="center"),
+            rx.text(f"Mesa #{mesa.numero}", font_size="10px",
+                    color="#94A3B8", text_align="center"),
+            rx.link(
+                rx.hstack(
+                    rx.icon(tag="download", size=11, color="#22C55E"),
+                    rx.text("Descargar", font_size="10px", color="#22C55E",
+                            font_weight="600"),
+                    spacing="1", align="center",
+                ),
+                href=mesa.qr_base64,
+                download=f"qr-mesa-{mesa.numero}.png",
+            ),
+            spacing="1", align="center",
+            padding="12px", background="#1E293B",
+            border="1px solid #334155",
+            border_radius="10px",
+            width="160px",
+        ),
+        rx.fragment(),
+    )
+
+
 def _mesa_row(mesa: MesaAdminView) -> rx.Component:
     return rx.hstack(
         rx.text(f"#{mesa.numero}", font_size="13px", font_weight="700",
-                color="#0F172A", min_width="36px"),
-        rx.text(mesa.nombre, font_size="12px", color="#64748B", flex="1"),
-        rx.badge(mesa.sector, background="#F1F5F9", color="#475569",
-                 border="1px solid #E2E8F0", border_radius="4px",
+                color="#F1F5F9", min_width="36px"),
+        rx.text(mesa.nombre, font_size="12px", color="#94A3B8", flex="1"),
+        rx.badge(mesa.sector, background="#1E293B", color="#94A3B8",
+                 border="1px solid #334155", border_radius="4px",
                  font_size="10px", padding="1px 6px"),
+        rx.cond(
+            mesa.qr_token != "",
+            rx.badge("QR", background="rgba(124,58,237,0.12)", color="#A78BFA",
+                     border="1px solid rgba(124,58,237,0.20)", border_radius="4px",
+                     font_size="10px", padding="1px 6px"),
+            rx.fragment(),
+        ),
         rx.text(f"{mesa.capacidad} pers.", font_size="11px", color="#94A3B8",
                 min_width="54px"),
         rx.cond(
             mesa.activa,
-            rx.badge("Activa", background="#DCFCE7", color="#15803D",
+            rx.badge("Activa", background="rgba(34,197,94,0.12)", color="#22C55E",
                      border_radius="5px", font_size="10px"),
-            rx.badge("Inactiva", background="#FEE2E2", color="#B91C1C",
+            rx.badge("Inactiva", background="rgba(239,68,68,0.12)", color="#F87171",
                      border_radius="5px", font_size="10px"),
         ),
         rx.button("Editar", on_click=FoodState.editar_mesa_config(mesa.id),
-                  background="#FFF7ED", color="#EA580C", border="1px solid #FED7AA",
+                  background="rgba(234,88,12,0.08)", color="#EA580C", border="1px solid rgba(234,88,12,0.40)",
                   border_radius="6px", font_size="10px", cursor="pointer",
                   padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"}),
         rx.button(
             rx.cond(mesa.activa, "Desactivar", "Activar"),
             on_click=FoodState.toggle_mesa_activa_config(mesa.id),
-            background=rx.cond(mesa.activa, "#FEF2F2", "#F0FDF4"),
-            color=rx.cond(mesa.activa, "#B91C1C", "#15803D"),
+            background=rx.cond(mesa.activa, "rgba(239,68,68,0.08)", "rgba(34,197,94,0.08)"),
+            color=rx.cond(mesa.activa, "#F87171", "#22C55E"),
             border=rx.cond(mesa.activa, "1px solid #FECACA", "1px solid #BBF7D0"),
             border_radius="6px", font_size="10px", cursor="pointer",
             padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
@@ -225,8 +296,8 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
         rx.alert_dialog.root(
             rx.alert_dialog.trigger(
                 rx.button(
-                    rx.icon(tag="trash_2", size=12, color="#B91C1C"),
-                    background="#FEF2F2", border="1px solid #FECACA",
+                    rx.icon(tag="trash_2", size=12, color="#F87171"),
+                    background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
                     border_radius="6px", cursor="pointer",
                     padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
                 ),
@@ -243,8 +314,8 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
                     rx.alert_dialog.cancel(
                         rx.button(
                             "Cancelar",
-                            background="#F1F5F9", color="#64748B",
-                            border="1px solid #E2E8F0", border_radius="8px",
+                            background="#1E293B", color="#94A3B8",
+                            border="1px solid #334155", border_radius="8px",
                             font_size="13px", cursor="pointer",
                             padding_x="14px", padding_y="8px",
                         ),
@@ -257,7 +328,7 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
                             border_radius="8px", font_size="13px",
                             font_weight="700", cursor="pointer",
                             padding_x="14px", padding_y="8px",
-                            _hover={"background": "#B91C1C"},
+                            _hover={"background": "#F87171"},
                         ),
                     ),
                     spacing="3", justify="end", width="100%", margin_top="16px",
@@ -265,9 +336,36 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
             ),
         ),
         width="100%", align="center",
-        padding="8px 10px", background="#FFFFFF",
-        border_radius="8px", border="1px solid #E2E8F0",
+        padding="8px 10px", background="#1E293B",
+        border_radius="8px", border="1px solid #334155",
         gap="8px", flex_wrap="wrap",
+    )
+
+
+def _mesas_qr_grid() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.icon(tag="qr_code", size=16, color="#7C3AED"),
+                rx.text("QR Self-Order por mesa", font_size="14px",
+                        font_weight="700", color="#F1F5F9"),
+                rx.spacer(),
+                rx.text("Imprimí cada QR y pegalo en la mesa correspondiente.",
+                        font_size="11px", color="#94A3B8", font_style="italic"),
+                spacing="2", align="center", width="100%",
+            ),
+            rx.flex(
+                rx.foreach(FoodState.mesas_config, _mesa_qr_card),
+                flex_wrap="wrap", gap="12px", justify="start",
+                width="100%",
+            ),
+            spacing="3", width="100%",
+        ),
+        background="rgba(124,58,237,0.08)",
+        border="1px solid rgba(124,58,237,0.20)",
+        border_radius="12px",
+        padding="16px",
+        width="100%",
     )
 
 
@@ -282,8 +380,8 @@ def _mesas_section() -> rx.Component:
                     value=FoodState.mesa_config_form_numero,
                     on_change=FoodState.set_mesa_config_form_numero,
                     type="number", min="1", width="60px",
-                    background="#FFFFFF", border="1px solid #E2E8F0",
-                    color="#0F172A", border_radius="8px",
+                    background="#1E293B", border="1px solid #334155",
+                    color="#F1F5F9", border_radius="8px",
                     padding_x="8px", padding_y="7px", font_size="13px",
                     _focus={"border_color": "#EA580C",
                             "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
@@ -293,8 +391,8 @@ def _mesas_section() -> rx.Component:
                     value=FoodState.mesa_config_form_nombre,
                     on_change=FoodState.set_mesa_config_form_nombre,
                     flex="1", min_width="120px",
-                    background="#FFFFFF", border="1px solid #E2E8F0",
-                    color="#0F172A", border_radius="8px",
+                    background="#1E293B", border="1px solid #334155",
+                    color="#F1F5F9", border_radius="8px",
                     padding_x="10px", padding_y="7px", font_size="13px",
                     _focus={"border_color": "#EA580C",
                             "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
@@ -304,8 +402,8 @@ def _mesas_section() -> rx.Component:
                     value=FoodState.mesa_config_form_sector,
                     on_change=FoodState.set_mesa_config_form_sector,
                     width="120px",
-                    background="#FFFFFF", border="1px solid #E2E8F0",
-                    color="#0F172A", border_radius="8px",
+                    background="#1E293B", border="1px solid #334155",
+                    color="#F1F5F9", border_radius="8px",
                     padding_x="8px", padding_y="7px", font_size="13px",
                     _focus={"border_color": "#EA580C",
                             "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
@@ -315,8 +413,8 @@ def _mesas_section() -> rx.Component:
                     value=FoodState.mesa_config_form_capacidad,
                     on_change=FoodState.set_mesa_config_form_capacidad,
                     type="number", min="1", width="58px",
-                    background="#FFFFFF", border="1px solid #E2E8F0",
-                    color="#0F172A", border_radius="8px",
+                    background="#1E293B", border="1px solid #334155",
+                    color="#F1F5F9", border_radius="8px",
                     padding_x="8px", padding_y="7px", font_size="13px",
                     _focus={"border_color": "#EA580C",
                             "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
@@ -341,12 +439,12 @@ def _mesas_section() -> rx.Component:
                 rx.cond(
                     FoodState.mesa_config_form_id > 0,
                     rx.button(
-                        rx.icon(tag="x", size=14, color="#64748B"),
+                        rx.icon(tag="x", size=14, color="#94A3B8"),
                         on_click=FoodState.cancelar_mesa_config_form,
-                        background="#F1F5F9", border="1px solid #E2E8F0",
+                        background="#1E293B", border="1px solid #334155",
                         border_radius="8px", cursor="pointer",
                         padding="7px",
-                        _hover={"background": "#E2E8F0"},
+                        _hover={"background": "#334155"},
                     ),
                     rx.fragment(),
                 ),
@@ -374,8 +472,8 @@ def _mesas_section() -> rx.Component:
             ),
             spacing="4", width="100%",
         ),
-        background="#FFFFFF",
-        border="1px solid #E2E8F0",
+        background="#1E293B",
+        border="1px solid #334155",
         border_radius="12px",
         padding="20px",
         width="100%",
@@ -389,13 +487,13 @@ def _admin_cuenta_section() -> rx.Component:
             _section_header("Cuenta del Dueño", "key_round"),
             rx.text(
                 "Configura email y contraseña para acceder al panel del dueño en /admin",
-                font_size="12px", color="#64748B", font_style="italic",
+                font_size="12px", color="#94A3B8", font_style="italic",
             ),
             _field_row("Email", FoodState.config_admin_email,
                        FoodState.set_config_admin_email,
                        "dueño@restaurante.com", "email"),
             rx.hstack(
-                rx.text("Nueva clave", font_size="13px", color="#334155",
+                rx.text("Nueva clave", font_size="13px", color="#CBD5E1",
                         min_width="130px", font_weight="600"),
                 rx.box(
                     rx.input(
@@ -403,8 +501,8 @@ def _admin_cuenta_section() -> rx.Component:
                         value=FoodState.config_admin_password_nueva,
                         on_change=FoodState.set_config_admin_password_nueva,
                         type=rx.cond(FoodState.config_admin_show_password, "text", "password"),
-                        background="#FFFFFF", border="1px solid #E2E8F0",
-                        color="#0F172A", border_radius="8px",
+                        background="#1E293B", border="1px solid #334155",
+                        color="#F1F5F9", border_radius="8px",
                         padding_x="12px", padding_y="8px", font_size="13px",
                         padding_right="40px", width="100%",
                     ),
@@ -415,9 +513,9 @@ def _admin_cuenta_section() -> rx.Component:
                         ),
                         on_click=FoodState.toggle_config_admin_show_password,
                         type="button",
-                        background="transparent", color="#64748B", border="none",
+                        background="transparent", color="#94A3B8", border="none",
                         width="26px", height="26px",
-                        _hover={"background": "#F1F5F9"},
+                        _hover={"background": "#334155"},
                         position="absolute", right="6px", top="50%",
                         transform="translateY(-50%)", cursor="pointer",
                     ),
@@ -427,7 +525,7 @@ def _admin_cuenta_section() -> rx.Component:
                 class_name="twk-field-row",
             ),
             rx.hstack(
-                rx.text("Confirmar clave", font_size="13px", color="#334155",
+                rx.text("Confirmar clave", font_size="13px", color="#CBD5E1",
                         min_width="130px", font_weight="600"),
                 rx.box(
                     rx.input(
@@ -435,8 +533,8 @@ def _admin_cuenta_section() -> rx.Component:
                         value=FoodState.config_admin_password_confirm,
                         on_change=FoodState.set_config_admin_password_confirm,
                         type=rx.cond(FoodState.config_admin_show_password, "text", "password"),
-                        background="#FFFFFF", border="1px solid #E2E8F0",
-                        color="#0F172A", border_radius="8px",
+                        background="#1E293B", border="1px solid #334155",
+                        color="#F1F5F9", border_radius="8px",
                         padding_x="12px", padding_y="8px", font_size="13px",
                         padding_right="40px", width="100%",
                     ),
@@ -447,9 +545,9 @@ def _admin_cuenta_section() -> rx.Component:
                         ),
                         on_click=FoodState.toggle_config_admin_show_password,
                         type="button",
-                        background="transparent", color="#64748B", border="none",
+                        background="transparent", color="#94A3B8", border="none",
                         width="26px", height="26px",
-                        _hover={"background": "#F1F5F9"},
+                        _hover={"background": "#334155"},
                         position="absolute", right="6px", top="50%",
                         transform="translateY(-50%)", cursor="pointer",
                     ),
@@ -473,8 +571,8 @@ def _admin_cuenta_section() -> rx.Component:
             ),
             spacing="3", width="100%",
         ),
-        background="#FFFFFF",
-        border="1px solid #E2E8F0",
+        background="#1E293B",
+        border="1px solid #334155",
         border_radius="12px",
         padding="20px",
         width="100%",
@@ -493,13 +591,13 @@ def _seccion_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                 rx.icon(
                     tag=icon,
                     size=16,
-                    color=rx.cond(active, "#EA580C", "#64748B"),
+                    color=rx.cond(active, "#EA580C", "#94A3B8"),
                 ),
                 width="34px",
                 height="34px",
                 border_radius="9px",
-                background=rx.cond(active, "#FFF7ED", "#F8FAFC"),
-                border=rx.cond(active, "1px solid #FED7AA", "1px solid #F1F5F9"),
+                background=rx.cond(active, "rgba(234,88,12,0.08)", "#0F172A"),
+                border=rx.cond(active, "1px solid rgba(234,88,12,0.40)", "1px solid #334155"),
                 display="flex",
                 align_items="center",
                 justify_content="center",
@@ -511,13 +609,13 @@ def _seccion_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                     label,
                     font_size="13px",
                     font_weight=rx.cond(active, "700", "500"),
-                    color=rx.cond(active, "#0F172A", "#334155"),
+                    color=rx.cond(active, "#F1F5F9", "#CBD5E1"),
                     line_height="1",
                 ),
                 rx.text(
                     desc,
                     font_size="11px",
-                    color=rx.cond(active, "#64748B", "#94A3B8"),
+                    color=rx.cond(active, "#CBD5E1", "#94A3B8"),
                     line_height="1",
                 ),
                 spacing="1",
@@ -529,16 +627,16 @@ def _seccion_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
         ),
         padding="10px 12px",
         border_radius="10px",
-        background=rx.cond(active, "#FFFFFF", "transparent"),
-        border=rx.cond(active, "1px solid #FED7AA", "1px solid transparent"),
+        background=rx.cond(active, "#1E293B", "transparent"),
+        border=rx.cond(active, "1px solid rgba(234,88,12,0.40)", "1px solid transparent"),
         box_shadow=rx.cond(active, "0 1px 4px rgba(234,88,12,0.1)", "none"),
         cursor="pointer",
         on_click=ConfigSeccionState.ir_a(key),
         width="100%",
         transition="all 0.12s ease",
         _hover={
-            "background": rx.cond(active, "#FFFFFF", "#F8FAFC"),
-            "border": rx.cond(active, "1px solid #FED7AA", "1px solid #F1F5F9"),
+            "background": rx.cond(active, "#1E293B", "#334155"),
+            "border": rx.cond(active, "1px solid rgba(234,88,12,0.40)", "1px solid #334155"),
         },
     )
 
@@ -566,8 +664,8 @@ def _config_left_sidebar() -> rx.Component:
             align="start",
         ),
         padding="12px",
-        background="#F8FAFC",
-        border="1px solid #E2E8F0",
+        background="#0F172A",
+        border="1px solid #334155",
         border_radius="14px",
         width="210px",
         flex_shrink="0",
@@ -580,13 +678,13 @@ def _tab_pill(key: str, label: str, icon: str) -> rx.Component:
         rx.hstack(
             rx.icon(
                 tag=icon, size=14,
-                color=rx.cond(active, "#EA580C", "#64748B"),
+                color=rx.cond(active, "#EA580C", "#94A3B8"),
             ),
             rx.text(
                 label,
                 font_size="12px",
                 font_weight=rx.cond(active, "700", "500"),
-                color=rx.cond(active, "#0F172A", "#64748B"),
+                color=rx.cond(active, "#F1F5F9", "#94A3B8"),
                 white_space="nowrap",
             ),
             spacing="2", align="center",
@@ -594,13 +692,13 @@ def _tab_pill(key: str, label: str, icon: str) -> rx.Component:
         on_click=ConfigSeccionState.ir_a(key),
         padding="8px 14px",
         border_radius="20px",
-        background=rx.cond(active, "#FFFFFF", "transparent"),
-        border=rx.cond(active, "1px solid #FED7AA", "1px solid transparent"),
+        background=rx.cond(active, "#1E293B", "transparent"),
+        border=rx.cond(active, "1px solid rgba(234,88,12,0.40)", "1px solid transparent"),
         box_shadow=rx.cond(active, "0 1px 4px rgba(234,88,12,0.12)", "none"),
         cursor="pointer",
         flex_shrink="0",
         transition="all 0.12s ease",
-        _hover={"background": rx.cond(active, "#FFFFFF", "#F1F5F9")},
+        _hover={"background": rx.cond(active, "#1E293B", "#334155")},
     )
 
 
@@ -617,8 +715,8 @@ def _config_nav_tabs() -> rx.Component:
             padding="4px",
         ),
         overflow_x="auto",
-        background="#F8FAFC",
-        border="1px solid #E2E8F0",
+        background="#0F172A",
+        border="1px solid #334155",
         border_radius="12px",
         width="100%",
     )
@@ -631,10 +729,10 @@ def _resumen_widget(icon: str, label: str, value, href: str) -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.icon(tag=icon, size=15, color="#EA580C"),
-                rx.text(label, font_size="12px", font_weight="700", color="#0F172A"),
+                rx.text(label, font_size="12px", font_weight="700", color="#F1F5F9"),
                 spacing="2", align="center",
             ),
-            rx.text(value, font_size="24px", font_weight="800", color="#0F172A"),
+            rx.text(value, font_size="24px", font_weight="800", color="#F1F5F9"),
             rx.hstack(
                 rx.text("Gestionar", font_size="11px", font_weight="600", color="#EA580C"),
                 rx.icon(tag="arrow_right", size=11, color="#EA580C"),
@@ -643,11 +741,11 @@ def _resumen_widget(icon: str, label: str, value, href: str) -> rx.Component:
             spacing="1", align="start", width="100%",
         ),
         on_click=lambda: ConfigSeccionState.ir_a(href),
-        background="#FFFFFF", border="1px solid #E2E8F0",
+        background="#1E293B", border="1px solid #334155",
         border_radius="12px", padding="16px",
         width="100%", text_decoration="none", cursor="pointer",
         box_shadow="0 1px 3px rgba(0,0,0,0.06)",
-        _hover={"border_color": "#FED7AA", "background": "#FFF7ED"},
+        _hover={"border_color": "rgba(234,88,12,0.40)", "background": "rgba(234,88,12,0.08)"},
         transition="all 0.15s ease",
     )
 
@@ -661,7 +759,7 @@ def _content_local() -> rx.Component:
                     _section_header("Identificación del local", "store", "🏪"),
                     rx.text(
                         "Estos datos aparecen en el encabezado del comprobante de pago.",
-                        font_size="12px", color="#64748B",
+                        font_size="12px", color="#94A3B8",
                     ),
                     _field_row("Nombre del local", FoodState.config_nombre_local,
                                FoodState.set_config_nombre_local, "Mi Restaurante"),
@@ -675,7 +773,7 @@ def _content_local() -> rx.Component:
                                FoodState.set_config_telefono, "999-999-999"),
                     rx.vstack(
                         rx.text("Logo de la empresa", font_size="12px",
-                                font_weight="600", color="#64748B"),
+                                font_weight="600", color="#94A3B8"),
                         rx.text("Se muestra como tarjeta en la pantalla de inicio de sesión.",
                                 font_size="11px", color="#94A3B8"),
                         rx.cond(
@@ -686,15 +784,15 @@ def _content_local() -> rx.Component:
                                     width="72px", height="72px",
                                     object_fit="cover",
                                     border_radius="10px",
-                                    border="1px solid #E2E8F0",
+                                    border="1px solid #334155",
                                 ),
                                 rx.vstack(
                                     rx.text("Logo cargado", font_size="11px",
-                                            color="#15803D", font_weight="600"),
+                                            color="#22C55E", font_weight="600"),
                                     rx.button(
                                         "Quitar logo",
                                         on_click=FoodState.quitar_logo_empresa,
-                                        background="#FEF2F2", color="#B91C1C",
+                                        background="rgba(239,68,68,0.08)", color="#F87171",
                                         border="1px solid #FECACA", border_radius="6px",
                                         font_size="11px", cursor="pointer",
                                         padding_x="8px", padding_y="3px",
@@ -708,7 +806,7 @@ def _content_local() -> rx.Component:
                                 rx.vstack(
                                     rx.icon(tag="image_plus", size=20, color="#94A3B8"),
                                     rx.text("Arrastre o haga clic", font_size="11px",
-                                            color="#64748B"),
+                                            color="#94A3B8"),
                                     rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px",
                                             color="#94A3B8"),
                                     spacing="1", align="center",
@@ -723,13 +821,13 @@ def _content_local() -> rx.Component:
                                     "image/webp": [".webp"],
                                 },
                                 max_files=1,
-                                border="2px dashed #E2E8F0",
+                                border="2px dashed #334155",
                                 border_radius="8px",
                                 padding="16px",
                                 width="100%",
-                                background="#FAFAFA",
+                                background="#0F172A",
                                 cursor="pointer",
-                                _hover={"border_color": "#EA580C", "background": "#FFF7ED"},
+                                _hover={"border_color": "#EA580C", "background": "rgba(234,88,12,0.08)"},
                             ),
                         ),
                         spacing="2", width="100%",
@@ -748,7 +846,7 @@ def _content_local() -> rx.Component:
                     ),
                     spacing="4", width="100%",
                 ),
-                background="#FFFFFF", border="1px solid #E2E8F0",
+                background="#1E293B", border="1px solid #334155",
                 border_radius="12px", padding="20px",
                 width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
             ),
@@ -758,18 +856,18 @@ def _content_local() -> rx.Component:
                     _section_header("Ticket y comprobante", "receipt", "🧾"),
                     rx.text(
                         "Personaliza el pie del ticket y la configuración fiscal.",
-                        font_size="12px", color="#64748B",
+                        font_size="12px", color="#94A3B8",
                     ),
                     # Mensaje al pie
                     rx.vstack(
                         rx.text("Mensaje al pie del ticket", font_size="13px",
-                                font_weight="600", color="#334155"),
+                                font_weight="600", color="#CBD5E1"),
                         rx.text_area(
                             placeholder="¡Gracias por su preferencia!",
                             value=FoodState.config_mensaje_ticket,
                             on_change=FoodState.set_config_mensaje_ticket,
-                            background="#FFFFFF", border="1px solid #E2E8F0",
-                            color="#0F172A", border_radius="8px",
+                            background="#1E293B", border="1px solid #334155",
+                            color="#F1F5F9", border_radius="8px",
                             padding_x="12px", padding_y="8px",
                             font_size="13px", width="100%", rows="2",
                             _focus={"border": "1px solid #EA580C",
@@ -782,7 +880,7 @@ def _content_local() -> rx.Component:
                         rx.hstack(
                             rx.vstack(
                                 rx.text("Mostrar impuesto en el ticket", font_size="13px",
-                                        font_weight="600", color="#334155"),
+                                        font_weight="600", color="#CBD5E1"),
                                 rx.text("Muestra el desglose subtotal + impuesto + Total.",
                                         font_size="11px", color="#94A3B8"),
                                 spacing="0", align="start",
@@ -819,9 +917,9 @@ def _content_local() -> rx.Component:
                     # Preview del ticket
                     rx.box(
                         rx.hstack(
-                            rx.icon(tag="eye", size=13, color="#64748B"),
+                            rx.icon(tag="eye", size=13, color="#94A3B8"),
                             rx.text("Vista previa del ticket", font_size="12px",
-                                    font_weight="600", color="#64748B"),
+                                    font_weight="600", color="#94A3B8"),
                             spacing="1", align="center", margin_bottom="6px",
                         ),
                         rx.box(
@@ -834,7 +932,7 @@ def _content_local() -> rx.Component:
                                 white_space="pre",
                             ),
                             background="#FFFDF7",
-                            border="1px solid #E2E8F0",
+                            border="1px solid #334155",
                             border_radius="6px",
                             padding="10px",
                             overflow_x="auto",
@@ -857,7 +955,7 @@ def _content_local() -> rx.Component:
                     ),
                     spacing="4", width="100%",
                 ),
-                background="#FFFFFF", border="1px solid #E2E8F0",
+                background="#1E293B", border="1px solid #334155",
                 border_radius="12px", padding="20px",
                 width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
             ),
@@ -900,6 +998,7 @@ def _content_carta() -> rx.Component:
 def _content_mesas() -> rx.Component:
     return rx.vstack(
         _mesas_section(),
+        _mesas_qr_grid(),
         width="100%",
         spacing="4",
     )
@@ -910,9 +1009,9 @@ def _paper_width_option(label: str, value: str) -> rx.Component:
     return rx.box(
         rx.text(label, font_size="13px", font_weight="700"),
         on_click=FoodState.set_config_ticket_paper_width_mm(value),
-        background=rx.cond(seleccionado, "#EA580C", "#FFFFFF"),
-        color=rx.cond(seleccionado, "#FFFFFF", "#334155"),
-        border=rx.cond(seleccionado, "1px solid #EA580C", "1px solid #E2E8F0"),
+        background=rx.cond(seleccionado, "#EA580C", "#1E293B"),
+        color=rx.cond(seleccionado, "#FFFFFF", "#CBD5E1"),
+        border=rx.cond(seleccionado, "1px solid #EA580C", "1px solid #334155"),
         border_radius="8px", padding="10px 20px", cursor="pointer",
         _hover={"border_color": "#EA580C"},
     )
@@ -929,9 +1028,9 @@ def _content_impresoras() -> rx.Component:
                     "trabajando — se abre el diálogo de impresión del sistema "
                     "y usa la impresora ya instalada ahí, sea por USB o por red. "
                     "No hace falta configurar una IP.",
-                    font_size="12px", color="#64748B",
+                    font_size="12px", color="#94A3B8",
                 ),
-                rx.text("Ancho de papel", font_size="13px", color="#334155",
+                rx.text("Ancho de papel", font_size="13px", color="#CBD5E1",
                         font_weight="600"),
                 rx.hstack(
                     _paper_width_option("58mm", "58"),
@@ -940,23 +1039,23 @@ def _content_impresoras() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            background="#FFFFFF", border="1px solid #E2E8F0",
+            background="#1E293B", border="1px solid #334155",
             border_radius="12px", padding="20px",
             width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
         rx.box(
             rx.hstack(
-                rx.icon(tag="info", size=14, color="#1D4ED8"),
+                rx.icon(tag="info", size=14, color="#60A5FA"),
                 rx.text(
                     "Para que la impresora quede configurada, instalala como "
                     "impresora normal en el sistema operativo de esa tablet/PC "
                     "(con el driver del fabricante si es USB) — el navegador se "
                     "encarga del resto.",
-                    font_size="12px", color="#334155",
+                    font_size="12px", color="#CBD5E1",
                 ),
                 spacing="2", align="start",
             ),
-            background="#EFF6FF", border="1px solid #BFDBFE",
+            background="rgba(59,130,246,0.08)", border="1px solid #BFDBFE",
             border_radius="8px", padding="12px 14px", width="100%",
         ),
         rx.box(
@@ -965,7 +1064,7 @@ def _content_impresoras() -> rx.Component:
                 rx.hstack(
                     rx.vstack(
                         rx.text("Minutos para alerta de demorado", font_size="13px",
-                                color="#334155", font_weight="600"),
+                                color="#CBD5E1", font_weight="600"),
                         rx.text("Un ticket se marca como demorado si supera este tiempo.",
                                 font_size="12px", color="#94A3B8"),
                         spacing="0", align="start", flex="1",
@@ -975,18 +1074,18 @@ def _content_impresoras() -> rx.Component:
                         on_change=FoodState.set_config_kds_minutos_alerta,
                         type="number", min="1", max="120",
                         width="80px",
-                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        background="#0F172A", border="1px solid #334155",
                         border_radius="7px", font_size="14px", font_weight="700",
                         text_align="center",
                         padding_y="8px",
                         _focus={"border": "1px solid #EA580C"},
                     ),
-                    rx.text("min", font_size="13px", color="#64748B", font_weight="600"),
+                    rx.text("min", font_size="13px", color="#94A3B8", font_weight="600"),
                     spacing="3", align="center", width="100%",
                 ),
                 spacing="3", width="100%",
             ),
-            background="#FFFFFF", border="1px solid #E2E8F0",
+            background="#1E293B", border="1px solid #334155",
             border_radius="12px", padding="20px",
             width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
@@ -999,11 +1098,11 @@ def _content_impresoras() -> rx.Component:
                     spacing="2", align="center",
                 ),
                 on_click=FoodState.imprimir_ticket_prueba,
-                background="#FFF7ED", border="1px solid #FED7AA",
+                background="rgba(234,88,12,0.08)", border="1px solid rgba(234,88,12,0.40)",
                 border_radius="8px",
                 padding_x="16px", padding_y="9px",
                 cursor="pointer",
-                _hover={"background": "#FFEDD5", "border_color": "#EA580C"},
+                _hover={"background": "rgba(234,88,12,0.12)", "border_color": "#EA580C"},
             ),
             rx.spacer(),
             rx.button(
@@ -1033,6 +1132,128 @@ def _content_cuenta() -> rx.Component:
     )
 
 
+def _sucursal_row(suc: SucursalView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.hstack(
+                rx.text(suc.nombre, font_size="14px", font_weight="600", color="#F1F5F9"),
+                rx.cond(
+                    suc.es_principal,
+                    rx.badge("Principal", color_scheme="orange", size="1"),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    suc.activa,
+                    rx.fragment(),
+                    rx.badge("Inactiva", color_scheme="gray", size="1"),
+                ),
+                spacing="2", align="center",
+            ),
+            rx.cond(
+                suc.direccion != "",
+                rx.text(suc.direccion, font_size="12px", color="#94A3B8"),
+                rx.fragment(),
+            ),
+            spacing="1", align="start",
+        ),
+        rx.spacer(),
+        rx.button(
+            rx.icon(tag="pencil", size=14),
+            on_click=FoodState.abrir_form_sucursal(suc.id),
+            variant="ghost", size="1", cursor="pointer",
+        ),
+        width="100%", align="center",
+        padding="10px 12px",
+        background="#1E293B",
+        border="1px solid #334155",
+        border_radius="8px",
+    )
+
+
+def _content_sucursales() -> rx.Component:
+    return rx.vstack(
+        rx.box(
+            rx.vstack(
+                _section_header("Sucursales", "map_pin"),
+                rx.text(
+                    "Configura los locales de tu empresa. Los usuarios, mesas, "
+                    "pedidos e inventario se filtran por sucursal activa.",
+                    font_size="12px", color="#94A3B8",
+                ),
+                rx.button(
+                    rx.icon(tag="plus", size=14),
+                    rx.text("Nueva sucursal", font_size="13px"),
+                    on_click=FoodState.abrir_form_sucursal(0),
+                    background="#EA580C", color="#FFFFFF",
+                    border_radius="8px", cursor="pointer", size="2",
+                    _hover={"background": "#C2410C"},
+                ),
+                rx.foreach(FoodState.sucursales_empresa, _sucursal_row),
+                spacing="3", width="100%",
+            ),
+            background="#1E293B", border="1px solid #334155",
+            border_radius="12px", padding="20px", width="100%",
+        ),
+        # Modal form
+        rx.dialog.root(
+            rx.dialog.content(
+                rx.dialog.title("Sucursal"),
+                rx.vstack(
+                    rx.text("Nombre *", font_size="12px", font_weight="600", color="#CBD5E1"),
+                    rx.input(
+                        value=FoodState.sucursal_admin_form_nombre,
+                        on_change=FoodState.on_change_suc_nombre,
+                        placeholder="Sede Central",
+                    ),
+                    rx.text("Dirección", font_size="12px", font_weight="600", color="#CBD5E1"),
+                    rx.input(
+                        value=FoodState.sucursal_admin_form_direccion,
+                        on_change=FoodState.on_change_suc_direccion,
+                        placeholder="Av. Principal 123",
+                    ),
+                    rx.text("Teléfono", font_size="12px", font_weight="600", color="#CBD5E1"),
+                    rx.input(
+                        value=FoodState.sucursal_admin_form_telefono,
+                        on_change=FoodState.on_change_suc_telefono,
+                        placeholder="01-2345678",
+                    ),
+                    rx.hstack(
+                        rx.checkbox(
+                            "Activa",
+                            checked=FoodState.sucursal_admin_form_activa,
+                            on_change=lambda _: FoodState.toggle_suc_activa(),
+                        ),
+                        rx.checkbox(
+                            "Principal",
+                            checked=FoodState.sucursal_admin_form_es_principal,
+                            on_change=lambda _: FoodState.toggle_suc_principal(),
+                        ),
+                        spacing="4",
+                    ),
+                    spacing="2", width="100%",
+                ),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button("Cancelar", variant="outline", size="2",
+                                  on_click=FoodState.cerrar_form_sucursal),
+                    ),
+                    rx.button(
+                        "Guardar", size="2",
+                        on_click=FoodState.guardar_sucursal,
+                        background="#EA580C", color="#FFFFFF",
+                        _hover={"background": "#C2410C"},
+                    ),
+                    spacing="3", justify="end", width="100%", margin_top="12px",
+                ),
+                background="#0F172A", border="1px solid #1E293B",
+            ),
+            open=FoodState.sucursal_admin_form_visible,
+            on_open_change=lambda v: rx.cond(v, rx.noop(), FoodState.cerrar_form_sucursal()),
+        ),
+        width="100%", spacing="4",
+    )
+
+
 def _content_area() -> rx.Component:
     return rx.cond(
         ConfigSeccionState.seccion == "local",
@@ -1044,9 +1265,13 @@ def _content_area() -> rx.Component:
                 ConfigSeccionState.seccion == "mesas",
                 _content_mesas(),
                 rx.cond(
-                    ConfigSeccionState.seccion == "impresoras",
-                    _content_impresoras(),
-                    _content_cuenta(),
+                    ConfigSeccionState.seccion == "sucursales",
+                    _content_sucursales(),
+                    rx.cond(
+                        ConfigSeccionState.seccion == "impresoras",
+                        _content_impresoras(),
+                        _content_cuenta(),
+                    ),
                 ),
             ),
         ),
@@ -1061,9 +1286,9 @@ def _configuracion_content() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text("Configuración", font_size=rx.breakpoints(initial="20px", md="24px"),
-                        font_weight="800", color="#0F172A", line_height="1"),
+                        font_weight="800", color="#F1F5F9", line_height="1"),
                 rx.text("Ajusta el funcionamiento del sistema",
-                        font_size="13px", color="#64748B"),
+                        font_size="13px", color="#94A3B8"),
                 spacing="1", align="start",
             ),
             rx.spacer(),

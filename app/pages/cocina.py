@@ -52,7 +52,7 @@ def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
                 rx.text(
                     "Mozo: " + ticket.mozo_nombre,
                     font_size="11px",
-                    color="#64748B",
+                    color="#94A3B8",
                 ),
                 rx.fragment(),
             ),
@@ -62,14 +62,31 @@ def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
                     rx.foreach(
                         ticket.items_ids,
                         lambda detalle_id, idx: rx.hstack(
-                            rx.icon(tag="circle_check", size=16, color="#475569", flex_shrink="0"),
+                            rx.icon(tag="circle_check", size=16, color="#94A3B8", flex_shrink="0"),
                             rx.text(
                                 ticket.items_lines[idx],
                                 font_size="17px", font_weight="700",
                                 color="#F1F5F9", letter_spacing="-0.3px",
+                                flex="1", min_width="0",
+                                cursor="pointer",
+                                on_click=FoodState.bump_item_cocina(detalle_id),
                             ),
-                            on_click=FoodState.bump_item_cocina(detalle_id),
-                            cursor="pointer",
+                            rx.button(
+                                "86",
+                                on_click=FoodState.marcar_86_cocina(ticket.items_producto_ids[idx]),
+                                background="#7F1D1D",
+                                color="#FCA5A5",
+                                border="1px solid #991B1B",
+                                border_radius="6px",
+                                font_size="11px",
+                                font_weight="800",
+                                padding="2px 8px",
+                                min_width="auto",
+                                height="24px",
+                                cursor="pointer",
+                                flex_shrink="0",
+                                _hover={"background": "#F87171"},
+                            ),
                             padding="4px 6px",
                             border_radius="6px",
                             width="100%",
@@ -85,11 +102,33 @@ def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
                 ),
                 rx.vstack(
                     rx.foreach(
-                        ticket.items_lines,
-                        lambda line: rx.text(
-                            line,
-                            font_size="17px", font_weight="700",
-                            color="#F1F5F9", letter_spacing="-0.3px",
+                        ticket.items_producto_ids,
+                        lambda prod_id, idx: rx.hstack(
+                            rx.text(
+                                ticket.items_lines[idx],
+                                font_size="17px", font_weight="700",
+                                color="#F1F5F9", letter_spacing="-0.3px",
+                                flex="1", min_width="0",
+                            ),
+                            rx.button(
+                                "86",
+                                on_click=FoodState.marcar_86_cocina(prod_id),
+                                background="#7F1D1D",
+                                color="#FCA5A5",
+                                border="1px solid #991B1B",
+                                border_radius="6px",
+                                font_size="11px",
+                                font_weight="800",
+                                padding="2px 8px",
+                                min_width="auto",
+                                height="24px",
+                                cursor="pointer",
+                                flex_shrink="0",
+                                _hover={"background": "#F87171"},
+                            ),
+                            width="100%",
+                            align="center",
+                            spacing="2",
                             padding_y="2px",
                         ),
                     ),
@@ -172,7 +211,7 @@ def _column(titulo: str, count, tickets, empty_msg: str) -> rx.Component:
             rx.cond(
                 tickets.length() == 0,
                 rx.center(
-                    rx.text(empty_msg, font_size="13px", color="#475569"),
+                    rx.text(empty_msg, font_size="13px", color="#94A3B8"),
                     padding_y="40px",
                 ),
                 rx.flex(
@@ -302,7 +341,7 @@ def _cocina_content() -> rx.Component:
             rx.hstack(
                 rx.text(
                     FoodState.ultima_actualizacion,
-                    font_size="11px", color="#64748B",
+                    font_size="11px", color="#94A3B8",
                 ),
                 rx.icon(
                     tag="refresh_cw", size=14, color="#EA580C",
@@ -350,6 +389,7 @@ def _fullscreen_shell() -> rx.Component:
         width="100%",
         background="#0F172A",
         color="#FFFFFF",
+        class_name="dark",
     )
 
 

@@ -75,16 +75,15 @@ def _hora_local(dt) -> str:
 
 # ─── Lógica de negocio (funciones puras, testeables sin Reflex) ──────────────
 
-def get_turno_abierto(session, company_id: int) -> TurnoCaja | None:
-    """Turno abierto de la empresa, o None. Solo puede existir uno a la vez."""
-    return session.exec(
-        select(TurnoCaja)
-        .where(
-            TurnoCaja.company_id == company_id,
-            TurnoCaja.estado == EstadoTurnoCaja.ABIERTO.value,
-        )
-        .order_by(TurnoCaja.id.desc())
-    ).first()
+def get_turno_abierto(session, company_id: int, sucursal_id: int = 0) -> TurnoCaja | None:
+    """Turno abierto de la empresa (y sucursal si aplica), o None."""
+    q = select(TurnoCaja).where(
+        TurnoCaja.company_id == company_id,
+        TurnoCaja.estado == EstadoTurnoCaja.ABIERTO.value,
+    )
+    if sucursal_id:
+        q = q.where(TurnoCaja.sucursal_id == sucursal_id)
+    return session.exec(q.order_by(TurnoCaja.id.desc())).first()
 
 
 def abrir_turno_caja(
@@ -92,14 +91,16 @@ def abrir_turno_caja(
     company_id: int,
     usuario_id: int | None,
     monto_inicial: Decimal,
+    sucursal_id: int = 0,
 ) -> TurnoCaja:
     monto_inicial = _dec(monto_inicial)
     if monto_inicial < 0:
         raise ValueError("El fondo inicial no puede ser negativo.")
-    if get_turno_abierto(session, company_id) is not None:
+    if get_turno_abierto(session, company_id, sucursal_id) is not None:
         raise ValueError("Ya hay un turno de caja abierto. Ciérralo antes de abrir otro.")
     turno = TurnoCaja(
         company_id=company_id,
+        sucursal_id=sucursal_id or None,
         abierto_por_id=usuario_id,
         estado=EstadoTurnoCaja.ABIERTO.value,
         monto_inicial=monto_inicial,
@@ -403,7 +404,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
 
     def cargar_turno_caja(self) -> None:
         with self._tenant_session() as session:
-            turno = get_turno_abierto(session, self._company_id())
+            turno = get_turno_abierto(session, self._company_id(), self._sucursal_id())
             if turno is None:
                 self.turno_activo_id = 0
                 self.turno_fondo_texto = ""
@@ -526,7 +527,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
         try:
             with self._tenant_session() as session:
                 abrir_turno_caja(
-                    session, self._company_id(), self.usuario_actual.id or None, monto
+                    session, self._company_id(), self.usuario_actual.id or None, monto,
+                    self._sucursal_id(),
                 )
                 session.commit()
         except ValueError as exc:
@@ -534,7 +536,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
             return
         self.turno_apertura_monto = ""
         self.cargar_turno_caja()
-        self.mensaje = f"Turno de caja abierto con fondo de {_money(monto)}."
+        return rx.toast.success(f"Turno de caja abierto con fondo de {_money(monto)}.")
 
     # ── Movimientos ──────────────────────────────────────────────────────────
 
@@ -577,18 +579,26 @@ class CajaTurnoMixin(rx.State, mixin=True):
         self.turno_mov_motivo = v
 
     def guardar_movimiento_caja(self) -> None:
+        if self.caja_registrando_mov:
+            return
         self.turno_mov_error = ""
+        motivo = (self.turno_mov_motivo or "").strip()
+        if not motivo:
+            self.turno_mov_error = "El motivo es obligatorio."
+            return
         raw = (self.turno_mov_monto or "").replace(",", ".").strip()
         try:
             monto = Decimal(raw) if raw else Decimal("0.00")
         except InvalidOperation:
             self.turno_mov_error = "Monto inválido."
             return
+        self.caja_registrando_mov = True
         try:
             with self._tenant_session() as session:
-                turno = get_turno_abierto(session, self._company_id())
+                turno = get_turno_abierto(session, self._company_id(), self._sucursal_id())
                 if turno is None:
                     self.turno_mov_error = "No hay turno de caja abierto."
+                    self.caja_registrando_mov = False
                     return
                 registrar_movimiento_caja(
                     session,
@@ -597,12 +607,14 @@ class CajaTurnoMixin(rx.State, mixin=True):
                     self.turno_mov_tipo,
                     self.turno_mov_categoria,
                     monto,
-                    self.turno_mov_motivo,
+                    motivo,
                 )
                 session.commit()
         except ValueError as exc:
             self.turno_mov_error = str(exc)
+            self.caja_registrando_mov = False
             return
+        self.caja_registrando_mov = False
         self.turno_mov_monto = ""
         self.turno_mov_motivo = ""
         self.cargar_turno_caja()
@@ -647,11 +659,15 @@ class CajaTurnoMixin(rx.State, mixin=True):
         self.turno_cierre_notas = v
 
     def confirmar_cierre_turno(self):
+        if self.turno_cerrando:
+            return
+        self.turno_cerrando = True
         self.turno_cierre_error = ""
         if self.usuario_actual is not None and not (
             self.usuario_actual.rol == "Admin" or self.usuario_actual.perm_turno
         ):
             self.turno_cierre_error = "No tiene permiso para cerrar turno de caja."
+            self.turno_cerrando = False
             return
         conteo_limpio: dict[str, int] = {}
         for key, _valor, _etiqueta in DENOMINACIONES_PEN:
@@ -726,12 +742,13 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 )
         except ValueError as exc:
             self.turno_cierre_error = str(exc)
+            self.turno_cerrando = False
             return
+        self.turno_cerrando = False
         self.turno_cierre_visible = False
         self.turno_cierre_conteo = {}
         self.cargar_turno_caja()
-        self.mensaje = "Turno de caja cerrado. Arqueo registrado."
-        return rx.call_script(build_print_script(ticket_html))
+        return [rx.toast.success("Turno de caja cerrado. Arqueo registrado."), rx.call_script(build_print_script(ticket_html))]
 
     # ── Historial ────────────────────────────────────────────────────────────
 

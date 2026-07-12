@@ -22,7 +22,7 @@ def _section_card(title: str, icon: str, *children) -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.icon(tag=icon, size=15, color="#EA580C"),
-                rx.text(title, font_size="15px", font_weight="700", color="#0F172A"),
+                rx.text(title, font_size="15px", font_weight="700", color="#F1F5F9"),
                 spacing="2",
                 align="center",
             ),
@@ -30,8 +30,8 @@ def _section_card(title: str, icon: str, *children) -> rx.Component:
             spacing="4",
             width="100%",
         ),
-        background="#FFFFFF",
-        border="1px solid #E2E8F0",
+        background="#1E293B",
+        border="1px solid #334155",
         border_radius="12px",
         padding="16px 18px",
         width="100%",
@@ -52,12 +52,12 @@ def _alerta_bajo_stock() -> rx.Component:
                         "Stock bajo — requiere reposición",
                         font_size="13px",
                         font_weight="700",
-                        color="#92400E",
+                        color="#F59E0B",
                     ),
                     rx.text(
                         rx.foreach(
                             FoodState.inv_alertas_bajo_stock,
-                            lambda n: rx.text(n, font_size="12px", color="#78350F"),
+                            lambda n: rx.text(n, font_size="12px", color="#F59E0B"),
                         ),
                     ),
                     spacing="1",
@@ -67,8 +67,8 @@ def _alerta_bajo_stock() -> rx.Component:
                 align="start",
                 width="100%",
             ),
-            background="#FFFBEB",
-            border="1px solid #FDE68A",
+            background="rgba(245,158,11,0.10)",
+            border="1px solid rgba(245,158,11,0.25)",
             border_radius="10px",
             padding="12px 14px",
             width="100%",
@@ -87,12 +87,12 @@ def _alerta_vencimientos() -> rx.Component:
         FoodState.inv_alertas_vencimiento.length() > 0,
         rx.box(
             rx.hstack(
-                rx.icon(tag="calendar_x", size=14, color="#B91C1C"),
+                rx.icon(tag="calendar_x", size=14, color="#F87171"),
                 rx.text("Vencimientos: " + FoodState.inv_alertas_vencimiento_texto,
-                        font_size="12px", color="#B91C1C", font_weight="600"),
+                        font_size="12px", color="#F87171", font_weight="600"),
                 spacing="2", align="center",
             ),
-            background="#FEF2F2", border="1px solid #FECACA",
+            background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
             border_radius="10px", padding="10px 14px", width="100%",
         ),
         rx.fragment(),
@@ -109,7 +109,7 @@ def _mov_insumo_modal() -> rx.Component:
                     rx.cond(es_merma, "Registrar merma — ",
                             rx.cond(es_ajuste, "Ajuste de conteo — ", "Entrada de stock — "))
                     + FoodState.inv_mov_insumo_nombre,
-                    font_size="16px", font_weight="800", color="#0F172A",
+                    font_size="16px", font_weight="800", color="#F1F5F9",
                 ),
                 rx.hstack(
                     rx.select(
@@ -124,7 +124,7 @@ def _mov_insumo_modal() -> rx.Component:
                         on_change=FoodState.set_inv_mov_cantidad,
                         type="number", min="0", step="0.001",
                         flex="1",
-                        background="#F8FAFC", border="1px solid #E2E8F0",
+                        background="#0F172A", border="1px solid #334155",
                         border_radius="7px", font_size="13px",
                         _focus={"border_color": "#EA580C"},
                     ),
@@ -148,22 +148,22 @@ def _mov_insumo_modal() -> rx.Component:
                     value=FoodState.inv_mov_motivo,
                     on_change=FoodState.set_inv_mov_motivo,
                     width="100%",
-                    background="#F8FAFC", border="1px solid #E2E8F0",
+                    background="#0F172A", border="1px solid #334155",
                     border_radius="7px", font_size="13px",
                     _focus={"border_color": "#EA580C"},
                 ),
                 rx.cond(
                     FoodState.inv_mov_error != "",
                     rx.text(FoodState.inv_mov_error, font_size="12px",
-                            color="#B91C1C", font_weight="600"),
+                            color="#F87171", font_weight="600"),
                     rx.fragment(),
                 ),
                 rx.hstack(
                     rx.button(
                         "Cancelar",
                         on_click=FoodState.set_inv_mov_modal_visible(False),
-                        background="#FFFFFF", color="#64748B",
-                        border="1px solid #E2E8F0", border_radius="8px",
+                        background="#1E293B", color="#94A3B8",
+                        border="1px solid #334155", border_radius="8px",
                         font_size="13px", font_weight="600", cursor="pointer", flex="1",
                     ),
                     rx.button(
@@ -177,7 +177,8 @@ def _mov_insumo_modal() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            class_name="light", max_width="460px",
+            max_width="460px",
+            background="#0F172A", border="1px solid #1E293B",
         ),
         open=FoodState.inv_mov_modal_visible,
         on_open_change=FoodState.set_inv_mov_modal_visible,
@@ -190,8 +191,8 @@ def _kardex_row(mov) -> rx.Component:
             rx.hstack(
                 rx.badge(
                     mov.tipo_label,
-                    background=rx.cond(mov.es_entrada, "#DCFCE7", "#FEE2E2"),
-                    color=rx.cond(mov.es_entrada, "#166534", "#B91C1C"),
+                    background=rx.cond(mov.es_entrada, "rgba(34,197,94,0.12)", "rgba(239,68,68,0.12)"),
+                    color=rx.cond(mov.es_entrada, "#22C55E", "#F87171"),
                     border_radius="6px", font_size="10px", font_weight="700",
                 ),
                 rx.text(mov.fecha_texto, font_size="11px", color="#94A3B8"),
@@ -199,7 +200,7 @@ def _kardex_row(mov) -> rx.Component:
             ),
             rx.cond(
                 mov.motivo != "",
-                rx.text(mov.motivo + " · " + mov.usuario, font_size="11px", color="#64748B"),
+                rx.text(mov.motivo + " · " + mov.usuario, font_size="11px", color="#94A3B8"),
                 rx.text(mov.usuario, font_size="11px", color="#94A3B8"),
             ),
             spacing="0", align="start",
@@ -209,11 +210,11 @@ def _kardex_row(mov) -> rx.Component:
             rx.text(mov.cantidad_texto, font_size="13px", font_weight="800",
                     color=rx.cond(mov.es_entrada, "#16A34A", "#DC2626"), text_align="right"),
             rx.text("Saldo: " + mov.stock_resultante_texto, font_size="11px",
-                    color="#64748B", text_align="right"),
+                    color="#94A3B8", text_align="right"),
             spacing="0", align="end",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 10px", border_bottom="1px solid #F1F5F9",
+        padding="8px 10px", border_bottom="1px solid #1E293B",
     )
 
 
@@ -223,9 +224,9 @@ def _kardex_modal() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.text("Kardex — " + FoodState.inv_kardex_insumo_nombre,
-                            font_size="16px", font_weight="800", color="#0F172A"),
+                            font_size="16px", font_weight="800", color="#F1F5F9"),
                     rx.spacer(),
-                    rx.icon(tag="x", size=18, color="#64748B", cursor="pointer",
+                    rx.icon(tag="x", size=18, color="#94A3B8", cursor="pointer",
                             on_click=FoodState.set_inv_kardex_visible(False)),
                     width="100%", align="center",
                 ),
@@ -242,12 +243,13 @@ def _kardex_modal() -> rx.Component:
                         ),
                     ),
                     max_height="420px", overflow_y="auto", width="100%",
-                    border="1px solid #F1F5F9", border_radius="10px",
+                    border="1px solid #1E293B", border_radius="10px",
                 ),
                 rx.text("Últimos 50 movimientos.", font_size="11px", color="#94A3B8"),
                 spacing="3", width="100%",
             ),
-            class_name="light", max_width="560px",
+            max_width="560px",
+            background="#0F172A", border="1px solid #1E293B",
         ),
         open=FoodState.inv_kardex_visible,
         on_open_change=FoodState.set_inv_kardex_visible,
@@ -268,7 +270,7 @@ def _insumos_table_header() -> rx.Component:
                 text_transform="uppercase", letter_spacing="0.05em"),
         columns=_INV_GRID_COLS,
         gap="8px", width="100%",
-        padding="0 10px 8px", border_bottom="1px solid #F1F5F9",
+        padding="0 10px 8px", border_bottom="1px solid #1E293B",
         display=rx.breakpoints(initial="none", md="grid"),
     )
 
@@ -284,14 +286,14 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                 ),
                 flex_shrink="0",
             ),
-            rx.text(ins.nombre, font_size="13px", font_weight="600", color="#0F172A",
+            rx.text(ins.nombre, font_size="13px", font_weight="600", color="#F1F5F9",
                     overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
             spacing="2", align="center", min_width="0",
         ),
         rx.vstack(
             rx.badge(
                 ins.stock_texto,
-                background=rx.cond(ins.bajo_stock, "#FEE2E2", "#DCFCE7"),
+                background=rx.cond(ins.bajo_stock, "rgba(239,68,68,0.12)", "rgba(34,197,94,0.12)"),
                 color=rx.cond(ins.bajo_stock, "#DC2626", "#16A34A"),
                 border_radius="20px", font_size="12px", font_weight="700",
                 padding="3px 10px", width="fit-content",
@@ -301,8 +303,8 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                 rx.badge(
                     rx.cond(ins.vencimiento_estado == "vencido", "Vencido ", "Vence ")
                     + ins.vencimiento_texto,
-                    background=rx.cond(ins.vencimiento_estado == "vencido", "#FEE2E2", "#FEF3C7"),
-                    color=rx.cond(ins.vencimiento_estado == "vencido", "#B91C1C", "#92400E"),
+                    background=rx.cond(ins.vencimiento_estado == "vencido", "rgba(239,68,68,0.12)", "rgba(245,158,11,0.12)"),
+                    color=rx.cond(ins.vencimiento_estado == "vencido", "#F87171", "#F59E0B"),
                     border_radius="20px", font_size="10px", font_weight="700",
                     padding="2px 8px", width="fit-content",
                 ),
@@ -310,9 +312,9 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
             ),
             spacing="1", align="start",
         ),
-        rx.text(ins.unidad, font_size="13px", color="#64748B",
+        rx.text(ins.unidad, font_size="13px", color="#94A3B8",
                 display=rx.breakpoints(initial="none", md="block")),
-        rx.text(ins.stock_minimo_texto, font_size="13px", color="#64748B",
+        rx.text(ins.stock_minimo_texto, font_size="13px", color="#94A3B8",
                 display=rx.breakpoints(initial="none", md="block")),
         rx.hstack(
             rx.button(
@@ -332,14 +334,14 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
             rx.button(
                 rx.icon(tag="scroll_text", size=15),
                 on_click=FoodState.abrir_kardex_insumo(ins.id),
-                background="transparent", color="#64748B",
+                background="transparent", color="#94A3B8",
                 border="none", padding="2px", cursor="pointer",
                 _hover={"color": "#EA580C"}, title="Ver kardex",
             ),
             rx.link(
                 "Editar",
                 on_click=FoodState.editar_insumo(ins.id),
-                font_size="12px", font_weight="600", color="#64748B",
+                font_size="12px", font_weight="600", color="#94A3B8",
                 cursor="pointer", _hover={"color": "#EA580C"},
             ),
             rx.button(
@@ -347,7 +349,7 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                         rx.icon(tag="toggle_left", size=13)),
                 on_click=FoodState.toggle_insumo_activo(ins.id),
                 background="transparent",
-                color=rx.cond(ins.activo, "#15803D", "#94A3B8"),
+                color=rx.cond(ins.activo, "#22C55E", "#94A3B8"),
                 border="none", padding="0", cursor="pointer",
                 _hover={"opacity": "0.7"},
             ),
@@ -356,9 +358,9 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
         columns=rx.breakpoints(initial="1fr auto auto", md=_INV_GRID_COLS),
         gap="8px", width="100%", align_items="center",
         padding="10px", border_radius="8px",
-        background=rx.cond(ins.bajo_stock, "#FFFBEB", "#FFFFFF"),
-        border=rx.cond(ins.bajo_stock, "1px solid #FDE68A", "1px solid #F1F5F9"),
-        _hover={"background": rx.cond(ins.bajo_stock, "#FEF9E7", "#F8FAFC")},
+        background=rx.cond(ins.bajo_stock, "rgba(245,158,11,0.10)", "#1E293B"),
+        border=rx.cond(ins.bajo_stock, "1px solid rgba(245,158,11,0.25)", "1px solid #334155"),
+        _hover={"background": rx.cond(ins.bajo_stock, "rgba(245,158,11,0.15)", "#334155")},
     )
 
 
@@ -375,20 +377,20 @@ def _insumo_form() -> rx.Component:
                     rx.cond(FoodState.inv_form_editando, "Editar insumo", "Nuevo insumo"),
                     font_size="13px",
                     font_weight="700",
-                    color="#0F172A",
+                    color="#F1F5F9",
                 ),
                 spacing="1",
                 align="center",
             ),
             rx.hstack(
                 rx.vstack(
-                    rx.text("Nombre", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Nombre", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="Ej: Harina de trigo",
                         value=FoodState.inv_form_nombre,
                         on_change=FoodState.set_inv_form_nombre,
-                        background="#F8FAFC",
-                        border="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border="1px solid #334155",
                         border_radius="7px",
                         font_size="13px",
                         padding_x="10px",
@@ -401,13 +403,13 @@ def _insumo_form() -> rx.Component:
                     flex="2",
                 ),
                 rx.vstack(
-                    rx.text("Unidad", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Unidad", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.select(
                         ["unidad", "kg", "gramos", "litros", "ml", "porción"],
                         value=FoodState.inv_form_unidad,
                         on_change=FoodState.set_inv_form_unidad,
-                        background="#F8FAFC",
-                        border="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border="1px solid #334155",
                         border_radius="7px",
                         font_size="13px",
                         width="100%",
@@ -422,14 +424,14 @@ def _insumo_form() -> rx.Component:
             ),
             rx.hstack(
                 rx.vstack(
-                    rx.text("Stock actual", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Stock actual", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="0",
                         value=FoodState.inv_form_stock_actual,
                         on_change=FoodState.set_inv_form_stock_actual,
                         type="number",
-                        background="#F8FAFC",
-                        border="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border="1px solid #334155",
                         border_radius="7px",
                         font_size="13px",
                         padding_x="10px",
@@ -442,14 +444,14 @@ def _insumo_form() -> rx.Component:
                     flex="1",
                 ),
                 rx.vstack(
-                    rx.text("Stock mínimo (alerta)", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Stock mínimo (alerta)", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="0",
                         value=FoodState.inv_form_stock_minimo,
                         on_change=FoodState.set_inv_form_stock_minimo,
                         type="number",
-                        background="#F8FAFC",
-                        border="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border="1px solid #334155",
                         border_radius="7px",
                         font_size="13px",
                         padding_x="10px",
@@ -462,14 +464,14 @@ def _insumo_form() -> rx.Component:
                     flex="1",
                 ),
                 rx.vstack(
-                    rx.text("Costo por unidad S/", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Costo por unidad S/", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         placeholder="0.00",
                         value=FoodState.inv_form_costo,
                         on_change=FoodState.set_inv_form_costo,
                         type="number", min="0", step="0.01",
-                        background="#F8FAFC",
-                        border="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border="1px solid #334155",
                         border_radius="7px",
                         font_size="13px",
                         padding_x="10px",
@@ -482,13 +484,13 @@ def _insumo_form() -> rx.Component:
                     flex="1",
                 ),
                 rx.vstack(
-                    rx.text("Vencimiento (opcional)", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Vencimiento (opcional)", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
                         value=FoodState.inv_form_vencimiento,
                         on_change=FoodState.set_inv_form_vencimiento,
                         type="date",
-                        background="#F8FAFC",
-                        border="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border="1px solid #334155",
                         border_radius="7px",
                         font_size="13px",
                         padding_x="10px",
@@ -521,15 +523,15 @@ def _insumo_form() -> rx.Component:
                 rx.button(
                     "Cancelar",
                     on_click=FoodState.cancelar_insumo_form,
-                    background="#F1F5F9",
-                    color="#64748B",
-                    border="1px solid #E2E8F0",
+                    background="#1E293B",
+                    color="#94A3B8",
+                    border="1px solid #334155",
                     border_radius="7px",
                     font_size="13px",
                     padding_x="16px",
                     padding_y="8px",
                     cursor="pointer",
-                    _hover={"background": "#E2E8F0"},
+                    _hover={"background": "#334155"},
                 ),
                 spacing="2",
                 justify="end",
@@ -538,8 +540,8 @@ def _insumo_form() -> rx.Component:
             spacing="3",
             width="100%",
         ),
-        background="#F8FAFC",
-        border="1px solid #E2E8F0",
+        background="#0F172A",
+        border="1px solid #334155",
         border_radius="8px",
         padding="12px 14px",
         width="100%",
@@ -555,7 +557,7 @@ def _insumos_section() -> rx.Component:
                 placeholder="Buscar insumo...",
                 value=FoodState.inv_search,
                 on_change=FoodState.set_inv_search,
-                background="#F8FAFC", border="1px solid #E2E8F0",
+                background="#0F172A", border="1px solid #334155",
                 border_radius="8px", font_size="13px",
                 padding_x="10px", padding_y="7px",
                 width=rx.breakpoints(initial="100%", sm="240px"),
@@ -574,7 +576,10 @@ def _insumos_section() -> rx.Component:
                     border_radius="8px", padding_x="14px", padding_y="8px",
                     cursor="pointer", _hover={"background": "#C2410C"},
                 ),
-                rx.dialog.content(_insumo_form(), class_name="light"),
+                rx.dialog.content(
+                    _insumo_form(),
+                    background="#0F172A", border="1px solid #1E293B",
+                ),
                 open=FoodState.inv_form_visible,
                 on_open_change=FoodState.set_inv_form_visible,
             ),
@@ -602,13 +607,13 @@ def _insumos_section() -> rx.Component:
                 align="center",
             ),
             on_click=FoodState.cargar_inventario,
-            background="#F1F5F9",
-            color="#64748B",
-            border="1px solid #E2E8F0",
+            background="#1E293B",
+            color="#94A3B8",
+            border="1px solid #334155",
             border_radius="7px",
             cursor="pointer",
             align_self="end",
-            _hover={"background": "#E2E8F0"},
+            _hover={"background": "#334155"},
         ),
     )
 
@@ -617,11 +622,11 @@ def _insumos_section() -> rx.Component:
 
 def _receta_item_row(item: RecetaItemView) -> rx.Component:
     return rx.hstack(
-        rx.text(item.insumo_nombre, font_size="13px", color="#0F172A", flex="1"),
+        rx.text(item.insumo_nombre, font_size="13px", color="#F1F5F9", flex="1"),
         rx.badge(
             item.cantidad_texto,
-            background="#EFF6FF",
-            color="#1D4ED8",
+            background="rgba(59,130,246,0.08)",
+            color="#60A5FA",
             border_radius="5px",
             font_size="11px",
             padding="2px 7px",
@@ -629,8 +634,8 @@ def _receta_item_row(item: RecetaItemView) -> rx.Component:
         rx.button(
             rx.icon(tag="trash_2", size=12),
             on_click=FoodState.eliminar_receta_item(item.id),
-            background="#FEF2F2",
-            color="#B91C1C",
+            background="rgba(239,68,68,0.08)",
+            color="#F87171",
             border="1px solid #FECACA",
             border_radius="6px",
             padding="4px 7px",
@@ -640,9 +645,9 @@ def _receta_item_row(item: RecetaItemView) -> rx.Component:
         width="100%",
         align="center",
         padding="6px 8px",
-        background="#FFFFFF",
+        background="#1E293B",
         border_radius="7px",
-        border="1px solid #F1F5F9",
+        border="1px solid #1E293B",
         gap="8px",
     )
 
@@ -654,8 +659,8 @@ def _receta_add_form() -> rx.Component:
             placeholder="Insumo…",
             value=FoodState.inv_receta_insumo_sel_nombre,
             on_change=FoodState.set_inv_receta_insumo_sel_nombre,
-            background="#F8FAFC",
-            border="1px solid #E2E8F0",
+            background="#0F172A",
+            border="1px solid #334155",
             border_radius="7px",
             font_size="13px",
             flex="2",
@@ -665,8 +670,8 @@ def _receta_add_form() -> rx.Component:
             value=FoodState.inv_receta_cantidad,
             on_change=FoodState.set_inv_receta_cantidad,
             type="number",
-            background="#F8FAFC",
-            border="1px solid #E2E8F0",
+            background="#0F172A",
+            border="1px solid #334155",
             border_radius="7px",
             font_size="13px",
             padding_x="10px",
@@ -698,17 +703,17 @@ def _recetas_section() -> rx.Component:
         rx.text(
             "Vincula ingredientes (insumos) a cada plato. El stock se descuenta automáticamente al cobrar.",
             font_size="12px",
-            color="#64748B",
+            color="#94A3B8",
         ),
         rx.vstack(
-            rx.text("Seleccionar producto", font_size="11px", font_weight="600", color="#64748B"),
+            rx.text("Seleccionar producto", font_size="11px", font_weight="600", color="#94A3B8"),
             rx.select(
                 FoodState.inv_productos_nombres,
                 placeholder="Elige un plato…",
                 value=FoodState.inv_producto_sel_nombre,
                 on_change=FoodState.set_inv_producto_sel_nombre,
-                background="#F8FAFC",
-                border="1px solid #E2E8F0",
+                background="#0F172A",
+                border="1px solid #334155",
                 border_radius="7px",
                 font_size="13px",
                 width="100%",
@@ -743,14 +748,14 @@ def _recetas_section() -> rx.Component:
                             "Agregar ingrediente",
                             font_size="12px",
                             font_weight="600",
-                            color="#64748B",
+                            color="#94A3B8",
                         ),
                         _receta_add_form(),
                         spacing="2",
                         width="100%",
                     ),
-                    background="#F8FAFC",
-                    border="1px solid #E2E8F0",
+                    background="#0F172A",
+                    border="1px solid #334155",
                     border_radius="8px",
                     padding="10px 12px",
                     width="100%",
@@ -767,41 +772,41 @@ def _recetas_section() -> rx.Component:
 
 def _plan_item_row(item: ProduccionPlanItem) -> rx.Component:
     return rx.hstack(
-        rx.text(item.nombre, font_size="13px", color="#0F172A", font_weight="600", flex="1"),
+        rx.text(item.nombre, font_size="13px", color="#F1F5F9", font_weight="600", flex="1"),
         rx.badge(
             rx.text(item.cantidad, font_size="12px"),
-            background="#EFF6FF", color="#1D4ED8",
+            background="rgba(59,130,246,0.08)", color="#60A5FA",
             border_radius="5px", padding="2px 10px",
         ),
         rx.button(
             rx.icon(tag="x", size=12),
             on_click=FoodState.prod_quitar_item(item.producto_id),
-            background="#FEF2F2", color="#B91C1C",
+            background="rgba(239,68,68,0.08)", color="#F87171",
             border="1px solid #FECACA", border_radius="6px",
             padding="4px 7px", cursor="pointer",
             _hover={"opacity": "0.8"},
         ),
         width="100%", align="center",
-        padding="6px 8px", background="#FFFFFF",
-        border_radius="7px", border="1px solid #F1F5F9", gap="8px",
+        padding="6px 8px", background="#1E293B",
+        border_radius="7px", border="1px solid #1E293B", gap="8px",
     )
 
 
 def _resultado_row(nec: ProduccionNecesidadView) -> rx.Component:
     es_faltante = nec.estado == "faltante"
     return rx.grid(
-        rx.text(nec.nombre, font_size="13px", font_weight="600", color="#0F172A",
+        rx.text(nec.nombre, font_size="13px", font_weight="600", color="#F1F5F9",
                 overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
-        rx.text(nec.cantidad_necesaria_texto, font_size="13px", color="#334155",
+        rx.text(nec.cantidad_necesaria_texto, font_size="13px", color="#CBD5E1",
                 text_align="right"),
-        rx.text(nec.stock_actual_texto, font_size="13px", color="#64748B",
+        rx.text(nec.stock_actual_texto, font_size="13px", color="#94A3B8",
                 text_align="right"),
         rx.text(
             nec.faltante_texto, font_size="13px", font_weight="700",
             color=rx.cond(es_faltante, "#DC2626", "#16A34A"),
             text_align="right",
         ),
-        rx.text(nec.costo_estimado_texto, font_size="13px", color="#334155",
+        rx.text(nec.costo_estimado_texto, font_size="13px", color="#CBD5E1",
                 text_align="right"),
         rx.box(
             width="10px", height="10px", border_radius="full",
@@ -811,8 +816,8 @@ def _resultado_row(nec: ProduccionNecesidadView) -> rx.Component:
         columns="2fr 1fr 1fr 1fr 1fr 30px",
         gap="8px", width="100%", align_items="center",
         padding="8px 10px", border_radius="6px",
-        background=rx.cond(es_faltante, "#FEF2F2", "#FFFFFF"),
-        border=rx.cond(es_faltante, "1px solid #FECACA", "1px solid #F1F5F9"),
+        background=rx.cond(es_faltante, "rgba(239,68,68,0.10)", "#1E293B"),
+        border=rx.cond(es_faltante, "1px solid rgba(239,68,68,0.25)", "1px solid #334155"),
     )
 
 
@@ -825,7 +830,7 @@ def _resultado_header() -> rx.Component:
           for i, c in enumerate(cols)],
         columns="2fr 1fr 1fr 1fr 1fr 30px",
         gap="8px", width="100%",
-        padding="0 10px 6px", border_bottom="1px solid #F1F5F9",
+        padding="0 10px 6px", border_bottom="1px solid #1E293B",
         display=rx.breakpoints(initial="none", md="grid"),
     )
 
@@ -836,7 +841,7 @@ def _produccion_section() -> rx.Component:
         "calculator",
         rx.text(
             "Arme el plan del día: seleccione productos con sus cantidades y calcule los insumos necesarios.",
-            font_size="12px", color="#64748B",
+            font_size="12px", color="#94A3B8",
         ),
         # Formulario para agregar productos al plan
         rx.hstack(
@@ -845,7 +850,7 @@ def _produccion_section() -> rx.Component:
                 placeholder="Seleccione producto o combo…",
                 value=FoodState.prod_agregar_nombre,
                 on_change=FoodState.set_prod_agregar_nombre,
-                background="#F8FAFC", border="1px solid #E2E8F0",
+                background="#0F172A", border="1px solid #334155",
                 border_radius="7px", font_size="13px", flex="2",
             ),
             rx.input(
@@ -853,7 +858,7 @@ def _produccion_section() -> rx.Component:
                 value=FoodState.prod_agregar_cantidad,
                 on_change=FoodState.set_prod_agregar_cantidad,
                 type="number", min="1", step="1",
-                background="#F8FAFC", border="1px solid #E2E8F0",
+                background="#0F172A", border="1px solid #334155",
                 border_radius="7px", font_size="13px",
                 padding_x="10px", padding_y="8px",
                 width="80px",
@@ -878,7 +883,7 @@ def _produccion_section() -> rx.Component:
             FoodState.prod_plan_items.length() > 0,
             rx.vstack(
                 rx.hstack(
-                    rx.text("Plan del día", font_size="12px", font_weight="700", color="#0F172A"),
+                    rx.text("Plan del día", font_size="12px", font_weight="700", color="#F1F5F9"),
                     rx.spacer(),
                     rx.button(
                         rx.hstack(
@@ -887,10 +892,10 @@ def _produccion_section() -> rx.Component:
                             spacing="1", align="center",
                         ),
                         on_click=FoodState.prod_limpiar_plan,
-                        background="#F1F5F9", color="#64748B",
-                        border="1px solid #E2E8F0", border_radius="6px",
+                        background="#1E293B", color="#94A3B8",
+                        border="1px solid #334155", border_radius="6px",
                         padding="4px 10px", cursor="pointer",
-                        _hover={"background": "#E2E8F0"},
+                        _hover={"background": "#334155"},
                     ),
                     width="100%", align="center",
                 ),
@@ -902,10 +907,10 @@ def _produccion_section() -> rx.Component:
                         spacing="2", align="center",
                     ),
                     on_click=FoodState.prod_calcular,
-                    background="#1D4ED8", color="#FFFFFF",
+                    background="#60A5FA", color="#FFFFFF",
                     border_radius="8px", padding_x="20px", padding_y="10px",
                     cursor="pointer", width="100%",
-                    _hover={"background": "#1E40AF"},
+                    _hover={"background": "#3B82F6"},
                 ),
                 spacing="2", width="100%",
             ),
@@ -916,20 +921,20 @@ def _produccion_section() -> rx.Component:
             FoodState.prod_calculado,
             rx.vstack(
                 rx.hstack(
-                    rx.text("Resultado de explosión", font_size="14px", font_weight="800", color="#0F172A"),
+                    rx.text("Resultado de explosión", font_size="14px", font_weight="800", color="#F1F5F9"),
                     rx.spacer(),
                     rx.cond(
                         FoodState.prod_faltantes_count > 0,
                         rx.badge(
                             rx.text(FoodState.prod_faltantes_count, font_size="11px"),
                             " faltante(s)",
-                            background="#FEE2E2", color="#DC2626",
+                            background="rgba(239,68,68,0.12)", color="#DC2626",
                             border_radius="20px", font_size="11px", font_weight="700",
                             padding="3px 10px",
                         ),
                         rx.badge(
                             "Stock suficiente",
-                            background="#DCFCE7", color="#166534",
+                            background="rgba(34,197,94,0.12)", color="#22C55E",
                             border_radius="20px", font_size="11px", font_weight="700",
                             padding="3px 10px",
                         ),
@@ -954,17 +959,17 @@ def _produccion_section() -> rx.Component:
                 rx.box(
                     rx.hstack(
                         rx.text("Costo total estimado del plan:", font_size="14px",
-                                font_weight="700", color="#0F172A"),
+                                font_weight="700", color="#F1F5F9"),
                         rx.spacer(),
                         rx.text(FoodState.prod_costo_total_texto, font_size="18px",
-                                font_weight="800", color="#1D4ED8"),
+                                font_weight="800", color="#60A5FA"),
                         width="100%", align="center",
                     ),
-                    background="#EFF6FF", border="1px solid #BFDBFE",
+                    background="rgba(59,130,246,0.08)", border="1px solid #BFDBFE",
                     border_radius="10px", padding="12px 16px", width="100%",
                 ),
                 spacing="3", width="100%",
-                background="#F8FAFC", border="1px solid #E2E8F0",
+                background="#0F172A", border="1px solid #334155",
                 border_radius="10px", padding="14px 16px",
             ),
             rx.fragment(),
@@ -981,8 +986,8 @@ def _inventario_content() -> rx.Component:
             rx.hstack(
                 rx.link(
                     rx.hstack(
-                        rx.icon(tag="arrow_left", size=13, color="#64748B"),
-                        rx.text("Panel Administrativo", font_size="12px", color="#64748B"),
+                        rx.icon(tag="arrow_left", size=13, color="#94A3B8"),
+                        rx.text("Panel Administrativo", font_size="12px", color="#94A3B8"),
                         spacing="1",
                         align="center",
                     ),
@@ -1000,23 +1005,11 @@ def _inventario_content() -> rx.Component:
                 "Inventario",
                 font_size="22px",
                 font_weight="800",
-                color="#0F172A",
+                color="#F1F5F9",
             ),
             rx.text("Insumos, stock y alertas de reposición",
-                    font_size="13px", color="#64748B"),
+                    font_size="13px", color="#94A3B8"),
             spacing="0",
-        ),
-        rx.cond(
-            FoodState.mensaje != "",
-            rx.box(
-                rx.text(FoodState.mensaje, font_size="13px", color="#15803D", font_weight="600"),
-                background="#F0FDF4",
-                border="1px solid #BBF7D0",
-                border_radius="8px",
-                padding="10px 14px",
-                width="100%",
-            ),
-            rx.fragment(),
         ),
         _alerta_bajo_stock(),
         _alerta_vencimientos(),

@@ -5,11 +5,14 @@ Se integran con Reflex via api_transformer en app/app.py.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import pathlib
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+
+from tuwayki_core.utils.timezone import utc_now_naive
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
@@ -45,7 +48,7 @@ _BOOT_TS = time.monotonic()
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return utc_now_naive().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _check_db() -> tuple[bool, str | None]:
@@ -190,7 +193,7 @@ async def _registro(request: Request) -> JSONResponse:
                     slug = f"{base_slug}-{suffix}"
                     suffix += 1
 
-                now = datetime.utcnow()
+                now = utc_now_naive()
                 company = Company(
                     name=company_name,
                     slug=slug,
@@ -237,7 +240,7 @@ async def _registro(request: Request) -> JSONResponse:
 def _require_admin_secret(request: Request) -> JSONResponse | None:
     expected = (os.getenv("FOOD_ADMIN_API_SECRET") or "").strip()
     provided = request.headers.get("X-Admin-Secret", "")
-    if not expected or provided != expected:
+    if not expected or not hmac.compare_digest(provided, expected):
         return JSONResponse({"error": "No autorizado."}, status_code=401)
     return None
 
@@ -249,7 +252,9 @@ def _company_admin_dict(company: Company, config: ConfigImpresora | None) -> dic
         "slug": company.slug,
         "admin_email": (config.admin_email if config else "") or "",
         "is_active": bool(company.is_active),
+        "plan": company.plan or "trial",
         "trial_ends_at": company.trial_ends_at.strftime("%Y-%m-%d") if company.trial_ends_at else None,
+        "plan_expires_at": company.plan_expires_at.strftime("%Y-%m-%d") if company.plan_expires_at else None,
         "created_at": company.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if company.created_at else None,
     }
 
@@ -330,7 +335,7 @@ async def _admin_set_active(request: Request, active: bool) -> JSONResponse:
             if company is None:
                 return JSONResponse({"error": "No encontrado."}, status_code=404)
             company.is_active = active
-            company.updated_at = datetime.utcnow()
+            company.updated_at = utc_now_naive()
             session.add(company)
             session.commit()
             result = {"id": company.id, "is_active": company.is_active}
@@ -359,7 +364,7 @@ async def _admin_extend_trial(request: Request) -> JSONResponse:
             company = session.get(Company, company_id)
             if company is None:
                 return JSONResponse({"error": "No encontrado."}, status_code=404)
-            now = datetime.utcnow()
+            now = utc_now_naive()
             base = company.trial_ends_at if company.trial_ends_at and company.trial_ends_at > now else now
             company.trial_ends_at = base + timedelta(days=extra_days)
             company.is_active = True
@@ -367,6 +372,59 @@ async def _admin_extend_trial(request: Request) -> JSONResponse:
             session.add(company)
             session.commit()
             result = {"id": company.id, "trial_ends_at": company.trial_ends_at.strftime("%Y-%m-%d")}
+
+    return JSONResponse(result, status_code=200)
+
+
+async def _admin_set_plan(request: Request) -> JSONResponse:
+    err = _require_admin_secret(request)
+    if err is not None:
+        return err
+    try:
+        company_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+    try:
+        body = await request.json()
+        plan = (body.get("plan") or "").strip().lower()
+        expires_days = body.get("expires_days")
+    except Exception:
+        return JSONResponse({"error": "JSON inválido."}, status_code=400)
+
+    from app.services.plan_service import PLANES_VALIDOS, plan_label
+    if plan not in PLANES_VALIDOS:
+        return JSONResponse(
+            {"error": f"Plan inválido. Opciones: {', '.join(sorted(PLANES_VALIDOS))}"},
+            status_code=400,
+        )
+
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+            if company is None:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            now = utc_now_naive()
+            company.plan = plan
+            if expires_days is not None:
+                try:
+                    days = int(expires_days)
+                    if days < 1 or days > 3650:
+                        return JSONResponse({"error": "expires_days debe estar entre 1 y 3650."}, status_code=400)
+                    company.plan_expires_at = now + timedelta(days=days)
+                except (TypeError, ValueError):
+                    return JSONResponse({"error": "expires_days debe ser un entero."}, status_code=400)
+            else:
+                company.plan_expires_at = None
+            company.is_active = True
+            company.updated_at = now
+            session.add(company)
+            session.commit()
+            result = {
+                "id": company.id,
+                "plan": company.plan,
+                "plan_label": plan_label(company.plan),
+                "plan_expires_at": company.plan_expires_at.strftime("%Y-%m-%d") if company.plan_expires_at else None,
+            }
 
     return JSONResponse(result, status_code=200)
 
@@ -382,5 +440,6 @@ health_app = Starlette(
         Route("/api/admin/companies/{id}/activate", _admin_activate, methods=["POST"]),
         Route("/api/admin/companies/{id}/suspend", _admin_suspend, methods=["POST"]),
         Route("/api/admin/companies/{id}/extend-trial", _admin_extend_trial, methods=["POST"]),
+        Route("/api/admin/companies/{id}/set-plan", _admin_set_plan, methods=["POST"]),
     ],
 )

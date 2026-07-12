@@ -20,5 +20,7 @@ class Company(TimestampedModel, table=True):
     name: str = Field(max_length=160, nullable=False)
     slug: str = Field(max_length=80, nullable=False, index=True)
     is_active: bool = Field(default=True, nullable=False)
+    plan: str = Field(default="trial", max_length=20, nullable=False)
     trial_ends_at: datetime | None = Field(default=None)
+    plan_expires_at: datetime | None = Field(default=None)
     logo_url: str | None = Field(default=None, max_length=500)

@@ -22,6 +22,7 @@ def index() -> rx.Component:
 
 app = rx.App(
     api_transformer=health_app,
+    theme=rx.theme(appearance="light"),
     stylesheets=["/twk.css"],
     head_components=[
         rx.el.link(rel="icon", type="image/png", href="/TUWAYKIFOODFAVICON.png"),

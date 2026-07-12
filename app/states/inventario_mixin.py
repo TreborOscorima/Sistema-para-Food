@@ -104,7 +104,10 @@ class InventarioMixin(rx.State, mixin=True):
 
     # ─── Inventario ───────────────────────────────────────────────────────────
 
-    def on_load_inventario(self) -> None:
+    def on_load_inventario(self):
+        result = self._route_access_result("inventario")
+        if result is not None:
+            return result
         self.cargar_inventario()
         if not self.productos:
             self.cargar_menu()
@@ -194,12 +197,10 @@ class InventarioMixin(rx.State, mixin=True):
         if self.usuario_actual is not None and not (
             self.usuario_actual.rol == "Admin" or self.usuario_actual.perm_inventario
         ):
-            self.mensaje = "No tiene permiso para gestionar inventario."
-            return
+            return rx.toast.error("No tiene permiso para gestionar inventario.")
         nombre = self.inv_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre del insumo es obligatorio."
-            return
+            return rx.toast.error("El nombre del insumo es obligatorio.")
         unidad = self.inv_form_unidad.strip() or "unidad"
         try:
             stock_actual = Decimal(self.inv_form_stock_actual.replace(",", ".").strip() or "0")
@@ -207,22 +208,19 @@ class InventarioMixin(rx.State, mixin=True):
             if stock_actual < 0 or stock_minimo < 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            self.mensaje = "Stock inválido. Ingrese números positivos."
-            return
+            return rx.toast.error("Stock inválido. Ingrese números positivos.")
         fecha_venc = None
         if self.inv_form_vencimiento.strip():
             try:
                 fecha_venc = datetime.strptime(self.inv_form_vencimiento.strip(), "%Y-%m-%d").date()
             except ValueError:
-                self.mensaje = "Fecha de vencimiento inválida."
-                return
+                return rx.toast.error("Fecha de vencimiento inválida.")
         try:
             costo = Decimal(self.inv_form_costo.replace(",", ".").strip() or "0")
             if costo < 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            self.mensaje = "Costo inválido. Ingrese un número positivo."
-            return
+            return rx.toast.error("Costo inválido. Ingrese un número positivo.")
         with self._tenant_session() as session:
             if self.inv_form_id == 0:
                 existente = session.exec(
@@ -232,8 +230,7 @@ class InventarioMixin(rx.State, mixin=True):
                     )
                 ).first()
                 if existente:
-                    self.mensaje = f"Ya existe un insumo llamado '{nombre}'."
-                    return
+                    return rx.toast.error(f"Ya existe un insumo llamado '{nombre}'.")
                 ins = Insumo(
                     company_id=self._company_id(),
                     nombre=nombre,
@@ -252,12 +249,11 @@ class InventarioMixin(rx.State, mixin=True):
                         (self.usuario_actual.id or None) if self.usuario_actual else None,
                         stock_actual, "Stock inicial",
                     )
-                self.mensaje = f"Insumo '{nombre}' creado."
+                _msg = f"Insumo '{nombre}' creado."
             else:
                 ins = session.get(Insumo, self.inv_form_id)
                 if ins is None or ins.company_id != self._company_id():
-                    self.mensaje = "Insumo no encontrado."
-                    return
+                    return rx.toast.error("Insumo no encontrado.")
                 ins.nombre = nombre
                 ins.unidad = unidad
                 ins.stock_minimo = stock_minimo
@@ -272,7 +268,7 @@ class InventarioMixin(rx.State, mixin=True):
                         (self.usuario_actual.id or None) if self.usuario_actual else None,
                         stock_actual, "Edición manual del insumo",
                     )
-                self.mensaje = f"Insumo '{nombre}' actualizado."
+                _msg = f"Insumo '{nombre}' actualizado."
             session.commit()
         self.inv_form_id = 0
         self.inv_form_nombre = ""
@@ -284,6 +280,7 @@ class InventarioMixin(rx.State, mixin=True):
         self.inv_form_editando = False
         self.inv_form_visible = False
         self.cargar_inventario()
+        return rx.toast.success(_msg)
 
     def editar_insumo(self, insumo_id: int) -> None:
         with self._tenant_session() as session:
@@ -402,7 +399,7 @@ class InventarioMixin(rx.State, mixin=True):
             return
         self.inv_mov_modal_visible = False
         self.cargar_inventario()
-        self.mensaje = f"Movimiento registrado para '{self.inv_mov_insumo_nombre}'."
+        return rx.toast.success(f"Movimiento registrado para '{self.inv_mov_insumo_nombre}'.")
 
     def set_inv_kardex_visible(self, v: bool) -> None:
         self.inv_kardex_visible = bool(v)
@@ -503,21 +500,18 @@ class InventarioMixin(rx.State, mixin=True):
 
     def guardar_receta_item(self) -> None:
         if self.inv_producto_sel_id == 0:
-            self.mensaje = "Seleccione un producto primero."
-            return
+            return rx.toast.error("Seleccione un producto primero.")
         insumo_match = next(
             (i for i in self.inv_insumos if i.nombre == self.inv_receta_insumo_sel_nombre), None
         )
         if insumo_match is None:
-            self.mensaje = "Seleccione un insumo válido."
-            return
+            return rx.toast.error("Seleccione un insumo válido.")
         try:
             cantidad = Decimal(self.inv_receta_cantidad.replace(",", ".").strip() or "0")
             if cantidad <= 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            self.mensaje = "Cantidad inválida. Ingrese un número mayor a 0."
-            return
+            return rx.toast.error("Cantidad inválida. Ingrese un número mayor a 0.")
         insumo_id = insumo_match.id
         with self._tenant_session() as session:
             existente = session.exec(
@@ -531,7 +525,7 @@ class InventarioMixin(rx.State, mixin=True):
                 existente.cantidad = cantidad
                 existente.updated_at = _utcnow()
                 session.add(existente)
-                self.mensaje = "Cantidad actualizada en receta."
+                _msg = "Cantidad actualizada en receta."
             else:
                 ri = RecetaItem(
                     company_id=self._company_id(),
@@ -540,11 +534,12 @@ class InventarioMixin(rx.State, mixin=True):
                     cantidad=cantidad,
                 )
                 session.add(ri)
-                self.mensaje = "Insumo agregado a la receta."
+                _msg = "Insumo agregado a la receta."
             session.commit()
         self.inv_receta_cantidad = ""
         self.inv_receta_insumo_sel_nombre = ""
         self.cargar_receta_producto()
+        return rx.toast.success(_msg)
 
     def eliminar_receta_item(self, item_id: int) -> None:
         with self._tenant_session() as session:
@@ -554,4 +549,4 @@ class InventarioMixin(rx.State, mixin=True):
             session.delete(ri)
             session.commit()
         self.cargar_receta_producto()
-        self.mensaje = "Insumo eliminado de la receta."
+        return rx.toast.success("Insumo eliminado de la receta.")

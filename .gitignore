@@ -41,3 +41,6 @@ dev.err
 
 # Reflex runtime lock
 reflex.lock/
+
+# Backups MySQL (generados por scripts/backup-mysql.sh)
+backups/*.sql.gz

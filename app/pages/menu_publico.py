@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.states.food_state import CategoriaPublicaView, MenuPublicoState, ProductoPublicoView, PromoPublicaView
+from app.states.food_state import CarritoItemView, CategoriaPublicaView, MenuPublicoState, ProductoPublicoView, PromoPublicaView
 
 
 def _promo_card(promo: PromoPublicaView) -> rx.Component:
@@ -68,15 +68,15 @@ def _categoria_chip(cat: CategoriaPublicaView, idx: int) -> rx.Component:
     return rx.link(
         cat.emoji + " " + cat.nombre,
         href=f"#cat-{idx}",
-        background="#F1F5F9",
-        color="#64748B",
+        background="#334155",
+        color="#94A3B8",
         font_size="12px",
         font_weight="600",
         padding="6px 14px",
         border_radius="20px",
         white_space="nowrap",
         flex_shrink="0",
-        _hover={"background": "#FED7AA", "color": "#C2410C"},
+        _hover={"background": "rgba(234,88,12,0.15)", "color": "#EA580C"},
     )
 
 
@@ -89,6 +89,7 @@ def _producto_item(prod: ProductoPublicoView) -> rx.Component:
                 width="72px", height="72px",
                 object_fit="cover", border_radius="12px",
                 flex_shrink="0",
+                loading="lazy",
             ),
             rx.center(
                 rx.text(prod.emoji, font_size="32px", line_height="1"),
@@ -98,10 +99,10 @@ def _producto_item(prod: ProductoPublicoView) -> rx.Component:
             ),
         ),
         rx.vstack(
-            rx.text(prod.nombre, font_size="15px", font_weight="700", color="#0F172A", line_height="1.3"),
+            rx.text(prod.nombre, font_size="15px", font_weight="700", color="#F1F5F9", line_height="1.3"),
             rx.cond(
                 prod.descripcion != "",
-                rx.text(prod.descripcion, font_size="12px", color="#64748B",
+                rx.text(prod.descripcion, font_size="12px", color="#94A3B8",
                         line_height="1.4", no_of_lines=2),
                 rx.fragment(),
             ),
@@ -111,18 +112,42 @@ def _producto_item(prod: ProductoPublicoView) -> rx.Component:
                         line_height="1.3"),
                 rx.fragment(),
             ),
-            rx.text(prod.precio_texto, font_size="18px", font_weight="800", color="#EA580C", margin_top="6px"),
+            rx.hstack(
+                rx.text(prod.precio_texto, font_size="18px", font_weight="800",
+                        color="#EA580C"),
+                rx.spacer(),
+                rx.cond(
+                    MenuPublicoState.tiene_mesa_qr,
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="plus", size=14),
+                            rx.text("Agregar", font_size="12px", font_weight="700"),
+                            spacing="1", align="center",
+                        ),
+                        on_click=MenuPublicoState.agregar_al_carrito(
+                            prod.id, prod.nombre, prod.precio_texto, prod.precio_float,
+                        ),
+                        background="#EA580C", color="#FFFFFF",
+                        border_radius="10px", padding="6px 14px",
+                        cursor="pointer", height="auto",
+                        _hover={"background": "#C2410C"},
+                        _active={"transform": "scale(0.95)"},
+                    ),
+                    rx.fragment(),
+                ),
+                width="100%", align="center", margin_top="6px",
+            ),
             spacing="0", align="start", flex="1", min_width="0",
         ),
         spacing="3", align="start", width="100%",
-        background="#FFFFFF", border_radius="16px", padding="14px",
+        background="#1E293B", border_radius="16px", padding="14px",
         box_shadow="0 1px 4px rgba(0,0,0,0.06)",
     )
 
 
 def _categoria_section(cat: CategoriaPublicaView, idx: int) -> rx.Component:
     return rx.vstack(
-        rx.text(cat.emoji + " " + cat.nombre, font_size="16px", font_weight="800", color="#0F172A"),
+        rx.text(cat.emoji + " " + cat.nombre, font_size="16px", font_weight="800", color="#F1F5F9"),
         rx.vstack(
             rx.foreach(cat.productos, _producto_item),
             spacing="2", width="100%",
@@ -130,6 +155,227 @@ def _categoria_section(cat: CategoriaPublicaView, idx: int) -> rx.Component:
         id=f"cat-{idx}",
         spacing="3", width="100%", padding_top="4px",
         scroll_margin_top="120px",
+    )
+
+
+def _carrito_item(item: CarritoItemView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.text(item.nombre, font_size="14px", font_weight="700",
+                    color="#F1F5F9", no_of_lines=1),
+            rx.text(item.precio_texto + " c/u", font_size="11px",
+                    color="#94A3B8"),
+            spacing="0", align="start", flex="1", min_width="0",
+        ),
+        rx.hstack(
+            rx.button(
+                rx.icon(tag="minus", size=14),
+                on_click=MenuPublicoState.quitar_del_carrito(item.producto_id),
+                background="#334155", color="#94A3B8",
+                border_radius="8px", padding="4px",
+                cursor="pointer", height="auto", min_width="28px",
+                _hover={"background": "#475569"},
+            ),
+            rx.text(item.cantidad.to_string(), font_size="14px",
+                    font_weight="700", color="#F1F5F9",
+                    min_width="20px", text_align="center"),
+            rx.button(
+                rx.icon(tag="plus", size=14),
+                on_click=MenuPublicoState.agregar_al_carrito(
+                    item.producto_id, item.nombre, item.precio_texto, item.precio_float,
+                ),
+                background="rgba(234,88,12,0.15)", color="#EA580C",
+                border_radius="8px", padding="4px",
+                cursor="pointer", height="auto", min_width="28px",
+                _hover={"background": "rgba(234,88,12,0.25)"},
+            ),
+            spacing="1", align="center",
+        ),
+        rx.text(item.subtotal_texto, font_size="14px", font_weight="800",
+                color="#EA580C", min_width="70px", text_align="right"),
+        width="100%", align="center", padding="8px 0",
+        border_bottom="1px solid #334155",
+    )
+
+
+def _carrito_drawer() -> rx.Component:
+    return rx.drawer.root(
+        rx.drawer.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.text("Tu pedido", font_size="18px", font_weight="800",
+                            color="#F1F5F9"),
+                    rx.spacer(),
+                    rx.drawer.close(
+                        rx.icon(tag="x", size=20, color="#94A3B8",
+                                cursor="pointer"),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.cond(
+                    MenuPublicoState.tiene_mesa_qr,
+                    rx.badge(
+                        MenuPublicoState.mesa_nombre_qr,
+                        background="rgba(59,130,246,0.12)", color="#3B82F6",
+                        border_radius="8px", font_size="12px",
+                        font_weight="700", padding="4px 10px",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    MenuPublicoState.carrito_count > 0,
+                    rx.vstack(
+                        rx.vstack(
+                            rx.foreach(MenuPublicoState.carrito, _carrito_item),
+                            spacing="0", width="100%",
+                            max_height="50vh", overflow_y="auto",
+                        ),
+                        rx.hstack(
+                            rx.text("Total", font_size="16px", font_weight="700",
+                                    color="#F1F5F9"),
+                            rx.spacer(),
+                            rx.text(MenuPublicoState.carrito_total_texto,
+                                    font_size="20px", font_weight="800",
+                                    color="#EA580C"),
+                            width="100%", align="center",
+                            padding="12px 0", border_top="2px solid #334155",
+                        ),
+                        rx.input(
+                            value=MenuPublicoState.nombre_cliente_qr,
+                            on_change=MenuPublicoState.set_nombre_cliente_qr,
+                            placeholder="Tu nombre (opcional)",
+                            background="#0F172A",
+                            border="1px solid #334155",
+                            border_radius="10px", color="#F1F5F9",
+                            font_size="14px",
+                            _focus={"border_color": "#EA580C"},
+                        ),
+                        rx.cond(
+                            MenuPublicoState.pedido_error != "",
+                            rx.text(MenuPublicoState.pedido_error,
+                                    font_size="12px", color="#DC2626",
+                                    font_weight="600"),
+                            rx.fragment(),
+                        ),
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="send", size=16),
+                                rx.text("Enviar pedido", font_size="15px",
+                                        font_weight="800"),
+                                spacing="2", align="center",
+                            ),
+                            on_click=MenuPublicoState.enviar_self_order,
+                            background="#EA580C", color="#FFFFFF",
+                            border_radius="12px", width="100%",
+                            padding_y="12px", cursor="pointer",
+                            _hover={"background": "#C2410C"},
+                        ),
+                        rx.button(
+                            "Vaciar carrito",
+                            on_click=MenuPublicoState.vaciar_carrito,
+                            background="transparent", color="#94A3B8",
+                            border="1px solid #334155",
+                            border_radius="10px", width="100%",
+                            padding_y="8px", cursor="pointer",
+                            font_size="13px",
+                            _hover={"background": "rgba(239,68,68,0.10)", "color": "#F87171"},
+                        ),
+                        spacing="3", width="100%",
+                    ),
+                    rx.center(
+                        rx.vstack(
+                            rx.icon(tag="shopping_cart", size=40, color="#CBD5E1"),
+                            rx.text("Carrito vacío", font_size="14px",
+                                    color="#94A3B8"),
+                            spacing="2", align="center",
+                        ),
+                        padding_y="48px", width="100%",
+                    ),
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#1E293B",
+            padding="20px",
+            max_width="420px",
+            width="100%",
+        ),
+        open=MenuPublicoState.carrito_visible,
+        on_open_change=MenuPublicoState.set_carrito_visible,
+        direction="bottom",
+    )
+
+
+def _carrito_fab() -> rx.Component:
+    return rx.cond(
+        MenuPublicoState.tiene_mesa_qr,
+        rx.box(
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="shopping_cart", size=20),
+                    rx.cond(
+                        MenuPublicoState.carrito_count > 0,
+                        rx.badge(
+                            MenuPublicoState.carrito_count.to_string(),
+                            background="#1E293B", color="#EA580C",
+                            border_radius="50%", font_size="11px",
+                            font_weight="800", padding="2px 6px",
+                            position="absolute", top="-6px", right="-6px",
+                        ),
+                        rx.fragment(),
+                    ),
+                    spacing="0", position="relative",
+                ),
+                on_click=MenuPublicoState.toggle_carrito,
+                background="#EA580C", color="#FFFFFF",
+                border_radius="50%",
+                width="56px", height="56px",
+                cursor="pointer",
+                box_shadow="0 4px 16px rgba(234,88,12,0.4)",
+                _hover={"background": "#C2410C", "transform": "scale(1.05)"},
+                transition="all 0.15s ease",
+            ),
+            position="fixed", bottom="24px", right="24px",
+            z_index="20",
+        ),
+        rx.fragment(),
+    )
+
+
+def _pedido_enviado_screen() -> rx.Component:
+    return rx.center(
+        rx.vstack(
+            rx.icon(tag="circle_check", size=64, color="#22C55E"),
+            rx.text("Pedido enviado", font_size="22px", font_weight="800",
+                    color="#F1F5F9"),
+            rx.text(
+                "Tu pedido fue enviado al mozo para aprobación. "
+                "Te atenderán en unos minutos.",
+                font_size="14px", color="#94A3B8",
+                text_align="center", max_width="300px",
+            ),
+            rx.cond(
+                MenuPublicoState.tiene_mesa_qr,
+                rx.badge(
+                    MenuPublicoState.mesa_nombre_qr,
+                    background="rgba(59,130,246,0.12)", color="#3B82F6",
+                    border_radius="8px", font_size="14px",
+                    font_weight="700", padding="6px 14px",
+                ),
+                rx.fragment(),
+            ),
+            rx.button(
+                "Ver carta nuevamente",
+                on_click=MenuPublicoState.volver_a_carta,
+                background="#EA580C", color="#FFFFFF",
+                border_radius="12px", padding_x="24px", padding_y="10px",
+                cursor="pointer", font_weight="700",
+                _hover={"background": "#C2410C"},
+                margin_top="8px",
+            ),
+            spacing="3", align="center",
+        ),
+        min_height="100vh", padding="48px 24px",
+        background="#0F172A",
     )
 
 
@@ -141,7 +387,7 @@ def _menu_content() -> rx.Component:
                 rx.hstack(
                     rx.vstack(
                         rx.text(MenuPublicoState.nombre_local, font_size="20px", font_weight="800",
-                                color="#0F172A", letter_spacing="-0.02em", line_height="1.2"),
+                                color="#F1F5F9", letter_spacing="-0.02em", line_height="1.2"),
                         rx.text("Menú digital", font_size="13px", color="#94A3B8"),
                         spacing="0", align="start",
                     ),
@@ -183,7 +429,7 @@ def _menu_content() -> rx.Component:
                                 value=MenuPublicoState.busqueda_menu,
                                 on_change=MenuPublicoState.set_busqueda_menu,
                                 border="none", outline="none",
-                                font_size="14px", color="#0F172A",
+                                font_size="14px", color="#F1F5F9",
                                 padding="0", flex="1",
                                 _focus={"border": "none", "box_shadow": "none"},
                                 _placeholder={"color": "#94A3B8"},
@@ -198,15 +444,15 @@ def _menu_content() -> rx.Component:
                                 rx.fragment(),
                             ),
                             spacing="2", align="center", width="100%",
-                            background="#F1F5F9", border_radius="12px",
+                            background="#334155", border_radius="12px",
                             padding="8px 12px",
                         ),
                         spacing="2", width="100%",
                     ),
                     rx.fragment(),
                 ),
-                background="#FFFFFF",
-                border_bottom="1px solid #F1F5F9",
+                background="#1E293B",
+                border_bottom="1px solid #334155",
                 padding=rx.breakpoints(initial="16px 16px 12px", md="20px 24px 14px"),
                 position="sticky", top="0", z_index="10",
                 width="100%",
@@ -231,7 +477,7 @@ def _menu_content() -> rx.Component:
                     rx.center(
                         rx.vstack(
                             rx.icon(tag="search_x", size=48, color="#CBD5E1"),
-                            rx.text("Carta no encontrada", font_size="17px", font_weight="700", color="#475569"),
+                            rx.text("Carta no encontrada", font_size="17px", font_weight="700", color="#94A3B8"),
                             rx.text(
                                 "El restaurante no tiene carta digital activa.",
                                 font_size="13px",
@@ -250,7 +496,7 @@ def _menu_content() -> rx.Component:
                         rx.center(
                             rx.vstack(
                                 rx.icon(tag="book_open", size=48, color="#CBD5E1"),
-                                rx.text("Carta sin productos", font_size="15px", font_weight="600", color="#475569"),
+                                rx.text("Carta sin productos", font_size="15px", font_weight="600", color="#94A3B8"),
                                 spacing="3",
                                 align="center",
                             ),
@@ -262,7 +508,7 @@ def _menu_content() -> rx.Component:
                             rx.center(
                                 rx.vstack(
                                     rx.icon(tag="search_x", size=40, color="#CBD5E1"),
-                                    rx.text("Sin resultados", font_size="15px", font_weight="600", color="#475569"),
+                                    rx.text("Sin resultados", font_size="15px", font_weight="600", color="#94A3B8"),
                                     rx.text("Pruebe con otro término", font_size="13px", color="#94A3B8"),
                                     spacing="2", align="center",
                                 ),
@@ -296,7 +542,7 @@ def _menu_content() -> rx.Component:
             width="100%",
             min_height="100vh",
         ),
-        background="#FFFBF7",
+        background="#0F172A",
         max_width=rx.breakpoints(initial="100%", sm="480px"),
         margin="0 auto",
         min_height="100vh",
@@ -307,8 +553,15 @@ def _menu_content() -> rx.Component:
 @rx.page(route="/menu/[slug]", on_load=MenuPublicoState.on_load, title="TUWAYKIFOOD | Carta Digital")
 def menu_publico_page() -> rx.Component:
     return rx.box(
-        _menu_content(),
-        background="#F8FAFC",
+        rx.cond(
+            MenuPublicoState.pedido_enviado,
+            _pedido_enviado_screen(),
+            rx.fragment(
+                _menu_content(),
+                _carrito_fab(),
+                _carrito_drawer(),
+            ),
+        ),
+        background="#0F172A",
         min_height="100vh",
-        class_name="light",
     )

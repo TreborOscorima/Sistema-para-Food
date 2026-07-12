@@ -12,7 +12,10 @@ import sqlalchemy as sa
 from sqlalchemy import func, case, literal_column
 from sqlmodel import select
 
+import json
+
 from app.models.food import (
+    Auditoria,
     EstadoPedido,
     Insumo,
     MovimientoInsumo,
@@ -128,6 +131,41 @@ def pyl_mensual(
     }
 
 
+# ─── ADM-05: Resumen IGV mensual ─────────────────────────────────────────────
+
+
+def resumen_igv_mensual(
+    session, company_id: int, anio: int, mes: int, porcentaje_igv: float = 18.0,
+) -> dict:
+    """Base imponible + IGV del mes. Precios incluyen IGV (estándar peruano)."""
+    inicio, fin = _month_filters(company_id, anio, mes)
+    row = session.exec(
+        select(
+            func.coalesce(func.sum(Pedido.total - Pedido.descuento + Pedido.recargo), 0),
+            func.count(Pedido.id),
+        ).where(
+            Pedido.company_id == company_id,
+            Pedido.estado == EstadoPedido.COBRADO.value,
+            Pedido.cerrado_en >= inicio,
+            Pedido.cerrado_en < fin,
+        )
+    ).one()
+    ventas_netas = _dec(row[0])
+    pedidos = row[1]
+    factor = Decimal(str(1 + porcentaje_igv / 100))
+    base_imponible = (ventas_netas / factor).quantize(Decimal("0.01"))
+    igv = ventas_netas - base_imponible
+    return {
+        "anio": anio,
+        "mes": mes,
+        "ventas_netas": ventas_netas,
+        "base_imponible": base_imponible,
+        "igv": igv,
+        "porcentaje_igv": porcentaje_igv,
+        "pedidos": pedidos,
+    }
+
+
 # ─── ADM-02: Descuentos y anulaciones (anti-fraude) ─────────────────────────
 
 
@@ -227,6 +265,49 @@ def reporte_anulaciones(
         }
         for p in pedidos
     ]
+
+
+def reporte_reversiones(
+    session, company_id: int, desde: datetime | None = None, hasta: datetime | None = None
+) -> list[dict]:
+    """Cobros revertidos con motivo, extraídos de la tabla de auditoría."""
+    filters = [
+        Auditoria.company_id == company_id,
+        Auditoria.accion == "revertir_cobro",
+    ]
+    if desde:
+        filters.append(Auditoria.created_at >= desde)
+    if hasta:
+        filters.append(Auditoria.created_at < hasta)
+
+    registros = session.exec(
+        select(Auditoria).where(*filters).order_by(Auditoria.created_at.desc())
+    ).all()
+    if not registros:
+        return []
+
+    user_ids = {r.usuario_id for r in registros if r.usuario_id}
+    nombres: dict[int, str] = {}
+    if user_ids:
+        for u in session.exec(
+            select(UsuarioFood).where(UsuarioFood.id.in_(list(user_ids)))
+        ).all():
+            nombres[u.id or 0] = u.nombre
+
+    result = []
+    for r in registros:
+        try:
+            detalle = json.loads(r.detalle) if r.detalle else {}
+        except (json.JSONDecodeError, TypeError):
+            detalle = {}
+        result.append({
+            "pedido_id": r.entidad_id or 0,
+            "total": _dec(detalle.get("total", 0)),
+            "motivo": detalle.get("motivo", "Sin motivo"),
+            "revertido_por": nombres.get(r.usuario_id or 0, "Sistema"),
+            "revertido_en": r.created_at,
+        })
+    return result
 
 
 # ─── ADM-03: Mermas valorizado ──────────────────────────────────────────────

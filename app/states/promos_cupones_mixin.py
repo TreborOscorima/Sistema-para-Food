@@ -144,9 +144,11 @@ class PromosCuponesMixin(rx.State, mixin=True):
 
     # ── Promociones — carga y on_load ───────────────────────────────────────
 
-    def on_load_promociones(self) -> None:
-        self.mensaje = ""
-        self.cargar_menu()  # productos/categorías para los selectores de alcance
+    def on_load_promociones(self):
+        result = self._route_access_result("promociones")
+        if result is not None:
+            return result
+        self.cargar_menu()
         self.cargar_promociones()
 
     def cargar_promociones(self) -> None:
@@ -271,8 +273,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
     def guardar_promocion(self) -> None:
         nombre = self.promo_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre de la promoción es obligatorio."
-            return
+            return rx.toast.error("El nombre de la promoción es obligatorio.")
         es_dosxuno = self.promo_form_tipo == TipoPromocion.DOSXUNO.value
         if es_dosxuno:
             valor = Decimal("0.00")  # el 2x1 no usa valor: regala 1 de cada 2
@@ -282,11 +283,9 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 if valor <= 0:
                     raise ValueError
             except (InvalidOperation, ValueError):
-                self.mensaje = "Valor inválido. Ingrese un número mayor a 0."
-                return
+                return rx.toast.error("Valor inválido. Ingrese un número mayor a 0.")
         if self.promo_form_dias_mask == 0:
-            self.mensaje = "Seleccione al menos un día de la semana."
-            return
+            return rx.toast.error("Seleccione al menos un día de la semana.")
         producto_id = None
         categoria_id = None
         if self.promo_form_alcance == "producto":
@@ -295,8 +294,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 None,
             )
             if prod is None:
-                self.mensaje = "Seleccione el producto para la promoción."
-                return
+                return rx.toast.error("Seleccione el producto para la promoción.")
             producto_id = prod.id
         elif self.promo_form_alcance == "categoria":
             cat = next(
@@ -304,12 +302,10 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 None,
             )
             if cat is None:
-                self.mensaje = "Seleccione la categoría para la promoción."
-                return
+                return rx.toast.error("Seleccione la categoría para la promoción.")
             categoria_id = cat.id
         if es_dosxuno and producto_id is None and categoria_id is None:
-            self.mensaje = "El 2x1 necesita un producto o una categoría como alcance."
-            return
+            return rx.toast.error("El 2x1 necesita un producto o una categoría como alcance.")
         hora_ini = self.promo_form_hora_inicio.strip() or None
         hora_fin = self.promo_form_hora_fin.strip() or None
         with self._tenant_session() as session:
@@ -329,12 +325,11 @@ class PromosCuponesMixin(rx.State, mixin=True):
                     activa=True,
                 )
                 session.add(p)
-                self.mensaje = f"Promoción '{nombre}' creada."
+                _msg = f"Promoción '{nombre}' creada."
             else:
                 p = session.get(Promocion, self.promo_form_id)
                 if p is None or p.company_id != self._company_id():
-                    self.mensaje = "Promoción no encontrada."
-                    return
+                    return rx.toast.error("Promoción no encontrada.")
                 p.nombre = nombre
                 p.tipo = self.promo_form_tipo
                 p.valor = valor
@@ -347,11 +342,12 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 p.auto_aplicar = self.promo_form_auto
                 p.updated_at = _utcnow()
                 session.add(p)
-                self.mensaje = f"Promoción '{nombre}' actualizada."
+                _msg = f"Promoción '{nombre}' actualizada."
             session.commit()
         self._reset_promo_form()
         self.promo_form_visible = False
         self.cargar_promociones()
+        return rx.toast.success(_msg)
 
     def abrir_nueva_promo(self) -> None:
         self._reset_promo_form()
@@ -482,8 +478,10 @@ class PromosCuponesMixin(rx.State, mixin=True):
 
     # ─── Cupones — Gestión admin ────────────────────────────────────────────
 
-    def on_load_cupones(self) -> None:
-        self.mensaje = ""
+    def on_load_cupones(self):
+        result = self._route_access_result("cupones")
+        if result is not None:
+            return result
         self.cargar_cupones()
 
     def cargar_cupones(self) -> None:
@@ -586,21 +584,17 @@ class PromosCuponesMixin(rx.State, mixin=True):
         nombre = self.cupon_form_nombre.strip()
         codigo = self.cupon_form_codigo.strip().upper()
         if not nombre:
-            self.mensaje = "El nombre es obligatorio."
-            return
+            return rx.toast.error("El nombre es obligatorio.")
         if not codigo:
-            self.mensaje = "El código es obligatorio."
-            return
+            return rx.toast.error("El código es obligatorio.")
         try:
             valor = Decimal(str(self.cupon_form_valor.replace(",", ".")))
             if valor <= 0:
                 raise ValueError
         except (ValueError, InvalidOperation):
-            self.mensaje = "Valor inválido. Ingrese un número mayor a cero."
-            return
+            return rx.toast.error("Valor inválido. Ingrese un número mayor a cero.")
         if self.cupon_form_tipo == "porcentaje" and valor > 100:
-            self.mensaje = "El porcentaje no puede superar 100%."
-            return
+            return rx.toast.error("El porcentaje no puede superar 100%.")
         usos_max: int | None = None
         if self.cupon_form_usos_max.strip():
             try:
@@ -608,8 +602,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 if usos_max <= 0:
                     raise ValueError
             except ValueError:
-                self.mensaje = "Usos máximos debe ser un número entero positivo."
-                return
+                return rx.toast.error("Usos máximos debe ser un número entero positivo.")
         fecha_inicio: _date | None = None
         fecha_fin: _date | None = None
         try:
@@ -618,14 +611,12 @@ class PromosCuponesMixin(rx.State, mixin=True):
             if self.cupon_form_fecha_fin:
                 fecha_fin = _date.fromisoformat(self.cupon_form_fecha_fin)
         except ValueError:
-            self.mensaje = "Fechas inválidas."
-            return
+            return rx.toast.error("Fechas inválidas.")
         with self._tenant_session() as session:
             if self.cupon_form_editando and self.cupon_form_id:
                 c = session.get(CuponLote, self.cupon_form_id)
                 if c is None or c.company_id != self._company_id():
-                    self.mensaje = "Cupón no encontrado."
-                    return
+                    return rx.toast.error("Cupón no encontrado.")
                 c.nombre = nombre
                 c.codigo = codigo
                 c.tipo = self.cupon_form_tipo
@@ -653,12 +644,11 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 session.commit()
             except Exception:
                 session.rollback()
-                self.mensaje = f"El código '{codigo}' ya existe."
-                return
-        self.mensaje = f"Cupón '{nombre}' guardado."
+                return rx.toast.error(f"El código '{codigo}' ya existe.")
         self.cupon_form_visible = False
         self._reset_cupon_form()
         self.cargar_cupones()
+        return rx.toast.success(f"Cupón '{nombre}' guardado.")
 
     def toggle_cupon_activo(self, cupon_id: int) -> None:
         with self._tenant_session() as session:

@@ -9,13 +9,17 @@ from app.states.food_state import (
     AnulacionView,
     DescuentoRankView,
     FoodState,
+    MatrizProductoView,
     MermaCategoriaView,
     MermaInsumoView,
     PylLineView,
+    ReversionView,
+    SucursalView,
     TopPlatoView,
     VentaDetalleItemView,
     VentaHistorialView,
 )
+from app.states.reportes_state import ReportesState
 
 _METODOS_FILTRO = [
     ("", "Todos los métodos"),
@@ -47,14 +51,14 @@ def _kpi_card(label: str, value, icon: str, accent: str, bg: str, border: str) -
                 ),
                 rx.spacer(),
             ),
-            rx.text(value, font_size="22px", font_weight="800", color="#0F172A", line_height="1"),
-            rx.text(label, font_size="11px", font_weight="600", color="#64748B",
+            rx.text(value, font_size="22px", font_weight="800", color="#F1F5F9", line_height="1"),
+            rx.text(label, font_size="11px", font_weight="600", color="#94A3B8",
                     text_transform="uppercase", letter_spacing="0.06em"),
             spacing="2",
             align="start",
             width="100%",
         ),
-        background="#FFFFFF",
+        background="#1E293B",
         border=f"1px solid {border}",
         border_radius="12px",
         padding="14px 16px",
@@ -74,19 +78,19 @@ def _top_plato_row(plato: TopPlatoView, idx: int) -> rx.Component:
             width="22px",
             height="22px",
             border_radius="full",
-            background="#FFF7ED",
-            border="1px solid #FED7AA",
+            background="rgba(234,88,12,0.08)",
+            border="1px solid rgba(234,88,12,0.40)",
             display="flex",
             align_items="center",
             justify_content="center",
             flex_shrink="0",
         ),
-        rx.text(plato.nombre, font_size="13px", color="#334155", flex="1",
+        rx.text(plato.nombre, font_size="13px", color="#CBD5E1", flex="1",
                 text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
         rx.badge(
             plato.cantidad.to_string() + " uds",
-            background="#FFF7ED",
-            color="#9A3412",
+            background="rgba(234,88,12,0.08)",
+            color="#EA580C",
             border_radius="5px",
             font_size="10px",
             font_weight="700",
@@ -94,15 +98,15 @@ def _top_plato_row(plato: TopPlatoView, idx: int) -> rx.Component:
             flex_shrink="0",
         ),
         rx.text(plato.total_texto, font_size="13px", font_weight="700",
-                color="#15803D", min_width="72px", text_align="right", flex_shrink="0"),
+                color="#22C55E", min_width="72px", text_align="right", flex_shrink="0"),
         width="100%",
         align="center",
         padding="8px 10px",
-        background="#FFFFFF",
+        background="#1E293B",
         border_radius="8px",
-        border="1px solid #F1F5F9",
+        border="1px solid #1E293B",
         gap="8px",
-        _hover={"background": "#F8FAFC"},
+        _hover={"background": "#334155"},
     )
 
 
@@ -112,16 +116,16 @@ def _metodo_badge(metodo: str) -> rx.Component:
     return rx.badge(
         metodo,
         background=rx.cond(
-            metodo == "efectivo", "#DCFCE7",
-            rx.cond(metodo == "tarjeta", "#DBEAFE",
-            rx.cond(metodo == "qr", "#FEF3C7",
-            rx.cond(metodo == "fiado", "#FFEDD5", "#F1F5F9"))),
+            metodo == "efectivo", "rgba(34,197,94,0.12)",
+            rx.cond(metodo == "tarjeta", "rgba(59,130,246,0.12)",
+            rx.cond(metodo == "qr", "rgba(245,158,11,0.12)",
+            rx.cond(metodo == "fiado", "rgba(234,88,12,0.12)", "#334155"))),
         ),
         color=rx.cond(
-            metodo == "efectivo", "#15803D",
-            rx.cond(metodo == "tarjeta", "#1D4ED8",
-            rx.cond(metodo == "qr", "#B45309",
-            rx.cond(metodo == "fiado", "#C2410C", "#64748B"))),
+            metodo == "efectivo", "#22C55E",
+            rx.cond(metodo == "tarjeta", "#3B82F6",
+            rx.cond(metodo == "qr", "#F59E0B",
+            rx.cond(metodo == "fiado", "#EA580C", "#94A3B8"))),
         ),
         border_radius="5px",
         font_size="10px",
@@ -134,29 +138,45 @@ def _metodo_badge(metodo: str) -> rx.Component:
 
 def _mozo_row(m) -> rx.Component:
     return rx.hstack(
-        rx.text(m.nombre, font_size="13px", font_weight="600", color="#0F172A", flex="1"),
-        rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color="#64748B",
+        rx.text(m.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
+        rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color="#94A3B8",
                 min_width="52px", text_align="right"),
         rx.vstack(
             rx.text(m.total_texto, font_size="13px", font_weight="800",
-                    color="#15803D", text_align="right"),
+                    color="#22C55E", text_align="right"),
             rx.cond(
                 m.propinas_texto != "",
                 rx.text("prop. " + m.propinas_texto, font_size="10px",
-                        color="#B45309", text_align="right"),
+                        color="#F59E0B", text_align="right"),
                 rx.fragment(),
             ),
             spacing="0", align="end", min_width="90px",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
+    )
+
+
+def _propina_row(m) -> rx.Component:
+    return rx.cond(
+        m.propinas > 0,
+        rx.hstack(
+            rx.text(m.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
+            rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color="#94A3B8",
+                    min_width="52px", text_align="right"),
+            rx.text(m.propinas_texto, font_size="14px", font_weight="800",
+                    color="#F59E0B", text_align="right", min_width="80px"),
+            width="100%", align="center", gap="8px",
+            padding="8px 4px", border_bottom="1px solid #334155",
+        ),
+        rx.fragment(),
     )
 
 
 def _ventas_hora_chart() -> rx.Component:
     return rx.recharts.responsive_container(
         rx.recharts.bar_chart(
-            rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#E2E8F0"),
+            rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#334155"),
             rx.recharts.x_axis(
                 data_key="hora_label", font_size=11, tick_line=False,
                 axis_line=False, stroke="#94A3B8",
@@ -176,7 +196,7 @@ def _ventas_hora_chart() -> rx.Component:
                 data_key="pedidos", fill="#FB923C", radius=[4, 4, 0, 0],
                 name="Pedidos",
             ),
-            data=FoodState.reporte_horas_chart,
+            data=ReportesState.reporte_horas_chart,
             margin={"top": 4, "right": 4, "left": 0, "bottom": 0},
         ),
         width="100%", height=220,
@@ -186,7 +206,7 @@ def _ventas_hora_chart() -> rx.Component:
 def _ventas_mozo_chart() -> rx.Component:
     return rx.recharts.responsive_container(
         rx.recharts.bar_chart(
-            rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#E2E8F0"),
+            rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#334155"),
             rx.recharts.x_axis(
                 data_key="nombre", font_size=10, tick_line=False,
                 axis_line=False, stroke="#94A3B8", interval=0,
@@ -207,7 +227,7 @@ def _ventas_mozo_chart() -> rx.Component:
                 data_key="propinas", fill="#F59E0B", radius=[4, 4, 0, 0],
                 name="Propinas (S/)",
             ),
-            data=FoodState.reporte_mozos_chart,
+            data=ReportesState.reporte_mozos_chart,
             margin={"top": 4, "right": 4, "left": 0, "bottom": 0},
         ),
         width="100%", height=220,
@@ -216,20 +236,20 @@ def _ventas_mozo_chart() -> rx.Component:
 
 def _margen_row(p) -> rx.Component:
     return rx.hstack(
-        rx.text(p.nombre, font_size="13px", font_weight="600", color="#0F172A", flex="1",
+        rx.text(p.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1",
                 min_width="0", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
-        rx.text("P " + p.precio_texto, font_size="12px", color="#64748B",
+        rx.text("P " + p.precio_texto, font_size="12px", color="#94A3B8",
                 min_width="86px", text_align="right",
                 display=rx.breakpoints(initial="none", sm="block")),
-        rx.text("C " + p.costo_texto, font_size="12px", color="#64748B",
+        rx.text("C " + p.costo_texto, font_size="12px", color="#94A3B8",
                 min_width="86px", text_align="right",
                 display=rx.breakpoints(initial="none", sm="block")),
-        rx.text(p.margen_texto, font_size="13px", font_weight="700", color="#334155",
+        rx.text(p.margen_texto, font_size="13px", font_weight="700", color="#CBD5E1",
                 min_width="86px", text_align="right"),
         rx.hstack(
             rx.badge(
                 p.margen_pct_texto,
-                background="#FFFFFF", color=p.color,
+                background="#1E293B", color=p.color,
                 border="1.5px solid", border_color=p.color,
                 border_radius="8px", font_size="11px", font_weight="800",
             ),
@@ -241,7 +261,7 @@ def _margen_row(p) -> rx.Component:
             spacing="1", align="center", min_width="70px", justify="end",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
     )
 
 
@@ -255,11 +275,11 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             flex_shrink="0",
         ),
         rx.vstack(
-            rx.text(venta.mesa_label, font_size="13px", color="#334155", width="100%",
+            rx.text(venta.mesa_label, font_size="13px", color="#CBD5E1", width="100%",
                     text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
             rx.cond(
                 venta.anulada,
-                rx.text(venta.anulacion_texto, font_size="10px", color="#B91C1C",
+                rx.text(venta.anulacion_texto, font_size="10px", color="#F87171",
                         width="100%", text_overflow="ellipsis", overflow="hidden",
                         white_space="nowrap"),
                 rx.fragment(),
@@ -269,13 +289,13 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         _metodo_badge(venta.metodo_pago),
         rx.text(
             venta.mozo_nombre,
-            font_size="12px", color="#64748B",
+            font_size="12px", color="#94A3B8",
             min_width="72px", text_align="center", flex_shrink="0",
             display=rx.breakpoints(initial="none", sm="block"),
         ),
         rx.text(
             venta.cajero_nombre,
-            font_size="12px", color="#64748B",
+            font_size="12px", color="#94A3B8",
             min_width="72px", text_align="center", flex_shrink="0",
             display=rx.breakpoints(initial="none", lg="block"),
         ),
@@ -283,11 +303,11 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             rx.cond(
                 venta.anulada,
                 rx.badge(
-                    "ANULADA", background="#FEE2E2", color="#B91C1C",
+                    "ANULADA", background="rgba(239,68,68,0.12)", color="#F87171",
                     border_radius="6px", font_size="10px", font_weight="800",
                 ),
                 rx.text(venta.total_con_propina_texto, font_size="13px", font_weight="700",
-                        color="#15803D", text_align="right"),
+                        color="#22C55E", text_align="right"),
             ),
             rx.cond(
                 venta.anulada,
@@ -296,7 +316,7 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
                 rx.cond(
                     venta.propina > 0,
                     rx.text("+ " + venta.propina_texto + " prop.",
-                            font_size="10px", color="#B45309", text_align="right"),
+                            font_size="10px", color="#F59E0B", text_align="right"),
                     rx.fragment(),
                 ),
             ),
@@ -309,7 +329,7 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             venta.anulada,
             rx.fragment(),
             rx.button(
-                rx.icon(tag="ban", size=15),
+                rx.icon(tag="trash_2", size=15),
                 on_click=FoodState.abrir_anulacion_venta(venta.pedido_id).stop_propagation,
                 background="transparent", color="#CBD5E1",
                 border="none", padding="2px", cursor="pointer",
@@ -321,14 +341,14 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         width="100%",
         align="center",
         padding="10px 12px",
-        background="#FFFFFF",
+        background="#1E293B",
         border_radius="8px",
-        border="1px solid #E2E8F0",
+        border="1px solid #334155",
         gap="8px",
         cursor="pointer",
         opacity=rx.cond(venta.anulada, "0.75", "1"),
-        on_click=FoodState.abrir_detalle_venta(venta.pedido_id),
-        _hover={"background": "#F8FAFC"},
+        on_click=ReportesState.abrir_detalle_venta(venta.pedido_id),
+        _hover={"background": "#334155"},
     )
 
 
@@ -337,9 +357,9 @@ def _venta_detalle_item_row(item: VentaDetalleItemView) -> rx.Component:
         rx.hstack(
             rx.text(item.cantidad.to_string() + "x", font_size="12px",
                      color="#94A3B8", min_width="26px", flex_shrink="0"),
-            rx.text(item.nombre, font_size="13px", color="#0F172A", flex="1"),
+            rx.text(item.nombre, font_size="13px", color="#F1F5F9", flex="1"),
             rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
-                     color="#0F172A", flex_shrink="0"),
+                     color="#F1F5F9", flex_shrink="0"),
             width="100%", align="center", gap="8px",
         ),
         rx.cond(
@@ -349,7 +369,7 @@ def _venta_detalle_item_row(item: VentaDetalleItemView) -> rx.Component:
             rx.fragment(),
         ),
         spacing="1", width="100%", padding="8px 0",
-        border_bottom="1px solid #F1F5F9",
+        border_bottom="1px solid #1E293B",
     )
 
 
@@ -359,52 +379,53 @@ def _venta_detalle_modal() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.vstack(
-                        rx.text("Pedido #" + FoodState.venta_detalle_pedido_id.to_string(),
-                                font_size="16px", font_weight="800", color="#0F172A"),
-                        rx.text(FoodState.venta_detalle_mesa_label, font_size="13px", color="#64748B"),
+                        rx.text("Pedido #" + ReportesState.venta_detalle_pedido_id.to_string(),
+                                font_size="16px", font_weight="800", color="#F1F5F9"),
+                        rx.text(ReportesState.venta_detalle_mesa_label, font_size="13px", color="#94A3B8"),
                         spacing="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(
-                        rx.icon(tag="x", size=16, color="#64748B", cursor="pointer"),
+                        rx.icon(tag="x", size=16, color="#94A3B8", cursor="pointer"),
                     ),
                     width="100%", align="start",
                 ),
                 rx.hstack(
-                    _metodo_badge(FoodState.venta_detalle_metodo),
-                    rx.text("Mozo: " + FoodState.venta_detalle_mozo, font_size="12px", color="#64748B"),
-                    rx.text("Cajero: " + FoodState.venta_detalle_cajero, font_size="12px", color="#64748B"),
+                    _metodo_badge(ReportesState.venta_detalle_metodo),
+                    rx.text("Mozo: " + ReportesState.venta_detalle_mozo, font_size="12px", color="#94A3B8"),
+                    rx.text("Cajero: " + ReportesState.venta_detalle_cajero, font_size="12px", color="#94A3B8"),
                     spacing="3", align="center", wrap="wrap",
                 ),
-                rx.box(height="1px", width="100%", background="#E2E8F0"),
+                rx.box(height="1px", width="100%", background="#334155"),
                 rx.vstack(
-                    rx.foreach(FoodState.venta_detalle_items, _venta_detalle_item_row),
+                    rx.foreach(ReportesState.venta_detalle_items, _venta_detalle_item_row),
                     spacing="0", width="100%", max_height="280px", overflow_y="auto",
                 ),
-                rx.box(height="1px", width="100%", background="#E2E8F0"),
+                rx.box(height="1px", width="100%", background="#334155"),
                 rx.hstack(
                     rx.vstack(
-                        rx.text("Total", font_size="14px", font_weight="700", color="#0F172A"),
+                        rx.text("Total", font_size="14px", font_weight="700", color="#F1F5F9"),
                         rx.cond(
-                            FoodState.venta_detalle_propina_texto != "",
-                            rx.text("Incluye propina " + FoodState.venta_detalle_propina_texto,
-                                     font_size="11px", color="#B45309"),
+                            ReportesState.venta_detalle_propina_texto != "",
+                            rx.text("Incluye propina " + ReportesState.venta_detalle_propina_texto,
+                                     font_size="11px", color="#F59E0B"),
                             rx.fragment(),
                         ),
                         spacing="0",
                     ),
                     rx.spacer(),
-                    rx.text(FoodState.venta_detalle_total_texto, font_size="18px",
-                             font_weight="800", color="#15803D"),
+                    rx.text(ReportesState.venta_detalle_total_texto, font_size="18px",
+                             font_weight="800", color="#22C55E"),
                     width="100%", align="center",
                 ),
                 spacing="3", width="100%",
             ),
-            class_name="light",
             max_width="420px",
+            background="#0F172A",
+            border="1px solid #1E293B",
         ),
-        open=FoodState.venta_detalle_visible,
-        on_open_change=FoodState.set_venta_detalle_visible,
+        open=ReportesState.venta_detalle_visible,
+        on_open_change=ReportesState.set_venta_detalle_visible,
     )
 
 
@@ -414,13 +435,13 @@ def _filtros_bar() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.icon(tag="filter", size=14, color="#64748B"),
-                rx.text("Filtros", font_size="13px", font_weight="700", color="#334155"),
+                rx.icon(tag="filter", size=14, color="#94A3B8"),
+                rx.text("Filtros", font_size="13px", font_weight="700", color="#CBD5E1"),
                 rx.cond(
-                    FoodState.historial_filtro_activo,
+                    ReportesState.historial_filtro_activo,
                     rx.badge(
                         "Activo",
-                        background="#FFF7ED",
+                        background="rgba(234,88,12,0.08)",
                         color="#EA580C",
                         border_radius="5px",
                         font_size="10px",
@@ -435,14 +456,14 @@ def _filtros_bar() -> rx.Component:
             rx.grid(
                 # Fecha desde
                 rx.vstack(
-                    rx.text("Desde", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Desde", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
-                        value=FoodState.historial_filtro_fecha_desde,
-                        on_change=FoodState.set_historial_filtro_fecha_desde,
+                        value=ReportesState.historial_filtro_fecha_desde,
+                        on_change=ReportesState.set_historial_filtro_fecha_desde,
                         type="date",
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
-                        color="#0F172A",
+                        background="#1E293B",
+                        border="1px solid #334155",
+                        color="#F1F5F9",
                         border_radius="8px",
                         padding_x="10px",
                         padding_y="7px",
@@ -455,14 +476,14 @@ def _filtros_bar() -> rx.Component:
                 ),
                 # Fecha hasta
                 rx.vstack(
-                    rx.text("Hasta", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Hasta", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.input(
-                        value=FoodState.historial_filtro_fecha_hasta,
-                        on_change=FoodState.set_historial_filtro_fecha_hasta,
+                        value=ReportesState.historial_filtro_fecha_hasta,
+                        on_change=ReportesState.set_historial_filtro_fecha_hasta,
                         type="date",
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
-                        color="#0F172A",
+                        background="#1E293B",
+                        border="1px solid #334155",
+                        color="#F1F5F9",
                         border_radius="8px",
                         padding_x="10px",
                         padding_y="7px",
@@ -475,35 +496,35 @@ def _filtros_bar() -> rx.Component:
                 ),
                 # Método de pago
                 rx.vstack(
-                    rx.text("Método", font_size="11px", font_weight="600", color="#64748B"),
+                    rx.text("Método", font_size="11px", font_weight="600", color="#94A3B8"),
                     rx.select(
                         [label for _, label in _METODOS_FILTRO],
                         value=rx.cond(
-                            FoodState.historial_filtro_metodo == "", "Todos los métodos",
+                            ReportesState.historial_filtro_metodo == "", "Todos los métodos",
                             rx.cond(
-                                FoodState.historial_filtro_metodo == "efectivo", "Efectivo",
+                                ReportesState.historial_filtro_metodo == "efectivo", "Efectivo",
                                 rx.cond(
-                                    FoodState.historial_filtro_metodo == "tarjeta", "Tarjeta",
+                                    ReportesState.historial_filtro_metodo == "tarjeta", "Tarjeta",
                                     rx.cond(
-                                        FoodState.historial_filtro_metodo == "qr", "QR / Yape",
+                                        ReportesState.historial_filtro_metodo == "qr", "QR / Yape",
                                         rx.cond(
-                                            FoodState.historial_filtro_metodo == "fiado", "Fiado / CC",
+                                            ReportesState.historial_filtro_metodo == "fiado", "Fiado / CC",
                                             "Mixto",
                                         ),
                                     ),
                                 ),
                             ),
                         ),
-                        on_change=lambda v: FoodState.set_historial_filtro_metodo(
+                        on_change=lambda v: ReportesState.set_historial_filtro_metodo(
                             rx.cond(v == "Todos los métodos", "",
                             rx.cond(v == "Efectivo", "efectivo",
                             rx.cond(v == "Tarjeta", "tarjeta",
                             rx.cond(v == "QR / Yape", "qr",
                             rx.cond(v == "Fiado / CC", "fiado", "mixto")))))
                         ),
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
-                        color="#0F172A",
+                        background="#1E293B",
+                        border="1px solid #334155",
+                        color="#F1F5F9",
                         border_radius="8px",
                         font_size="13px",
                         width="100%",
@@ -523,7 +544,7 @@ def _filtros_bar() -> rx.Component:
                         rx.text("Buscar", font_size="13px", font_weight="600"),
                         spacing="1", align="center",
                     ),
-                    on_click=FoodState.buscar_historial_manual,
+                    on_click=ReportesState.buscar_historial_manual,
                     background="#EA580C",
                     color="#FFFFFF",
                     border_radius="8px",
@@ -533,17 +554,17 @@ def _filtros_bar() -> rx.Component:
                     _hover={"background": "#C2410C"},
                 ),
                 rx.cond(
-                    FoodState.historial_filtro_activo,
+                    ReportesState.historial_filtro_activo,
                     rx.button(
                         rx.hstack(
                             rx.icon(tag="x", size=13),
                             rx.text("Limpiar", font_size="13px", font_weight="600"),
                             spacing="1", align="center",
                         ),
-                        on_click=FoodState.limpiar_filtros_historial,
-                        background="#F1F5F9",
-                        color="#64748B",
-                        border="1px solid #E2E8F0",
+                        on_click=ReportesState.limpiar_filtros_historial,
+                        background="#1E293B",
+                        color="#94A3B8",
+                        border="1px solid #334155",
                         border_radius="8px",
                         padding_x="14px",
                         padding_y="8px",
@@ -557,8 +578,8 @@ def _filtros_bar() -> rx.Component:
             spacing="3",
             width="100%",
         ),
-        background="#F8FAFC",
-        border="1px solid #E2E8F0",
+        background="#0F172A",
+        border="1px solid #334155",
         border_radius="10px",
         padding="12px 14px",
         width="100%",
@@ -605,7 +626,7 @@ def _pyl_line_row(line: PylLineView) -> rx.Component:
             line.concepto,
             font_size="13px",
             font_weight=rx.cond(line.es_total, "800", "500"),
-            color=rx.cond(line.es_total, "#0F172A", "#475569"),
+            color=rx.cond(line.es_total, "#F1F5F9", "#94A3B8"),
             flex="1",
         ),
         rx.hstack(
@@ -624,8 +645,8 @@ def _pyl_line_row(line: PylLineView) -> rx.Component:
                 line.margen_pct_texto != "",
                 rx.badge(
                     line.margen_pct_texto,
-                    background=rx.cond(line.es_negativo, "#FEE2E2", "#DCFCE7"),
-                    color=rx.cond(line.es_negativo, "#DC2626", "#15803D"),
+                    background=rx.cond(line.es_negativo, "rgba(239,68,68,0.12)", "rgba(34,197,94,0.12)"),
+                    color=rx.cond(line.es_negativo, "#DC2626", "#22C55E"),
                     border_radius="6px",
                     font_size="11px",
                     font_weight="800",
@@ -638,7 +659,25 @@ def _pyl_line_row(line: PylLineView) -> rx.Component:
         width="100%",
         align="center",
         padding="8px 4px",
-        border_top=rx.cond(line.es_total, "2px solid #E2E8F0", "1px solid #F1F5F9"),
+        border_top=rx.cond(line.es_total, "2px solid #475569", "1px solid #334155"),
+    )
+
+
+def _excel_btn(on_click) -> rx.Component:
+    return rx.button(
+        rx.icon(tag="download", size=12, color="#22C55E"),
+        rx.text("Excel", font_size="11px", font_weight="700", color="#22C55E"),
+        on_click=on_click,
+        background="rgba(34,197,94,0.08)",
+        border="1px solid #BBF7D0",
+        border_radius="8px",
+        padding="4px 10px",
+        cursor="pointer",
+        _hover={"background": "rgba(34,197,94,0.12)"},
+        display="flex",
+        align_items="center",
+        gap="4px",
+        height="auto",
     )
 
 
@@ -648,26 +687,26 @@ def _pyl_section() -> rx.Component:
             rx.hstack(
                 rx.icon(tag="file_text", size=14, color="#EA580C"),
                 rx.text("Estado de resultados (P&L)", font_size="13px",
-                        font_weight="700", color="#334155"),
+                        font_weight="700", color="#CBD5E1"),
                 rx.spacer(),
                 rx.hstack(
                     rx.select(
                         [label for _, label in _MESES],
                         value=rx.cond(
-                            FoodState.pyl_mes == 1, "Enero",
-                            rx.cond(FoodState.pyl_mes == 2, "Febrero",
-                            rx.cond(FoodState.pyl_mes == 3, "Marzo",
-                            rx.cond(FoodState.pyl_mes == 4, "Abril",
-                            rx.cond(FoodState.pyl_mes == 5, "Mayo",
-                            rx.cond(FoodState.pyl_mes == 6, "Junio",
-                            rx.cond(FoodState.pyl_mes == 7, "Julio",
-                            rx.cond(FoodState.pyl_mes == 8, "Agosto",
-                            rx.cond(FoodState.pyl_mes == 9, "Septiembre",
-                            rx.cond(FoodState.pyl_mes == 10, "Octubre",
-                            rx.cond(FoodState.pyl_mes == 11, "Noviembre",
+                            ReportesState.pyl_mes == 1, "Enero",
+                            rx.cond(ReportesState.pyl_mes == 2, "Febrero",
+                            rx.cond(ReportesState.pyl_mes == 3, "Marzo",
+                            rx.cond(ReportesState.pyl_mes == 4, "Abril",
+                            rx.cond(ReportesState.pyl_mes == 5, "Mayo",
+                            rx.cond(ReportesState.pyl_mes == 6, "Junio",
+                            rx.cond(ReportesState.pyl_mes == 7, "Julio",
+                            rx.cond(ReportesState.pyl_mes == 8, "Agosto",
+                            rx.cond(ReportesState.pyl_mes == 9, "Septiembre",
+                            rx.cond(ReportesState.pyl_mes == 10, "Octubre",
+                            rx.cond(ReportesState.pyl_mes == 11, "Noviembre",
                             "Diciembre",
                             ))))))))))),
-                        on_change=lambda v: FoodState.set_pyl_mes(
+                        on_change=lambda v: ReportesState.set_pyl_mes(
                             rx.cond(v == "Enero", "1",
                             rx.cond(v == "Febrero", "2",
                             rx.cond(v == "Marzo", "3",
@@ -682,18 +721,18 @@ def _pyl_section() -> rx.Component:
                             "12",
                             )))))))))))
                         ),
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
+                        background="#1E293B",
+                        border="1px solid #334155",
                         border_radius="8px",
                         font_size="12px",
                         width="130px",
                     ),
                     rx.input(
-                        value=FoodState.pyl_anio.to_string(),
-                        on_change=FoodState.set_pyl_anio,
+                        value=ReportesState.pyl_anio.to_string(),
+                        on_change=ReportesState.set_pyl_anio,
                         type="number",
-                        background="#FFFFFF",
-                        border="1px solid #E2E8F0",
+                        background="#1E293B",
+                        border="1px solid #334155",
                         border_radius="8px",
                         font_size="12px",
                         width="80px",
@@ -701,30 +740,244 @@ def _pyl_section() -> rx.Component:
                     ),
                     rx.button(
                         rx.icon(tag="refresh_cw", size=13),
-                        on_click=FoodState.actualizar_pyl,
-                        background="#FFF7ED",
+                        on_click=ReportesState.actualizar_pyl,
+                        background="rgba(234,88,12,0.08)",
                         color="#EA580C",
-                        border="1px solid #FED7AA",
+                        border="1px solid rgba(234,88,12,0.40)",
                         border_radius="8px",
                         padding="6px 10px",
                         cursor="pointer",
                         _hover={"opacity": "0.85"},
                     ),
+                    _excel_btn(ReportesState.exportar_pyl_excel),
                     spacing="2", align="center",
                 ),
                 spacing="2", align="center", width="100%", wrap="wrap",
             ),
             rx.cond(
-                FoodState.pyl_lineas.length() > 0,
+                ReportesState.pyl_lineas.length() > 0,
                 rx.vstack(
-                    rx.foreach(FoodState.pyl_lineas, _pyl_line_row),
+                    rx.foreach(ReportesState.pyl_lineas, _pyl_line_row),
                     spacing="0", width="100%",
                 ),
                 rx.text("Sin datos para el mes seleccionado.", font_size="12px", color="#94A3B8"),
             ),
             spacing="3", width="100%",
         ),
-        background="#F8FAFC", border="1px solid #E2E8F0",
+        background="#0F172A", border="1px solid #334155",
+        border_radius="10px", padding="12px 14px", width="100%",
+    )
+
+
+# ─── Resumen IGV mensual (ADM-05) ──────────────────────────────────────────
+
+
+def _igv_kpi(label: str, value, icon: str) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.text(label, font_size="11px", font_weight="600", color="#94A3B8"),
+            rx.text(value, font_size="18px", font_weight="800", color="#F1F5F9",
+                    line_height="1"),
+            spacing="1", align="start",
+        ),
+        flex="1", min_width="120px",
+    )
+
+
+def _igv_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.icon(tag="receipt", size=14, color="#EA580C"),
+                rx.text("Resumen IGV mensual", font_size="13px",
+                        font_weight="700", color="#CBD5E1"),
+                rx.spacer(),
+                rx.hstack(
+                    rx.select(
+                        [label for _, label in _MESES],
+                        value=rx.cond(
+                            ReportesState.igv_mes == 1, "Enero",
+                            rx.cond(ReportesState.igv_mes == 2, "Febrero",
+                            rx.cond(ReportesState.igv_mes == 3, "Marzo",
+                            rx.cond(ReportesState.igv_mes == 4, "Abril",
+                            rx.cond(ReportesState.igv_mes == 5, "Mayo",
+                            rx.cond(ReportesState.igv_mes == 6, "Junio",
+                            rx.cond(ReportesState.igv_mes == 7, "Julio",
+                            rx.cond(ReportesState.igv_mes == 8, "Agosto",
+                            rx.cond(ReportesState.igv_mes == 9, "Septiembre",
+                            rx.cond(ReportesState.igv_mes == 10, "Octubre",
+                            rx.cond(ReportesState.igv_mes == 11, "Noviembre",
+                            "Diciembre",
+                            ))))))))))),
+                        on_change=lambda v: ReportesState.set_igv_mes(
+                            rx.cond(v == "Enero", "1",
+                            rx.cond(v == "Febrero", "2",
+                            rx.cond(v == "Marzo", "3",
+                            rx.cond(v == "Abril", "4",
+                            rx.cond(v == "Mayo", "5",
+                            rx.cond(v == "Junio", "6",
+                            rx.cond(v == "Julio", "7",
+                            rx.cond(v == "Agosto", "8",
+                            rx.cond(v == "Septiembre", "9",
+                            rx.cond(v == "Octubre", "10",
+                            rx.cond(v == "Noviembre", "11",
+                            "12",
+                            )))))))))))
+                        ),
+                        background="#1E293B",
+                        border="1px solid #334155",
+                        border_radius="8px",
+                        font_size="12px",
+                        width="130px",
+                    ),
+                    rx.input(
+                        value=ReportesState.igv_anio.to_string(),
+                        on_change=ReportesState.set_igv_anio,
+                        type="number",
+                        background="#1E293B",
+                        border="1px solid #334155",
+                        border_radius="8px",
+                        font_size="12px",
+                        width="80px",
+                        padding_x="8px",
+                    ),
+                    rx.button(
+                        rx.icon(tag="refresh_cw", size=13),
+                        on_click=ReportesState.actualizar_igv,
+                        background="rgba(234,88,12,0.08)",
+                        color="#EA580C",
+                        border="1px solid rgba(234,88,12,0.40)",
+                        border_radius="8px",
+                        padding="6px 10px",
+                        cursor="pointer",
+                        _hover={"opacity": "0.85"},
+                    ),
+                    _excel_btn(ReportesState.exportar_igv_excel),
+                    spacing="2", align="center",
+                ),
+                spacing="2", align="center", width="100%", wrap="wrap",
+            ),
+            rx.cond(
+                ReportesState.igv_pedidos > 0,
+                rx.vstack(
+                    rx.flex(
+                        _igv_kpi("Ventas netas (con IGV)", ReportesState.igv_ventas_netas_texto, "banknote"),
+                        _igv_kpi("Base imponible", ReportesState.igv_base_imponible_texto, "calculator"),
+                        _igv_kpi("IGV (" + ReportesState.igv_porcentaje.to_string() + "%)", ReportesState.igv_monto_texto, "percent"),
+                        wrap="wrap", gap="12px", width="100%",
+                    ),
+                    rx.text(
+                        ReportesState.igv_pedidos.to_string() + " pedidos cobrados en el mes.",
+                        font_size="11px", color="#94A3B8",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                rx.text("Sin pedidos cobrados para el mes seleccionado.", font_size="12px", color="#94A3B8"),
+            ),
+            spacing="3", width="100%",
+        ),
+        background="rgba(34,197,94,0.08)", border="1px solid #BBF7D0",
+        border_radius="10px", padding="12px 14px", width="100%",
+    )
+
+
+# ─── Matriz estrella/perro (ADM-06) ────────────────────────────────────────
+
+_CAT_COLORS = {
+    "estrella": ("rgba(245,158,11,0.12)", "#F59E0B"),
+    "vaca": ("rgba(59,130,246,0.12)", "#3B82F6"),
+    "puzzle": ("rgba(124,58,237,0.12)", "#A78BFA"),
+    "perro": ("rgba(239,68,68,0.12)", "#F87171"),
+}
+
+
+def _matriz_row(p: MatrizProductoView) -> rx.Component:
+    return rx.hstack(
+        rx.text(p.categoria_emoji, font_size="16px", flex_shrink="0", width="22px"),
+        rx.text(p.nombre, font_size="13px", font_weight="600", color="#F1F5F9",
+                flex="1", min_width="0", text_overflow="ellipsis",
+                overflow="hidden", white_space="nowrap"),
+        rx.text(p.unidades.to_string() + " uds", font_size="12px", color="#94A3B8",
+                min_width="55px", text_align="right"),
+        rx.text(p.ingreso_texto, font_size="12px", font_weight="600", color="#F1F5F9",
+                min_width="75px", text_align="right"),
+        rx.badge(
+            p.margen_pct_texto,
+            background=rx.cond(
+                p.categoria == "estrella", "rgba(245,158,11,0.12)",
+                rx.cond(p.categoria == "vaca", "rgba(59,130,246,0.12)",
+                rx.cond(p.categoria == "puzzle", "rgba(124,58,237,0.12)", "rgba(239,68,68,0.12)")),
+            ),
+            color=rx.cond(
+                p.categoria == "estrella", "#F59E0B",
+                rx.cond(p.categoria == "vaca", "#3B82F6",
+                rx.cond(p.categoria == "puzzle", "#A78BFA", "#F87171")),
+            ),
+            border_radius="6px", font_size="11px", font_weight="800",
+            padding="2px 6px", min_width="55px", text_align="center",
+        ),
+        width="100%", align="center", gap="8px",
+        padding="6px 4px", border_bottom="1px solid #1E293B",
+    )
+
+
+def _matriz_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.icon(tag="grid_2x2", size=14, color="#EA580C"),
+                rx.text("Matriz estrella / perro", font_size="13px",
+                        font_weight="700", color="#CBD5E1"),
+                rx.spacer(),
+                rx.button(
+                    rx.icon(tag="refresh_cw", size=13),
+                    on_click=ReportesState.cargar_matriz_productos,
+                    background="rgba(234,88,12,0.08)",
+                    color="#EA580C",
+                    border="1px solid rgba(234,88,12,0.40)",
+                    border_radius="8px",
+                    padding="6px 10px",
+                    cursor="pointer",
+                    _hover={"opacity": "0.85"},
+                ),
+                _excel_btn(ReportesState.exportar_matriz_excel),
+                spacing="2", align="center", width="100%",
+            ),
+            rx.cond(
+                ReportesState.matriz_productos.length() > 0,
+                rx.vstack(
+                    rx.hstack(
+                        rx.badge("⭐ " + ReportesState.matriz_estrellas.to_string(),
+                                 background="rgba(245,158,11,0.12)", color="#F59E0B",
+                                 border_radius="6px", font_size="11px",
+                                 font_weight="700", padding="3px 8px"),
+                        rx.badge("\U0001F42E " + ReportesState.matriz_vacas.to_string(),
+                                 background="rgba(59,130,246,0.12)", color="#3B82F6",
+                                 border_radius="6px", font_size="11px",
+                                 font_weight="700", padding="3px 8px"),
+                        rx.badge("\U0001F9E9 " + ReportesState.matriz_puzzles.to_string(),
+                                 background="rgba(124,58,237,0.12)", color="#A78BFA",
+                                 border_radius="6px", font_size="11px",
+                                 font_weight="700", padding="3px 8px"),
+                        rx.badge("\U0001F415 " + ReportesState.matriz_perros.to_string(),
+                                 background="rgba(239,68,68,0.12)", color="#F87171",
+                                 border_radius="6px", font_size="11px",
+                                 font_weight="700", padding="3px 8px"),
+                        spacing="2", wrap="wrap",
+                    ),
+                    rx.box(
+                        rx.foreach(ReportesState.matriz_productos, _matriz_row),
+                        width="100%",
+                        max_height="320px",
+                        overflow_y="auto",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                rx.text("Sin datos de ventas para el período.", font_size="12px", color="#94A3B8"),
+            ),
+            spacing="3", width="100%",
+        ),
+        background="rgba(245,158,11,0.10)", border="1px solid rgba(245,158,11,0.20)",
         border_radius="10px", padding="12px 14px", width="100%",
     )
 
@@ -734,19 +987,19 @@ def _pyl_section() -> rx.Component:
 
 def _descuento_rank_row(d: DescuentoRankView) -> rx.Component:
     return rx.hstack(
-        rx.text(d.cajero, font_size="13px", font_weight="600", color="#0F172A", flex="1"),
-        rx.text(d.pedidos.to_string() + " ped.", font_size="12px", color="#64748B",
+        rx.text(d.cajero, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
+        rx.text(d.pedidos.to_string() + " ped.", font_size="12px", color="#94A3B8",
                 min_width="52px", text_align="right"),
         rx.text(d.total_descuento_texto, font_size="13px", font_weight="700",
                 color="#DC2626", min_width="86px", text_align="right"),
         rx.badge(
             d.pct_descuento_texto,
-            background="#FEE2E2", color="#B91C1C",
+            background="rgba(239,68,68,0.12)", color="#F87171",
             border_radius="6px", font_size="11px", font_weight="800",
             padding="2px 6px",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
     )
 
 
@@ -755,7 +1008,7 @@ def _anulacion_row(a: AnulacionView) -> rx.Component:
         rx.text("#" + a.pedido_id.to_string(), font_size="11px", color="#94A3B8",
                 min_width="36px", flex_shrink="0"),
         rx.vstack(
-            rx.text(a.motivo, font_size="13px", color="#334155", width="100%",
+            rx.text(a.motivo, font_size="13px", color="#CBD5E1", width="100%",
                     text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
             rx.text(
                 a.cancelado_por + " — " + a.cancelado_en_texto,
@@ -766,7 +1019,7 @@ def _anulacion_row(a: AnulacionView) -> rx.Component:
         rx.text(a.total_texto, font_size="13px", font_weight="700", color="#DC2626",
                 min_width="80px", text_align="right", flex_shrink="0"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
     )
 
 
@@ -778,60 +1031,111 @@ def _descuentos_anulaciones_section() -> rx.Component:
                 rx.hstack(
                     rx.icon(tag="percent", size=14, color="#DC2626"),
                     rx.text("Descuentos por cajero", font_size="13px",
-                            font_weight="700", color="#334155"),
+                            font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
                     rx.badge(
-                        FoodState.descuentos_total_texto,
-                        background="#FEE2E2", color="#B91C1C",
+                        ReportesState.descuentos_total_texto,
+                        background="rgba(239,68,68,0.12)", color="#F87171",
                         border_radius="6px", font_size="11px", font_weight="800",
                         padding="2px 8px",
                     ),
                     spacing="2", align="center", width="100%",
                 ),
                 rx.cond(
-                    FoodState.descuentos_rank.length() > 0,
+                    ReportesState.descuentos_rank.length() > 0,
                     rx.vstack(
-                        rx.foreach(FoodState.descuentos_rank, _descuento_rank_row),
+                        rx.foreach(ReportesState.descuentos_rank, _descuento_rank_row),
                         spacing="0", width="100%",
                     ),
                     rx.text("Sin descuentos en el período.", font_size="12px", color="#94A3B8"),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         # Anulaciones
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="ban", size=14, color="#DC2626"),
+                    rx.icon(tag="trash_2", size=14, color="#DC2626"),
                     rx.text("Anulaciones", font_size="13px",
-                            font_weight="700", color="#334155"),
+                            font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
                     rx.badge(
-                        FoodState.anulaciones_total_texto,
-                        background="#FEE2E2", color="#B91C1C",
+                        ReportesState.anulaciones_total_texto,
+                        background="rgba(239,68,68,0.12)", color="#F87171",
                         border_radius="6px", font_size="11px", font_weight="800",
                         padding="2px 8px",
                     ),
                     spacing="2", align="center", width="100%",
                 ),
                 rx.cond(
-                    FoodState.anulaciones_lista.length() > 0,
+                    ReportesState.anulaciones_lista.length() > 0,
                     rx.vstack(
-                        rx.foreach(FoodState.anulaciones_lista, _anulacion_row),
+                        rx.foreach(ReportesState.anulaciones_lista, _anulacion_row),
                         spacing="0", width="100%", max_height="300px", overflow_y="auto",
                     ),
                     rx.text("Sin anulaciones en el período.", font_size="12px", color="#94A3B8"),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
+        # Reversiones de cobro
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="undo_2", size=14, color="#F59E0B"),
+                    rx.text("Reversiones de cobro", font_size="13px",
+                            font_weight="700", color="#CBD5E1"),
+                    rx.spacer(),
+                    rx.badge(
+                        ReportesState.reversiones_total_texto,
+                        background="rgba(245,158,11,0.12)", color="#FBBF24",
+                        border_radius="6px", font_size="11px", font_weight="800",
+                        padding="2px 8px",
+                    ),
+                    spacing="2", align="center", width="100%",
+                ),
+                rx.cond(
+                    ReportesState.reversiones_lista.length() > 0,
+                    rx.vstack(
+                        rx.foreach(ReportesState.reversiones_lista, _reversion_row),
+                        spacing="0", width="100%", max_height="300px", overflow_y="auto",
+                    ),
+                    rx.text("Sin reversiones en el período.", font_size="12px", color="#94A3B8"),
+                ),
+                spacing="3", width="100%",
+            ),
+            background="#0F172A", border="1px solid #334155",
+            border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
+        ),
+        _excel_btn(ReportesState.exportar_descuentos_excel),
         gap="12px", width="100%",
         direction=rx.breakpoints(initial="column", md="row"),
+        flex_wrap="wrap",
+    )
+
+
+def _reversion_row(r: ReversionView) -> rx.Component:
+    return rx.hstack(
+        rx.text("#" + r.pedido_id.to_string(), font_size="11px", color="#94A3B8",
+                min_width="36px", flex_shrink="0"),
+        rx.vstack(
+            rx.text(r.motivo, font_size="13px", color="#CBD5E1", width="100%",
+                    text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
+            rx.text(
+                r.revertido_por + " — " + r.revertido_en_texto,
+                font_size="10px", color="#94A3B8",
+            ),
+            spacing="0", flex="1", min_width="0",
+        ),
+        rx.text(r.total_texto, font_size="13px", font_weight="700", color="#F59E0B",
+                min_width="80px", text_align="right", flex_shrink="0"),
+        width="100%", align="center", gap="8px",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
     )
 
 
@@ -840,26 +1144,26 @@ def _descuentos_anulaciones_section() -> rx.Component:
 
 def _merma_cat_row(c: MermaCategoriaView) -> rx.Component:
     return rx.hstack(
-        rx.text(c.categoria, font_size="13px", font_weight="600", color="#0F172A", flex="1"),
-        rx.text(c.registros.to_string() + " reg.", font_size="12px", color="#64748B",
+        rx.text(c.categoria, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
+        rx.text(c.registros.to_string() + " reg.", font_size="12px", color="#94A3B8",
                 min_width="52px", text_align="right"),
         rx.text(c.valor_texto, font_size="13px", font_weight="700", color="#DC2626",
                 min_width="86px", text_align="right"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
     )
 
 
 def _merma_insumo_row(i: MermaInsumoView) -> rx.Component:
     return rx.hstack(
-        rx.text(i.nombre, font_size="13px", font_weight="600", color="#0F172A", flex="1",
+        rx.text(i.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1",
                 min_width="0", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
-        rx.text(i.cantidad_texto + " " + i.unidad, font_size="12px", color="#64748B",
+        rx.text(i.cantidad_texto + " " + i.unidad, font_size="12px", color="#94A3B8",
                 min_width="80px", text_align="right"),
         rx.text(i.valor_texto, font_size="13px", font_weight="700", color="#DC2626",
                 min_width="86px", text_align="right"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #F1F5F9",
+        padding="8px 4px", border_bottom="1px solid #1E293B",
     )
 
 
@@ -869,55 +1173,57 @@ def _mermas_section() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="trash_2", size=14, color="#B45309"),
+                    rx.icon(tag="trash_2", size=14, color="#F59E0B"),
                     rx.text("Mermas por categoría", font_size="13px",
-                            font_weight="700", color="#334155"),
+                            font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
                     rx.badge(
-                        FoodState.mermas_total_texto,
-                        background="#FEF3C7", color="#92400E",
+                        ReportesState.mermas_total_texto,
+                        background="rgba(245,158,11,0.12)", color="#F59E0B",
                         border_radius="6px", font_size="11px", font_weight="800",
                         padding="2px 8px",
                     ),
                     spacing="2", align="center", width="100%",
                 ),
                 rx.cond(
-                    FoodState.mermas_por_categoria.length() > 0,
+                    ReportesState.mermas_por_categoria.length() > 0,
                     rx.vstack(
-                        rx.foreach(FoodState.mermas_por_categoria, _merma_cat_row),
+                        rx.foreach(ReportesState.mermas_por_categoria, _merma_cat_row),
                         spacing="0", width="100%",
                     ),
                     rx.text("Sin mermas en el período.", font_size="12px", color="#94A3B8"),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         # Por insumo (top 20)
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="package_x", size=14, color="#B45309"),
+                    rx.icon(tag="package_x", size=14, color="#F59E0B"),
                     rx.text("Mermas por insumo (top 20)", font_size="13px",
-                            font_weight="700", color="#334155"),
+                            font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center",
                 ),
                 rx.cond(
-                    FoodState.mermas_por_insumo.length() > 0,
+                    ReportesState.mermas_por_insumo.length() > 0,
                     rx.vstack(
-                        rx.foreach(FoodState.mermas_por_insumo, _merma_insumo_row),
+                        rx.foreach(ReportesState.mermas_por_insumo, _merma_insumo_row),
                         spacing="0", width="100%", max_height="300px", overflow_y="auto",
                     ),
                     rx.text("Sin mermas en el período.", font_size="12px", color="#94A3B8"),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
+        _excel_btn(ReportesState.exportar_mermas_excel),
         gap="12px", width="100%",
         direction=rx.breakpoints(initial="column", md="row"),
+        flex_wrap="wrap",
     )
 
 
@@ -930,35 +1236,86 @@ def _reportes_content() -> rx.Component:
         # Header
         rx.hstack(
             rx.vstack(
-                rx.text("Reportes", font_size="22px", font_weight="800", color="#0F172A"),
-                rx.text("Dashboard y ventas del día", font_size="13px", color="#64748B"),
+                rx.text("Reportes", font_size="22px", font_weight="800", color="#F1F5F9"),
+                rx.text("Dashboard y ventas del día", font_size="13px", color="#94A3B8"),
                 spacing="0",
+            ),
+            rx.cond(
+                FoodState.tiene_sucursales,
+                rx.hstack(
+                    rx.icon(tag="map_pin", size=14, color="#94A3B8"),
+                    rx.button(
+                        "Todas",
+                        on_click=ReportesState.cambiar_sucursal_reportes("0"),
+                        background=rx.cond(
+                            ReportesState.reportes_sucursal_id == 0,
+                            "#EA580C", "#1E293B",
+                        ),
+                        color=rx.cond(
+                            ReportesState.reportes_sucursal_id == 0,
+                            "#FFFFFF", "#94A3B8",
+                        ),
+                        border=rx.cond(
+                            ReportesState.reportes_sucursal_id == 0,
+                            "1px solid #EA580C", "1px solid #334155",
+                        ),
+                        border_radius="7px", font_size="11px", font_weight="600",
+                        padding_x="10px", padding_y="5px", cursor="pointer",
+                        _hover={"border_color": "#EA580C"},
+                    ),
+                    rx.foreach(
+                        FoodState.sucursales_empresa,
+                        lambda s: rx.button(
+                            s.nombre,
+                            on_click=ReportesState.cambiar_sucursal_reportes(
+                                s.id.to_string()
+                            ),
+                            background=rx.cond(
+                                ReportesState.reportes_sucursal_id == s.id,
+                                "#EA580C", "#1E293B",
+                            ),
+                            color=rx.cond(
+                                ReportesState.reportes_sucursal_id == s.id,
+                                "#FFFFFF", "#94A3B8",
+                            ),
+                            border=rx.cond(
+                                ReportesState.reportes_sucursal_id == s.id,
+                                "1px solid #EA580C", "1px solid #334155",
+                            ),
+                            border_radius="7px", font_size="11px", font_weight="600",
+                            padding_x="10px", padding_y="5px", cursor="pointer",
+                            _hover={"border_color": "#EA580C"},
+                        ),
+                    ),
+                    spacing="1", align="center", flex_wrap="wrap",
+                ),
+                rx.fragment(),
             ),
             rx.spacer(),
             rx.hstack(
                 rx.button(
-                    "Hoy", on_click=FoodState.filtro_rapido_hoy,
-                    background=rx.cond(FoodState.historial_filtro_rapido == "hoy", "#EA580C", "#FFFFFF"),
-                    color=rx.cond(FoodState.historial_filtro_rapido == "hoy", "#FFFFFF", "#64748B"),
-                    border=rx.cond(FoodState.historial_filtro_rapido == "hoy", "1px solid #EA580C", "1px solid #E2E8F0"),
+                    "Hoy", on_click=ReportesState.filtro_rapido_hoy,
+                    background=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "#EA580C", "#1E293B"),
+                    color=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "#FFFFFF", "#94A3B8"),
+                    border=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "1px solid #EA580C", "1px solid #334155"),
                     border_radius="8px", font_size="12px", font_weight="700",
                     padding_x="14px", padding_y="7px", cursor="pointer",
                     _hover={"border_color": "#EA580C", "color": "#EA580C"},
                 ),
                 rx.button(
-                    "Semana", on_click=FoodState.filtro_rapido_semana,
-                    background=rx.cond(FoodState.historial_filtro_rapido == "semana", "#EA580C", "#FFFFFF"),
-                    color=rx.cond(FoodState.historial_filtro_rapido == "semana", "#FFFFFF", "#64748B"),
-                    border=rx.cond(FoodState.historial_filtro_rapido == "semana", "1px solid #EA580C", "1px solid #E2E8F0"),
+                    "Semana", on_click=ReportesState.filtro_rapido_semana,
+                    background=rx.cond(ReportesState.historial_filtro_rapido == "semana", "#EA580C", "#1E293B"),
+                    color=rx.cond(ReportesState.historial_filtro_rapido == "semana", "#FFFFFF", "#94A3B8"),
+                    border=rx.cond(ReportesState.historial_filtro_rapido == "semana", "1px solid #EA580C", "1px solid #334155"),
                     border_radius="8px", font_size="12px", font_weight="600",
                     padding_x="14px", padding_y="7px", cursor="pointer",
                     _hover={"border_color": "#EA580C", "color": "#EA580C"},
                 ),
                 rx.button(
-                    "Mes", on_click=FoodState.filtro_rapido_mes,
-                    background=rx.cond(FoodState.historial_filtro_rapido == "mes", "#EA580C", "#FFFFFF"),
-                    color=rx.cond(FoodState.historial_filtro_rapido == "mes", "#FFFFFF", "#64748B"),
-                    border=rx.cond(FoodState.historial_filtro_rapido == "mes", "1px solid #EA580C", "1px solid #E2E8F0"),
+                    "Mes", on_click=ReportesState.filtro_rapido_mes,
+                    background=rx.cond(ReportesState.historial_filtro_rapido == "mes", "#EA580C", "#1E293B"),
+                    color=rx.cond(ReportesState.historial_filtro_rapido == "mes", "#FFFFFF", "#94A3B8"),
+                    border=rx.cond(ReportesState.historial_filtro_rapido == "mes", "1px solid #EA580C", "1px solid #334155"),
                     border_radius="8px", font_size="12px", font_weight="600",
                     padding_x="14px", padding_y="7px", cursor="pointer",
                     _hover={"border_color": "#EA580C", "color": "#EA580C"},
@@ -969,10 +1326,10 @@ def _reportes_content() -> rx.Component:
                         rx.text("Actualizar", font_size="13px", font_weight="600"),
                         spacing="1", align="center",
                     ),
-                    on_click=[FoodState.cargar_dashboard, FoodState.cargar_historial_ventas],
-                    background="#FFF7ED",
+                    on_click=[ReportesState.cargar_dashboard, ReportesState.cargar_historial_ventas],
+                    background="rgba(234,88,12,0.08)",
                     color="#EA580C",
-                    border="1px solid #FED7AA",
+                    border="1px solid rgba(234,88,12,0.40)",
                     border_radius="8px",
                     font_size="13px",
                     cursor="pointer",
@@ -985,12 +1342,12 @@ def _reportes_content() -> rx.Component:
                                 color="#FFFFFF"),
                         spacing="1", align="center",
                     ),
-                    on_click=FoodState.exportar_ventas_excel,
-                    background="#15803D",
+                    on_click=ReportesState.exportar_ventas_excel,
+                    background="#22C55E",
                     border_radius="8px",
                     padding_x="14px", padding_y="7px",
                     cursor="pointer",
-                    _hover={"background": "#166534"},
+                    _hover={"background": "#22C55E"},
                 ),
                 spacing="2", wrap="wrap",
             ),
@@ -1003,23 +1360,23 @@ def _reportes_content() -> rx.Component:
         rx.grid(
             _kpi_card(
                 "Ventas hoy",
-                FoodState.dashboard_ventas_hoy_texto,
-                "trending_up", "#15803D", "#F0FDF4", "#BBF7D0",
+                ReportesState.dashboard_ventas_hoy_texto,
+                "trending_up", "#22C55E", "rgba(34,197,94,0.12)", "rgba(34,197,94,0.25)",
             ),
             _kpi_card(
                 "Pedidos cobrados",
-                FoodState.dashboard_pedidos_hoy.to_string(),
-                "receipt_text", "#1D4ED8", "#EFF6FF", "#BFDBFE",
+                ReportesState.dashboard_pedidos_hoy.to_string(),
+                "receipt_text", "#60A5FA", "rgba(59,130,246,0.12)", "rgba(59,130,246,0.25)",
             ),
             _kpi_card(
                 "Ticket promedio",
-                FoodState.dashboard_ticket_promedio_texto,
-                "calculator", "#7C3AED", "#F5F3FF", "#DDD6FE",
+                ReportesState.dashboard_ticket_promedio_texto,
+                "calculator", "#7C3AED", "rgba(124,58,237,0.12)", "rgba(124,58,237,0.25)",
             ),
             _kpi_card(
                 "Propinas hoy",
-                FoodState.dashboard_propina_hoy_texto,
-                "heart", "#9A3412", "#FFF7ED", "#FED7AA",
+                ReportesState.dashboard_propina_hoy_texto,
+                "heart", "#EA580C", "rgba(234,88,12,0.12)", "rgba(234,88,12,0.25)",
             ),
             columns=rx.breakpoints(initial="2", md="4"),
             gap=rx.breakpoints(initial="10px", md="14px"),
@@ -1028,20 +1385,20 @@ def _reportes_content() -> rx.Component:
 
         # ── Top platos ────────────────────────────────────────────────────────
         rx.cond(
-            FoodState.dashboard_top_platos.length() > 0,
+            ReportesState.dashboard_top_platos.length() > 0,
             rx.box(
                 rx.vstack(
                     rx.hstack(
                         rx.icon(tag="star", size=14, color="#EA580C"),
-                        rx.text("Top platos hoy", font_size="13px", font_weight="700", color="#334155"),
+                        rx.text("Top platos hoy", font_size="13px", font_weight="700", color="#CBD5E1"),
                         spacing="2", align="center",
                     ),
-                    rx.foreach(FoodState.dashboard_top_platos, lambda plato, i: _top_plato_row(plato, i)),
+                    rx.foreach(ReportesState.dashboard_top_platos, lambda plato, i: _top_plato_row(plato, i)),
                     spacing="2",
                     width="100%",
                 ),
-                background="#F8FAFC",
-                border="1px solid #E2E8F0",
+                background="#0F172A",
+                border="1px solid #334155",
                 border_radius="10px",
                 padding="12px 14px",
                 width="100%",
@@ -1055,47 +1412,75 @@ def _reportes_content() -> rx.Component:
             rx.box(
                 rx.hstack(
                     rx.icon(tag="users", size=14, color="#EA580C"),
-                    rx.text("Ventas por mozo", font_size="13px", font_weight="700", color="#334155"),
+                    rx.text("Ventas por mozo", font_size="13px", font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center", margin_bottom="10px",
                 ),
                 rx.cond(
-                    FoodState.reporte_mozos.length() > 0,
+                    ReportesState.reporte_mozos.length() > 0,
                     _ventas_mozo_chart(),
                     rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
                 ),
-                background="#F8FAFC", border="1px solid #E2E8F0",
+                background="#0F172A", border="1px solid #334155",
                 border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
             ),
             # Ventas por hora
             rx.box(
                 rx.hstack(
                     rx.icon(tag="clock", size=14, color="#EA580C"),
-                    rx.text("Ventas por hora", font_size="13px", font_weight="700", color="#334155"),
+                    rx.text("Ventas por hora", font_size="13px", font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center", margin_bottom="10px",
                 ),
                 rx.cond(
-                    FoodState.reporte_horas.length() > 0,
+                    ReportesState.reporte_horas.length() > 0,
                     _ventas_hora_chart(),
                     rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
                 ),
-                background="#F8FAFC", border="1px solid #E2E8F0",
+                background="#0F172A", border="1px solid #334155",
                 border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
             ),
             gap="12px", width="100%",
             direction=rx.breakpoints(initial="column", md="row"),
         ),
+        # ── Propinas por mozo (ADM-04) ───────────────────────────────────────
+        rx.box(
+            rx.hstack(
+                rx.hstack(
+                    rx.icon(tag="hand_coins", size=14, color="#F59E0B"),
+                    rx.text("Propinas por mozo", font_size="13px",
+                            font_weight="700", color="#CBD5E1"),
+                    spacing="2", align="center",
+                ),
+                rx.text(
+                    "Total: " + ReportesState.reporte_propinas_total_texto,
+                    font_size="13px", font_weight="800", color="#F59E0B",
+                ),
+                width="100%", justify="between", align="center",
+                margin_bottom="10px",
+            ),
+            rx.cond(
+                ReportesState.reporte_propinas_total_texto != "S/ 0.00",
+                rx.vstack(
+                    rx.foreach(ReportesState.reporte_mozos, _propina_row),
+                    spacing="0", width="100%",
+                ),
+                rx.text("Sin propinas registradas en el período.", font_size="12px",
+                        color="#94A3B8"),
+            ),
+            background="rgba(245,158,11,0.10)", border="1px solid rgba(245,158,11,0.20)",
+            border_radius="10px", padding="12px 14px", width="100%",
+        ),
         # Desglose por método de pago
         rx.box(
             rx.hstack(
                 rx.icon(tag="credit_card", size=14, color="#EA580C"),
-                rx.text("Desglose por método de pago", font_size="13px", font_weight="700", color="#334155"),
+                rx.text("Desglose por método de pago", font_size="13px", font_weight="700", color="#CBD5E1"),
                 spacing="2", align="center", margin_bottom="10px",
             ),
             rx.cond(
-                FoodState.reporte_metodos.length() > 0,
+                ReportesState.reporte_metodos.length() > 0,
                 rx.recharts.responsive_container(
                     rx.recharts.bar_chart(
-                        rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#E2E8F0"),
+                        rx.recharts.cartesian_grid(stroke_dasharray="3 3", stroke="#334155"),
                         rx.recharts.x_axis(
                             data_key="metodo", font_size=11, tick_line=False,
                             axis_line=False, stroke="#94A3B8",
@@ -1115,14 +1500,14 @@ def _reportes_content() -> rx.Component:
                             data_key="count", fill="#FB923C", radius=[4, 4, 0, 0],
                             name="Pagos",
                         ),
-                        data=FoodState.reporte_metodos,
+                        data=ReportesState.reporte_metodos,
                         margin={"top": 4, "right": 4, "left": 0, "bottom": 0},
                     ),
                     width="100%", height=220,
                 ),
                 rx.text("Sin pagos en el período.", font_size="12px", color="#94A3B8"),
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
         # Comparativa entre períodos
@@ -1130,99 +1515,120 @@ def _reportes_content() -> rx.Component:
             rx.hstack(
                 rx.icon(tag="git_compare_arrows", size=14, color="#EA580C"),
                 rx.text("Comparativa con período anterior", font_size="13px",
-                        font_weight="700", color="#334155"),
+                        font_weight="700", color="#CBD5E1"),
                 spacing="2", align="center", margin_bottom="10px",
             ),
             rx.grid(
                 # Ventas
                 rx.box(
                     rx.text("Ventas", font_size="11px", color="#94A3B8", margin_bottom="2px"),
-                    rx.text(FoodState.comp_ventas_actual, font_size="18px",
-                            font_weight="800", color="#0F172A"),
+                    rx.text(ReportesState.comp_ventas_actual, font_size="18px",
+                            font_weight="800", color="#F1F5F9"),
                     rx.hstack(
                         rx.text(
-                            "vs " + FoodState.comp_ventas_anterior,
-                            font_size="11px", color="#64748B",
+                            "vs " + ReportesState.comp_ventas_anterior,
+                            font_size="11px", color="#94A3B8",
                         ),
                         rx.text(
-                            rx.cond(FoodState.comp_ventas_pct >= 0, "+", "") + FoodState.comp_ventas_pct.to_string() + "%",
+                            rx.cond(ReportesState.comp_ventas_pct >= 0, "+", "") + ReportesState.comp_ventas_pct.to_string() + "%",
                             font_size="11px", font_weight="700",
-                            color=rx.cond(FoodState.comp_ventas_pct >= 0, "#16A34A", "#DC2626"),
+                            color=rx.cond(ReportesState.comp_ventas_pct >= 0, "#16A34A", "#DC2626"),
                         ),
                         spacing="1", align="center",
                     ),
-                    rx.text(FoodState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
-                    padding="10px", background="#FFFFFF", border_radius="8px",
-                    border="1px solid #E2E8F0",
+                    rx.text(ReportesState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
+                    padding="10px", background="#1E293B", border_radius="8px",
+                    border="1px solid #334155",
                 ),
                 # Pedidos
                 rx.box(
                     rx.text("Pedidos", font_size="11px", color="#94A3B8", margin_bottom="2px"),
-                    rx.text(FoodState.comp_pedidos_actual.to_string(), font_size="18px",
-                            font_weight="800", color="#0F172A"),
+                    rx.text(ReportesState.comp_pedidos_actual.to_string(), font_size="18px",
+                            font_weight="800", color="#F1F5F9"),
                     rx.hstack(
                         rx.text(
-                            "vs " + FoodState.comp_pedidos_anterior.to_string(),
-                            font_size="11px", color="#64748B",
+                            "vs " + ReportesState.comp_pedidos_anterior.to_string(),
+                            font_size="11px", color="#94A3B8",
                         ),
                         rx.text(
-                            rx.cond(FoodState.comp_pedidos_diff >= 0, "+", "") + FoodState.comp_pedidos_diff.to_string(),
+                            rx.cond(ReportesState.comp_pedidos_diff >= 0, "+", "") + ReportesState.comp_pedidos_diff.to_string(),
                             font_size="11px", font_weight="700",
-                            color=rx.cond(FoodState.comp_pedidos_diff >= 0, "#16A34A", "#DC2626"),
+                            color=rx.cond(ReportesState.comp_pedidos_diff >= 0, "#16A34A", "#DC2626"),
                         ),
                         spacing="1", align="center",
                     ),
-                    rx.text(FoodState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
-                    padding="10px", background="#FFFFFF", border_radius="8px",
-                    border="1px solid #E2E8F0",
+                    rx.text(ReportesState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
+                    padding="10px", background="#1E293B", border_radius="8px",
+                    border="1px solid #334155",
                 ),
                 # Ticket promedio
                 rx.box(
                     rx.text("Ticket promedio", font_size="11px", color="#94A3B8", margin_bottom="2px"),
-                    rx.text(FoodState.comp_ticket_actual, font_size="18px",
-                            font_weight="800", color="#0F172A"),
+                    rx.text(ReportesState.comp_ticket_actual, font_size="18px",
+                            font_weight="800", color="#F1F5F9"),
                     rx.hstack(
                         rx.text(
-                            "vs " + FoodState.comp_ticket_anterior,
-                            font_size="11px", color="#64748B",
+                            "vs " + ReportesState.comp_ticket_anterior,
+                            font_size="11px", color="#94A3B8",
                         ),
                         rx.text(
-                            rx.cond(FoodState.comp_ticket_pct >= 0, "+", "") + FoodState.comp_ticket_pct.to_string() + "%",
+                            rx.cond(ReportesState.comp_ticket_pct >= 0, "+", "") + ReportesState.comp_ticket_pct.to_string() + "%",
                             font_size="11px", font_weight="700",
-                            color=rx.cond(FoodState.comp_ticket_pct >= 0, "#16A34A", "#DC2626"),
+                            color=rx.cond(ReportesState.comp_ticket_pct >= 0, "#16A34A", "#DC2626"),
                         ),
                         spacing="1", align="center",
                     ),
-                    rx.text(FoodState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
-                    padding="10px", background="#FFFFFF", border_radius="8px",
-                    border="1px solid #E2E8F0",
+                    rx.text(ReportesState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
+                    padding="10px", background="#1E293B", border_radius="8px",
+                    border="1px solid #334155",
                 ),
                 columns="3", spacing="3", width="100%",
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
-        # ── P&L mensual (ADM-01) ─────────────────────────────────────────────
-        _pyl_section(),
-
-        # ── Descuentos y anulaciones (ADM-02) ────────────────────────────────
-        _descuentos_anulaciones_section(),
-
-        # ── Mermas valorizado (ADM-03) ───────────────────────────────────────
-        _mermas_section(),
+        # ── Secciones avanzadas (requieren plan profesional) ────────────────
+        rx.cond(
+            FoodState.reportes_avanzados_habilitados,
+            rx.fragment(
+                _pyl_section(),
+                _igv_section(),
+                _matriz_section(),
+                _descuentos_anulaciones_section(),
+                _mermas_section(),
+            ),
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="lock", size=16, color="#EA580C"),
+                    rx.text(
+                        "P&L, IGV, matriz productos, descuentos/anulaciones y mermas requieren el plan Profesional.",
+                        font_size="13px", font_weight="600", color="#CBD5E1",
+                    ),
+                    spacing="2", align="center",
+                ),
+                rx.text(
+                    "Contacte a TUWAYKI para actualizar su plan y acceder a reportes avanzados.",
+                    font_size="12px", color="#94A3B8", margin_top="4px",
+                ),
+                background="rgba(234,88,12,0.08)", border="1px solid rgba(234,88,12,0.40)",
+                border_radius="10px", padding="14px 16px", width="100%",
+            ),
+        ),
 
         # Margen por plato
         rx.box(
             rx.hstack(
                 rx.icon(tag="chef_hat", size=14, color="#EA580C"),
                 rx.text("Margen por plato (precio vs costo de receta)",
-                        font_size="13px", font_weight="700", color="#334155"),
-                spacing="2", align="center", margin_bottom="10px",
+                        font_size="13px", font_weight="700", color="#CBD5E1"),
+                rx.spacer(),
+                _excel_btn(ReportesState.exportar_margen_excel),
+                spacing="2", align="center", margin_bottom="10px", width="100%",
             ),
             rx.cond(
-                FoodState.reporte_margen.length() > 0,
+                ReportesState.reporte_margen.length() > 0,
                 rx.vstack(
-                    rx.foreach(FoodState.reporte_margen, _margen_row),
+                    rx.foreach(ReportesState.reporte_margen, _margen_row),
                     spacing="0", width="100%",
                 ),
                 rx.text(
@@ -1230,20 +1636,20 @@ def _reportes_content() -> rx.Component:
                     font_size="12px", color="#94A3B8",
                 ),
             ),
-            background="#F8FAFC", border="1px solid #E2E8F0",
+            background="#0F172A", border="1px solid #334155",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
 
         # ── Historial con filtros ─────────────────────────────────────────────
         rx.vstack(
             rx.hstack(
-                rx.text("Historial de ventas", font_size="15px", font_weight="700", color="#0F172A"),
+                rx.text("Historial de ventas", font_size="15px", font_weight="700", color="#F1F5F9"),
                 rx.cond(
-                    FoodState.historial_ventas.length() > 0,
+                    ReportesState.historial_ventas.length() > 0,
                     rx.badge(
-                        FoodState.historial_ventas.length().to_string() + " registros",
-                        background="#F1F5F9",
-                        color="#64748B",
+                        ReportesState.historial_ventas.length().to_string() + " registros",
+                        background="#1E293B",
+                        color="#94A3B8",
                         border_radius="5px",
                         font_size="10px",
                         font_weight="600",
@@ -1256,13 +1662,13 @@ def _reportes_content() -> rx.Component:
             ),
             _filtros_bar(),
             rx.cond(
-                FoodState.historial_ventas.length() == 0,
+                ReportesState.historial_ventas.length() == 0,
                 rx.center(
                     rx.vstack(
                         rx.icon(tag="inbox", size=32, color="#CBD5E1"),
                         rx.text(
                             rx.cond(
-                                FoodState.historial_filtro_activo,
+                                ReportesState.historial_filtro_activo,
                                 "Sin resultados para los filtros aplicados.",
                                 "Sin ventas registradas.",
                             ),
@@ -1280,47 +1686,47 @@ def _reportes_content() -> rx.Component:
                         position="sticky",
                         top="0",
                         z_index="10",
-                        background="#F8FAFC",
-                        border_bottom="1px solid #E2E8F0",
+                        background="#0F172A",
+                        border_bottom="1px solid #334155",
                         padding_y="4px",
                     ),
-                    rx.foreach(FoodState.historial_ventas, _venta_row),
+                    rx.foreach(ReportesState.historial_ventas, _venta_row),
                     # Controles de paginación
                     rx.hstack(
                         rx.button(
                             rx.icon(tag="chevron_left", size=14),
-                            on_click=FoodState.historial_pagina_anterior,
-                            background="#F1F5F9",
-                            color="#64748B",
-                            border="1px solid #E2E8F0",
+                            on_click=ReportesState.historial_pagina_anterior,
+                            background="#1E293B",
+                            color="#94A3B8",
+                            border="1px solid #334155",
                             border_radius="7px",
                             padding_x="10px",
                             padding_y="6px",
                             cursor="pointer",
-                            disabled=~FoodState.historial_tiene_anterior,
-                            opacity=rx.cond(FoodState.historial_tiene_anterior, "1", "0.4"),
-                            _hover={"background": "#E2E8F0"},
+                            disabled=~ReportesState.historial_tiene_anterior,
+                            opacity=rx.cond(ReportesState.historial_tiene_anterior, "1", "0.4"),
+                            _hover={"background": "#334155"},
                         ),
                         rx.text(
-                            FoodState.historial_pagina_label,
+                            ReportesState.historial_pagina_label,
                             font_size="12px",
-                            color="#64748B",
+                            color="#94A3B8",
                             flex="1",
                             text_align="center",
                         ),
                         rx.button(
                             rx.icon(tag="chevron_right", size=14),
-                            on_click=FoodState.historial_pagina_siguiente,
-                            background="#F1F5F9",
-                            color="#64748B",
-                            border="1px solid #E2E8F0",
+                            on_click=ReportesState.historial_pagina_siguiente,
+                            background="#1E293B",
+                            color="#94A3B8",
+                            border="1px solid #334155",
                             border_radius="7px",
                             padding_x="10px",
                             padding_y="6px",
                             cursor="pointer",
-                            disabled=~FoodState.historial_tiene_siguiente,
-                            opacity=rx.cond(FoodState.historial_tiene_siguiente, "1", "0.4"),
-                            _hover={"background": "#E2E8F0"},
+                            disabled=~ReportesState.historial_tiene_siguiente,
+                            opacity=rx.cond(ReportesState.historial_tiene_siguiente, "1", "0.4"),
+                            _hover={"background": "#334155"},
                         ),
                         width="100%",
                         align="center",
@@ -1339,7 +1745,7 @@ def _reportes_content() -> rx.Component:
     )
 
 
-@rx.page(route="/reportes", on_load=FoodState.on_load_reportes, title="TUWAYKIFOOD | Reportes")
+@rx.page(route="/reportes", on_load=ReportesState.on_load_reportes, title="TUWAYKIFOOD | Reportes")
 def reportes_page() -> rx.Component:
     return rx.cond(
         FoodState.pagina_cargada,

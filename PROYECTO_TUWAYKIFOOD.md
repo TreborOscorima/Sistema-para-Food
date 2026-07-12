@@ -5,7 +5,7 @@
 > auditoría integral (2026-07-07) y roadmap priorizado. Leyendo solo este archivo se puede continuar
 > el desarrollo sin contexto previo.
 >
-> **Última actualización:** 2026-07-07 · **Estado:** MVP completo + Auditoría Frontend P0/P1/P2 cerrada.
+> **Última actualización:** 2026-07-09 · **Estado:** MVP + Fase 2 (P1+P2) 100% completados. Solo Fase 3.
 
 ---
 
@@ -36,7 +36,7 @@ empresas de ambos sistemas. **Los repos son 100% independientes: cambios en uno 
 |---|---|
 | Framework full-stack | **Reflex 0.9.4** (Python → React/Vite, websockets para estado) |
 | Base de datos | **MySQL 8.0** (`food_db`), SQLModel + SQLAlchemy 2.0, PyMySQL |
-| Migraciones | Alembic (39 migraciones aplicadas, head = `e8f1a2b3c4d5`) |
+| Migraciones | Alembic (45 migraciones, head = `f6a7b8c9d0e1`) |
 | Servidor | Granian, contenedor Docker único (frontend+backend, puerto interno 3000) |
 | Auth | bcrypt 5.0 (PINs operativos + contraseña admin) |
 | Exportación | openpyxl (Excel), reportlab (disponible, sin uso aún) |
@@ -64,14 +64,15 @@ app/
 │   ├── food.py             # TODOS los modelos SQLModel (706 líneas) — ver §4
 │   └── company.py          # Company (tenant registry)
 ├── states/
-│   ├── food_state.py       # Estado central (5.268 líneas) — login, mesas, pedidos,
-│   │                       # cocina, caja/cobros, config, menú público, admin local
+│   ├── food_state.py       # Estado central (~5.700 líneas) — login, mesas, pedidos,
+│   │                       # cocina, caja/cobros, config, menú público, admin local, sucursales
+│   ├── reportes_state.py   # ReportesState(rx.State) — substate independiente (75 vars,
+│   │                       # ~1100 líneas): dashboard, historial, analítica, P&L, export Excel
 │   ├── carta_mixin.py      # CRUD carta: categorías, productos, modificadores, combos
 │   ├── caja_turno_mixin.py # Turnos de caja, arqueo, movimientos ingreso/egreso
 │   ├── inventario_mixin.py # Insumos, kardex, recetas por producto
 │   ├── clientes_cuentas_mixin.py  # Clientes + cuentas corrientes (fiado)
-│   ├── promos_cupones_mixin.py    # Promociones + lotes de cupones
-│   └── reportes_mixin.py   # Dashboard, analítica, comparativa, export Excel
+│   └── promos_cupones_mixin.py    # Promociones + lotes de cupones
 ├── services/               # Lógica pura testeada (sin Reflex)
 │   ├── pago_service.py     # validar_pagos, registrar_pagos_pedido (pagos mixtos/split)
 │   ├── kardex_service.py   # registrar_entrada/merma/ajuste (stock insumos)
@@ -111,22 +112,24 @@ Sonidos (chime mozos, campana cocina) y auto-impresión de tickets de cocina se 
 
 | Tabla | Rol | Claves |
 |---|---|---|
-| `food_companies` | Registro de tenants | slug único, `is_active`, `trial_ends_at` |
+| `food_companies` | Registro de tenants | slug único, `is_active`, plan, `trial_ends_at`, `plan_expires_at` |
+| `food_sucursales` | Sucursales/locales por empresa | nombre, dirección, teléfono, activa, es_principal. Retrocompat: tablas operativas usan sucursal_id=NULL en modo single-location |
 | `food_config_impresora` | Config por empresa (1 fila/company) | nombre local, impresoras IP, ancho papel 58/80mm, slug carta pública, admin_email+password_hash, RUC/dirección/teléfono, IGV configurable, KDS minutos alerta |
-| `food_usuarios` | Usuarios operativos | PIN bcrypt (4-6 dígitos), rol (Mozo/Caja/Cocina/Admin), perms: descuento, anular, reportes |
-| `food_mesas` | Mesas físicas | número único/company, estado (libre/ocupada/esperando_cuenta), sector, capacidad |
-| `food_pedidos` | Pedido mesa o mostrador | estado (borrador→enviado→en_preparacion→listo→cobrado/cancelado), mozo/cajero, total/descuento/propina/recargo, turno_caja, cliente, auditoría de anulación |
+| `food_usuarios` | Usuarios operativos | PIN bcrypt (4-6 dígitos), rol (Mozo/Caja/Cocina/Admin), sucursal_id, perms: descuento, anular, reportes |
+| `food_mesas` | Mesas físicas | número único/company, sucursal_id, estado (libre/ocupada/esperando_cuenta), sector, capacidad |
+| `food_pedidos` | Pedido mesa o mostrador | sucursal_id, estado (borrador→enviado→en_preparacion→listo→cobrado/cancelado), mozo/cajero, total/descuento/propina/recargo, turno_caja, cliente, auditoría de anulación |
 | `food_detalle_pedidos` | Línea de pedido | estado_produccion (pendiente→en_preparacion→listo→entregado), modificadores_json, combo_items_json, impreso_cocina/caja, preparado_por |
 | `food_productos` | Carta | precio Decimal, categoría, emoji, imagen_url, estación (cocina/barra), tags JSON (picante/veggie/…) |
 | `food_categorias` | Categorías carta | orden, estación default |
 | `food_grupo_modificadores` + `food_opcion_modificadores` + `food_producto_grupo_modificadores` | Modificadores (Tamaño, Extras…) | min/max selecciones, precio_extra |
 | `food_combos` + `food_combo_items` | Combos precio fijo | items = producto+cantidad |
-| `food_insumos` | Ingredientes con stock | stock_actual/mínimo Numeric(12,3), costo_unitario, vencimiento |
+| `food_insumos` | Ingredientes con stock | sucursal_id, stock_actual/mínimo Numeric(12,3), costo_unitario, vencimiento |
 | `food_receta_items` | Receta por producto | (producto, insumo, cantidad) único — **base del cálculo de producción** |
 | `food_movimientos_insumo` | Kardex | entrada/consumo/merma/ajuste/reposicion, stock_resultante |
-| `food_turnos_caja` | Turnos con arqueo | snapshot al cierre: totales por método, esperado vs contado, descuadre, denominaciones JSON |
+| `food_turnos_caja` | Turnos con arqueo | sucursal_id, snapshot al cierre: totales por método, esperado vs contado, descuadre, denominaciones JSON |
 | `food_movimientos_caja` | Ingresos/egresos de efectivo | categoría, motivo obligatorio |
 | `food_pagos_pedido` | Pagos 1..N por pedido | pago mixto, split por ítems (detalle_ids_json) |
+| `food_reservas` | Reservas de mesa | company_id, sucursal_id, mesa_id, cliente_id, nombre_cliente, teléfono, fecha, hora, pax, estado (pendiente/confirmada/sentada/cancelada/no_show), notas |
 | `food_clientes` | Clientes | teléfono único/company, cumpleaños, puntos |
 | `food_cuentas_corrientes` + `food_movimientos_cuenta` | Fiado | saldo_deuda, límite crédito, cargo/pago |
 | `food_promociones` | Promos | %/monto/happy_hour/2x1, bitmask días (lun=1…dom=64), rango horario, producto o categoría, auto_aplicar |
@@ -288,17 +291,18 @@ Cobertura actual: servicios core (pagos, kardex, anulación, promos, analítica,
 ### Sprint S3 — Admin financiero (P1)
 8. ~~ADM-01 P&L mensual · ADM-02 reporte descuentos/anulaciones · ADM-03 mermas valorizado~~ ✅ DONE (2026-07-08)
 9. ~~OP-01 transferir/unir mesas~~ ✅ DONE (implementado previamente) · ~~OP-02 precuenta parcial desde mozos~~ ✅ DONE (2026-07-08)
-10. MT-01/MT-02 planes standard/profesional + gating
+10. ~~MT-01/MT-02 planes standard/profesional + gating~~ ✅ DONE (2026-07-08)
 
-### Fase 3 — Features mayores (acordados previamente, orden sugerido)
-11. **FEAT-04 Reservas de mesa** — CRUD fecha/hora/pax/cliente + indicador en mapa
-12. **FEAT-07 Módulo Delivery** — TipoPedido.DELIVERY, dirección/teléfono, estado reparto, repartidores
-13. **FEAT-05 Self-order QR** — carrito en menú público + llamar mozo + cola de aprobación
-14. **MT-03 Multi-sucursal** (antes de FEAT-06 si hay clientes multi-local)
-15. **FEAT-06 Facturación electrónica SUNAT** — boleta/factura, integración PSE/OSE (mayor complejidad regulatoria)
+### Fase 3 — Features mayores (orden sugerido)
+11. ~~**FEAT-04 Reservas de mesa** — CRUD fecha/hora/pax/cliente + indicador en mapa~~ ✅ DONE (2026-07-09)
+12. ~~**FEAT-08 Dashboard mobile dueño** — vista responsive ventas en vivo, mesas, alertas stock~~ ✅ DONE (2026-07-09)
+13. ~~**FEAT-07 Módulo Delivery** — TipoPedido.DELIVERY, dirección/teléfono, estado reparto, repartidores~~ ✅ DONE (2026-07-09)
+14. ~~**FEAT-05 Self-order QR** — carrito en menú público + llamar mozo + cola de aprobación~~ ✅ DONE (2026-07-09)
+15. ~~**MT-03b Multi-sucursal (expansión)** — reportes por sucursal, asignación masiva (modelo base ✅ DONE)~~ ✅ DONE (2026-07-09)
+16. **FEAT-06 Facturación electrónica SUNAT** — boleta/factura, integración PSE/OSE (mayor complejidad regulatoria)
 
-### Continuo
-- UI-01d theme.py · SEC-07 utcnow · PERF-06 substates · MT-05 backups (no postergar demasiado)
+### Continuo / Ya completados
+- ~~SEC-07 utcnow~~ ✅ · ~~PERF-06 substates~~ ✅ · ~~MT-05 backups~~ ✅ · UI-01d theme.py (incremental)
 
 ---
 

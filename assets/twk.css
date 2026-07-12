@@ -440,8 +440,8 @@ input::placeholder, textarea::placeholder {
   transition: left 0.25s ease;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #F8FAFC;
-  border-right: 1px solid #E2E8F0;
+  background: #0F172A;
+  border-right: 1px solid #1E293B;
 }
 .twk-admin-sb.open { left: 0; box-shadow: 4px 0 20px rgba(0,0,0,0.12); }
 .twk-admin-bd {

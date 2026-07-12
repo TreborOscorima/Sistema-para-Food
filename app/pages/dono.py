@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.states.food_state import AdminLocalState, FoodState
+from app.states.food_state import AdminLocalState, DeliveryPedidoView, FoodState, ReservaView
+from app.states.reportes_state import ReportesState
+from app.services.plan_service import MSG_UPGRADE
 from app.components.shared import _connection_banner_es
 from app.components.theme import (
     ACCENT as _ORANGE,
@@ -14,10 +16,11 @@ from app.components.theme import (
     DARK_900 as _SLATE_900,
     DARK_700 as _SLATE_700,
     SLATE_500 as _SLATE_500,
-    SLATE_200 as _SLATE_200,
-    SLATE_100 as _SLATE_100,
-    SLATE_50 as _SLATE_50,
+    BORDER_COLOR as _SLATE_200,
+    SURFACE_BASE as _SLATE_100,
+    PAGE_BACKGROUND as _SLATE_50,
     TEXT_WHITE as _WHITE,
+    SURFACE_BASE as _SURFACE,
     SUCCESS_TEXT as _GREEN,
     SUCCESS_BG as _GREEN_LT,
     INFO_TEXT as _BLUE,
@@ -34,8 +37,14 @@ class AdminPanelState(rx.State):
     seccion: str = "resumen"
     sidebar_open: bool = True
 
-    def ir_a(self, s: str) -> None:
+    async def ir_a(self, s: str) -> None:
         self.seccion = s
+        food_state = await self.get_state(FoodState)
+        food_state._cargar_plan_empresa()
+        if s == "reservas":
+            food_state.cargar_reservas()
+        if s == "delivery":
+            food_state.cargar_deliveries()
 
     def toggle_sidebar(self) -> None:
         self.sidebar_open = not self.sidebar_open
@@ -54,7 +63,7 @@ class AdminPanelState(rx.State):
 def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
     return rx.hstack(
         rx.button(
-            rx.icon(tag="panel_left", size=18, color=_SLATE_700),
+            rx.icon(tag="panel_left", size=18, color="#CBD5E1"),
             on_click=AdminPanelState.toggle_sidebar,
             background="transparent",
             border="none",
@@ -62,7 +71,7 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
             padding="6px",
             min_width="0",
             cursor="pointer",
-            _hover={"background": _SLATE_100},
+            _hover={"background": _SLATE_700},
             aria_label="Abrir/cerrar menú",
         ) if show_hamburger else rx.fragment(),
         rx.hstack(
@@ -73,6 +82,36 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
                 background=_ORANGE_LT,
                 color=_ORANGE,
                 border=f"1px solid {_ORANGE_BD}",
+                border_radius="6px",
+                font_size="10px",
+                font_weight="700",
+                padding="3px 8px",
+            ),
+            rx.badge(
+                rx.text(rx.icon(tag="crown", size=10), " ",
+                        FoodState.empresa_plan_label,
+                        display="inline-flex", align_items="center", gap="3px"),
+                background=rx.cond(
+                    FoodState.empresa_plan == "profesional",
+                    "rgba(59,130,246,0.12)", rx.cond(
+                        FoodState.empresa_plan == "trial",
+                        _AMBER_LT, "#F1F5F9",
+                    ),
+                ),
+                color=rx.cond(
+                    FoodState.empresa_plan == "profesional",
+                    "#60A5FA", rx.cond(
+                        FoodState.empresa_plan == "trial",
+                        _AMBER, "#94A3B8",
+                    ),
+                ),
+                border=rx.cond(
+                    FoodState.empresa_plan == "profesional",
+                    "1px solid #93C5FD", rx.cond(
+                        FoodState.empresa_plan == "trial",
+                        f"1px solid {_AMBER_BD}", "1px solid #CBD5E1",
+                    ),
+                ),
                 border_radius="6px",
                 font_size="10px",
                 font_weight="700",
@@ -98,13 +137,13 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
             padding_x="12px",
             padding_y="8px",
             cursor="pointer",
-            _hover={"background": _SLATE_200},
+            _hover={"background": _SLATE_700},
         ),
         width="100%",
         align="center",
         padding=rx.breakpoints(initial="0 16px", md="0 28px"),
         height="60px",
-        background=_WHITE,
+        background=_SURFACE,
         border_bottom=f"1px solid {_SLATE_200}",
         position="sticky",
         top="0",
@@ -121,10 +160,10 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
         rx.hstack(
             rx.box(
                 rx.icon(tag=icon, size=16,
-                        color=rx.cond(active, _ORANGE, _SLATE_500)),
+                        color=rx.cond(active, _ORANGE, "#E2E8F0")),
                 width="34px", height="34px",
                 border_radius="9px",
-                background=rx.cond(active, _ORANGE_LT, _SLATE_100),
+                background=rx.cond(active, _ORANGE_LT, "#1E293B"),
                 border=rx.cond(active, f"1px solid {_ORANGE_BD}",
                                "1px solid transparent"),
                 display="flex", align_items="center",
@@ -135,11 +174,12 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                 AdminPanelState.sidebar_open,
                 rx.vstack(
                     rx.text(label, font_size="13px",
-                            font_weight=rx.cond(active, "700", "500"),
-                            color=rx.cond(active, _SLATE_900, _SLATE_700),
+                            font_weight="600",
+                            color=rx.cond(active, "#FFFFFF", "#FFFFFF"),
                             line_height="1"),
                     rx.text(desc, font_size="11px",
-                            color=rx.cond(active, _SLATE_500, "#94A3B8"),
+                            font_weight="500",
+                            color=rx.cond(active, "#E2E8F0", "#94A3B8"),
                             line_height="1"),
                     spacing="1", align="start",
                 ),
@@ -152,7 +192,7 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
         ),
         padding=rx.cond(AdminPanelState.sidebar_open, "10px 12px", "10px 4px"),
         border_radius="10px",
-        background=rx.cond(active, _WHITE, "transparent"),
+        background=rx.cond(active, _SURFACE, "transparent"),
         border=rx.cond(active, f"1px solid {_ORANGE_BD}",
                        "1px solid transparent"),
         box_shadow=rx.cond(active, "0 1px 4px rgba(234,88,12,0.1)", "none"),
@@ -163,7 +203,7 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
         overflow="hidden",
         transition="all 0.12s ease",
         _hover={
-            "background": rx.cond(active, _WHITE, _SLATE_50),
+            "background": rx.cond(active, _SURFACE, _SLATE_700),
             "border": rx.cond(active, f"1px solid {_ORANGE_BD}",
                               f"1px solid {_SLATE_200}"),
         },
@@ -187,6 +227,8 @@ def _admin_sidebar() -> rx.Component:
             _admin_nav_item("clientes",   "Clientes",     "users",            "Fidelización y alertas"),
             _admin_nav_item("cuentas",    "Cuentas",      "credit_card",      "Fiado y créditos"),
             _admin_nav_item("promociones","Promociones",  "tag",              "Descuentos y cupones"),
+            _admin_nav_item("reservas",   "Reservas",     "calendar_clock",   "Mesas reservadas"),
+            _admin_nav_item("delivery",   "Delivery",     "truck",            "Pedidos a domicilio"),
             _admin_nav_item("inventario", "Inventario",   "package",          "Stock y alertas"),
             _admin_nav_item("usuarios",   "Usuarios",     "users_round",      "Personal y PINs"),
             _admin_nav_item("config",     "Configuración","settings",         "Ajustes del sistema"),
@@ -230,17 +272,21 @@ def _kpi_card(label: str, value, icon: str, accent: str, bg: str,
                 ),
                 rx.spacer(),
             ),
-            rx.text(value, font_size="26px", font_weight="800",
-                    color=_SLATE_900, line_height="1", margin_top="4px"),
+            rx.text(value,
+                    font_size=rx.breakpoints(initial="20px", sm="24px", md="26px"),
+                    font_weight="800",
+                    color="#F1F5F9", line_height="1", margin_top="4px"),
             rx.text(label, font_size="11px", font_weight="600",
                     color=_SLATE_500, text_transform="uppercase",
                     letter_spacing="0.05em"),
             trend if trend is not None else rx.fragment(),
             spacing="2", align="start", width="100%",
         ),
-        background=_WHITE, border=f"1px solid {_SLATE_200}",
-        border_radius="14px", padding="18px 20px",
-        box_shadow="0 1px 4px rgba(0,0,0,0.06)", flex="1", min_width="0",
+        background=_SURFACE, border=f"1px solid {_SLATE_200}",
+        border_radius="14px",
+        padding=rx.breakpoints(initial="14px 16px", md="18px 20px"),
+        box_shadow="0 1px 4px rgba(0,0,0,0.06)", flex="1",
+        min_width=rx.breakpoints(initial="140px", sm="160px"),
     )
 
 
@@ -248,16 +294,16 @@ def _venta_row(venta) -> rx.Component:
     return rx.hstack(
         rx.text("#" + venta.pedido_id.to_string(), font_size="11px",
                 color=_SLATE_500, min_width="32px", flex_shrink="0"),
-        rx.text(venta.mesa_label, font_size="13px", color=_SLATE_700,
+        rx.text(venta.mesa_label, font_size="13px", color="#CBD5E1",
                 flex="1", text_overflow="ellipsis", overflow="hidden",
                 white_space="nowrap"),
         rx.badge(
             venta.metodo_pago,
             background=rx.cond(
-                venta.metodo_pago == "efectivo", "#DCFCE7",
-                rx.cond(venta.metodo_pago == "tarjeta", "#DBEAFE",
-                rx.cond(venta.metodo_pago == "qr", "#FEF3C7",
-                rx.cond(venta.metodo_pago == "fiado", "#FFEDD5", _SLATE_100)))),
+                venta.metodo_pago == "efectivo", "rgba(34,197,94,0.12)",
+                rx.cond(venta.metodo_pago == "tarjeta", "rgba(59,130,246,0.12)",
+                rx.cond(venta.metodo_pago == "qr", "rgba(245,158,11,0.12)",
+                rx.cond(venta.metodo_pago == "fiado", "rgba(234,88,12,0.12)", _SLATE_100)))),
             color=rx.cond(
                 venta.metodo_pago == "efectivo", _GREEN,
                 rx.cond(venta.metodo_pago == "tarjeta", _BLUE,
@@ -271,13 +317,13 @@ def _venta_row(venta) -> rx.Component:
                 text_align="right", flex_shrink="0"),
         width="100%", align="center",
         padding="8px 10px", border_radius="8px",
-        background=_WHITE, border=f"1px solid {_SLATE_100}",
-        gap="8px", _hover={"background": _SLATE_50},
+        background=_SURFACE, border=f"1px solid {_SLATE_100}",
+        gap="8px", _hover={"background": _SLATE_700},
     )
 
 
 def _top_plato_row(plato, index: int) -> rx.Component:
-    max_cantidad = FoodState.dashboard_top_platos[0].cantidad
+    max_cantidad = ReportesState.dashboard_top_platos[0].cantidad
     pct = rx.cond(
         max_cantidad > 0,
         (plato.cantidad * 100) / max_cantidad,
@@ -297,7 +343,7 @@ def _top_plato_row(plato, index: int) -> rx.Component:
         ),
         rx.vstack(
             rx.text(plato.nombre, font_size="13px", font_weight="600",
-                    color=_SLATE_900, width="100%", overflow="hidden",
+                    color="#F1F5F9", width="100%", overflow="hidden",
                     text_overflow="ellipsis", white_space="nowrap"),
             rx.box(
                 rx.box(
@@ -324,20 +370,20 @@ def _alerta_cumpleanos() -> rx.Component:
                     rx.text("🎂", font_size="16px", line_height="1"),
                     width="36px", height="36px",
                     border_radius="9px",
-                    background="#FEE2E2",
-                    border="1px solid #FCA5A5",
+                    background="rgba(239,68,68,0.12)",
+                    border="1px solid rgba(239,68,68,0.30)",
                     display="flex", align_items="center",
                     justify_content="center", flex_shrink="0",
                 ),
                 rx.vstack(
                     rx.text("Cumpleaños hoy", font_size="12px",
-                            font_weight="700", color="#991B1B"),
+                            font_weight="700", color="#F87171"),
                     rx.foreach(
                         FoodState.clientes_cumpleanos_hoy,
                         lambda c: rx.text(
                             c.nombre + rx.cond(c.telefono != "",
                                                " · " + c.telefono, ""),
-                            font_size="11px", color="#B91C1C",
+                            font_size="11px", color="#F87171",
                         ),
                     ),
                     spacing="0", align="start",
@@ -353,7 +399,7 @@ def _alerta_cumpleanos() -> rx.Component:
                 ),
                 width="100%", align="center", gap="12px",
             ),
-            background="#FEF2F2", border="1px solid #FCA5A5",
+            background="rgba(239,68,68,0.08)", border="1px solid rgba(239,68,68,0.30)",
             border_radius="12px", padding="14px 16px",
             flex="1", min_width=rx.breakpoints(initial="100%", sm="260px"),
         ),
@@ -377,9 +423,9 @@ def _alerta_stock() -> rx.Component:
                 ),
                 rx.vstack(
                     rx.text("Stock bajo", font_size="12px",
-                            font_weight="700", color=_SLATE_900),
+                            font_weight="700", color="#F1F5F9"),
                     rx.text(FoodState.inv_alertas_bajo_stock_texto,
-                            font_size="11px", color="#92400E"),
+                            font_size="11px", color="#F59E0B"),
                     spacing="0", align="start",
                 ),
                 rx.spacer(),
@@ -416,7 +462,7 @@ def _quick_link_card(label: str, desc: str, icon: str, href: str, emoji: str = "
             ),
             rx.vstack(
                 rx.text(label, font_size="13px", font_weight="700",
-                        color=_SLATE_900),
+                        color="#F1F5F9"),
                 rx.text(desc, font_size="11px", color=_SLATE_500,
                         line_height="1.3"),
                 spacing="0", align="start",
@@ -426,7 +472,7 @@ def _quick_link_card(label: str, desc: str, icon: str, href: str, emoji: str = "
             spacing="3", align="center", width="100%",
         ),
         href=href,
-        background=_WHITE, border=f"1px solid {_SLATE_200}",
+        background=_SURFACE, border=f"1px solid {_SLATE_200}",
         border_radius="12px", padding="12px 14px",
         text_decoration="none",
         _hover={
@@ -447,12 +493,63 @@ def _section_resumen() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text("Resumen del día", font_size="18px",
-                        font_weight="800", color=_SLATE_900, line_height="1"),
+                        font_weight="800", color="#F1F5F9", line_height="1"),
                 rx.text("Vista general de tu negocio hoy",
                         font_size="13px", color=_SLATE_500),
                 spacing="1", align="start",
             ),
             rx.spacer(),
+            rx.cond(
+                FoodState.tiene_sucursales,
+                rx.hstack(
+                    rx.icon(tag="map_pin", size=13, color=_SLATE_500),
+                    rx.button(
+                        "Todas",
+                        on_click=ReportesState.cambiar_sucursal_reportes("0"),
+                        background=rx.cond(
+                            ReportesState.reportes_sucursal_id == 0,
+                            _ORANGE, _SURFACE,
+                        ),
+                        color=rx.cond(
+                            ReportesState.reportes_sucursal_id == 0,
+                            _WHITE, _SLATE_500,
+                        ),
+                        border=rx.cond(
+                            ReportesState.reportes_sucursal_id == 0,
+                            f"1px solid {_ORANGE}",
+                            f"1px solid {_SLATE_200}",
+                        ),
+                        border_radius="7px", font_size="11px", font_weight="600",
+                        padding_x="8px", padding_y="4px", cursor="pointer",
+                    ),
+                    rx.foreach(
+                        FoodState.sucursales_empresa,
+                        lambda s: rx.button(
+                            s.nombre,
+                            on_click=ReportesState.cambiar_sucursal_reportes(
+                                s.id.to_string()
+                            ),
+                            background=rx.cond(
+                                ReportesState.reportes_sucursal_id == s.id,
+                                _ORANGE, _SURFACE,
+                            ),
+                            color=rx.cond(
+                                ReportesState.reportes_sucursal_id == s.id,
+                                _WHITE, _SLATE_500,
+                            ),
+                            border=rx.cond(
+                                ReportesState.reportes_sucursal_id == s.id,
+                                f"1px solid {_ORANGE}",
+                                f"1px solid {_SLATE_200}",
+                            ),
+                            border_radius="7px", font_size="11px", font_weight="600",
+                            padding_x="8px", padding_y="4px", cursor="pointer",
+                        ),
+                    ),
+                    spacing="1", align="center", flex_wrap="wrap",
+                ),
+                rx.fragment(),
+            ),
             rx.button(
                 rx.hstack(
                     rx.icon(tag="refresh_cw", size=13, color=_ORANGE),
@@ -460,8 +557,8 @@ def _section_resumen() -> rx.Component:
                             font_weight="600", color=_ORANGE),
                     spacing="1", align="center",
                 ),
-                on_click=[FoodState.cargar_dashboard,
-                          FoodState.cargar_historial_ventas],
+                on_click=[ReportesState.cargar_dashboard,
+                          ReportesState.cargar_historial_ventas],
                 background=_ORANGE_LT, border=f"1px solid {_ORANGE_BD}",
                 border_radius="7px", padding_x="12px", padding_y="7px",
                 cursor="pointer", _hover={"opacity": "0.85"},
@@ -470,21 +567,35 @@ def _section_resumen() -> rx.Component:
         ),
         # KPIs
         rx.flex(
-            _kpi_card("Ventas hoy", FoodState.dashboard_ventas_hoy_texto,
+            _kpi_card("Ventas hoy", ReportesState.dashboard_ventas_hoy_texto,
                       "trending_up", _GREEN, _GREEN_LT,
-                      trend=_kpi_trend(FoodState.dashboard_ventas_trend_pct)),
+                      trend=_kpi_trend(ReportesState.dashboard_ventas_trend_pct)),
             _kpi_card("Pedidos cobrados",
-                      FoodState.dashboard_pedidos_hoy.to_string(),
+                      ReportesState.dashboard_pedidos_hoy.to_string(),
                       "receipt_text", _BLUE, _BLUE_LT,
-                      trend=_kpi_trend(FoodState.dashboard_pedidos_trend, suffix="")),
+                      trend=_kpi_trend(ReportesState.dashboard_pedidos_trend, suffix="")),
             _kpi_card("Ticket promedio",
-                      FoodState.dashboard_ticket_promedio_texto,
-                      "calculator", "#7C3AED", "#F5F3FF",
-                      trend=_kpi_trend(FoodState.dashboard_ticket_trend_pct)),
+                      ReportesState.dashboard_ticket_promedio_texto,
+                      "calculator", "#7C3AED", "rgba(124,58,237,0.08)",
+                      trend=_kpi_trend(ReportesState.dashboard_ticket_trend_pct)),
             _kpi_card("Propinas hoy",
-                      FoodState.dashboard_propina_hoy_texto,
-                      "heart", "#9A3412", _ORANGE_LT,
-                      trend=_kpi_trend(FoodState.dashboard_propina_trend_pct)),
+                      ReportesState.dashboard_propina_hoy_texto,
+                      "heart", "#EA580C", _ORANGE_LT,
+                      trend=_kpi_trend(ReportesState.dashboard_propina_trend_pct)),
+            gap="12px", width="100%", flex_wrap="wrap",
+        ),
+        # KPIs operativos en vivo
+        rx.flex(
+            _kpi_card("Mesas ocupadas",
+                      ReportesState.dashboard_mesas_ocupadas.to_string()
+                      + " / " + ReportesState.dashboard_total_mesas.to_string(),
+                      "armchair", _ORANGE, _ORANGE_LT),
+            _kpi_card("En cocina",
+                      ReportesState.dashboard_items_en_cocina.to_string() + " ítems",
+                      "chef_hat", "#D97706", _AMBER_LT),
+            _kpi_card("Reservas hoy",
+                      ReportesState.dashboard_reservas_hoy.to_string(),
+                      "calendar_clock", "#7C3AED", "rgba(124,58,237,0.08)"),
             gap="12px", width="100%", flex_wrap="wrap",
         ),
         # Alertas
@@ -499,7 +610,7 @@ def _section_resumen() -> rx.Component:
                 rx.vstack(
                     rx.hstack(
                         rx.text("Últimas ventas", font_size="13px",
-                                font_weight="700", color=_SLATE_700),
+                                font_weight="700", color="#CBD5E1"),
                         rx.spacer(),
                         rx.link(
                             rx.hstack(
@@ -514,7 +625,7 @@ def _section_resumen() -> rx.Component:
                         width="100%", align="center",
                     ),
                     rx.cond(
-                        FoodState.historial_ventas.length() == 0,
+                        ReportesState.historial_ventas.length() == 0,
                         rx.center(
                             rx.text("Sin ventas todavía", font_size="12px",
                                     color=_SLATE_500),
@@ -522,7 +633,7 @@ def _section_resumen() -> rx.Component:
                         ),
                         rx.vstack(
                             rx.foreach(
-                                FoodState.historial_ventas_recientes,
+                                ReportesState.historial_ventas_recientes,
                                 _venta_row,
                             ),
                             spacing="2", width="100%",
@@ -530,7 +641,7 @@ def _section_resumen() -> rx.Component:
                     ),
                     spacing="3", width="100%",
                 ),
-                background=_WHITE, border=f"1px solid {_SLATE_200}",
+                background=_SURFACE, border=f"1px solid {_SLATE_200}",
                 border_radius="16px", padding="18px 20px",
                 width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
             ),
@@ -539,7 +650,7 @@ def _section_resumen() -> rx.Component:
                 rx.box(
                     rx.vstack(
                         rx.text("Accesos operativos", font_size="13px",
-                                font_weight="700", color=_SLATE_700),
+                                font_weight="700", color="#CBD5E1"),
                         rx.grid(
                             _quick_link_card("Mozos", "Mesas y comanda",
                                              "utensils", "/mozos", "🧑‍🍳"),
@@ -553,7 +664,7 @@ def _section_resumen() -> rx.Component:
                         ),
                         spacing="3", width="100%",
                     ),
-                    background=_WHITE, border=f"1px solid {_SLATE_200}",
+                    background=_SURFACE, border=f"1px solid {_SLATE_200}",
                     border_radius="16px", padding="18px 20px",
                     width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
                 ),
@@ -561,9 +672,9 @@ def _section_resumen() -> rx.Component:
                 rx.box(
                     rx.vstack(
                         rx.text("Top platos hoy", font_size="13px",
-                                font_weight="700", color=_SLATE_700),
+                                font_weight="700", color="#CBD5E1"),
                         rx.cond(
-                            FoodState.dashboard_top_platos.length() == 0,
+                            ReportesState.dashboard_top_platos.length() == 0,
                             rx.center(
                                 rx.text("Sin datos todavía", font_size="12px",
                                         color=_SLATE_500),
@@ -571,7 +682,7 @@ def _section_resumen() -> rx.Component:
                             ),
                             rx.vstack(
                                 rx.foreach(
-                                    FoodState.dashboard_top_platos,
+                                    ReportesState.dashboard_top_platos,
                                     _top_plato_row,
                                 ),
                                 spacing="2", width="100%",
@@ -579,7 +690,7 @@ def _section_resumen() -> rx.Component:
                         ),
                         spacing="3", width="100%",
                     ),
-                    background=_WHITE, border=f"1px solid {_SLATE_200}",
+                    background=_SURFACE, border=f"1px solid {_SLATE_200}",
                     border_radius="16px", padding="18px 20px",
                     width="100%", box_shadow="0 1px 4px rgba(0,0,0,0.06)",
                 ),
@@ -594,12 +705,688 @@ def _section_resumen() -> rx.Component:
 
 
 
+# ── SECCIÓN: RESERVAS ────────────────────────────────────────────────────────
+
+def _reserva_row(r: ReservaView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.hstack(
+                rx.text(r.nombre_cliente, font_size="14px", font_weight="700",
+                        color="#F1F5F9", no_of_lines=1),
+                rx.badge(
+                    r.estado_label,
+                    background=r.badge_bg,
+                    color=r.badge_text,
+                    border_radius="5px",
+                    font_size="10px",
+                    font_weight="700",
+                    padding="2px 8px",
+                ),
+                spacing="2", align="center",
+            ),
+            rx.hstack(
+                rx.cond(
+                    r.mesa_label != "",
+                    rx.hstack(
+                        rx.icon(tag="armchair", size=12, color=_SLATE_500),
+                        rx.text(r.mesa_label, font_size="12px", color=_SLATE_500),
+                        spacing="1", align="center",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.icon(tag="clock", size=12, color=_SLATE_500),
+                    rx.text(r.hora, font_size="12px", font_weight="600",
+                            color="#CBD5E1"),
+                    spacing="1", align="center",
+                ),
+                rx.hstack(
+                    rx.icon(tag="users", size=12, color=_SLATE_500),
+                    rx.text(r.pax.to_string() + " pax", font_size="12px",
+                            color=_SLATE_500),
+                    spacing="1", align="center",
+                ),
+                rx.cond(
+                    r.telefono != "",
+                    rx.hstack(
+                        rx.icon(tag="phone", size=12, color=_SLATE_500),
+                        rx.text(r.telefono, font_size="12px", color=_SLATE_500),
+                        spacing="1", align="center",
+                    ),
+                    rx.fragment(),
+                ),
+                spacing="3", align="center", flex_wrap="wrap",
+            ),
+            rx.cond(
+                r.notas != "",
+                rx.text(r.notas, font_size="11px", color="#94A3B8",
+                        font_style="italic", no_of_lines=1),
+                rx.fragment(),
+            ),
+            spacing="1", align="start", flex="1", min_width="0",
+        ),
+        rx.hstack(
+            rx.cond(
+                r.estado == "pendiente",
+                rx.button(
+                    rx.icon(tag="check", size=13),
+                    on_click=FoodState.confirmar_reserva(r.id),
+                    background="rgba(34,197,94,0.12)", color="#22C55E",
+                    border="1px solid #BBF7D0", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="Confirmar",
+                    _hover={"background": "rgba(34,197,94,0.25)"},
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (r.estado == "pendiente") | (r.estado == "confirmada"),
+                rx.button(
+                    rx.icon(tag="armchair", size=13),
+                    on_click=FoodState.sentar_reserva(r.id),
+                    background="rgba(59,130,246,0.12)", color="#3B82F6",
+                    border="1px solid #93C5FD", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="Sentar",
+                    _hover={"background": "#BFDBFE"},
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (r.estado == "pendiente") | (r.estado == "confirmada"),
+                rx.button(
+                    rx.icon(tag="user_x", size=13),
+                    on_click=FoodState.marcar_no_show(r.id),
+                    background=_SLATE_100, color=_SLATE_500,
+                    border=f"1px solid {_SLATE_200}", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="No asistió",
+                    _hover={"background": _SLATE_700},
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (r.estado == "pendiente") | (r.estado == "confirmada"),
+                rx.button(
+                    rx.icon(tag="x", size=13),
+                    on_click=FoodState.cancelar_reserva(r.id),
+                    background="rgba(239,68,68,0.12)", color="#F87171",
+                    border="1px solid #FECACA", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="Cancelar",
+                    _hover={"background": "rgba(239,68,68,0.25)"},
+                ),
+                rx.fragment(),
+            ),
+            rx.button(
+                rx.icon(tag="pencil", size=13),
+                on_click=FoodState.abrir_form_reserva(r.id),
+                background=_ORANGE_LT, color=_ORANGE,
+                border=f"1px solid {_ORANGE_BD}", border_radius="7px",
+                padding="6px", cursor="pointer", height="auto",
+                title="Editar",
+                _hover={"background": _ORANGE_BD},
+            ),
+            spacing="1", align="center", flex_shrink="0",
+        ),
+        width="100%", align="center",
+        padding="12px 14px",
+        background=_SURFACE,
+        border=f"1px solid {_SLATE_200}",
+        border_radius="10px",
+        _hover={"border_color": _ORANGE_BD, "box_shadow": "0 1px 4px rgba(0,0,0,0.06)"},
+        transition="all 0.12s ease",
+    )
+
+
+def _reserva_form_dialog() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="calendar_clock", size=18, color=_ORANGE),
+                    rx.text(
+                        rx.cond(FoodState.reserva_form_id > 0,
+                                "Editar reserva", "Nueva reserva"),
+                        font_size="16px", font_weight="700", color="#F1F5F9",
+                    ),
+                    rx.spacer(),
+                    rx.dialog.close(
+                        rx.box(
+                            rx.icon(tag="x", size=16, color=_SLATE_500),
+                            cursor="pointer", padding="4px",
+                            border_radius="6px",
+                            _hover={"background": _SLATE_700},
+                        ),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.grid(
+                    rx.vstack(
+                        rx.text("Nombre *", font_size="11px", font_weight="600",
+                                color=_SLATE_500, text_transform="uppercase",
+                                letter_spacing="0.06em"),
+                        rx.input(
+                            value=FoodState.reserva_form_nombre,
+                            on_change=FoodState.on_change_reserva_nombre,
+                            placeholder="Nombre del cliente",
+                            background=_SLATE_50,
+                            border=f"1px solid {_SLATE_200}",
+                            border_radius="8px",
+                            color="#F1F5F9",
+                            font_size="13px",
+                            width="100%",
+                            _focus={"border_color": _ORANGE},
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                    rx.vstack(
+                        rx.text("Teléfono", font_size="11px", font_weight="600",
+                                color=_SLATE_500, text_transform="uppercase",
+                                letter_spacing="0.06em"),
+                        rx.input(
+                            value=FoodState.reserva_form_telefono,
+                            on_change=FoodState.on_change_reserva_telefono,
+                            placeholder="999 999 999",
+                            background=_SLATE_50,
+                            border=f"1px solid {_SLATE_200}",
+                            border_radius="8px",
+                            color="#F1F5F9",
+                            font_size="13px",
+                            width="100%",
+                            _focus={"border_color": _ORANGE},
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                    columns="2", gap="12px", width="100%",
+                ),
+                rx.grid(
+                    rx.vstack(
+                        rx.text("Fecha *", font_size="11px", font_weight="600",
+                                color=_SLATE_500, text_transform="uppercase",
+                                letter_spacing="0.06em"),
+                        rx.input(
+                            value=FoodState.reserva_form_fecha,
+                            on_change=FoodState.on_change_reserva_fecha,
+                            type="date",
+                            background=_SLATE_50,
+                            border=f"1px solid {_SLATE_200}",
+                            border_radius="8px",
+                            color="#F1F5F9",
+                            font_size="13px",
+                            width="100%",
+                            _focus={"border_color": _ORANGE},
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                    rx.vstack(
+                        rx.text("Hora *", font_size="11px", font_weight="600",
+                                color=_SLATE_500, text_transform="uppercase",
+                                letter_spacing="0.06em"),
+                        rx.input(
+                            value=FoodState.reserva_form_hora,
+                            on_change=FoodState.on_change_reserva_hora,
+                            type="time",
+                            background=_SLATE_50,
+                            border=f"1px solid {_SLATE_200}",
+                            border_radius="8px",
+                            color="#F1F5F9",
+                            font_size="13px",
+                            width="100%",
+                            _focus={"border_color": _ORANGE},
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                    rx.vstack(
+                        rx.text("Personas", font_size="11px", font_weight="600",
+                                color=_SLATE_500, text_transform="uppercase",
+                                letter_spacing="0.06em"),
+                        rx.input(
+                            value=FoodState.reserva_form_pax.to_string(),
+                            on_change=FoodState.on_change_reserva_pax,
+                            type="number",
+                            min="1",
+                            background=_SLATE_50,
+                            border=f"1px solid {_SLATE_200}",
+                            border_radius="8px",
+                            color="#F1F5F9",
+                            font_size="13px",
+                            width="100%",
+                            _focus={"border_color": _ORANGE},
+                        ),
+                        spacing="1", width="100%",
+                    ),
+                    columns="3", gap="12px", width="100%",
+                ),
+                rx.vstack(
+                    rx.text("Notas", font_size="11px", font_weight="600",
+                            color=_SLATE_500, text_transform="uppercase",
+                            letter_spacing="0.06em"),
+                    rx.text_area(
+                        value=FoodState.reserva_form_notas,
+                        on_change=FoodState.on_change_reserva_notas,
+                        placeholder="Notas adicionales (alergias, celebración, etc.)",
+                        background=_SLATE_50,
+                        border=f"1px solid {_SLATE_200}",
+                        border_radius="8px",
+                        color="#F1F5F9",
+                        font_size="13px",
+                        width="100%",
+                        rows="2",
+                        _focus={"border_color": _ORANGE},
+                    ),
+                    spacing="1", width="100%",
+                ),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button(
+                            "Cancelar",
+                            background=_SLATE_100,
+                            color="#CBD5E1",
+                            border=f"1px solid {_SLATE_200}",
+                            border_radius="8px",
+                            font_size="13px",
+                            font_weight="600",
+                            cursor="pointer",
+                            _hover={"background": _SLATE_700},
+                        ),
+                    ),
+                    rx.button(
+                        rx.cond(FoodState.reserva_form_id > 0,
+                                "Guardar cambios", "Crear reserva"),
+                        on_click=FoodState.guardar_reserva,
+                        background=_ORANGE,
+                        color=_WHITE,
+                        border_radius="8px",
+                        font_size="13px",
+                        font_weight="700",
+                        cursor="pointer",
+                        _hover={"background": _ORANGE_DK},
+                    ),
+                    spacing="2", justify="end", width="100%",
+                ),
+                spacing="4", width="100%",
+            ),
+            background=_SURFACE,
+            border=f"1px solid {_SLATE_200}",
+            border_radius="16px",
+            padding="24px",
+            max_width="520px",
+            width="90vw",
+        ),
+        open=FoodState.reserva_form_visible,
+        on_open_change=FoodState.set_reserva_form_visible,
+    )
+
+
+def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.hstack(
+                rx.text(d.nombre_cliente, font_size="14px", font_weight="700",
+                        color="#F1F5F9", no_of_lines=1),
+                rx.badge(
+                    d.delivery_estado_label,
+                    background=d.badge_bg,
+                    color=d.badge_text,
+                    border_radius="5px",
+                    font_size="10px",
+                    font_weight="700",
+                    padding="2px 8px",
+                ),
+                rx.cond(
+                    d.pagado,
+                    rx.badge("Pagado", background="rgba(34,197,94,0.12)", color="#22C55E",
+                             border_radius="5px", font_size="10px",
+                             font_weight="700", padding="2px 8px"),
+                    rx.fragment(),
+                ),
+                spacing="2", align="center",
+            ),
+            rx.hstack(
+                rx.hstack(
+                    rx.icon(tag="map_pin", size=12, color=_SLATE_500),
+                    rx.text(d.delivery_direccion, font_size="12px",
+                            color="#CBD5E1", no_of_lines=1),
+                    spacing="1", align="center",
+                ),
+                rx.cond(
+                    d.delivery_telefono != "",
+                    rx.hstack(
+                        rx.icon(tag="phone", size=12, color=_SLATE_500),
+                        rx.text(d.delivery_telefono, font_size="12px",
+                                color=_SLATE_500),
+                        spacing="1", align="center",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.icon(tag="clock", size=12, color=_SLATE_500),
+                    rx.text(d.hora_texto, font_size="12px", font_weight="600",
+                            color="#CBD5E1"),
+                    spacing="1", align="center",
+                ),
+                spacing="3", align="center", flex_wrap="wrap",
+            ),
+            rx.hstack(
+                rx.text(d.items_resumen, font_size="11px", color="#94A3B8",
+                        no_of_lines=1, flex="1"),
+                rx.text(d.total_texto, font_size="13px", font_weight="700",
+                        color="#F1F5F9"),
+                spacing="2", align="center", width="100%",
+            ),
+            rx.cond(
+                d.repartidor_nombre != "",
+                rx.hstack(
+                    rx.icon(tag="bike", size=12, color="#7C3AED"),
+                    rx.text(d.repartidor_nombre, font_size="12px",
+                            font_weight="600", color="#7C3AED"),
+                    spacing="1", align="center",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                d.notas != "",
+                rx.text(d.notas, font_size="11px", color="#94A3B8",
+                        font_style="italic", no_of_lines=1),
+                rx.fragment(),
+            ),
+            spacing="1", align="start", flex="1", min_width="0",
+        ),
+        rx.hstack(
+            rx.cond(
+                d.delivery_estado == "pendiente",
+                rx.button(
+                    rx.icon(tag="bike", size=13),
+                    on_click=FoodState.delivery_marcar_en_camino(d.pedido_id),
+                    background="rgba(59,130,246,0.12)", color="#3B82F6",
+                    border="1px solid #93C5FD", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="En camino",
+                    _hover={"background": "#BFDBFE"},
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                d.delivery_estado == "en_camino",
+                rx.button(
+                    rx.icon(tag="check", size=13),
+                    on_click=FoodState.delivery_marcar_entregado(d.pedido_id),
+                    background="rgba(34,197,94,0.12)", color="#22C55E",
+                    border="1px solid #BBF7D0", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="Entregado",
+                    _hover={"background": "rgba(34,197,94,0.25)"},
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (d.delivery_estado == "pendiente") | (d.delivery_estado == "en_camino"),
+                rx.button(
+                    rx.icon(tag="x", size=13),
+                    on_click=FoodState.delivery_cancelar(d.pedido_id),
+                    background="rgba(239,68,68,0.12)", color="#F87171",
+                    border="1px solid #FECACA", border_radius="7px",
+                    padding="6px", cursor="pointer", height="auto",
+                    title="Cancelar",
+                    _hover={"background": "rgba(239,68,68,0.25)"},
+                ),
+                rx.fragment(),
+            ),
+            spacing="1", align="center", flex_shrink="0",
+        ),
+        width="100%", align="center",
+        padding="12px 14px",
+        background=_SURFACE,
+        border=f"1px solid {_SLATE_200}",
+        border_radius="10px",
+        _hover={"border_color": _ORANGE_BD, "box_shadow": "0 1px 4px rgba(0,0,0,0.06)"},
+        transition="all 0.12s ease",
+    )
+
+
+def _delivery_form_dialog() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.dialog.title("Nuevo pedido delivery",
+                            font_weight="800", color="#F1F5F9"),
+            rx.vstack(
+                rx.text("Nombre del cliente *", font_size="12px",
+                        font_weight="600", color="#CBD5E1"),
+                rx.input(
+                    value=FoodState.delivery_form_nombre,
+                    on_change=FoodState.on_change_delivery_nombre,
+                    placeholder="Juan Pérez",
+                    background=_SURFACE, border=f"1px solid {_SLATE_200}",
+                    border_radius="8px", color="#F1F5F9",
+                    _focus={"border_color": _ORANGE},
+                ),
+                rx.text("Dirección *", font_size="12px",
+                        font_weight="600", color="#CBD5E1"),
+                rx.input(
+                    value=FoodState.delivery_form_direccion,
+                    on_change=FoodState.on_change_delivery_direccion,
+                    placeholder="Av. Principal 123, Dpto 4B",
+                    background=_SURFACE, border=f"1px solid {_SLATE_200}",
+                    border_radius="8px", color="#F1F5F9",
+                    _focus={"border_color": _ORANGE},
+                ),
+                rx.text("Teléfono", font_size="12px",
+                        font_weight="600", color="#CBD5E1"),
+                rx.input(
+                    value=FoodState.delivery_form_telefono,
+                    on_change=FoodState.on_change_delivery_telefono,
+                    placeholder="987 654 321",
+                    background=_SURFACE, border=f"1px solid {_SLATE_200}",
+                    border_radius="8px", color="#F1F5F9",
+                    _focus={"border_color": _ORANGE},
+                ),
+                rx.text("Notas", font_size="12px",
+                        font_weight="600", color="#CBD5E1"),
+                rx.text_area(
+                    value=FoodState.delivery_form_notas,
+                    on_change=FoodState.on_change_delivery_notas,
+                    placeholder="Indicaciones de entrega...",
+                    background=_SURFACE, border=f"1px solid {_SLATE_200}",
+                    border_radius="8px", color="#F1F5F9", rows="2",
+                    _focus={"border_color": _ORANGE},
+                ),
+                spacing="2", width="100%",
+            ),
+            rx.hstack(
+                rx.dialog.close(
+                    rx.button(
+                        "Cancelar",
+                        background=_SLATE_100, color="#CBD5E1",
+                        border_radius="8px", cursor="pointer",
+                        _hover={"background": _SLATE_700},
+                    ),
+                ),
+                rx.button(
+                    "Crear pedido",
+                    on_click=FoodState.crear_pedido_delivery,
+                    background=_ORANGE, color=_WHITE,
+                    border_radius="8px", cursor="pointer",
+                    _hover={"background": _ORANGE_DK},
+                ),
+                spacing="2", width="100%", justify="end",
+                padding_top="8px",
+            ),
+            background=_SURFACE, border_radius="14px",
+            padding="24px",
+        ),
+        open=FoodState.delivery_form_visible,
+        on_open_change=FoodState.set_delivery_form_visible,
+    )
+
+
+def _delivery_filtro_btn(label: str, valor: str) -> rx.Component:
+    activo = FoodState.delivery_filtro_estado == valor
+    return rx.button(
+        label,
+        on_click=FoodState.set_delivery_filtro_estado(valor),
+        background=rx.cond(activo, _ORANGE, _SURFACE),
+        color=rx.cond(activo, _WHITE, _SLATE_500),
+        border=rx.cond(activo, f"1px solid {_ORANGE}", f"1px solid {_SLATE_200}"),
+        border_radius="8px", font_size="12px", font_weight="600",
+        padding="4px 12px", cursor="pointer", height="auto",
+        _hover={"background": rx.cond(activo, _ORANGE_DK, _SLATE_700)},
+    )
+
+
+def _section_delivery() -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.vstack(
+                rx.text("Delivery", font_size="18px", font_weight="800",
+                        color="#F1F5F9", line_height="1"),
+                rx.text("Pedidos a domicilio",
+                        font_size="13px", color=_SLATE_500),
+                spacing="1", align="start",
+            ),
+            rx.spacer(),
+            rx.hstack(
+                _delivery_filtro_btn("Activos", ""),
+                _delivery_filtro_btn("Pendientes", "pendiente"),
+                _delivery_filtro_btn("En camino", "en_camino"),
+                _delivery_filtro_btn("Entregados", "entregado"),
+                spacing="1", align="center", flex_wrap="wrap",
+            ),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="plus", size=14),
+                    rx.text("Nuevo delivery", font_size="13px",
+                            font_weight="700",
+                            display=rx.breakpoints(initial="none", sm="block")),
+                    spacing="2", align="center",
+                ),
+                on_click=FoodState.abrir_form_delivery,
+                background=_ORANGE, color=_WHITE,
+                border_radius="8px", padding_x="14px", padding_y="8px",
+                cursor="pointer",
+                _hover={"background": _ORANGE_DK},
+            ),
+            width="100%", align="center", flex_wrap="wrap", gap="8px",
+        ),
+        rx.cond(
+            FoodState.deliveries_lista.length() == 0,
+            rx.center(
+                rx.vstack(
+                    rx.icon(tag="truck", size=40, color=_SLATE_200),
+                    rx.text("Sin pedidos delivery",
+                            font_size="14px", color=_SLATE_500),
+                    rx.text("Crea un nuevo pedido con el botón de arriba",
+                            font_size="12px", color="#94A3B8"),
+                    spacing="2", align="center",
+                ),
+                padding_y="48px", width="100%",
+                background=_SURFACE, border=f"1px solid {_SLATE_200}",
+                border_radius="14px",
+            ),
+            rx.vstack(
+                rx.foreach(FoodState.deliveries_lista, _delivery_row),
+                spacing="2", width="100%",
+            ),
+        ),
+        _delivery_form_dialog(),
+        spacing="4", width="100%",
+    )
+
+
+def _section_reservas() -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.vstack(
+                rx.text("Reservas", font_size="18px", font_weight="800",
+                        color="#F1F5F9", line_height="1"),
+                rx.text("Gestión de reservas de mesas",
+                        font_size="13px", color=_SLATE_500),
+                spacing="1", align="start",
+            ),
+            rx.spacer(),
+            rx.hstack(
+                rx.input(
+                    value=FoodState.reservas_fecha_filtro,
+                    on_change=FoodState.set_reservas_fecha_filtro,
+                    type="date",
+                    background=_SURFACE,
+                    border=f"1px solid {_SLATE_200}",
+                    border_radius="8px",
+                    color="#F1F5F9",
+                    font_size="13px",
+                    width="160px",
+                    _focus={"border_color": _ORANGE},
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="plus", size=14),
+                        rx.text("Nueva reserva", font_size="13px",
+                                font_weight="700",
+                                display=rx.breakpoints(initial="none", sm="block")),
+                        spacing="2", align="center",
+                    ),
+                    on_click=FoodState.abrir_form_reserva(0),
+                    background=_ORANGE, color=_WHITE,
+                    border_radius="8px", padding_x="14px", padding_y="8px",
+                    cursor="pointer",
+                    _hover={"background": _ORANGE_DK},
+                ),
+                spacing="2", align="center",
+            ),
+            width="100%", align="center", flex_wrap="wrap", gap="8px",
+        ),
+        rx.cond(
+            FoodState.reservas_lista.length() == 0,
+            rx.center(
+                rx.vstack(
+                    rx.icon(tag="calendar_x_2", size=40, color=_SLATE_200),
+                    rx.text("Sin reservas para esta fecha",
+                            font_size="14px", color=_SLATE_500),
+                    rx.text("Crea una nueva reserva con el botón de arriba",
+                            font_size="12px", color="#94A3B8"),
+                    spacing="2", align="center",
+                ),
+                padding_y="48px", width="100%",
+                background=_SURFACE, border=f"1px solid {_SLATE_200}",
+                border_radius="14px",
+            ),
+            rx.vstack(
+                rx.foreach(FoodState.reservas_lista, _reserva_row),
+                spacing="2", width="100%",
+            ),
+        ),
+        _reserva_form_dialog(),
+        spacing="4", width="100%",
+    )
+
+
+# ── Banner upgrade para módulos premium ────────────────────────────────────────
+
+def _upgrade_banner(modulo: str) -> rx.Component:
+    return rx.center(
+        rx.vstack(
+            rx.icon(tag="lock", size=48, color=_AMBER),
+            rx.heading(
+                f"{modulo} — Plan Profesional",
+                size="4", color="#F1F5F9",
+            ),
+            rx.text(
+                MSG_UPGRADE,
+                color="#CBD5E1", text_align="center", max_width="400px",
+            ),
+            align="center", spacing="3",
+            padding="48px 24px",
+            border_radius="16px",
+            background=_AMBER_LT,
+            border=f"1px solid {_AMBER_BD}",
+        ),
+        width="100%", min_height="300px",
+    )
+
+
 # ── Área de contenido dinámico ────────────────────────────────────────────────
 
 def _content_area() -> rx.Component:
-    # Import diferido: cuentas.py/promociones.py/clientes.py/inventario.py
-    # importan _dono_shell de este módulo, así que importarlos a nivel de
-    # módulo aquí generaría un ciclo.
     from app.pages.cuentas import _cuentas_content
     from app.pages.promociones import _promociones_content
     from app.pages.reportes import _reportes_content
@@ -616,20 +1403,44 @@ def _content_area() -> rx.Component:
             _reportes_content(),
             rx.cond(
                 AdminPanelState.seccion == "clientes",
-                _clientes_content(),
+                rx.cond(
+                    FoodState.plan_permite_clientes,
+                    _clientes_content(),
+                    _upgrade_banner("Clientes"),
+                ),
                 rx.cond(
                     AdminPanelState.seccion == "cuentas",
-                    _cuentas_content(),
+                    rx.cond(
+                        FoodState.plan_permite_cuentas,
+                        _cuentas_content(),
+                        _upgrade_banner("Cuentas por cobrar"),
+                    ),
                     rx.cond(
                         AdminPanelState.seccion == "promociones",
-                        _promociones_content(),
                         rx.cond(
-                            AdminPanelState.seccion == "inventario",
-                            _inventario_content(),
+                            FoodState.plan_permite_promociones,
+                            _promociones_content(),
+                            _upgrade_banner("Promociones"),
+                        ),
+                        rx.cond(
+                            AdminPanelState.seccion == "reservas",
+                            _section_reservas(),
                             rx.cond(
-                                AdminPanelState.seccion == "usuarios",
-                                _usuarios_content(),
-                                _configuracion_content(),
+                                AdminPanelState.seccion == "delivery",
+                                _section_delivery(),
+                                rx.cond(
+                                    AdminPanelState.seccion == "inventario",
+                                    rx.cond(
+                                        FoodState.plan_permite_inventario,
+                                        _inventario_content(),
+                                        _upgrade_banner("Inventario"),
+                                    ),
+                                    rx.cond(
+                                        AdminPanelState.seccion == "usuarios",
+                                        _usuarios_content(),
+                                        _configuracion_content(),
+                                    ),
+                                ),
                             ),
                         ),
                     ),
@@ -643,22 +1454,6 @@ def _content_area() -> rx.Component:
 
 def _dono_dashboard() -> rx.Component:
     return rx.vstack(
-        # Mensaje global de éxito
-        rx.cond(
-            FoodState.mensaje != "",
-            rx.hstack(
-                rx.icon(tag="circle_check", size=14, color=_GREEN),
-                rx.text(FoodState.mensaje, font_size="13px",
-                        color=_GREEN, font_weight="600"),
-                spacing="2", align="center",
-                background=_GREEN_LT,
-                border="1px solid #BBF7D0",
-                border_radius="10px",
-                padding="10px 16px",
-                width="100%",
-            ),
-            rx.fragment(),
-        ),
         _content_area(),
         spacing="4",
         width="100%",
@@ -717,7 +1512,6 @@ def _dono_shell(content: rx.Component, with_sidebar: bool = False) -> rx.Compone
         ),
         background=_SLATE_50,
         min_height="100vh",
-        class_name="light",
     )
 
 
@@ -749,7 +1543,7 @@ def _brand_banner_generico() -> rx.Component:
             ),
             width="100%", height="100%",
         ),
-        background=_WHITE,
+        background=_SURFACE,
         border_radius="20px",
         width=rx.breakpoints(initial="190px", sm="230px", md="270px"),
         height=rx.breakpoints(initial="130px", sm="158px", md="186px"),
@@ -786,7 +1580,7 @@ def _brand_banner_empresa() -> rx.Component:
                 border_radius="20px",
             ),
         ),
-        background=_WHITE,
+        background=_SURFACE,
         border_radius="20px",
         width=rx.breakpoints(initial="155px", sm="190px", md="220px"),
         height=rx.breakpoints(initial="105px", sm="128px", md="150px"),
@@ -820,7 +1614,7 @@ def dono_login_page() -> rx.Component:
                             font_weight="800", color=_WHITE,
                             text_align="center"),
                     rx.text("Ingrese con su email y contraseña",
-                            font_size="13px", color="#475569",
+                            font_size="13px", color="#94A3B8",
                             text_align="center"),
                     spacing="1", align="center",
                 ),
@@ -831,13 +1625,13 @@ def dono_login_page() -> rx.Component:
                             rx.box(
                                 rx.hstack(
                                     rx.icon(tag="circle_alert", size=14,
-                                            color="#B91C1C"),
+                                            color="#F87171"),
                                     rx.text(AdminLocalState.error_msg,
-                                            font_size="13px", color="#B91C1C",
+                                            font_size="13px", color="#F87171",
                                             font_weight="600"),
                                     spacing="2", align="center",
                                 ),
-                                background="#FEF2F2",
+                                background="rgba(239,68,68,0.08)",
                                 border="1px solid #FECACA",
                                 border_radius="8px",
                                 padding="10px 14px",
@@ -847,7 +1641,7 @@ def dono_login_page() -> rx.Component:
                         ),
                         rx.vstack(
                             rx.text("Email", font_size="11px",
-                                    font_weight="600", color="#64748B",
+                                    font_weight="600", color="#94A3B8",
                                     text_transform="uppercase",
                                     letter_spacing="0.06em"),
                             rx.input(
@@ -863,7 +1657,7 @@ def dono_login_page() -> rx.Component:
                         ),
                         rx.vstack(
                             rx.text("Contraseña", font_size="11px",
-                                    font_weight="600", color="#64748B",
+                                    font_weight="600", color="#94A3B8",
                                     text_transform="uppercase",
                                     letter_spacing="0.06em"),
                             rx.box(
@@ -893,7 +1687,7 @@ def dono_login_page() -> rx.Component:
                                     on_click=AdminLocalState.toggle_show_password,
                                     type="button",
                                     background="transparent",
-                                    color="#64748B",
+                                    color="#94A3B8",
                                     border="none",
                                     width="26px",
                                     height="26px",
@@ -933,7 +1727,7 @@ def dono_login_page() -> rx.Component:
                 ),
                 rx.center(
                     rx.hstack(
-                        rx.text("¿Eres empleado?", font_size="12px", color="#475569"),
+                        rx.text("¿Eres empleado?", font_size="12px", color="#94A3B8"),
                         rx.link(
                             "Ingresar con PIN",
                             href="/login?empresa=" + AdminLocalState.login_empresa_slug,
@@ -958,7 +1752,7 @@ def dono_login_page() -> rx.Component:
 
 @rx.page(
     route="/admin",
-    on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page],
+    on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page, ReportesState.init_reportes_dono],
     title="TUWAYKIFOOD | Panel Administrativo",
 )
 def dono_page() -> rx.Component:

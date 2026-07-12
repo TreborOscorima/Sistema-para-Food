@@ -21,6 +21,7 @@ from sqlmodel import select
 
 from tuwayki_core.utils.timezone import utc_now_naive
 
+from app.services.auditoria_service import registrar_auditoria
 from app.services.kardex_service import registrar_reposicion
 from app.models.food import (
     CuentaCorriente,
@@ -107,7 +108,18 @@ def revertir_fiado_pedido(session, pedido: Pedido) -> Decimal:
     """Revierte los cargos de cuenta corriente del pedido con un contraasiento.
 
     Devuelve el monto total revertido (0 si el pedido no tenía fiado).
+    Idempotente: si ya existe un contraasiento para este pedido, no duplica.
     """
+    ya_revertidos = session.exec(
+        select(MovimientoCuenta).where(
+            MovimientoCuenta.company_id == pedido.company_id,
+            MovimientoCuenta.pedido_id == pedido.id,
+            MovimientoCuenta.tipo == "pago",
+            MovimientoCuenta.descripcion.contains("reverso de fiado"),
+        )
+    ).all()
+    if ya_revertidos:
+        return Decimal("0.00")
     cargos = session.exec(
         select(MovimientoCuenta).where(
             MovimientoCuenta.company_id == pedido.company_id,
@@ -130,7 +142,8 @@ def revertir_fiado_pedido(session, pedido: Pedido) -> Decimal:
             monto=monto,
             descripcion=f"Anulación pedido #{pedido.id} — reverso de fiado",
         ))
-        cuenta.saldo_deuda = Decimal(str(cuenta.saldo_deuda)) - monto
+        saldo = Decimal(str(cuenta.saldo_deuda))
+        cuenta.saldo_deuda = max(saldo - monto, Decimal("0.00"))
         cuenta.updated_at = now
         session.add(cuenta)
         total_revertido += monto
@@ -154,9 +167,27 @@ def anular_pedido_abierto(
     if pedido.mesa_id:
         mesa = session.get(Mesa, pedido.mesa_id)
         if mesa is not None:
-            mesa.estado = EstadoMesa.LIBRE.value
-            mesa.updated_at = utc_now_naive()
-            session.add(mesa)
+            otros_activos = session.exec(
+                select(Pedido).where(
+                    Pedido.mesa_id == pedido.mesa_id,
+                    Pedido.company_id == pedido.company_id,
+                    Pedido.id != pedido.id,
+                    Pedido.estado.notin_([
+                        EstadoPedido.CANCELADO.value,
+                        EstadoPedido.COBRADO.value,
+                    ]),
+                )
+            ).first()
+            if otros_activos is None:
+                mesa.estado = EstadoMesa.LIBRE.value
+                mesa.updated_at = utc_now_naive()
+                session.add(mesa)
+    registrar_auditoria(
+        session, pedido.company_id, "anular_pedido",
+        usuario_id=usuario_id,
+        entidad="pedido", entidad_id=pedido.id,
+        detalle={"motivo": motivo, "total": str(pedido.total)},
+    )
     session.flush()
     return pedido
 
@@ -181,5 +212,12 @@ def anular_venta_cobrada(
     fiado_revertido = revertir_fiado_pedido(session, pedido)
     _marcar_cancelado(pedido, usuario_id, motivo)
     session.add(pedido)
+    registrar_auditoria(
+        session, pedido.company_id, "anular_venta",
+        usuario_id=usuario_id,
+        entidad="pedido", entidad_id=pedido.id,
+        detalle={"motivo": motivo, "total": str(pedido.total),
+                 "fiado_revertido": str(fiado_revertido)},
+    )
     session.flush()
     return fiado_revertido

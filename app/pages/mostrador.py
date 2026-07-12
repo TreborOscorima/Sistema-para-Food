@@ -66,7 +66,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                 ),
                 rx.cond(
                     item.es_combo,
-                    rx.badge("🍱 Combo", background="#92400E", color="#FDE68A",
+                    rx.badge("🍱 Combo", background="#F59E0B", color="#FDE68A",
                              border_radius="4px", font_size="9px", padding="1px 5px"),
                     rx.fragment(),
                 ),
@@ -86,7 +86,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     "-",
                     on_click=FoodState.restar_producto_mostrador(item.producto_id),
                     width="40px", height="40px",
-                    background="#FEF2F2", color="#B91C1C",
+                    background="rgba(239,68,68,0.08)", color="#F87171",
                     border="1px solid #FECACA", border_radius="8px",
                     font_size="18px", cursor="pointer", padding="0",
                     _hover={"opacity": "0.8"},
@@ -100,7 +100,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     "+",
                     on_click=FoodState.agregar_producto_mostrador(item.producto_id),
                     width="40px", height="40px",
-                    background="#F0FDF4", color="#15803D",
+                    background="rgba(34,197,94,0.08)", color="#22C55E",
                     border="1px solid #BBF7D0", border_radius="8px",
                     font_size="18px", cursor="pointer", padding="0",
                     _hover={"opacity": "0.8"},
@@ -126,7 +126,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     font_size="11px", padding_x="8px", padding_y="4px",
                     width="100%", height="28px",
                     _focus={"border": "1px solid #EA580C"},
-                    _placeholder={"color": "#64748B"},
+                    _placeholder={"color": "#94A3B8"},
                 ),
                 rx.button(
                     rx.icon(tag="check", size=11),
@@ -151,7 +151,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                 ),
                 rx.text(
                     rx.cond(item.nota != "", "editar", "+ nota"),
-                    font_size="10px", color="#64748B", cursor="pointer",
+                    font_size="10px", color="#94A3B8", cursor="pointer",
                     _hover={"color": "#EA580C"},
                     on_click=FoodState.abrir_nota_item_mostrador(item.producto_id),
                 ),
@@ -190,7 +190,7 @@ def _pendiente_card(pedido: MostradorPendienteView) -> rx.Component:
             rx.hstack(
                 rx.text(pedido.total_texto, font_size="13px", font_weight="800", color="#EA580C"),
                 rx.spacer(),
-                rx.text(pedido.hora_texto, font_size="11px", color="#64748B"),
+                rx.text(pedido.hora_texto, font_size="11px", color="#94A3B8"),
                 width="100%", align="center",
             ),
             spacing="1", width="100%",
@@ -209,13 +209,13 @@ def _entregado_card(pedido: MostradorEntregadoView) -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text(pedido.cliente_nombre, font_size="13px", font_weight="600", color="#F1F5F9"),
-                rx.text(pedido.items_resumen, font_size="11px", color="#64748B"),
+                rx.text(pedido.items_resumen, font_size="11px", color="#94A3B8"),
                 spacing="0", align="start",
             ),
             rx.spacer(),
             rx.vstack(
                 rx.text(pedido.total_texto, font_size="13px", font_weight="700", color="#4ADE80"),
-                rx.text(pedido.hora_texto, font_size="11px", color="#64748B"),
+                rx.text(pedido.hora_texto, font_size="11px", color="#94A3B8"),
                 align="end", spacing="0",
             ),
             width="100%", align="center",
@@ -245,7 +245,7 @@ def _mostrador_content() -> rx.Component:
             rx.vstack(
                 # Nombre del cliente
                 rx.hstack(
-                    rx.icon(tag="user", size=14, color="#64748B", flex_shrink="0"),
+                    rx.icon(tag="user", size=14, color="#94A3B8", flex_shrink="0"),
                     rx.input(
                         value=FoodState.mostrador_cliente_nombre,
                         on_change=FoodState.set_mostrador_cliente_nombre,
@@ -257,7 +257,7 @@ def _mostrador_content() -> rx.Component:
                         outline="none",
                         width="100%",
                         _focus={"outline": "none", "box_shadow": "none"},
-                        _placeholder={"color": "#64748B"},
+                        _placeholder={"color": "#94A3B8"},
                     ),
                     spacing="2", align="center", width="100%",
                     background="#0F172A",
@@ -268,7 +268,7 @@ def _mostrador_content() -> rx.Component:
                 # Buscador
                 rx.box(
                     rx.hstack(
-                        rx.icon(tag="search", size=14, color="#64748B", flex_shrink="0"),
+                        rx.icon(tag="search", size=14, color="#94A3B8", flex_shrink="0"),
                         rx.input(
                             value=FoodState.busqueda_producto_mostrador,
                             on_change=FoodState.set_busqueda_producto_mostrador,
@@ -280,7 +280,7 @@ def _mostrador_content() -> rx.Component:
                             outline="none",
                             width="100%",
                             _focus={"outline": "none", "box_shadow": "none"},
-                            _placeholder={"color": "#64748B"},
+                            _placeholder={"color": "#94A3B8"},
                         ),
                         rx.cond(
                             FoodState.busqueda_producto_mostrador != "",
@@ -340,8 +340,8 @@ def _mostrador_content() -> rx.Component:
                         FoodState.mostrador_productos_filtrados.length() == 0,
                         rx.center(
                             rx.vstack(
-                                rx.icon(tag="search_x", size=28, color="#475569"),
-                                rx.text("Sin resultados", font_size="13px", color="#64748B"),
+                                rx.icon(tag="search_x", size=28, color="#94A3B8"),
+                                rx.text("Sin resultados", font_size="13px", color="#94A3B8"),
                                 spacing="2", align="center",
                             ),
                             padding_y="24px",
@@ -366,7 +366,7 @@ def _mostrador_content() -> rx.Component:
                             rx.text("Combos", font_size="12px", font_weight="700", color="#FDE68A"),
                             rx.badge(
                                 FoodState.combos_menu.length().to_string(),
-                                background="#92400E", color="#FDE68A",
+                                background="#F59E0B", color="#FDE68A",
                                 border_radius="8px", font_size="10px", padding_x="6px",
                             ),
                             spacing="2", align="center",
@@ -383,7 +383,7 @@ def _mostrador_content() -> rx.Component:
                 spacing="2",
                 flex="3",
                 min_width="0",
-                height="calc(100vh - 140px)",
+                height=rx.breakpoints(initial="auto", lg="calc(100vh - 140px)"),
             ),
             # ─── Columna derecha: carrito + pendientes + cobrados ───
             rx.vstack(
@@ -398,7 +398,7 @@ def _mostrador_content() -> rx.Component:
                                 FoodState.mostrador_cupon_id_aplicado > 0,
                                 rx.text(
                                     FoodState.total_mostrador_texto,
-                                    font_size="11px", color="#64748B",
+                                    font_size="11px", color="#94A3B8",
                                     text_decoration="line-through",
                                 ),
                                 rx.fragment(),
@@ -417,8 +417,8 @@ def _mostrador_content() -> rx.Component:
                             FoodState.mostrador_carrito.length() == 0,
                             rx.center(
                                 rx.vstack(
-                                    rx.icon(tag="clipboard_list", size=24, color="#334155"),
-                                    rx.text("Agrega productos", font_size="11px", color="#64748B"),
+                                    rx.icon(tag="clipboard_list", size=24, color="#94A3B8"),
+                                    rx.text("Agrega productos", font_size="11px", color="#94A3B8"),
                                     spacing="1", align="center",
                                 ),
                                 padding_y="20px",
@@ -440,7 +440,7 @@ def _mostrador_content() -> rx.Component:
                             "Limpiar",
                             on_click=FoodState.limpiar_carrito_mostrador,
                             background="transparent",
-                            color="#64748B",
+                            color="#94A3B8",
                             border="1px solid #334155",
                             border_radius="8px",
                             font_size="12px",
@@ -455,6 +455,7 @@ def _mostrador_content() -> rx.Component:
                                 spacing="2", align="center",
                             ),
                             on_click=FoodState.enviar_pedido_mostrador,
+                            is_loading=FoodState.mostrador_enviando,
                             background="#EA580C",
                             color="#FFFFFF",
                             border_radius="8px",
@@ -476,7 +477,7 @@ def _mostrador_content() -> rx.Component:
                     padding="12px",
                 ),
                 # Separador
-                rx.divider(border_color="#334155"),
+                rx.divider(border_color="#94A3B8"),
                 # Pendientes de cobro
                 rx.vstack(
                     rx.hstack(
@@ -487,7 +488,7 @@ def _mostrador_content() -> rx.Component:
                     rx.cond(
                         FoodState.pedidos_mostrador_pendientes.length() == 0,
                         rx.center(
-                            rx.text("Sin pedidos en espera", font_size="12px", color="#64748B"),
+                            rx.text("Sin pedidos en espera", font_size="12px", color="#94A3B8"),
                             padding_y="10px",
                         ),
                         rx.vstack(
@@ -504,7 +505,7 @@ def _mostrador_content() -> rx.Component:
                     rx.cond(
                         FoodState.pedidos_mostrador_entregados.length() == 0,
                         rx.center(
-                            rx.text("Sin historial", font_size="12px", color="#64748B"),
+                            rx.text("Sin historial", font_size="12px", color="#94A3B8"),
                             padding_y="10px",
                         ),
                         rx.vstack(
@@ -518,10 +519,10 @@ def _mostrador_content() -> rx.Component:
                 spacing="3",
                 flex="2",
                 min_width="0",
-                height="calc(100vh - 140px)",
+                height=rx.breakpoints(initial="auto", lg="calc(100vh - 140px)"),
                 overflow_y="auto",
             ),
-            direction=rx.breakpoints(initial="column", md="row"),
+            direction=rx.breakpoints(initial="column", lg="row"),
             gap="16px",
             width="100%",
             flex="1",
@@ -583,7 +584,7 @@ def _mod_item_flat_m(item: dict) -> rx.Component:
                     "(máx " + item["max"].to(int).to_string() + ")",
                     "",
                 ),
-                font_size="10px", color="#64748B",
+                font_size="10px", color="#94A3B8",
             ),
             spacing="2", align="center", width="100%",
             padding_top="8px",
@@ -689,7 +690,7 @@ def _modal_seleccion_mods_m() -> rx.Component:
                 spacing="3", width="100%",
             ),
             background="#0F172A",
-            border="1px solid #334155",
+            border="1px solid #1E293B",
             border_radius="14px",
             padding="20px",
             max_width="420px",

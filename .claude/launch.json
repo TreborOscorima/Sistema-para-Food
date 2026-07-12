@@ -7,6 +7,13 @@
       "runtimeArgs": ["compose", "-f", "docker-compose.yml", "-f", "docker-compose.local.yml", "up"],
       "port": 3003,
       "autoPort": false
+    },
+    {
+      "name": "tuwayki-food-docker",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "echo Waiting && timeout /t 3600 /nobreak > nul"],
+      "port": 3003,
+      "autoPort": false
     }
   ]
 }

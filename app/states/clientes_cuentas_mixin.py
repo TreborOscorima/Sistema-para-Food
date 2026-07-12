@@ -128,8 +128,10 @@ class ClientesCuentasMixin(rx.State, mixin=True):
 
     # ── Clientes — carga y CRUD ─────────────────────────────────────────────
 
-    def on_load_clientes(self) -> None:
-        self.mensaje = ""
+    def on_load_clientes(self):
+        result = self._route_access_result("clientes")
+        if result is not None:
+            return result
         self.cargar_clientes()
 
     def cargar_clientes(self) -> None:
@@ -233,8 +235,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
     def guardar_cliente(self) -> None:
         nombre = self.cli_form_nombre.strip()
         if not nombre:
-            self.mensaje = "El nombre del cliente es obligatorio."
-            return
+            return rx.toast.error("El nombre del cliente es obligatorio.")
         tel = self.cli_form_telefono.strip() or None
         email = self.cli_form_email.strip() or None
         notas = self.cli_form_notas.strip() or None
@@ -245,8 +246,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                 parts = self.cli_form_fecha_nac.split("-")
                 fn = _date(int(parts[0]), int(parts[1]), int(parts[2]))
             except (ValueError, IndexError):
-                self.mensaje = "Fecha de nacimiento inválida. Usa el formato AAAA-MM-DD."
-                return
+                return rx.toast.error("Fecha de nacimiento inválida. Usa el formato AAAA-MM-DD.")
         with self._tenant_session() as session:
             if self.cli_form_id == 0:
                 existente = session.exec(
@@ -256,8 +256,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                     )
                 ).first()
                 if existente:
-                    self.mensaje = f"Ya existe un cliente con ese nombre."
-                    return
+                    return rx.toast.error("Ya existe un cliente con ese nombre.")
                 c = Cliente(
                     company_id=self._company_id(),
                     nombre=nombre,
@@ -268,12 +267,11 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                     activo=True,
                 )
                 session.add(c)
-                self.mensaje = f"Cliente '{nombre}' registrado."
+                _msg = f"Cliente '{nombre}' registrado."
             else:
                 c = session.get(Cliente, self.cli_form_id)
                 if c is None or c.company_id != self._company_id():
-                    self.mensaje = "Cliente no encontrado."
-                    return
+                    return rx.toast.error("Cliente no encontrado.")
                 c.nombre = nombre
                 c.telefono = tel
                 c.email = email
@@ -281,7 +279,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                 c.notas = notas
                 c.updated_at = _utcnow()
                 session.add(c)
-                self.mensaje = f"Cliente '{nombre}' actualizado."
+                _msg = f"Cliente '{nombre}' actualizado."
             session.commit()
         self.cli_form_id = 0
         self.cli_form_nombre = ""
@@ -292,6 +290,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
         self.cli_form_editando = False
         self.cli_form_visible = False
         self.cargar_clientes()
+        return rx.toast.success(_msg)
 
     def abrir_nuevo_cliente(self) -> None:
         self.cli_form_id = 0
@@ -393,8 +392,10 @@ class ClientesCuentasMixin(rx.State, mixin=True):
 
     # ── Cuentas corrientes ──────────────────────────────────────────────────
 
-    def on_load_cuentas(self) -> None:
-        self.mensaje = ""
+    def on_load_cuentas(self):
+        result = self._route_access_result("cuentas")
+        if result is not None:
+            return result
         if not self.clientes_lista:
             self.cargar_clientes()
         self.cargar_cuentas()
@@ -472,20 +473,23 @@ class ClientesCuentasMixin(rx.State, mixin=True):
 
     def registrar_pago_cc(self) -> None:
         if self.cuenta_sel_id == 0:
-            self.mensaje = "Seleccione un cliente con cuenta corriente."
-            return
+            return rx.toast.error("Seleccione un cliente con cuenta corriente.")
         try:
             monto = Decimal(self.cc_pago_monto.replace(",", ".").strip() or "0")
             if monto <= 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            self.mensaje = "Monto de pago inválido."
-            return
+            return rx.toast.error("Monto de pago inválido.")
         with self._tenant_session() as session:
             cc = session.get(CuentaCorriente, self.cuenta_sel_id)
             if cc is None or cc.company_id != self._company_id():
-                self.mensaje = "Cuenta no encontrada."
-                return
+                return rx.toast.error("Cuenta no encontrada.")
+            saldo_actual = Decimal(str(cc.saldo_deuda))
+            if monto > saldo_actual:
+                return rx.toast.error(
+                    f"El pago ({_money_text(monto)}) supera la deuda "
+                    f"({_money_text(saldo_actual)}). Máximo: {_money_text(saldo_actual)}."
+                )
             pago = MovimientoCuenta(
                 company_id=self._company_id(),
                 cuenta_id=cc.id or 0,
@@ -494,17 +498,16 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                 descripcion=self.cc_pago_descripcion.strip() or "Pago en caja",
             )
             session.add(pago)
-            saldo_actual = Decimal(str(cc.saldo_deuda))
-            cc.saldo_deuda = max(saldo_actual - monto, Decimal("0.00"))
+            cc.saldo_deuda = saldo_actual - monto
             cc.updated_at = _utcnow()
             session.add(cc)
             session.commit()
             cliente_id = cc.cliente_id
         self.cc_pago_monto = ""
         self.cc_pago_descripcion = ""
-        self.mensaje = f"Pago de {_money_text(monto)} registrado."
         self.cargar_cuentas()
         self._ver_o_crear_cuenta(cliente_id)
+        return rx.toast.success(f"Pago de {_money_text(monto)} registrado.")
 
     def _registrar_cargo_cc(self, session, cliente_id: int, monto: Decimal, pedido_id: int | None, descripcion: str) -> None:
         cc = session.exec(
@@ -568,8 +571,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                 ).all()
 
         if not cuentas_db and not movimientos:
-            self.mensaje = "No hay cuentas corrientes para exportar."
-            return None
+            return rx.toast.error("No hay cuentas corrientes para exportar.")
 
         cuentas_por_id = {c.id: c for c in cuentas_db}
 

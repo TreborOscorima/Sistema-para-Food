@@ -59,15 +59,13 @@ class ProduccionMixin(rx.State, mixin=True):
     def prod_agregar_item(self) -> None:
         nombre = self.prod_agregar_nombre.strip()
         if not nombre:
-            self.mensaje = "Seleccione un producto o combo."
-            return
+            return rx.toast.error("Seleccione un producto o combo.")
         try:
             cantidad = int(self.prod_agregar_cantidad or "1")
             if cantidad < 1:
                 raise ValueError
         except ValueError:
-            self.mensaje = "Cantidad inválida. Ingrese un número entero mayor a 0."
-            return
+            return rx.toast.error("Cantidad inválida. Ingrese un número entero mayor a 0.")
 
         es_combo = nombre.startswith("[Combo] ")
         nombre_real = nombre.removeprefix("[Combo] ")
@@ -90,8 +88,7 @@ class ProduccionMixin(rx.State, mixin=True):
                 producto_id = prod.id
 
         if producto_id == 0:
-            self.mensaje = "Producto no encontrado."
-            return
+            return rx.toast.error("Producto no encontrado.")
 
         existente = next(
             (i for i in self.prod_plan_items if i.producto_id == producto_id and i.nombre == nombre),
@@ -137,8 +134,7 @@ class ProduccionMixin(rx.State, mixin=True):
 
     def prod_calcular(self) -> None:
         if not self.prod_plan_items:
-            self.mensaje = "Agregue al menos un producto al plan."
-            return
+            return rx.toast.error("Agregue al menos un producto al plan.")
 
         plan = [(item.producto_id, item.cantidad) for item in self.prod_plan_items]
 
@@ -181,8 +177,8 @@ class ProduccionMixin(rx.State, mixin=True):
         self.prod_calculado = True
 
         if not resultado:
-            self.mensaje = "Ningún producto del plan tiene receta cargada. Agregue insumos en la sección Recetas."
+            return rx.toast.error("Ningún producto del plan tiene receta cargada. Agregue insumos en la sección Recetas.")
         elif faltan:
-            self.mensaje = f"Plan calculado. {len(faltan)} insumo(s) con stock insuficiente."
+            return rx.toast.warning(f"Plan calculado. {len(faltan)} insumo(s) con stock insuficiente.")
         else:
-            self.mensaje = "Plan calculado. Stock suficiente para todos los insumos."
+            return rx.toast.success("Plan calculado. Stock suficiente para todos los insumos.")

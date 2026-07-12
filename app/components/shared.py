@@ -27,6 +27,8 @@ from app.components.theme import (  # noqa: F401 — re-export
     WARNING_BG, WARNING_BORDER, WARNING_TEXT,
     Z_ADMIN_BACKDROP, Z_ADMIN_SIDEBAR, Z_DRAWER, Z_MENU_PUBLIC, Z_MODAL,
     Z_STICKY_HEADER, Z_TOAST,
+    DARK_MODAL_PROPS, DARK_MODAL_TEXT, DARK_MODAL_MUTED, DARK_MODAL_BORDER,
+    DARK_MODAL_INPUT_BG, DARK_MODAL_INPUT_BORDER, DARK_MODAL_BTN_BG, DARK_MODAL_BTN_BORDER,
 )
 
 
@@ -120,8 +122,8 @@ def kpi_card(title: str, value, description: str = "",
 # ─── BRAND COMPONENT ──────────────────────────────────────────────────────────────
 
 def _brand(compact: bool = False, dark: bool = False) -> rx.Component:
-    title_color = "rgba(255,255,255,0.95)" if dark else TEXT_PRIMARY
-    sub_color   = "rgba(255,255,255,0.42)" if dark else TEXT_MUTED
+    title_color = TEXT_PRIMARY
+    sub_color   = TEXT_MUTED
     return rx.hstack(
         rx.image(
             src="/TUWAYKIFOODFAVICON.png",
@@ -206,7 +208,7 @@ def user_session_badge() -> rx.Component:
             border_radius="8px",
             height="34px",
             padding_x="10px",
-            _hover={"background": "#FEE2E2"},
+            _hover={"background": "rgba(239,68,68,0.12)"},
         ),
         spacing="3",
         align="center",
@@ -293,7 +295,7 @@ def _desktop_nav_item(label: str, href: str, icon_tag: str,
                     rx.icon(
                         tag=icon_tag,
                         size=15,
-                        color=rx.cond(active, "#FFFFFF", "rgba(255,255,255,0.65)"),
+                        color=rx.cond(active, "#FFFFFF", "rgba(255,255,255,0.80)"),
                     ),
                     class_name="twk-nav-icon-box",
                 ),
@@ -304,15 +306,15 @@ def _desktop_nav_item(label: str, href: str, icon_tag: str,
                     rx.vstack(
                         rx.text(
                             label,
-                            color=rx.cond(active, "#FFFFFF", "rgba(255,255,255,0.82)"),
+                            color=rx.cond(active, "#FFFFFF", "rgba(255,255,255,0.92)"),
                             font_weight=rx.cond(active, "700", "500"),
                             font_size="13px",
                             line_height="1",
                         ),
                         rx.text(
                             desc,
-                            color=rx.cond(active, "rgba(255,255,255,0.65)",
-                                          "rgba(255,255,255,0.32)"),
+                            color=rx.cond(active, "rgba(255,255,255,0.85)",
+                                          "rgba(255,255,255,0.55)"),
                             font_size="10.5px",
                             line_height="1",
                         ),
@@ -487,6 +489,25 @@ def _desktop_sidebar(active: str) -> rx.Component:
                    background="rgba(255,255,255,0.07)"),
             # ── Usuario ───────────────────────────────────────────────────────
             _sidebar_user_badge(),
+            # ── Sucursal (solo si multi-local) ────────────────────────────────
+            rx.cond(
+                FoodState.tiene_sucursales,
+                rx.hstack(
+                    rx.icon(tag="map_pin", size=12, color="#EA580C"),
+                    rx.cond(
+                        FoodState.sidebar_collapsed,
+                        rx.fragment(),
+                        rx.text(
+                            FoodState.sucursal_actual_nombre,
+                            font_size="11px", color="rgba(255,255,255,0.6)",
+                            max_width="130px", overflow="hidden",
+                            text_overflow="ellipsis", white_space="nowrap",
+                        ),
+                    ),
+                    spacing="2", align="center", padding_x="4px",
+                ),
+                rx.fragment(),
+            ),
             spacing="0",
             gap="8px",
             height="100%",
@@ -689,14 +710,14 @@ def cumpleanos_banner() -> rx.Component:
                     FoodState.clientes_cumpleanos_hoy,
                     lambda c: rx.badge(
                         c.nombre,
-                        background="#FFFFFF", color="#991B1B",
-                        border="1px solid #FCA5A5", border_radius="6px",
+                        background="#1E293B", color="#F87171",
+                        border="1px solid rgba(239,68,68,0.25)", border_radius="6px",
                         font_size="11px", font_weight="600",
                     ),
                 ),
                 spacing="2", align="center", wrap="wrap",
             ),
-            background="#FEF2F2", border="1px solid #FCA5A5",
+            background="rgba(239,68,68,0.10)", border="1px solid rgba(239,68,68,0.25)",
             border_radius="10px", padding="10px 14px", width="100%",
         ),
         rx.fragment(),
@@ -708,7 +729,7 @@ def cumpleanos_banner() -> rx.Component:
 def loading_placeholder(*, dark: bool = False) -> rx.Component:
     bg = "#1E293B" if dark else "#F1F5F9"
     accent = "#334155" if dark else "#E2E8F0"
-    text_color = "#64748B" if dark else "#94A3B8"
+    text_color = "#94A3B8" if dark else "#94A3B8"
     return rx.center(
         rx.vstack(
             rx.spinner(size="3", color="#EA580C"),
@@ -755,8 +776,8 @@ def app_shell(
     dark: bool = False,
 ) -> rx.Component:
     _active = page_key or active
-    _bg = "#0F172A" if dark else PAGE_BACKGROUND
-    _text = "#FFFFFF" if dark else TEXT_PRIMARY
+    _bg = PAGE_BACKGROUND
+    _text = TEXT_PRIMARY
     return rx.box(
         _connection_banner_es(),
         rx.hstack(
@@ -785,7 +806,7 @@ def app_shell(
         width="100%",
         background=_bg,
         color=_text,
-        class_name="" if dark else "light",
+        class_name="dark" if dark else "",
     )
 
 
@@ -800,7 +821,7 @@ def anulacion_modal() -> rx.Component:
                 rx.hstack(
                     rx.icon(tag="triangle_alert", size=18, color="#DC2626"),
                     rx.text("Anular " + FoodState.anulacion_referencia,
-                            font_size="17px", font_weight="800", color="#0F172A"),
+                            font_size="17px", font_weight="800", color=DARK_MODAL_TEXT),
                     spacing="2", align="center",
                 ),
                 rx.text(
@@ -810,31 +831,32 @@ def anulacion_modal() -> rx.Component:
                         "y la venta saldrá del arqueo del turno. La operación queda registrada.",
                         "El pedido se cancelará y la mesa quedará libre. La operación queda registrada.",
                     ),
-                    font_size="13px", color="#64748B",
+                    font_size="13px", color=DARK_MODAL_MUTED,
                 ),
                 rx.input(
                     placeholder="Motivo de la anulación (obligatorio)",
                     value=FoodState.anulacion_motivo,
                     on_change=FoodState.set_anulacion_motivo,
                     width="100%",
-                    background="#FFFFFF", border="1px solid #E2E8F0",
+                    background=DARK_MODAL_INPUT_BG, border=f"1px solid {DARK_MODAL_INPUT_BORDER}",
+                    color=DARK_MODAL_TEXT,
                     border_radius="8px", font_size="13px",
                     _focus={"border_color": "#DC2626"},
                 ),
                 rx.cond(
                     FoodState.anulacion_error != "",
                     rx.text(FoodState.anulacion_error, font_size="12px",
-                            color="#B91C1C", font_weight="600"),
+                            color="#EF4444", font_weight="600"),
                     rx.fragment(),
                 ),
                 rx.hstack(
                     rx.button(
                         "Volver",
                         on_click=FoodState.cancelar_anulacion,
-                        background="#FFFFFF", color="#64748B",
-                        border="1px solid #E2E8F0", border_radius="10px",
+                        background=DARK_MODAL_BTN_BG, color=DARK_MODAL_MUTED,
+                        border=f"1px solid {DARK_MODAL_BTN_BORDER}", border_radius="10px",
                         font_size="14px", font_weight="600", cursor="pointer",
-                        _hover={"background": "#F8FAFC"}, flex="1",
+                        _hover={"background": DARK_700, "color": DARK_MODAL_TEXT}, flex="1",
                     ),
                     rx.button(
                         "Confirmar anulación",
@@ -847,7 +869,8 @@ def anulacion_modal() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            class_name="light", max_width="440px",
+            max_width="440px",
+            **DARK_MODAL_PROPS,
         ),
         open=FoodState.anulacion_modal_visible,
         on_open_change=FoodState.set_anulacion_modal_visible,

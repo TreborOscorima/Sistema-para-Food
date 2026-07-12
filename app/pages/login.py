@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import _connection_banner_es
-from app.states.food_state import CompanyOptionView, FoodState
+from app.states.food_state import CompanyOptionView, FoodState, SucursalView
 
 
 # ─── Tarjeta de rol ───────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ def _keypad() -> rx.Component:
         _key_iphone("8", FoodState.append_login_digit("8")),
         _key_iphone("9", FoodState.append_login_digit("9")),
         _key_iphone_ghost(
-            rx.text("C", font_size="20px", font_weight="400", color="#64748B",
+            rx.text("C", font_size="20px", font_weight="400", color="#94A3B8",
                     line_height="1"),
             FoodState.clear_login_pin,
             "Borrar PIN completo",
@@ -178,7 +178,7 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
         padding="16px 10px",
         cursor="pointer",
         transition="border-color 0.15s, transform 0.1s",
-        _hover={"border_color": "#64748B", "transform": "scale(0.98)"},
+        _hover={"border_color": "#94A3B8", "transform": "scale(0.98)"},
         _active={"transform": "scale(0.95)"},
     )
 
@@ -189,7 +189,7 @@ def _restaurant_selector_card() -> rx.Component:
             "ELIGE TU RESTAURANTE",
             font_size="11px",
             font_weight="700",
-            color="#64748B",
+            color="#94A3B8",
             text_transform="uppercase",
             letter_spacing="0.08em",
             margin_bottom="16px",
@@ -205,7 +205,7 @@ def _restaurant_selector_card() -> rx.Component:
             rx.text(
                 "No hay restaurantes activos por ahora.",
                 font_size="13px",
-                color="#64748B",
+                color="#94A3B8",
                 text_align="center",
             ),
         ),
@@ -228,7 +228,7 @@ def _login_card() -> rx.Component:
                 "SELECCIONA TU ROL",
                 font_size="11px",
                 font_weight="700",
-                color="#64748B",
+                color="#94A3B8",
                 text_transform="uppercase",
                 letter_spacing="0.08em",
             ),
@@ -237,7 +237,7 @@ def _login_card() -> rx.Component:
                 "← Volver",
                 on_click=FoodState.volver_a_seleccion_restaurante,
                 font_size="11px",
-                color="#64748B",
+                color="#94A3B8",
                 cursor="pointer",
                 text_decoration="none",
                 _hover={"color": "#94A3B8"},
@@ -258,7 +258,7 @@ def _login_card() -> rx.Component:
             "Ingrese su PIN",
             font_size="11px",
             font_weight="700",
-            color="#64748B",
+            color="#94A3B8",
             text_transform="uppercase",
             letter_spacing="0.08em",
             margin_bottom="16px",
@@ -268,12 +268,12 @@ def _login_card() -> rx.Component:
         rx.cond(
             FoodState.login_error != "",
             rx.hstack(
-                rx.icon(tag="circle_x", size=13, color="#B91C1C"),
+                rx.icon(tag="circle_x", size=13, color="#F87171"),
                 rx.text(FoodState.login_error, font_size="12px",
-                        color="#B91C1C", font_weight="600"),
+                        color="#F87171", font_weight="600"),
                 spacing="2",
                 align="center",
-                background="#FEF2F2",
+                background="rgba(239,68,68,0.08)",
                 border="1px solid #FECACA",
                 border_radius="8px",
                 padding="8px 12px",
@@ -291,7 +291,7 @@ def _login_card() -> rx.Component:
                 rx.text(
                     FoodState.login_pin_input.length().to_string() + " dígito(s)",
                     font_size="11px",
-                    color="#475569",
+                    color="#94A3B8",
                     text_align="center",
                 ),
                 rx.fragment(),
@@ -321,6 +321,83 @@ def _login_card() -> rx.Component:
             transition="all 0.15s",
         ),
         # Interior del card
+        background="#1E293B",
+        border_radius="20px",
+        border="1px solid #334155",
+        padding="32px",
+        width="100%",
+        max_width="400px",
+    )
+
+
+# ─── Selector de sucursal (paso posterior al PIN) ────────────────────────────
+
+def _sucursal_card(suc: SucursalView) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.icon(tag="map_pin", size=24, color="#EA580C"),
+            rx.text(suc.nombre, font_size="14px", font_weight="600",
+                    color="#FFFFFF", text_align="center", no_of_lines=2),
+            rx.cond(
+                suc.direccion != "",
+                rx.text(suc.direccion, font_size="11px", color="#94A3B8",
+                        text_align="center", no_of_lines=1),
+                rx.fragment(),
+            ),
+            spacing="2", align="center",
+        ),
+        on_click=FoodState.seleccionar_sucursal_login(suc.id),
+        background="#0F172A",
+        border="2px solid #334155",
+        border_radius="14px",
+        padding="16px 10px",
+        cursor="pointer",
+        transition="border-color 0.15s, transform 0.1s",
+        _hover={"border_color": "#EA580C", "transform": "scale(0.98)"},
+        _active={"transform": "scale(0.95)"},
+    )
+
+
+def _sucursal_selector_card() -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(
+                "ELIGE TU SUCURSAL",
+                font_size="11px",
+                font_weight="700",
+                color="#94A3B8",
+                text_transform="uppercase",
+                letter_spacing="0.08em",
+            ),
+            rx.spacer(),
+            rx.link(
+                "← Volver",
+                on_click=FoodState.volver_a_pin_login,
+                font_size="11px",
+                color="#94A3B8",
+                cursor="pointer",
+                text_decoration="none",
+                _hover={"color": "#94A3B8"},
+            ),
+            width="100%",
+            align="center",
+            margin_bottom="16px",
+        ),
+        rx.cond(
+            FoodState.sucursales_empresa.length() > 0,
+            rx.grid(
+                rx.foreach(FoodState.sucursales_empresa, _sucursal_card),
+                columns="2",
+                gap="10px",
+                width="100%",
+            ),
+            rx.text(
+                "No hay sucursales configuradas.",
+                font_size="13px",
+                color="#94A3B8",
+                text_align="center",
+            ),
+        ),
         background="#1E293B",
         border_radius="20px",
         border="1px solid #334155",
@@ -407,9 +484,9 @@ def _brand_logo_box_pin() -> rx.Component:
 
 def _brand_logo_box() -> rx.Component:
     return rx.cond(
-        FoodState.login_step == "pin",
-        _brand_logo_box_pin(),
+        FoodState.login_step == "restaurant",
         _brand_logo_box_restaurant(),
+        _brand_logo_box_pin(),
     )
 
 
@@ -440,23 +517,27 @@ def login_page() -> rx.Component:
         rx.center(
             rx.vstack(
                 _brand_logo_box(),
-                # Card principal
+                # Card principal — 3 pasos: restaurant → pin → sucursal
                 rx.cond(
-                    FoodState.login_step == "pin",
-                    _login_card(),
+                    FoodState.login_step == "restaurant",
                     _restaurant_selector_card(),
+                    rx.cond(
+                        FoodState.login_step == "sucursal",
+                        _sucursal_selector_card(),
+                        _login_card(),
+                    ),
                 ),
-                # Link administrador — solo visible tras elegir empresa
+                # Link administrador — solo visible en paso PIN
                 rx.cond(
                     FoodState.login_step == "pin",
                     rx.link(
                         "Ingresar como Administrador →",
                         href="/admin/login?empresa=" + FoodState.login_selected_company_slug,
                         font_size="13px",
-                        color="#475569",
+                        color="#94A3B8",
                         font_weight="500",
                         text_decoration="none",
-                        _hover={"color": "#64748B"},
+                        _hover={"color": "#94A3B8"},
                     ),
                     rx.fragment(),
                 ),
@@ -471,4 +552,5 @@ def login_page() -> rx.Component:
         ),
         background="#0F172A",
         min_height="100vh",
+        class_name="dark",
     )
