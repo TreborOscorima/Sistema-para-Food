@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.states.food_state import AdminLocalState, DeliveryPedidoView, FoodState, ReservaView
+from app.states.food_state import AdminLocalState, FoodState
+from app.states.dono_state import DeliveryPedidoView, DonoOperacionesState, ReservaView
 from app.states.reportes_state import ReportesState
 from app.services.plan_service import MSG_UPGRADE
 from app.components.shared import _connection_banner_es
@@ -41,10 +42,13 @@ class AdminPanelState(rx.State):
         self.seccion = s
         food_state = await self.get_state(FoodState)
         food_state._cargar_plan_empresa()
-        if s == "reservas":
-            food_state.cargar_reservas()
-        if s == "delivery":
-            food_state.cargar_deliveries()
+        if s in ("reservas", "delivery"):
+            dono_state = await self.get_state(DonoOperacionesState)
+            await dono_state._sync_tenant()
+            if s == "reservas":
+                dono_state.cargar_reservas()
+            else:
+                dono_state.cargar_deliveries()
 
     def toggle_sidebar(self) -> None:
         self.sidebar_open = not self.sidebar_open
@@ -770,7 +774,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 r.estado == "pendiente",
                 rx.button(
                     rx.icon(tag="check", size=13),
-                    on_click=FoodState.confirmar_reserva(r.id),
+                    on_click=DonoOperacionesState.confirmar_reserva(r.id),
                     background="rgba(34,197,94,0.12)", color="#22C55E",
                     border="1px solid #BBF7D0", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -783,7 +787,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 (r.estado == "pendiente") | (r.estado == "confirmada"),
                 rx.button(
                     rx.icon(tag="armchair", size=13),
-                    on_click=FoodState.sentar_reserva(r.id),
+                    on_click=DonoOperacionesState.sentar_reserva(r.id),
                     background="rgba(59,130,246,0.12)", color="#3B82F6",
                     border="1px solid #93C5FD", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -796,7 +800,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 (r.estado == "pendiente") | (r.estado == "confirmada"),
                 rx.button(
                     rx.icon(tag="user_x", size=13),
-                    on_click=FoodState.marcar_no_show(r.id),
+                    on_click=DonoOperacionesState.marcar_no_show(r.id),
                     background=_SLATE_100, color=_SLATE_500,
                     border=f"1px solid {_SLATE_200}", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -809,7 +813,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 (r.estado == "pendiente") | (r.estado == "confirmada"),
                 rx.button(
                     rx.icon(tag="x", size=13),
-                    on_click=FoodState.cancelar_reserva(r.id),
+                    on_click=DonoOperacionesState.cancelar_reserva(r.id),
                     background="rgba(239,68,68,0.12)", color="#F87171",
                     border="1px solid #FECACA", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -820,7 +824,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
             ),
             rx.button(
                 rx.icon(tag="pencil", size=13),
-                on_click=FoodState.abrir_form_reserva(r.id),
+                on_click=DonoOperacionesState.abrir_form_reserva(r.id),
                 background=_ORANGE_LT, color=_ORANGE,
                 border=f"1px solid {_ORANGE_BD}", border_radius="7px",
                 padding="6px", cursor="pointer", height="auto",
@@ -845,10 +849,10 @@ def _reserva_form_dialog() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.icon(tag="calendar_clock", size=18, color=_ORANGE),
-                    rx.text(
-                        rx.cond(FoodState.reserva_form_id > 0,
+                    rx.dialog.title(
+                        rx.cond(DonoOperacionesState.reserva_form_id > 0,
                                 "Editar reserva", "Nueva reserva"),
-                        font_size="16px", font_weight="700", color="#F1F5F9",
+                        font_size="16px", font_weight="700", color="#F1F5F9", margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(
@@ -867,8 +871,8 @@ def _reserva_form_dialog() -> rx.Component:
                                 color=_SLATE_500, text_transform="uppercase",
                                 letter_spacing="0.06em"),
                         rx.input(
-                            value=FoodState.reserva_form_nombre,
-                            on_change=FoodState.on_change_reserva_nombre,
+                            value=DonoOperacionesState.reserva_form_nombre,
+                            on_change=DonoOperacionesState.on_change_reserva_nombre,
                             placeholder="Nombre del cliente",
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
@@ -885,8 +889,8 @@ def _reserva_form_dialog() -> rx.Component:
                                 color=_SLATE_500, text_transform="uppercase",
                                 letter_spacing="0.06em"),
                         rx.input(
-                            value=FoodState.reserva_form_telefono,
-                            on_change=FoodState.on_change_reserva_telefono,
+                            value=DonoOperacionesState.reserva_form_telefono,
+                            on_change=DonoOperacionesState.on_change_reserva_telefono,
                             placeholder="999 999 999",
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
@@ -906,8 +910,8 @@ def _reserva_form_dialog() -> rx.Component:
                                 color=_SLATE_500, text_transform="uppercase",
                                 letter_spacing="0.06em"),
                         rx.input(
-                            value=FoodState.reserva_form_fecha,
-                            on_change=FoodState.on_change_reserva_fecha,
+                            value=DonoOperacionesState.reserva_form_fecha,
+                            on_change=DonoOperacionesState.on_change_reserva_fecha,
                             type="date",
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
@@ -924,8 +928,8 @@ def _reserva_form_dialog() -> rx.Component:
                                 color=_SLATE_500, text_transform="uppercase",
                                 letter_spacing="0.06em"),
                         rx.input(
-                            value=FoodState.reserva_form_hora,
-                            on_change=FoodState.on_change_reserva_hora,
+                            value=DonoOperacionesState.reserva_form_hora,
+                            on_change=DonoOperacionesState.on_change_reserva_hora,
                             type="time",
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
@@ -942,8 +946,8 @@ def _reserva_form_dialog() -> rx.Component:
                                 color=_SLATE_500, text_transform="uppercase",
                                 letter_spacing="0.06em"),
                         rx.input(
-                            value=FoodState.reserva_form_pax.to_string(),
-                            on_change=FoodState.on_change_reserva_pax,
+                            value=DonoOperacionesState.reserva_form_pax.to_string(),
+                            on_change=DonoOperacionesState.on_change_reserva_pax,
                             type="number",
                             min="1",
                             background=_SLATE_50,
@@ -963,8 +967,8 @@ def _reserva_form_dialog() -> rx.Component:
                             color=_SLATE_500, text_transform="uppercase",
                             letter_spacing="0.06em"),
                     rx.text_area(
-                        value=FoodState.reserva_form_notas,
-                        on_change=FoodState.on_change_reserva_notas,
+                        value=DonoOperacionesState.reserva_form_notas,
+                        on_change=DonoOperacionesState.on_change_reserva_notas,
                         placeholder="Notas adicionales (alergias, celebración, etc.)",
                         background=_SLATE_50,
                         border=f"1px solid {_SLATE_200}",
@@ -992,9 +996,9 @@ def _reserva_form_dialog() -> rx.Component:
                         ),
                     ),
                     rx.button(
-                        rx.cond(FoodState.reserva_form_id > 0,
+                        rx.cond(DonoOperacionesState.reserva_form_id > 0,
                                 "Guardar cambios", "Crear reserva"),
-                        on_click=FoodState.guardar_reserva,
+                        on_click=DonoOperacionesState.guardar_reserva,
                         background=_ORANGE,
                         color=_WHITE,
                         border_radius="8px",
@@ -1014,8 +1018,8 @@ def _reserva_form_dialog() -> rx.Component:
             max_width="520px",
             width="90vw",
         ),
-        open=FoodState.reserva_form_visible,
-        on_open_change=FoodState.set_reserva_form_visible,
+        open=DonoOperacionesState.reserva_form_visible,
+        on_open_change=DonoOperacionesState.set_reserva_form_visible,
     )
 
 
@@ -1098,7 +1102,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 d.delivery_estado == "pendiente",
                 rx.button(
                     rx.icon(tag="bike", size=13),
-                    on_click=FoodState.delivery_marcar_en_camino(d.pedido_id),
+                    on_click=DonoOperacionesState.delivery_marcar_en_camino(d.pedido_id),
                     background="rgba(59,130,246,0.12)", color="#3B82F6",
                     border="1px solid #93C5FD", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -1111,7 +1115,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 d.delivery_estado == "en_camino",
                 rx.button(
                     rx.icon(tag="check", size=13),
-                    on_click=FoodState.delivery_marcar_entregado(d.pedido_id),
+                    on_click=DonoOperacionesState.delivery_marcar_entregado(d.pedido_id),
                     background="rgba(34,197,94,0.12)", color="#22C55E",
                     border="1px solid #BBF7D0", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -1124,7 +1128,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 (d.delivery_estado == "pendiente") | (d.delivery_estado == "en_camino"),
                 rx.button(
                     rx.icon(tag="x", size=13),
-                    on_click=FoodState.delivery_cancelar(d.pedido_id),
+                    on_click=DonoOperacionesState.delivery_cancelar(d.pedido_id),
                     background="rgba(239,68,68,0.12)", color="#F87171",
                     border="1px solid #FECACA", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
@@ -1154,8 +1158,8 @@ def _delivery_form_dialog() -> rx.Component:
                 rx.text("Nombre del cliente *", font_size="12px",
                         font_weight="600", color="#CBD5E1"),
                 rx.input(
-                    value=FoodState.delivery_form_nombre,
-                    on_change=FoodState.on_change_delivery_nombre,
+                    value=DonoOperacionesState.delivery_form_nombre,
+                    on_change=DonoOperacionesState.on_change_delivery_nombre,
                     placeholder="Juan Pérez",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
                     border_radius="8px", color="#F1F5F9",
@@ -1164,8 +1168,8 @@ def _delivery_form_dialog() -> rx.Component:
                 rx.text("Dirección *", font_size="12px",
                         font_weight="600", color="#CBD5E1"),
                 rx.input(
-                    value=FoodState.delivery_form_direccion,
-                    on_change=FoodState.on_change_delivery_direccion,
+                    value=DonoOperacionesState.delivery_form_direccion,
+                    on_change=DonoOperacionesState.on_change_delivery_direccion,
                     placeholder="Av. Principal 123, Dpto 4B",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
                     border_radius="8px", color="#F1F5F9",
@@ -1174,8 +1178,8 @@ def _delivery_form_dialog() -> rx.Component:
                 rx.text("Teléfono", font_size="12px",
                         font_weight="600", color="#CBD5E1"),
                 rx.input(
-                    value=FoodState.delivery_form_telefono,
-                    on_change=FoodState.on_change_delivery_telefono,
+                    value=DonoOperacionesState.delivery_form_telefono,
+                    on_change=DonoOperacionesState.on_change_delivery_telefono,
                     placeholder="987 654 321",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
                     border_radius="8px", color="#F1F5F9",
@@ -1184,8 +1188,8 @@ def _delivery_form_dialog() -> rx.Component:
                 rx.text("Notas", font_size="12px",
                         font_weight="600", color="#CBD5E1"),
                 rx.text_area(
-                    value=FoodState.delivery_form_notas,
-                    on_change=FoodState.on_change_delivery_notas,
+                    value=DonoOperacionesState.delivery_form_notas,
+                    on_change=DonoOperacionesState.on_change_delivery_notas,
                     placeholder="Indicaciones de entrega...",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
                     border_radius="8px", color="#F1F5F9", rows="2",
@@ -1204,7 +1208,7 @@ def _delivery_form_dialog() -> rx.Component:
                 ),
                 rx.button(
                     "Crear pedido",
-                    on_click=FoodState.crear_pedido_delivery,
+                    on_click=DonoOperacionesState.crear_pedido_delivery,
                     background=_ORANGE, color=_WHITE,
                     border_radius="8px", cursor="pointer",
                     _hover={"background": _ORANGE_DK},
@@ -1215,16 +1219,16 @@ def _delivery_form_dialog() -> rx.Component:
             background=_SURFACE, border_radius="14px",
             padding="24px",
         ),
-        open=FoodState.delivery_form_visible,
-        on_open_change=FoodState.set_delivery_form_visible,
+        open=DonoOperacionesState.delivery_form_visible,
+        on_open_change=DonoOperacionesState.set_delivery_form_visible,
     )
 
 
 def _delivery_filtro_btn(label: str, valor: str) -> rx.Component:
-    activo = FoodState.delivery_filtro_estado == valor
+    activo = DonoOperacionesState.delivery_filtro_estado == valor
     return rx.button(
         label,
-        on_click=FoodState.set_delivery_filtro_estado(valor),
+        on_click=DonoOperacionesState.set_delivery_filtro_estado(valor),
         background=rx.cond(activo, _ORANGE, _SURFACE),
         color=rx.cond(activo, _WHITE, _SLATE_500),
         border=rx.cond(activo, f"1px solid {_ORANGE}", f"1px solid {_SLATE_200}"),
@@ -1260,7 +1264,7 @@ def _section_delivery() -> rx.Component:
                             display=rx.breakpoints(initial="none", sm="block")),
                     spacing="2", align="center",
                 ),
-                on_click=FoodState.abrir_form_delivery,
+                on_click=DonoOperacionesState.abrir_form_delivery,
                 background=_ORANGE, color=_WHITE,
                 border_radius="8px", padding_x="14px", padding_y="8px",
                 cursor="pointer",
@@ -1269,7 +1273,7 @@ def _section_delivery() -> rx.Component:
             width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
         rx.cond(
-            FoodState.deliveries_lista.length() == 0,
+            DonoOperacionesState.deliveries_lista.length() == 0,
             rx.center(
                 rx.vstack(
                     rx.icon(tag="truck", size=40, color=_SLATE_200),
@@ -1284,7 +1288,7 @@ def _section_delivery() -> rx.Component:
                 border_radius="14px",
             ),
             rx.vstack(
-                rx.foreach(FoodState.deliveries_lista, _delivery_row),
+                rx.foreach(DonoOperacionesState.deliveries_lista, _delivery_row),
                 spacing="2", width="100%",
             ),
         ),
@@ -1306,8 +1310,8 @@ def _section_reservas() -> rx.Component:
             rx.spacer(),
             rx.hstack(
                 rx.input(
-                    value=FoodState.reservas_fecha_filtro,
-                    on_change=FoodState.set_reservas_fecha_filtro,
+                    value=DonoOperacionesState.reservas_fecha_filtro,
+                    on_change=DonoOperacionesState.set_reservas_fecha_filtro,
                     type="date",
                     background=_SURFACE,
                     border=f"1px solid {_SLATE_200}",
@@ -1325,7 +1329,7 @@ def _section_reservas() -> rx.Component:
                                 display=rx.breakpoints(initial="none", sm="block")),
                         spacing="2", align="center",
                     ),
-                    on_click=FoodState.abrir_form_reserva(0),
+                    on_click=DonoOperacionesState.abrir_form_reserva(0),
                     background=_ORANGE, color=_WHITE,
                     border_radius="8px", padding_x="14px", padding_y="8px",
                     cursor="pointer",
@@ -1336,7 +1340,7 @@ def _section_reservas() -> rx.Component:
             width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
         rx.cond(
-            FoodState.reservas_lista.length() == 0,
+            DonoOperacionesState.reservas_lista.length() == 0,
             rx.center(
                 rx.vstack(
                     rx.icon(tag="calendar_x_2", size=40, color=_SLATE_200),
@@ -1351,7 +1355,7 @@ def _section_reservas() -> rx.Component:
                 border_radius="14px",
             ),
             rx.vstack(
-                rx.foreach(FoodState.reservas_lista, _reserva_row),
+                rx.foreach(DonoOperacionesState.reservas_lista, _reserva_row),
                 spacing="2", width="100%",
             ),
         ),

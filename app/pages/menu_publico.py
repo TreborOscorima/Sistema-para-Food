@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.states.food_state import CarritoItemView, CategoriaPublicaView, MenuPublicoState, ProductoPublicoView, PromoPublicaView
+from app.states.food_state import CategoriaPublicaView, MenuPublicoState, ProductoPublicoView, PromoPublicaView
+from app.states.self_order_state import CarritoItemView, SelfOrderState
 
 
 def _promo_card(promo: PromoPublicaView) -> rx.Component:
@@ -117,14 +118,14 @@ def _producto_item(prod: ProductoPublicoView) -> rx.Component:
                         color="#EA580C"),
                 rx.spacer(),
                 rx.cond(
-                    MenuPublicoState.tiene_mesa_qr,
+                    SelfOrderState.tiene_mesa_qr,
                     rx.button(
                         rx.hstack(
                             rx.icon(tag="plus", size=14),
                             rx.text("Agregar", font_size="12px", font_weight="700"),
                             spacing="1", align="center",
                         ),
-                        on_click=MenuPublicoState.agregar_al_carrito(
+                        on_click=SelfOrderState.agregar_al_carrito(
                             prod.id, prod.nombre, prod.precio_texto, prod.precio_float,
                         ),
                         background="#EA580C", color="#FFFFFF",
@@ -170,7 +171,7 @@ def _carrito_item(item: CarritoItemView) -> rx.Component:
         rx.hstack(
             rx.button(
                 rx.icon(tag="minus", size=14),
-                on_click=MenuPublicoState.quitar_del_carrito(item.producto_id),
+                on_click=SelfOrderState.quitar_del_carrito(item.producto_id),
                 background="#334155", color="#94A3B8",
                 border_radius="8px", padding="4px",
                 cursor="pointer", height="auto", min_width="28px",
@@ -181,7 +182,7 @@ def _carrito_item(item: CarritoItemView) -> rx.Component:
                     min_width="20px", text_align="center"),
             rx.button(
                 rx.icon(tag="plus", size=14),
-                on_click=MenuPublicoState.agregar_al_carrito(
+                on_click=SelfOrderState.agregar_al_carrito(
                     item.producto_id, item.nombre, item.precio_texto, item.precio_float,
                 ),
                 background="rgba(234,88,12,0.15)", color="#EA580C",
@@ -213,9 +214,9 @@ def _carrito_drawer() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.cond(
-                    MenuPublicoState.tiene_mesa_qr,
+                    SelfOrderState.tiene_mesa_qr,
                     rx.badge(
-                        MenuPublicoState.mesa_nombre_qr,
+                        SelfOrderState.mesa_nombre_qr,
                         background="rgba(59,130,246,0.12)", color="#3B82F6",
                         border_radius="8px", font_size="12px",
                         font_weight="700", padding="4px 10px",
@@ -223,10 +224,10 @@ def _carrito_drawer() -> rx.Component:
                     rx.fragment(),
                 ),
                 rx.cond(
-                    MenuPublicoState.carrito_count > 0,
+                    SelfOrderState.carrito_count > 0,
                     rx.vstack(
                         rx.vstack(
-                            rx.foreach(MenuPublicoState.carrito, _carrito_item),
+                            rx.foreach(SelfOrderState.carrito, _carrito_item),
                             spacing="0", width="100%",
                             max_height="50vh", overflow_y="auto",
                         ),
@@ -234,15 +235,15 @@ def _carrito_drawer() -> rx.Component:
                             rx.text("Total", font_size="16px", font_weight="700",
                                     color="#F1F5F9"),
                             rx.spacer(),
-                            rx.text(MenuPublicoState.carrito_total_texto,
+                            rx.text(SelfOrderState.carrito_total_texto,
                                     font_size="20px", font_weight="800",
                                     color="#EA580C"),
                             width="100%", align="center",
                             padding="12px 0", border_top="2px solid #334155",
                         ),
                         rx.input(
-                            value=MenuPublicoState.nombre_cliente_qr,
-                            on_change=MenuPublicoState.set_nombre_cliente_qr,
+                            value=SelfOrderState.nombre_cliente_qr,
+                            on_change=SelfOrderState.set_nombre_cliente_qr,
                             placeholder="Tu nombre (opcional)",
                             background="#0F172A",
                             border="1px solid #334155",
@@ -251,8 +252,8 @@ def _carrito_drawer() -> rx.Component:
                             _focus={"border_color": "#EA580C"},
                         ),
                         rx.cond(
-                            MenuPublicoState.pedido_error != "",
-                            rx.text(MenuPublicoState.pedido_error,
+                            SelfOrderState.pedido_error != "",
+                            rx.text(SelfOrderState.pedido_error,
                                     font_size="12px", color="#DC2626",
                                     font_weight="600"),
                             rx.fragment(),
@@ -264,7 +265,7 @@ def _carrito_drawer() -> rx.Component:
                                         font_weight="800"),
                                 spacing="2", align="center",
                             ),
-                            on_click=MenuPublicoState.enviar_self_order,
+                            on_click=SelfOrderState.enviar_self_order,
                             background="#EA580C", color="#FFFFFF",
                             border_radius="12px", width="100%",
                             padding_y="12px", cursor="pointer",
@@ -272,7 +273,7 @@ def _carrito_drawer() -> rx.Component:
                         ),
                         rx.button(
                             "Vaciar carrito",
-                            on_click=MenuPublicoState.vaciar_carrito,
+                            on_click=SelfOrderState.vaciar_carrito,
                             background="transparent", color="#94A3B8",
                             border="1px solid #334155",
                             border_radius="10px", width="100%",
@@ -299,23 +300,23 @@ def _carrito_drawer() -> rx.Component:
             max_width="420px",
             width="100%",
         ),
-        open=MenuPublicoState.carrito_visible,
-        on_open_change=MenuPublicoState.set_carrito_visible,
+        open=SelfOrderState.carrito_visible,
+        on_open_change=SelfOrderState.set_carrito_visible,
         direction="bottom",
     )
 
 
 def _carrito_fab() -> rx.Component:
     return rx.cond(
-        MenuPublicoState.tiene_mesa_qr,
+        SelfOrderState.tiene_mesa_qr,
         rx.box(
             rx.button(
                 rx.hstack(
                     rx.icon(tag="shopping_cart", size=20),
                     rx.cond(
-                        MenuPublicoState.carrito_count > 0,
+                        SelfOrderState.carrito_count > 0,
                         rx.badge(
-                            MenuPublicoState.carrito_count.to_string(),
+                            SelfOrderState.carrito_count.to_string(),
                             background="#1E293B", color="#EA580C",
                             border_radius="50%", font_size="11px",
                             font_weight="800", padding="2px 6px",
@@ -325,7 +326,7 @@ def _carrito_fab() -> rx.Component:
                     ),
                     spacing="0", position="relative",
                 ),
-                on_click=MenuPublicoState.toggle_carrito,
+                on_click=SelfOrderState.toggle_carrito,
                 background="#EA580C", color="#FFFFFF",
                 border_radius="50%",
                 width="56px", height="56px",
@@ -354,9 +355,9 @@ def _pedido_enviado_screen() -> rx.Component:
                 text_align="center", max_width="300px",
             ),
             rx.cond(
-                MenuPublicoState.tiene_mesa_qr,
+                SelfOrderState.tiene_mesa_qr,
                 rx.badge(
-                    MenuPublicoState.mesa_nombre_qr,
+                    SelfOrderState.mesa_nombre_qr,
                     background="rgba(59,130,246,0.12)", color="#3B82F6",
                     border_radius="8px", font_size="14px",
                     font_weight="700", padding="6px 14px",
@@ -365,7 +366,7 @@ def _pedido_enviado_screen() -> rx.Component:
             ),
             rx.button(
                 "Ver carta nuevamente",
-                on_click=MenuPublicoState.volver_a_carta,
+                on_click=SelfOrderState.volver_a_carta,
                 background="#EA580C", color="#FFFFFF",
                 border_radius="12px", padding_x="24px", padding_y="10px",
                 cursor="pointer", font_weight="700",
@@ -550,11 +551,11 @@ def _menu_content() -> rx.Component:
     )
 
 
-@rx.page(route="/menu/[slug]", on_load=MenuPublicoState.on_load, title="TUWAYKIFOOD | Carta Digital")
+@rx.page(route="/menu/[slug]", on_load=[MenuPublicoState.on_load, SelfOrderState.on_load], title="TUWAYKIFOOD | Carta Digital")
 def menu_publico_page() -> rx.Component:
     return rx.box(
         rx.cond(
-            MenuPublicoState.pedido_enviado,
+            SelfOrderState.pedido_enviado,
             _pedido_enviado_screen(),
             rx.fragment(
                 _menu_content(),

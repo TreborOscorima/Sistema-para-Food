@@ -105,11 +105,11 @@ def _mov_insumo_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.vstack(
-                rx.text(
+                rx.dialog.title(
                     rx.cond(es_merma, "Registrar merma — ",
                             rx.cond(es_ajuste, "Ajuste de conteo — ", "Entrada de stock — "))
                     + FoodState.inv_mov_insumo_nombre,
-                    font_size="16px", font_weight="800", color="#F1F5F9",
+                    font_size="16px", font_weight="800", color="#F1F5F9", margin="0",
                 ),
                 rx.hstack(
                     rx.select(
@@ -223,8 +223,8 @@ def _kardex_modal() -> rx.Component:
         rx.dialog.content(
             rx.vstack(
                 rx.hstack(
-                    rx.text("Kardex — " + FoodState.inv_kardex_insumo_nombre,
-                            font_size="16px", font_weight="800", color="#F1F5F9"),
+                    rx.dialog.title("Kardex — " + FoodState.inv_kardex_insumo_nombre,
+                            font_size="16px", font_weight="800", color="#F1F5F9", margin="0"),
                     rx.spacer(),
                     rx.icon(tag="x", size=18, color="#94A3B8", cursor="pointer",
                             on_click=FoodState.set_inv_kardex_visible(False)),
@@ -577,6 +577,7 @@ def _insumos_section() -> rx.Component:
                     cursor="pointer", _hover={"background": "#C2410C"},
                 ),
                 rx.dialog.content(
+                    rx.dialog.title("Insumo", visibility="hidden", height="0", margin="0", padding="0"),
                     _insumo_form(),
                     background="#0F172A", border="1px solid #1E293B",
                 ),

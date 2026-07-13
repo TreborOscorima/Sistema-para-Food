@@ -689,9 +689,9 @@ def _mod_grupo_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.vstack(
-                rx.text(
+                rx.dialog.title(
                     rx.cond(FoodState.mod_grupo_form_id > 0, "Editar grupo", "Nuevo grupo de modificadores"),
-                    font_size="16px", font_weight="700", color="#F1F5F9",
+                    font_size="16px", font_weight="700", color="#F1F5F9", margin="0",
                 ),
                 rx.input(
                     placeholder="Nombre del grupo (ej: Tamaño, Extras, Término)",
@@ -812,9 +812,9 @@ def _mod_asignar_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.vstack(
-                rx.text(
+                rx.dialog.title(
                     "Modificadores de " + FoodState.mod_asignar_producto_nombre,
-                    font_size="15px", font_weight="700", color="#F1F5F9",
+                    font_size="15px", font_weight="700", color="#F1F5F9", margin="0",
                 ),
                 rx.text(
                     "Seleccione los grupos que aplican a este producto",
@@ -943,9 +943,9 @@ def _combo_modal() -> rx.Component:
         rx.dialog.content(
             rx.vstack(
                 rx.hstack(
-                    rx.text(
+                    rx.dialog.title(
                         rx.cond(FoodState.combo_form_id > 0, "Editar Combo", "Nuevo Combo"),
-                        font_size="16px", font_weight="700", color="#F1F5F9",
+                        font_size="16px", font_weight="700", color="#F1F5F9", margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(

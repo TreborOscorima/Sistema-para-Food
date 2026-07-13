@@ -406,6 +406,7 @@ def _promociones_content() -> rx.Component:
                         _hover={"background": "#C2410C"},
                     ),
                     rx.dialog.content(
+                        rx.dialog.title("Promoción", visibility="hidden", height="0", margin="0", padding="0"),
                         _promo_modal_content(),
                         background="#0F172A", border="1px solid #1E293B",
                     ),

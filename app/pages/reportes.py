@@ -379,8 +379,8 @@ def _venta_detalle_modal() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.vstack(
-                        rx.text("Pedido #" + ReportesState.venta_detalle_pedido_id.to_string(),
-                                font_size="16px", font_weight="800", color="#F1F5F9"),
+                        rx.dialog.title("Pedido #" + ReportesState.venta_detalle_pedido_id.to_string(),
+                                font_size="16px", font_weight="800", color="#F1F5F9", margin="0"),
                         rx.text(ReportesState.venta_detalle_mesa_label, font_size="13px", color="#94A3B8"),
                         spacing="0",
                     ),
@@ -1348,6 +1348,20 @@ def _reportes_content() -> rx.Component:
                     padding_x="14px", padding_y="7px",
                     cursor="pointer",
                     _hover={"background": "#22C55E"},
+                ),
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="file_text", size=13, color="#FFFFFF"),
+                        rx.text("PDF Ejecutivo", font_size="13px", font_weight="700",
+                                color="#FFFFFF"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=ReportesState.exportar_pdf_ejecutivo,
+                    background="#7C3AED",
+                    border_radius="8px",
+                    padding_x="14px", padding_y="7px",
+                    cursor="pointer",
+                    _hover={"background": "#6D28D9"},
                 ),
                 spacing="2", wrap="wrap",
             ),

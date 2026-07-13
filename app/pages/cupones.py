@@ -103,9 +103,9 @@ def _cupon_form_modal() -> rx.Component:
                         tag=rx.cond(FoodState.cupon_form_editando, "pencil", "circle_plus"),
                         size=14, color="#EA580C",
                     ),
-                    rx.text(
+                    rx.dialog.title(
                         rx.cond(FoodState.cupon_form_editando, "Editar cupón", "Nuevo cupón"),
-                        font_size="14px", font_weight="700", color="#F1F5F9",
+                        font_size="14px", font_weight="700", color="#F1F5F9", margin="0",
                     ),
                     spacing="2", align="center", margin_bottom="8px",
                 ),

@@ -101,6 +101,21 @@ def _mesa_card(mesa: MesaView) -> rx.Component:
                 ),
                 rx.fragment(),
             ),
+            # Nivel 3: Alerta de inactividad (> 4h)
+            rx.cond(
+                mesa.inactivo_minutos >= 240,
+                rx.badge(
+                    "⚠ Inactivo " + (mesa.inactivo_minutos / 60).to(int).to_string() + "h",
+                    background="rgba(239,68,68,0.15)",
+                    color="#F87171",
+                    border="1px solid rgba(239,68,68,0.3)",
+                    border_radius="4px",
+                    font_size="9px",
+                    font_weight="700",
+                    padding="1px 6px",
+                ),
+                rx.fragment(),
+            ),
             # Items listos texto
             rx.cond(
                 mesa.tiene_items_listos,
@@ -736,9 +751,9 @@ def _modal_transfer() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.icon(tag="move_right", size=16, color="#F59E0B"),
-                    rx.text(
+                    rx.dialog.title(
                         "Transferir " + FoodState.mesa_seleccionada_label,
-                        font_size="15px", font_weight="700", color="#FFFFFF",
+                        font_size="15px", font_weight="700", color="#FFFFFF", margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(
@@ -853,9 +868,9 @@ def _modal_seleccion_mods() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.icon(tag="settings_2", size=16, color="#A78BFA"),
-                    rx.text(
+                    rx.dialog.title(
                         FoodState.mod_seleccion_producto_nombre,
-                        font_size="15px", font_weight="700", color="#FFFFFF",
+                        font_size="15px", font_weight="700", color="#FFFFFF", margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(
@@ -955,11 +970,12 @@ def _modal_agregar_productos() -> rx.Component:
             rx.vstack(
                 # Header
                 rx.hstack(
-                    rx.text(
+                    rx.dialog.title(
                         FoodState.mesa_seleccionada_label,
                         font_size="16px",
                         font_weight="700",
                         color="#FFFFFF",
+                        margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(

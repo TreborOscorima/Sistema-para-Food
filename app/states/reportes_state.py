@@ -1226,3 +1226,165 @@ class ReportesState(rx.State):
             for i in data["por_insumo"][:20]
         ]
         self.mermas_total_texto = _money_text(data["total"])
+
+    # ── PDF ejecutivo ────────────────────────────────────────────────────────
+
+    async def exportar_pdf_ejecutivo(self):
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm, mm
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+        food = await self._food()
+        empresa_nombre = getattr(food, "empresa_nombre", "TUWAYKIFOOD")
+        fecha_str = _utcnow().strftime("%d/%m/%Y %H:%M")
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=2 * cm, rightMargin=2 * cm,
+            topMargin=1.5 * cm, bottomMargin=1.5 * cm,
+        )
+
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(
+            "TitlePDF", parent=styles["Title"],
+            fontSize=18, spaceAfter=4 * mm,
+        ))
+        styles.add(ParagraphStyle(
+            "SubtitlePDF", parent=styles["Normal"],
+            fontSize=10, textColor=colors.grey, spaceAfter=8 * mm,
+        ))
+        styles.add(ParagraphStyle(
+            "SectionHeader", parent=styles["Heading2"],
+            fontSize=13, spaceBefore=6 * mm, spaceAfter=3 * mm,
+            textColor=colors.HexColor("#1E293B"),
+        ))
+
+        elements = []
+
+        elements.append(Paragraph(f"Reporte Ejecutivo — {empresa_nombre}", styles["TitlePDF"]))
+        elements.append(Paragraph(f"Generado: {fecha_str}", styles["SubtitlePDF"]))
+
+        # KPIs
+        elements.append(Paragraph("Resumen del Día", styles["SectionHeader"]))
+        kpi_data = [
+            ["Ventas", "Pedidos", "Ticket Prom.", "Propinas"],
+            [
+                self.dashboard_ventas_hoy_texto,
+                str(self.dashboard_pedidos_hoy),
+                self.dashboard_ticket_promedio_texto,
+                self.dashboard_propina_hoy_texto,
+            ],
+        ]
+        kpi_table = Table(kpi_data, colWidths=[4.2 * cm] * 4)
+        kpi_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, 1), 12),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(kpi_table)
+        elements.append(Spacer(1, 4 * mm))
+
+        # Ocupación
+        ocup_data = [
+            ["Mesas Ocupadas", "Total Mesas", "Ítems en Cocina", "Reservas Hoy"],
+            [
+                str(self.dashboard_mesas_ocupadas),
+                str(self.dashboard_total_mesas),
+                str(self.dashboard_items_en_cocina),
+                str(self.dashboard_reservas_hoy),
+            ],
+        ]
+        ocup_table = Table(ocup_data, colWidths=[4.2 * cm] * 4)
+        ocup_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#334155")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, 1), 12),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(ocup_table)
+        elements.append(Spacer(1, 6 * mm))
+
+        # Top platos
+        if self.dashboard_top_platos:
+            elements.append(Paragraph("Top Platos del Día", styles["SectionHeader"]))
+            top_data = [["#", "Producto", "Unidades", "Total"]]
+            for i, p in enumerate(self.dashboard_top_platos[:10], 1):
+                top_data.append([str(i), p.nombre, str(p.cantidad), p.total_texto])
+            top_table = Table(top_data, colWidths=[1 * cm, 8 * cm, 3 * cm, 4 * cm])
+            top_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (2, 0), (3, -1), "CENTER"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(top_table)
+            elements.append(Spacer(1, 6 * mm))
+
+        # Mozos ranking
+        if self.reporte_mozos:
+            elements.append(Paragraph("Ranking Mozos", styles["SectionHeader"]))
+            mozo_data = [["Mozo", "Pedidos", "Total Vendido"]]
+            for m in self.reporte_mozos[:10]:
+                mozo_data.append([m.nombre, str(m.pedidos), m.total_texto])
+            mozo_table = Table(mozo_data, colWidths=[7 * cm, 3 * cm, 5 * cm])
+            mozo_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (1, 0), (2, -1), "CENTER"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(mozo_table)
+            elements.append(Spacer(1, 6 * mm))
+
+        # Tendencias
+        elements.append(Paragraph("Tendencias vs. Ayer", styles["SectionHeader"]))
+        trend_data = [
+            ["Métrica", "Variación"],
+            ["Ventas", f"{'+' if self.dashboard_ventas_trend_pct >= 0 else ''}{self.dashboard_ventas_trend_pct}%"],
+            ["Pedidos", f"{'+' if self.dashboard_pedidos_trend >= 0 else ''}{self.dashboard_pedidos_trend}"],
+            ["Ticket Prom.", f"{'+' if self.dashboard_ticket_trend_pct >= 0 else ''}{self.dashboard_ticket_trend_pct}%"],
+            ["Propinas", f"{'+' if self.dashboard_propina_trend_pct >= 0 else ''}{self.dashboard_propina_trend_pct}%"],
+        ]
+        trend_table = Table(trend_data, colWidths=[8 * cm, 5 * cm])
+        trend_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#334155")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 0), (1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(trend_table)
+
+        doc.build(elements)
+        filename = f"reporte_ejecutivo_{_utcnow().strftime('%Y%m%d_%H%M')}.pdf"
+        return rx.download(data=buf.getvalue(), filename=filename)

@@ -1040,7 +1040,7 @@ def _mov_modal() -> rx.Component:
         rx.dialog.content(
             rx.vstack(
                 rx.hstack(
-                    rx.text("Movimientos de caja", font_size="18px", font_weight="800", color="#F1F5F9"),
+                    rx.dialog.title("Movimientos de caja", font_size="18px", font_weight="800", color="#F1F5F9", margin="0"),
                     rx.spacer(),
                     rx.icon(tag="x", size=18, color="#94A3B8", cursor="pointer",
                             on_click=FoodState.cerrar_mov_modal),
@@ -1171,7 +1171,7 @@ def _cierre_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.vstack(
-                rx.text("Cierre de turno — Arqueo", font_size="18px", font_weight="800", color="#F1F5F9"),
+                rx.dialog.title("Cierre de turno — Arqueo", font_size="18px", font_weight="800", color="#F1F5F9", margin="0"),
                 rx.flex(
                     # Columna resumen
                     rx.box(
@@ -1256,10 +1256,19 @@ def _cierre_modal() -> rx.Component:
                         _hover={"background": "#334155"}, flex="1",
                     ),
                     rx.button(
-                        "Cerrar turno e imprimir",
+                        rx.hstack(rx.icon(tag="file_text", size=14), rx.text("Descargar PDF"),
+                                  spacing="1", align="center"),
+                        on_click=FoodState.descargar_pdf_cierre,
+                        background="#DC2626", color="#FFFFFF",
+                        border_radius="10px", font_size="14px", font_weight="700",
+                        cursor="pointer", _hover={"opacity": "0.9"}, flex="1",
+                    ),
+                    rx.button(
+                        rx.hstack(rx.icon(tag="lock", size=14), rx.text("Cerrar turno e imprimir"),
+                                  spacing="1", align="center"),
                         on_click=FoodState.confirmar_cierre_turno,
                         is_loading=FoodState.turno_cerrando,
-                        background="#EA580C", color="#FFFFFF",
+                        background="#7C3AED", color="#FFFFFF",
                         border_radius="10px", font_size="14px", font_weight="800",
                         cursor="pointer", _hover={"opacity": "0.9"}, flex="2",
                     ),
@@ -1293,6 +1302,12 @@ def _turno_historial_row(t: TurnoHistorialView) -> rx.Component:
                     color=t.descuadre_color, text_align="right"),
             spacing="0", align="end",
         ),
+        rx.icon_button(
+            rx.icon(tag="printer", size=14),
+            variant="ghost", size="1", color="#94A3B8", cursor="pointer",
+            title="Reimprimir cierre",
+            on_click=FoodState.reimprimir_cierre_turno(t.id),
+        ),
         width="100%", align="center", gap="10px",
         padding="10px 12px", border_bottom="1px solid #1E293B",
     )
@@ -1303,7 +1318,7 @@ def _historial_modal() -> rx.Component:
         rx.dialog.content(
             rx.vstack(
                 rx.hstack(
-                    rx.text("Historial de turnos", font_size="18px", font_weight="800", color="#F1F5F9"),
+                    rx.dialog.title("Historial de turnos", font_size="18px", font_weight="800", color="#F1F5F9", margin="0"),
                     rx.spacer(),
                     rx.icon(tag="x", size=18, color="#94A3B8", cursor="pointer",
                             on_click=FoodState.toggle_historial_turnos),
@@ -1371,8 +1386,8 @@ def _ultimos_cobros_modal() -> rx.Component:
                 rx.hstack(
                     rx.hstack(
                         rx.icon(tag="receipt", size=20, color="#EA580C"),
-                        rx.text("Últimos cobros", font_size="18px", font_weight="800",
-                                color="#F1F5F9"),
+                        rx.dialog.title("Últimos cobros", font_size="18px", font_weight="800",
+                                color="#F1F5F9", margin="0"),
                         spacing="2", align="center",
                     ),
                     rx.spacer(),
@@ -1426,8 +1441,8 @@ def _reversion_modal() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.icon(tag="triangle_alert", size=18, color="#DC2626"),
-                    rx.text("Anular cobro — " + FoodState.reversion_referencia,
-                            font_size="17px", font_weight="800", color="#F1F5F9"),
+                    rx.dialog.title("Anular cobro — " + FoodState.reversion_referencia,
+                            font_size="17px", font_weight="800", color="#F1F5F9", margin="0"),
                     spacing="2", align="center",
                 ),
                 rx.text(

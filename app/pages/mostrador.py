@@ -633,9 +633,9 @@ def _modal_seleccion_mods_m() -> rx.Component:
             rx.vstack(
                 rx.hstack(
                     rx.icon(tag="settings_2", size=16, color="#A78BFA"),
-                    rx.text(
+                    rx.dialog.title(
                         FoodState.mod_seleccion_producto_nombre,
-                        font_size="15px", font_weight="700", color="#FFFFFF",
+                        font_size="15px", font_weight="700", color="#FFFFFF", margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(

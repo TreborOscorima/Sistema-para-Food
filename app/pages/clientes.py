@@ -386,6 +386,7 @@ def _clientes_content() -> rx.Component:
                     ),
                 ),
                 rx.dialog.content(
+                    rx.dialog.title("Cliente", visibility="hidden", height="0", margin="0", padding="0"),
                     _cli_form(),
                     max_width="560px",
                     background="#0F172A", border="1px solid #1E293B",

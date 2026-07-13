@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import io
+import json as _json
 import os
 import pathlib
 import re
@@ -32,7 +35,6 @@ from app.models.food import (
     CuentaCorriente,
     DetallePedido,
     EstacionCocina,
-    EstadoDelivery,
     EstadoMesa,
     EstadoPedido,
     EstadoProduccion,
@@ -94,7 +96,6 @@ from app.services.plan_service import (
     MSG_UPGRADE,
     plan_permite,
     plan_label,
-    check_limite_usuarios,
     check_limite_mesas,
 )
 from tuwayki_core.utils.rate_limit import (
@@ -141,6 +142,9 @@ OPEN_ORDER_STATES = (
     EstadoPedido.LISTO.value,
 )
 
+PEDIDO_EXPIRACION_MIN = 480
+PEDIDO_ALERTA_INACTIVIDAD_MIN = 240
+
 KITCHEN_VISIBLE_STATES = (
     EstadoProduccion.PENDIENTE.value,
     EstadoProduccion.EN_PREPARACION.value,
@@ -176,6 +180,7 @@ READY_ALERT_BORDER = "3px solid #F59E0B"
 
 _SOUND_BELL_JS = """(function(){try{var c=new(window.AudioContext||window.webkitAudioContext)();var o=c.createOscillator();var g=c.createGain();o.type='triangle';o.frequency.value=880;g.gain.setValueAtTime(0.3,c.currentTime);g.gain.exponentialRampToValueAtTime(0.01,c.currentTime+0.4);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+0.4)}catch(e){}})()"""
 _SOUND_CHIME_JS = """(function(){try{var c=new(window.AudioContext||window.webkitAudioContext)();function b(f,t){var o=c.createOscillator();var g=c.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.25,c.currentTime+t);g.gain.exponentialRampToValueAtTime(0.01,c.currentTime+t+0.3);o.connect(g);g.connect(c.destination);o.start(c.currentTime+t);o.stop(c.currentTime+t+0.3)}b(659,0);b(784,0.15);b(988,0.3)}catch(e){}})()"""
+_VIBRATE_JS = """(function(){try{if(navigator.vibrate)navigator.vibrate([200,100,200])}catch(e){}})()"""
 
 PRODUCTION_LABELS = {
     EstadoProduccion.PENDIENTE.value: "Pendiente",
@@ -269,6 +274,33 @@ def _utcnow() -> datetime:
 # Operativo: 8 horas (turno completo). Admin local: 2 horas.
 _SESSION_TIMEOUT_OPERATIVO_S = 8 * 3600
 _SESSION_TIMEOUT_ADMIN_S = 2 * 3600
+
+_COOKIE_SECRET: str = (
+    os.getenv("FOOD_ADMIN_API_SECRET")
+    or "fallback-dev-key-not-for-prod"
+)
+
+
+def _sign_session(payload: dict) -> str:
+    raw = _json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    sig = hmac.new(
+        _COOKIE_SECRET.encode(), raw.encode(), hashlib.sha256
+    ).hexdigest()
+    return base64.urlsafe_b64encode(f"{raw}|{sig}".encode()).decode()
+
+
+def _verify_session(token: str) -> dict | None:
+    try:
+        decoded = base64.urlsafe_b64decode(token.encode()).decode()
+        raw, sig = decoded.rsplit("|", 1)
+        expected = hmac.new(
+            _COOKIE_SECRET.encode(), raw.encode(), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return None
+        return _json.loads(raw)
+    except Exception:
+        return None
 
 
 def _session_expired(ultima_actividad_iso: str, rol: str) -> bool:
@@ -605,40 +637,7 @@ class MesaView(BaseModel):
     sector: str = "Salón"
     mozo_nombre: str = ""
     reserva_texto: str = ""
-
-
-class ReservaView(BaseModel):
-    id: int
-    mesa_id: int = 0
-    mesa_label: str = ""
-    nombre_cliente: str
-    telefono: str = ""
-    fecha: str
-    hora: str
-    pax: int
-    estado: str
-    estado_label: str
-    notas: str = ""
-    badge_bg: str = ""
-    badge_text: str = ""
-
-
-class DeliveryPedidoView(BaseModel):
-    pedido_id: int = 0
-    nombre_cliente: str = ""
-    delivery_direccion: str = ""
-    delivery_telefono: str = ""
-    delivery_estado: str = ""
-    delivery_estado_label: str = ""
-    repartidor_nombre: str = ""
-    repartidor_id: int = 0
-    total_texto: str = ""
-    items_resumen: str = ""
-    hora_texto: str = ""
-    notas: str = ""
-    badge_bg: str = ""
-    badge_text: str = ""
-    pagado: bool = False
+    inactivo_minutos: int = 0
 
 
 class SelfOrderPendienteView(BaseModel):
@@ -1312,6 +1311,7 @@ class FoodState(
     usuario_actual: UsuarioSesion | None = None
     ultima_actividad: str = ""
     empresa_plan: str = "trial"
+    session_token: str = rx.Cookie("", name="twk_session", max_age=28800)
     login_pin_input: str = ""
     login_rol_seleccionado: str = RolUsuario.MOZO.value
     sidebar_collapsed: bool = False
@@ -1329,30 +1329,6 @@ class FoodState(
     sucursal_admin_form_activa: bool = True
     sucursal_admin_form_es_principal: bool = False
     sucursal_admin_form_visible: bool = False
-
-    # ── Reservas ──────────────────────────────────────────────────────────────
-    reservas_lista: list[ReservaView] = []
-    reservas_fecha_filtro: str = ""
-    reserva_form_id: int = 0
-    reserva_form_nombre: str = ""
-    reserva_form_telefono: str = ""
-    reserva_form_fecha: str = ""
-    reserva_form_hora: str = "20:00"
-    reserva_form_pax: int = 2
-    reserva_form_mesa_id: int = 0
-    reserva_form_notas: str = ""
-    reserva_form_visible: bool = False
-
-    # ── Delivery ─────────────────────────────────────────────────────────────
-    deliveries_lista: list[DeliveryPedidoView] = []
-    delivery_filtro_estado: str = ""
-    delivery_form_visible: bool = False
-    delivery_form_nombre: str = ""
-    delivery_form_direccion: str = ""
-    delivery_form_telefono: str = ""
-    delivery_form_notas: str = ""
-    delivery_form_repartidor_id: int = 0
-    delivery_form_items: list[dict] = []
 
     # ── Self-order (aprobación) ──────────────────────────────────────────────
     self_orders_pendientes: list[SelfOrderPendienteView] = []
@@ -1425,22 +1401,6 @@ class FoodState(
     sonidos_activos: bool = True
     _prev_tickets_pendientes: int = -1
     _prev_mesas_alerta_entrega: int = -1
-
-    usuarios_admin: list[UsuarioAdminView] = []
-    usuario_form_id: int = 0
-    usuario_form_nombre: str = ""
-    usuario_form_rol: str = RolUsuario.MOZO.value
-    usuario_form_pin: str = ""
-    usuario_form_pin_confirm: str = ""
-    usuario_form_activo: bool = True
-    usuario_form_visible: bool = False
-    usuario_form_perm_descuento: bool = False
-    usuario_form_perm_anular: bool = False
-    usuario_form_perm_reportes: bool = False
-    usuario_form_perm_turno: bool = False
-    usuario_form_perm_inventario: bool = False
-    usuario_form_perm_costos: bool = False
-    usuario_form_perm_reimprimir: bool = False
 
     mozos_tab_activa: str = "salon"
     modal_agregar_abierto: bool = False
@@ -1618,14 +1578,6 @@ class FoodState(
         return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["usuarios"]
 
     @rx.var
-    def roles_disponibles(self) -> list[str]:
-        return [r.value for r in RolUsuario]
-
-    @rx.var
-    def usuario_form_es_edicion(self) -> bool:
-        return self.usuario_form_id > 0
-
-    @rx.var
     def tiene_perm_turno(self) -> bool:
         if self.usuario_actual is None:
             return False
@@ -1658,6 +1610,7 @@ class FoodState(
             return False
         if _session_expired(self.ultima_actividad, self.usuario_actual.rol):
             self.usuario_actual = None
+            self.session_token = ""
             self.ultima_actividad = ""
             self._clear_operational_context()
             self.mensaje = "Sesión expirada por inactividad. Ingrese nuevamente."
@@ -1937,8 +1890,6 @@ class FoodState(
         self.cocina_polling_enabled = False
         self.caja_polling_enabled = False
         self.mostrador_polling_enabled = False
-        self.usuarios_admin = []
-        self._limpiar_usuario_form()
         self.caja_cobro_mesa_id = 0
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
@@ -1955,11 +1906,87 @@ class FoodState(
     def toggle_sidebar(self) -> None:
         self.sidebar_collapsed = not self.sidebar_collapsed
 
+    def _set_session_cookie(
+        self, usuario: UsuarioFood, company_id: int,
+        sucursal_id: int, sucursal_nombre: str,
+    ) -> None:
+        self.session_token = _sign_session({
+            "uid": usuario.id or 0,
+            "cid": company_id,
+            "sid": sucursal_id,
+            "sname": sucursal_nombre,
+            "slug": self.login_selected_company_slug,
+        })
+
+    def _set_session_cookie_from_current(self) -> None:
+        if self.usuario_actual is None:
+            return
+        u = self.usuario_actual
+        self.session_token = _sign_session({
+            "uid": u.id,
+            "cid": u.company_id,
+            "sid": u.sucursal_id,
+            "sname": u.sucursal_nombre,
+            "slug": self.login_selected_company_slug,
+        })
+
+    def _try_restore_session(self) -> bool:
+        """Restaura sesión desde cookie firmada (para pestañas nuevas)."""
+        token = self.session_token
+        if not token:
+            return False
+        payload = _verify_session(token)
+        if payload is None:
+            self.session_token = ""
+            return False
+        uid = payload.get("uid", 0)
+        cid = payload.get("cid", 0)
+        if not uid or not cid:
+            self.session_token = ""
+            return False
+        with tenant_bypass():
+            with get_session() as session:
+                usuario = session.exec(
+                    select(UsuarioFood).where(
+                        UsuarioFood.id == uid,
+                        UsuarioFood.company_id == cid,
+                        UsuarioFood.activo.is_(True),
+                    )
+                ).first()
+        if usuario is None:
+            self.session_token = ""
+            return False
+        sid = payload.get("sid", 0)
+        sname = payload.get("sname", "")
+        self.usuario_actual = UsuarioSesion(
+            id=usuario.id or 0,
+            nombre=usuario.nombre,
+            rol=usuario.rol,
+            company_id=usuario.company_id,
+            sucursal_id=sid,
+            sucursal_nombre=sname,
+            perm_descuento=usuario.perm_descuento,
+            perm_anular=usuario.perm_anular,
+            perm_reportes=usuario.perm_reportes,
+            perm_turno=usuario.perm_turno,
+            perm_inventario=usuario.perm_inventario,
+            perm_costos=usuario.perm_costos,
+            perm_reimprimir=usuario.perm_reimprimir,
+        )
+        self.ultima_actividad = _utcnow().isoformat()
+        self.login_selected_company_id = cid
+        self.login_selected_company_slug = payload.get("slug", "")
+        self.cargar_config_impresora()
+        self._cargar_plan_empresa()
+        return True
+
     def _route_access_result(self, route_key: str, also_allowed: bool = False):
         if self.usuario_actual is None:
-            return rx.redirect("/login", replace=True)
+            if not self._try_restore_session():
+                return rx.redirect("/login", replace=True)
         if _session_expired(self.ultima_actividad, self.usuario_actual.rol):
             self.usuario_actual = None
+            self.session_token = ""
             self.ultima_actividad = ""
             self._clear_operational_context()
             self.login_error = "Sesión expirada por inactividad."
@@ -1972,6 +1999,7 @@ class FoodState(
         bloqueo = _bloqueo_suscripcion(self._company_id())
         if bloqueo:
             self.usuario_actual = None
+            self.session_token = ""
             self._clear_operational_context()
             self.login_error = bloqueo
             return [
@@ -1991,10 +2019,14 @@ class FoodState(
     def on_load_root(self):
         if self.usuario_actual is not None:
             return rx.redirect(self.usuario_home_route, replace=True)
+        if self._try_restore_session():
+            return rx.redirect(self.usuario_home_route, replace=True)
         return rx.redirect("/login", replace=True)
 
     def on_load_login(self):
         if self.usuario_actual is not None:
+            return rx.redirect(self.usuario_home_route, replace=True)
+        if self._try_restore_session():
             return rx.redirect(self.usuario_home_route, replace=True)
         self.login_pin_input = ""
         self.login_error = ""
@@ -2095,18 +2127,6 @@ class FoodState(
     def reportes_avanzados_habilitados(self) -> bool:
         return plan_permite(self.empresa_plan, "reportes_avanzados")
 
-    def on_load_usuarios(self):
-        if self.usuario_actual is None:
-            return rx.redirect("/login", replace=True)
-        if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES["usuarios"]:
-            return [
-                rx.window_alert("No tienes permiso para este módulo."),
-                rx.redirect(self.usuario_home_route, replace=True),
-            ]
-        self.cargar_usuarios_admin()
-        self._limpiar_usuario_form()
-        return None
-
     def on_load_configuracion(self):
         result = self._route_access_result("configuracion")
         if result is not None:
@@ -2124,7 +2144,6 @@ class FoodState(
         self.cargar_clientes()
         self.cargar_promociones()
         self.cargar_cuentas()
-        self.cargar_usuarios_admin()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
@@ -2238,6 +2257,7 @@ class FoodState(
         if needs_sucursal_step:
             self.login_step = "sucursal"
             return
+        self._set_session_cookie(usuario, company_id, sucursal_id, sucursal_nombre)
         self.cargar_config_impresora()
         self._cargar_plan_empresa()
         return [rx.toast.success(f"Sesion iniciada como {usuario.nombre}."), rx.redirect(_role_home_route(usuario.rol), replace=True)]
@@ -2273,6 +2293,7 @@ class FoodState(
         self.usuario_actual = self.usuario_actual.model_copy(
             update={"sucursal_id": suc.id, "sucursal_nombre": suc.nombre}
         )
+        self._set_session_cookie_from_current()
         self.cargar_config_impresora()
         self._cargar_plan_empresa()
         return [rx.toast.success(f"Sesion iniciada como {self.usuario_actual.nombre}."), rx.redirect(_role_home_route(self.usuario_actual.rol), replace=True)]
@@ -2292,6 +2313,7 @@ class FoodState(
         self.usuario_actual = self.usuario_actual.model_copy(
             update={"sucursal_id": suc.id, "sucursal_nombre": suc.nombre}
         )
+        self._set_session_cookie_from_current()
         self._clear_operational_context()
         self.cargar_datos_iniciales()
 
@@ -2384,368 +2406,6 @@ class FoodState(
         self.sucursal_admin_form_visible = False
         self.cargar_sucursales_admin()
         return rx.toast.success(f"Sucursal '{nombre}' guardada.")
-
-    # ─── Reservas de mesa ─────────────────────────────────────────────────────
-
-    _RESERVA_BADGE = {
-        "pendiente":  ("rgba(245,158,11,0.12)", "#F59E0B"),
-        "confirmada": ("rgba(34,197,94,0.12)", "#22C55E"),
-        "sentada":    ("rgba(59,130,246,0.12)", "#3B82F6"),
-        "cancelada":  ("rgba(239,68,68,0.12)", "#F87171"),
-        "no_show":    ("#334155", "#94A3B8"),
-    }
-    _RESERVA_LABEL = {
-        "pendiente": "Pendiente",
-        "confirmada": "Confirmada",
-        "sentada": "Sentada",
-        "cancelada": "Cancelada",
-        "no_show": "No asistió",
-    }
-
-    def _reserva_to_view(self, r: Reserva, mesas_map: dict) -> ReservaView:
-        bg, text = self._RESERVA_BADGE.get(r.estado, ("#F1F5F9", "#94A3B8"))
-        mesa_label = ""
-        if r.mesa_id and r.mesa_id in mesas_map:
-            m = mesas_map[r.mesa_id]
-            mesa_label = f"Mesa {m}"
-        return ReservaView(
-            id=r.id or 0,
-            mesa_id=r.mesa_id or 0,
-            mesa_label=mesa_label,
-            nombre_cliente=r.nombre_cliente,
-            telefono=r.telefono or "",
-            fecha=r.fecha.isoformat() if r.fecha else "",
-            hora=r.hora,
-            pax=r.pax,
-            estado=r.estado,
-            estado_label=self._RESERVA_LABEL.get(r.estado, r.estado),
-            notas=r.notas or "",
-            badge_bg=bg,
-            badge_text=text,
-        )
-
-    def cargar_reservas(self) -> None:
-        from datetime import date as _date
-        fecha_str = self.reservas_fecha_filtro or _date.today().isoformat()
-        try:
-            fecha = _date.fromisoformat(fecha_str)
-        except ValueError:
-            fecha = _date.today()
-        with self._tenant_session() as session:
-            q = select(Reserva).where(
-                Reserva.company_id == self._company_id(),
-                Reserva.fecha == fecha,
-            ).order_by(Reserva.hora)
-            q = self._sucursal_filter(Reserva, q)
-            rows = session.exec(q).all()
-            mesa_ids = {r.mesa_id for r in rows if r.mesa_id}
-            mesas_map: dict[int, int] = {}
-            if mesa_ids:
-                for m in session.exec(select(Mesa).where(Mesa.id.in_(mesa_ids))).all():
-                    mesas_map[m.id] = m.numero
-        self.reservas_lista = [self._reserva_to_view(r, mesas_map) for r in rows]
-
-    def set_reservas_fecha_filtro(self, v: str) -> None:
-        self.reservas_fecha_filtro = v
-        self.cargar_reservas()
-
-    def abrir_form_reserva(self, reserva_id: int = 0) -> None:
-        from datetime import date as _date
-        if reserva_id:
-            rv = next((r for r in self.reservas_lista if r.id == reserva_id), None)
-            if rv:
-                self.reserva_form_id = rv.id
-                self.reserva_form_nombre = rv.nombre_cliente
-                self.reserva_form_telefono = rv.telefono
-                self.reserva_form_fecha = rv.fecha
-                self.reserva_form_hora = rv.hora
-                self.reserva_form_pax = rv.pax
-                self.reserva_form_mesa_id = rv.mesa_id
-                self.reserva_form_notas = rv.notas
-        else:
-            self.reserva_form_id = 0
-            self.reserva_form_nombre = ""
-            self.reserva_form_telefono = ""
-            self.reserva_form_fecha = self.reservas_fecha_filtro or _date.today().isoformat()
-            self.reserva_form_hora = "20:00"
-            self.reserva_form_pax = 2
-            self.reserva_form_mesa_id = 0
-            self.reserva_form_notas = ""
-        self.reserva_form_visible = True
-
-    def cerrar_form_reserva(self) -> None:
-        self.reserva_form_visible = False
-
-    def set_reserva_form_visible(self, v: bool) -> None:
-        self.reserva_form_visible = v
-
-    def on_change_reserva_nombre(self, v: str) -> None:
-        self.reserva_form_nombre = v
-
-    def on_change_reserva_telefono(self, v: str) -> None:
-        self.reserva_form_telefono = v
-
-    def on_change_reserva_fecha(self, v: str) -> None:
-        self.reserva_form_fecha = v
-
-    def on_change_reserva_hora(self, v: str) -> None:
-        self.reserva_form_hora = v
-
-    def on_change_reserva_pax(self, v: str) -> None:
-        try:
-            self.reserva_form_pax = max(1, int(v))
-        except ValueError:
-            pass
-
-    def on_change_reserva_mesa(self, v: str) -> None:
-        try:
-            self.reserva_form_mesa_id = int(v)
-        except ValueError:
-            self.reserva_form_mesa_id = 0
-
-    def on_change_reserva_notas(self, v: str) -> None:
-        self.reserva_form_notas = v
-
-    def guardar_reserva(self) -> None:
-        from datetime import date as _date
-        nombre = self.reserva_form_nombre.strip()
-        if not nombre:
-            return rx.toast.error("El nombre del cliente es obligatorio.")
-        if not self.reserva_form_fecha or not self.reserva_form_hora:
-            return rx.toast.error("Fecha y hora son obligatorias.")
-        try:
-            fecha = _date.fromisoformat(self.reserva_form_fecha)
-        except ValueError:
-            return rx.toast.error("Fecha inválida.")
-        company_id = self._company_id()
-        with self._tenant_session() as session:
-            if self.reserva_form_id:
-                reserva = session.get(Reserva, self.reserva_form_id)
-                if reserva and reserva.company_id == company_id:
-                    reserva.nombre_cliente = nombre
-                    reserva.telefono = self.reserva_form_telefono.strip()
-                    reserva.fecha = fecha
-                    reserva.hora = self.reserva_form_hora.strip()
-                    reserva.pax = self.reserva_form_pax
-                    reserva.mesa_id = self.reserva_form_mesa_id or None
-                    reserva.notas = self.reserva_form_notas.strip() or None
-                    session.add(reserva)
-            else:
-                reserva = Reserva(
-                    company_id=company_id,
-                    sucursal_id=self._sucursal_id() or None,
-                    nombre_cliente=nombre,
-                    telefono=self.reserva_form_telefono.strip(),
-                    fecha=fecha,
-                    hora=self.reserva_form_hora.strip(),
-                    pax=self.reserva_form_pax,
-                    mesa_id=self.reserva_form_mesa_id or None,
-                    estado=EstadoReserva.PENDIENTE.value,
-                    notas=self.reserva_form_notas.strip() or None,
-                )
-                session.add(reserva)
-            session.commit()
-        self.reserva_form_visible = False
-        self.cargar_reservas()
-        return rx.toast.success(f"Reserva de '{nombre}' guardada.")
-
-    def cambiar_estado_reserva(self, reserva_id: int, nuevo_estado: str) -> None:
-        company_id = self._company_id()
-        with self._tenant_session() as session:
-            reserva = session.get(Reserva, reserva_id)
-            if reserva and reserva.company_id == company_id:
-                reserva.estado = nuevo_estado
-                session.add(reserva)
-                session.commit()
-        self.cargar_reservas()
-
-    def confirmar_reserva(self, reserva_id: int) -> None:
-        self.cambiar_estado_reserva(reserva_id, EstadoReserva.CONFIRMADA.value)
-
-    def sentar_reserva(self, reserva_id: int) -> None:
-        self.cambiar_estado_reserva(reserva_id, EstadoReserva.SENTADA.value)
-
-    def cancelar_reserva(self, reserva_id: int) -> None:
-        self.cambiar_estado_reserva(reserva_id, EstadoReserva.CANCELADA.value)
-
-    def marcar_no_show(self, reserva_id: int) -> None:
-        self.cambiar_estado_reserva(reserva_id, EstadoReserva.NO_SHOW.value)
-
-    # ── Delivery ─────────────────────────────────────────────────────────────
-
-    _DELIVERY_BADGE = {
-        EstadoDelivery.PENDIENTE.value: ("Pendiente", "#F59E0B", "rgba(245,158,11,0.12)"),
-        EstadoDelivery.EN_CAMINO.value: ("En camino", "#3B82F6", "rgba(59,130,246,0.12)"),
-        EstadoDelivery.ENTREGADO.value: ("Entregado", "#22C55E", "rgba(34,197,94,0.12)"),
-        EstadoDelivery.CANCELADO.value: ("Cancelado", "#F87171", "rgba(239,68,68,0.12)"),
-    }
-
-    def _delivery_to_view(self, pedido, detalles, productos, repartidores_map) -> DeliveryPedidoView:
-        resumen = " · ".join(
-            f"{d.cantidad}x {productos[d.producto_id].nombre if d.producto_id in productos else f'Producto {d.producto_id}'}"
-            for d in detalles
-        )
-        hora = pedido.abierto_en or pedido.created_at
-        estado = pedido.delivery_estado or EstadoDelivery.PENDIENTE.value
-        label, bg, txt = self._DELIVERY_BADGE.get(estado, ("?", "#6B7280", "#F3F4F6"))
-        rep_nombre = ""
-        if pedido.delivery_repartidor_id and pedido.delivery_repartidor_id in repartidores_map:
-            rep_nombre = repartidores_map[pedido.delivery_repartidor_id]
-        return DeliveryPedidoView(
-            pedido_id=pedido.id or 0,
-            nombre_cliente=_actor_name(pedido.nombre_cliente) or "Sin nombre",
-            delivery_direccion=pedido.delivery_direccion or "",
-            delivery_telefono=pedido.delivery_telefono or "",
-            delivery_estado=estado,
-            delivery_estado_label=label,
-            repartidor_nombre=rep_nombre,
-            repartidor_id=pedido.delivery_repartidor_id or 0,
-            total_texto=_money_text(pedido.total),
-            items_resumen=resumen,
-            hora_texto=hora.strftime("%H:%M") if hora else "",
-            notas=pedido.delivery_notas or "",
-            badge_bg=bg,
-            badge_text=txt,
-            pagado=bool(pedido.pagado),
-        )
-
-    def cargar_deliveries(self) -> None:
-        with self._tenant_session() as session:
-            q = select(Pedido).where(
-                Pedido.company_id == self._company_id(),
-                Pedido.tipo_pedido == TipoPedido.DELIVERY.value,
-            )
-            filtro = self.delivery_filtro_estado
-            if filtro:
-                q = q.where(Pedido.delivery_estado == filtro)
-            else:
-                q = q.where(Pedido.delivery_estado != EstadoDelivery.ENTREGADO.value)
-            q = self._sucursal_filter(Pedido, q)
-            q = q.order_by(Pedido.abierto_en.desc(), Pedido.id.desc())
-            pedidos = session.exec(q).all()
-            if not pedidos:
-                if self.deliveries_lista:
-                    self.deliveries_lista = []
-                return
-            productos = {p.id: p for p in session.exec(
-                select(Producto).where(Producto.company_id == self._company_id())
-            ).all()}
-            repartidores = session.exec(
-                select(UsuarioFood).where(
-                    UsuarioFood.company_id == self._company_id(),
-                    UsuarioFood.rol == RolUsuario.REPARTIDOR.value,
-                )
-            ).all()
-            repartidores_map = {u.id: u.nombre for u in repartidores if u.id}
-            result: list[DeliveryPedidoView] = []
-            for pedido in pedidos:
-                detalles = session.exec(
-                    select(DetallePedido).where(DetallePedido.pedido_id == pedido.id).order_by(DetallePedido.id)
-                ).all()
-                result.append(self._delivery_to_view(pedido, detalles, productos, repartidores_map))
-            if _list_fingerprint(result) != _list_fingerprint(self.deliveries_lista):
-                self.deliveries_lista = result
-
-    @rx.var
-    def repartidores_lista(self) -> list[dict]:
-        with self._tenant_session() as session:
-            reps = session.exec(
-                select(UsuarioFood).where(
-                    UsuarioFood.company_id == self._company_id(),
-                    UsuarioFood.rol == RolUsuario.REPARTIDOR.value,
-                    UsuarioFood.activo.is_(True),
-                )
-            ).all()
-            return [{"id": u.id or 0, "nombre": u.nombre} for u in reps]
-
-    def set_delivery_filtro_estado(self, v: str) -> None:
-        self.delivery_filtro_estado = v
-        self.cargar_deliveries()
-
-    def abrir_form_delivery(self) -> None:
-        self.delivery_form_nombre = ""
-        self.delivery_form_direccion = ""
-        self.delivery_form_telefono = ""
-        self.delivery_form_notas = ""
-        self.delivery_form_repartidor_id = 0
-        self.delivery_form_items = []
-        self.delivery_form_visible = True
-
-    def cerrar_form_delivery(self) -> None:
-        self.delivery_form_visible = False
-
-    def set_delivery_form_visible(self, v: bool) -> None:
-        self.delivery_form_visible = v
-
-    def on_change_delivery_nombre(self, v: str) -> None:
-        self.delivery_form_nombre = v
-
-    def on_change_delivery_direccion(self, v: str) -> None:
-        self.delivery_form_direccion = v
-
-    def on_change_delivery_telefono(self, v: str) -> None:
-        self.delivery_form_telefono = v
-
-    def on_change_delivery_notas(self, v: str) -> None:
-        self.delivery_form_notas = v
-
-    def on_change_delivery_repartidor(self, v: str) -> None:
-        try:
-            self.delivery_form_repartidor_id = int(v)
-        except (ValueError, TypeError):
-            self.delivery_form_repartidor_id = 0
-
-    def crear_pedido_delivery(self) -> None:
-        nombre = self.delivery_form_nombre.strip()
-        direccion = self.delivery_form_direccion.strip()
-        telefono = self.delivery_form_telefono.strip()
-        if not nombre or not direccion:
-            return
-        with self._tenant_session() as session:
-            pedido = Pedido(
-                company_id=self._company_id(),
-                tipo_pedido=TipoPedido.DELIVERY.value,
-                nombre_cliente=nombre,
-                delivery_direccion=direccion,
-                delivery_telefono=telefono,
-                delivery_notas=self.delivery_form_notas.strip() or None,
-                delivery_estado=EstadoDelivery.PENDIENTE.value,
-                delivery_repartidor_id=self.delivery_form_repartidor_id or None,
-                sucursal_id=self._sucursal_id() or None,
-                estado=EstadoPedido.ENVIADO.value,
-                abierto_en=utc_now_naive(),
-            )
-            session.add(pedido)
-            session.commit()
-        self.delivery_form_visible = False
-        self.cargar_deliveries()
-
-    def asignar_repartidor_delivery(self, pedido_id: int, repartidor_id: int) -> None:
-        with self._tenant_session() as session:
-            pedido = session.get(Pedido, pedido_id)
-            if pedido and pedido.company_id == self._company_id():
-                pedido.delivery_repartidor_id = repartidor_id or None
-                session.add(pedido)
-                session.commit()
-        self.cargar_deliveries()
-
-    def cambiar_estado_delivery(self, pedido_id: int, nuevo_estado: str) -> None:
-        with self._tenant_session() as session:
-            pedido = session.get(Pedido, pedido_id)
-            if pedido and pedido.company_id == self._company_id():
-                pedido.delivery_estado = nuevo_estado
-                session.add(pedido)
-                session.commit()
-        self.cargar_deliveries()
-
-    def delivery_marcar_en_camino(self, pedido_id: int) -> None:
-        self.cambiar_estado_delivery(pedido_id, EstadoDelivery.EN_CAMINO.value)
-
-    def delivery_marcar_entregado(self, pedido_id: int) -> None:
-        self.cambiar_estado_delivery(pedido_id, EstadoDelivery.ENTREGADO.value)
-
-    def delivery_cancelar(self, pedido_id: int) -> None:
-        self.cambiar_estado_delivery(pedido_id, EstadoDelivery.CANCELADO.value)
 
     # ── Self-order (QR tokens + aprobación) ──────────────────────────────────
 
@@ -2918,249 +2578,9 @@ class FoodState(
 
     def logout(self):
         self.usuario_actual = None
+        self.session_token = ""
         self._clear_operational_context()
         return rx.redirect("/login", replace=True)
-
-    # ─── Gestión de usuarios del local ───────────────────────────────────────
-
-    def on_change_uf_nombre(self, value: str) -> None:
-        self.usuario_form_nombre = value
-
-    def on_change_uf_rol(self, value: str) -> None:
-        self.usuario_form_rol = value
-        _defs = _ROL_PERM_DEFAULTS.get(value, {})
-        self.usuario_form_perm_descuento = _defs.get("descuento", False)
-        self.usuario_form_perm_anular = _defs.get("anular", False)
-        self.usuario_form_perm_reportes = _defs.get("reportes", False)
-        self.usuario_form_perm_turno = _defs.get("turno", False)
-        self.usuario_form_perm_inventario = _defs.get("inventario", False)
-        self.usuario_form_perm_costos = _defs.get("costos", False)
-        self.usuario_form_perm_reimprimir = _defs.get("reimprimir", False)
-
-    def toggle_uf_perm_descuento(self) -> None:
-        self.usuario_form_perm_descuento = not self.usuario_form_perm_descuento
-
-    def toggle_uf_perm_anular(self) -> None:
-        self.usuario_form_perm_anular = not self.usuario_form_perm_anular
-
-    def toggle_uf_perm_reportes(self) -> None:
-        self.usuario_form_perm_reportes = not self.usuario_form_perm_reportes
-
-    def toggle_uf_perm_turno(self) -> None:
-        self.usuario_form_perm_turno = not self.usuario_form_perm_turno
-
-    def toggle_uf_perm_inventario(self) -> None:
-        self.usuario_form_perm_inventario = not self.usuario_form_perm_inventario
-
-    def toggle_uf_perm_costos(self) -> None:
-        self.usuario_form_perm_costos = not self.usuario_form_perm_costos
-
-    def toggle_uf_perm_reimprimir(self) -> None:
-        self.usuario_form_perm_reimprimir = not self.usuario_form_perm_reimprimir
-
-    def on_change_uf_pin(self, value: str) -> None:
-        self.usuario_form_pin = value
-
-    def on_change_uf_pin_confirm(self, value: str) -> None:
-        self.usuario_form_pin_confirm = value
-
-    def toggle_uf_activo(self) -> None:
-        self.usuario_form_activo = not self.usuario_form_activo
-
-    def _limpiar_usuario_form(self) -> None:
-        self.usuario_form_id = 0
-        self.usuario_form_nombre = ""
-        self.usuario_form_rol = RolUsuario.MOZO.value
-        self.usuario_form_pin = ""
-        self.usuario_form_pin_confirm = ""
-        self.usuario_form_activo = True
-        self.usuario_form_visible = False
-        _defs = _ROL_PERM_DEFAULTS[RolUsuario.MOZO.value]
-        self.usuario_form_perm_descuento = _defs["descuento"]
-        self.usuario_form_perm_anular = _defs["anular"]
-        self.usuario_form_perm_reportes = _defs["reportes"]
-        self.usuario_form_perm_turno = _defs["turno"]
-        self.usuario_form_perm_inventario = _defs["inventario"]
-        self.usuario_form_perm_costos = _defs["costos"]
-        self.usuario_form_perm_reimprimir = _defs["reimprimir"]
-
-    def set_usuario_form_visible(self, v: bool) -> None:
-        self.usuario_form_visible = v
-
-    def cargar_usuarios_admin(self) -> None:
-        mi_id = self.usuario_actual.id if self.usuario_actual else 0
-        with self._tenant_session() as session:
-            rows = session.exec(
-                select(UsuarioFood)
-                .where(UsuarioFood.company_id == self._company_id())
-                .order_by(UsuarioFood.rol, UsuarioFood.nombre)
-            ).all()
-        self.usuarios_admin = [
-            UsuarioAdminView(
-                id=u.id or 0,
-                nombre=u.nombre,
-                rol=u.rol,
-                rol_label=_ROL_LABELS.get(u.rol, u.rol),
-                pin_masked="●●●●",
-                activo=u.activo,
-                badge_bg=_ROL_BADGE_BG.get(u.rol, "rgba(100,116,139,0.16)"),
-                badge_text=_ROL_BADGE_TEXT.get(u.rol, "#94A3B8"),
-                es_yo=u.id == mi_id,
-                perm_descuento=u.perm_descuento,
-                perm_anular=u.perm_anular,
-                perm_reportes=u.perm_reportes,
-                perm_turno=u.perm_turno,
-                perm_inventario=u.perm_inventario,
-                perm_costos=u.perm_costos,
-                perm_reimprimir=u.perm_reimprimir,
-            )
-            for u in rows
-        ]
-
-    def nuevo_usuario_form(self) -> None:
-        self._limpiar_usuario_form()
-        self.usuario_form_visible = True
-
-    def editar_usuario(self, user_id: int) -> None:
-        with self._tenant_session() as session:
-            u = session.get(UsuarioFood, user_id)
-        if u is None or u.company_id != self._company_id():
-            return rx.toast.error("Usuario no encontrado.")
-        self.usuario_form_id = u.id or 0
-        self.usuario_form_nombre = u.nombre
-        self.usuario_form_rol = u.rol
-        self.usuario_form_pin = ""
-        self.usuario_form_pin_confirm = ""
-        self.usuario_form_activo = u.activo
-        self.usuario_form_perm_descuento = u.perm_descuento
-        self.usuario_form_perm_anular = u.perm_anular
-        self.usuario_form_perm_reportes = u.perm_reportes
-        self.usuario_form_perm_turno = u.perm_turno
-        self.usuario_form_perm_inventario = u.perm_inventario
-        self.usuario_form_perm_costos = u.perm_costos
-        self.usuario_form_perm_reimprimir = u.perm_reimprimir
-        self.usuario_form_visible = True
-
-    def guardar_usuario(self) -> None:
-        nombre = self.usuario_form_nombre.strip()
-        if not nombre:
-            return rx.toast.error("El nombre es obligatorio.")
-        rol = self.usuario_form_rol
-        if rol not in [r.value for r in RolUsuario]:
-            return rx.toast.error("Rol inválido.")
-
-        nuevo_pin = _normalize_pin(self.usuario_form_pin)
-        es_edicion = self.usuario_form_id > 0
-
-        if not es_edicion:
-            with self._tenant_session() as session:
-                total_usuarios = len(session.exec(
-                    select(UsuarioFood).where(
-                        UsuarioFood.company_id == self._company_id(),
-                        UsuarioFood.activo.is_(True),
-                    )
-                ).all())
-            msg_limite = check_limite_usuarios(self.empresa_plan, total_usuarios)
-            if msg_limite:
-                return rx.toast.error(msg_limite, duration=5000)
-
-        if not es_edicion:
-            if len(nuevo_pin) < 4:
-                return rx.toast.error("El PIN debe tener al menos 4 dígitos.")
-        else:
-            if self.usuario_form_pin and len(nuevo_pin) < 4:
-                return rx.toast.error("El nuevo PIN debe tener al menos 4 dígitos.")
-
-        if self.usuario_form_pin:
-            pin_confirm = _normalize_pin(self.usuario_form_pin_confirm)
-            if nuevo_pin != pin_confirm:
-                return rx.toast.error("Los PINs no coinciden.")
-
-        with self._tenant_session() as session:
-            otros = session.exec(
-                select(UsuarioFood).where(
-                    UsuarioFood.company_id == self._company_id(),
-                    UsuarioFood.id != self.usuario_form_id,
-                )
-            ).all()
-            if es_edicion:
-                u = session.get(UsuarioFood, self.usuario_form_id)
-                if u is None or u.company_id != self._company_id():
-                    return rx.toast.error("Usuario no encontrado.")
-                if nuevo_pin:
-                    conflicto = next((o for o in otros if _verify_pin(nuevo_pin, o.pin)), None)
-                    if conflicto:
-                        return rx.toast.error(f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}.")
-                    u.pin = _hash_pin(nuevo_pin)
-                u.nombre = nombre
-                u.rol = rol
-                u.activo = self.usuario_form_activo
-                u.perm_descuento = self.usuario_form_perm_descuento
-                u.perm_anular = self.usuario_form_perm_anular
-                u.perm_reportes = self.usuario_form_perm_reportes
-                u.perm_turno = self.usuario_form_perm_turno
-                u.perm_inventario = self.usuario_form_perm_inventario
-                u.perm_costos = self.usuario_form_perm_costos
-                u.perm_reimprimir = self.usuario_form_perm_reimprimir
-                u.updated_at = _utcnow()
-                session.add(u)
-                session.commit()
-                _toast_msg = f"Usuario '{nombre}' actualizado."
-            else:
-                conflicto = next((o for o in otros if _verify_pin(nuevo_pin, o.pin)), None)
-                if conflicto:
-                    return rx.toast.error(f"El PIN {nuevo_pin} ya lo usa {conflicto.nombre}.")
-                u = UsuarioFood(
-                    company_id=self._company_id(),
-                    nombre=nombre,
-                    pin=_hash_pin(nuevo_pin),
-                    rol=rol,
-                    activo=True,
-                    perm_descuento=self.usuario_form_perm_descuento,
-                    perm_anular=self.usuario_form_perm_anular,
-                    perm_reportes=self.usuario_form_perm_reportes,
-                    perm_turno=self.usuario_form_perm_turno,
-                    perm_inventario=self.usuario_form_perm_inventario,
-                    perm_costos=self.usuario_form_perm_costos,
-                    perm_reimprimir=self.usuario_form_perm_reimprimir,
-                )
-                session.add(u)
-                session.commit()
-                _toast_msg = f"Usuario '{nombre}' creado."
-
-        self._limpiar_usuario_form()
-        self.cargar_usuarios_admin()
-        return rx.toast.success(_toast_msg)
-
-    def toggle_usuario_activo(self, user_id: int) -> None:
-        mi_id = self.usuario_actual.id if self.usuario_actual else 0
-        if user_id == mi_id:
-            return rx.toast.error("No puedes desactivarte a ti mismo.")
-        with self._tenant_session() as session:
-            u = session.get(UsuarioFood, user_id)
-            if u is None or u.company_id != self._company_id():
-                return rx.toast.error("Usuario no encontrado.")
-            if u.activo and u.rol == RolUsuario.ADMIN.value:
-                admins_activos = session.exec(
-                    select(UsuarioFood).where(
-                        UsuarioFood.company_id == self._company_id(),
-                        UsuarioFood.rol == RolUsuario.ADMIN.value,
-                        UsuarioFood.activo.is_(True),
-                    )
-                ).all()
-                if len(admins_activos) <= 1:
-                    return rx.toast.error("No puedes desactivar al último administrador.")
-            u.activo = not u.activo
-            u.updated_at = _utcnow()
-            session.add(u)
-            session.commit()
-            accion = "activado" if u.activo else "desactivado"
-            _toast_msg = f"Usuario '{u.nombre}' {accion}."
-        self.cargar_usuarios_admin()
-        return rx.toast.success(_toast_msg)
-
-    def cancelar_usuario_form(self) -> None:
-        self._limpiar_usuario_form()
 
     # ─── Configuración impresoras ─────────────────────────────────────────────
 
@@ -3726,6 +3146,7 @@ class FoodState(
                     play_sound = self._refresh_mozos_slice()
                 if play_sound:
                     yield rx.call_script(_SOUND_CHIME_JS)
+                    yield rx.call_script(_VIBRATE_JS)
             except Exception:
                 break
 
@@ -3756,6 +3177,7 @@ class FoodState(
                     yield rx.call_script(build_print_script(print_html))
                 if play_sound:
                     yield rx.call_script(_SOUND_BELL_JS)
+                    yield rx.call_script(_VIBRATE_JS)
             except Exception:
                 break
 
@@ -3830,6 +3252,26 @@ class FoodState(
                     if p.mesa_id not in pedidos_abiertos:
                         pedidos_abiertos[p.mesa_id] = p
 
+            # Nivel 2: Expirar pedidos abandonados (> 8h sin actividad)
+            ahora = _utcnow()
+            pedidos_expirados_ids: list[int] = []
+            for mesa_id, pedido in list(pedidos_abiertos.items()):
+                inactivo_min = max(0, int((ahora - pedido.updated_at).total_seconds() // 60))
+                if inactivo_min >= PEDIDO_EXPIRACION_MIN:
+                    pedido.estado = EstadoPedido.CANCELADO.value
+                    pedido.motivo_cancelacion = f"Expirado automáticamente por {inactivo_min} min de inactividad"
+                    pedido.cancelado_en = ahora
+                    session.add(pedido)
+                    registrar_auditoria(
+                        session, pedido.company_id, "pedido_expirado",
+                        entidad="Pedido", entidad_id=pedido.id,
+                        detalle={"mesa_id": mesa_id, "inactivo_min": inactivo_min, "total": str(pedido.total)},
+                    )
+                    pedidos_expirados_ids.append(mesa_id)
+                    del pedidos_abiertos[mesa_id]
+            if pedidos_expirados_ids:
+                session.commit()
+
             pedido_ids = [p.id for p in pedidos_abiertos.values() if p.id]
 
             # Bulk: 1 query para detalles listos para entregar
@@ -3881,13 +3323,20 @@ class FoodState(
                     reservas_by_mesa[rv.mesa_id] = f"Reservada {rv.hora}"
 
             # Construir vistas y acumular correcciones de mesas stuck
-            hay_stuck = False
+            hay_stuck = bool(pedidos_expirados_ids)
             for mesa in mesas_db:
                 pedido_abierto = pedidos_abiertos.get(mesa.id or 0)
-                # Auto-corregir mesa stuck: si figura OCUPADA pero no hay pedido abierto, volver a LIBRE
-                if mesa.estado != EstadoMesa.LIBRE.value and pedido_abierto is None:
+                # Nivel 1: Auto-corregir mesa stuck (bidireccional)
+                necesita_libre = (mesa.estado != EstadoMesa.LIBRE.value and pedido_abierto is None)
+                necesita_ocupada = (mesa.estado == EstadoMesa.LIBRE.value and pedido_abierto is not None)
+                if necesita_libre:
                     mesa.estado = EstadoMesa.LIBRE.value
-                    mesa.updated_at = _utcnow()
+                    mesa.updated_at = ahora
+                    session.add(mesa)
+                    hay_stuck = True
+                elif necesita_ocupada:
+                    mesa.estado = EstadoMesa.OCUPADA.value
+                    mesa.updated_at = ahora
                     session.add(mesa)
                     hay_stuck = True
                 total_abierto = _to_decimal(pedido_abierto.total if pedido_abierto else Decimal("0.00"))
@@ -3898,9 +3347,11 @@ class FoodState(
                 items_total_count = items_total_by_pedido.get(pid, 0) if pedido_abierto else 0
                 tiempo_abierto_texto = ""
                 mozo_nombre = ""
+                inactivo_min = 0
                 if pedido_abierto is not None:
-                    elapsed_min = max(0, int((_utcnow() - pedido_abierto.created_at).total_seconds() // 60))
+                    elapsed_min = max(0, int((ahora - pedido_abierto.created_at).total_seconds() // 60))
                     tiempo_abierto_texto = f"{elapsed_min} min"
+                    inactivo_min = max(0, int((ahora - pedido_abierto.updated_at).total_seconds() // 60))
                     if pedido_abierto.mozo_id:
                         mozo_nombre = mozos_map.get(pedido_abierto.mozo_id, "")
                 mesas_ui.append(MesaView(
@@ -3927,6 +3378,7 @@ class FoodState(
                     mozo_nombre=mozo_nombre,
                     sector=mesa.sector or "Salón",
                     reserva_texto=reservas_by_mesa.get(mesa.id or 0, ""),
+                    inactivo_minutos=inactivo_min,
                 ))
             if hay_stuck:
                 session.commit()
@@ -4606,7 +4058,10 @@ class FoodState(
         self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.cargar_mesas()
         self.cargar_cocina()
-        return rx.toast.success(f"Pedido #{pedido_id} enviado a cocina")
+        return [
+            rx.toast.success(f"Pedido #{pedido_id} enviado a cocina"),
+            rx.call_script(_VIBRATE_JS),
+        ]
 
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
 
@@ -4768,7 +4223,7 @@ class FoodState(
         self.cargar_mesas()
         if self.mesa_seleccionada_id:
             self._cargar_historial_mesa(self.mesa_seleccionada_id)
-        return rx.toast.success(success_message)
+        return [rx.toast.success(success_message), rx.call_script(_VIBRATE_JS)]
 
     def iniciar_preparacion_ticket(self, detalle_ids_csv: str) -> None:
         self._transition_ticket_state(
@@ -6344,15 +5799,6 @@ class ProductoPublicoView(BaseModel):
     tags_texto: str = ""
 
 
-class CarritoItemView(BaseModel):
-    producto_id: int = 0
-    nombre: str = ""
-    precio_texto: str = ""
-    precio_float: float = 0.0
-    cantidad: int = 1
-    subtotal_texto: str = ""
-
-
 class PromoPublicaView(BaseModel):
     nombre: str = ""
     descripcion: str = ""
@@ -6407,10 +5853,6 @@ class MenuPublicoState(rx.State):
         self.categorias_menu = []
         self.promos_activas = []
         self.busqueda_menu = ""
-        self.pedido_enviado = False
-        self.pedido_error = ""
-        self.carrito = []
-        self.carrito_visible = False
 
         if not slug:
             self.no_encontrado = True
@@ -6520,155 +5962,6 @@ class MenuPublicoState(rx.State):
             self.promos_activas = promo_views
 
         self.cargando = False
-        self._init_from_token()
-
-    # ── Self-order (QR) ──────────────────────────────────────────────────────
-
-    carrito: list[CarritoItemView] = []
-    carrito_visible: bool = False
-    mesa_token: str = ""
-    mesa_nombre_qr: str = ""
-    pedido_enviado: bool = False
-    pedido_error: str = ""
-    nombre_cliente_qr: str = ""
-
-    @rx.var
-    def carrito_count(self) -> int:
-        return sum(i.cantidad for i in self.carrito)
-
-    @rx.var
-    def carrito_total_texto(self) -> str:
-        total = sum(i.precio_float * i.cantidad for i in self.carrito)
-        return f"S/ {total:.2f}"
-
-    @rx.var
-    def tiene_mesa_qr(self) -> bool:
-        return self.mesa_token != "" and self.mesa_nombre_qr != ""
-
-    def _init_from_token(self) -> None:
-        token = self.router.page.params.get("mesa", "")
-        if not token:
-            self.mesa_token = ""
-            self.mesa_nombre_qr = ""
-            return
-        slug = self.router.page.params.get("slug", "")
-        if not slug:
-            return
-        with tenant_bypass(), get_session() as session:
-            cfg = session.exec(
-                select(ConfigImpresora).where(ConfigImpresora.slug == slug)
-            ).first()
-            if not cfg:
-                return
-            mesa = session.exec(
-                select(Mesa).where(
-                    Mesa.company_id == cfg.company_id,
-                    Mesa.qr_token == token,
-                    Mesa.activa.is_(True),
-                )
-            ).first()
-            if mesa:
-                self.mesa_token = token
-                self.mesa_nombre_qr = mesa.nombre or f"Mesa {mesa.numero}"
-
-    def agregar_al_carrito(self, producto_id: int, nombre: str, precio_texto: str, precio_float: float) -> None:
-        for i, item in enumerate(self.carrito):
-            if item.producto_id == producto_id:
-                nuevo = item.model_copy()
-                nuevo.cantidad += 1
-                nuevo.subtotal_texto = f"S/ {nuevo.precio_float * nuevo.cantidad:.2f}"
-                self.carrito[i] = nuevo
-                return
-        self.carrito.append(CarritoItemView(
-            producto_id=producto_id,
-            nombre=nombre,
-            precio_texto=precio_texto,
-            precio_float=precio_float,
-            cantidad=1,
-            subtotal_texto=precio_texto,
-        ))
-
-    def quitar_del_carrito(self, producto_id: int) -> None:
-        for i, item in enumerate(self.carrito):
-            if item.producto_id == producto_id:
-                if item.cantidad > 1:
-                    nuevo = item.model_copy()
-                    nuevo.cantidad -= 1
-                    nuevo.subtotal_texto = f"S/ {nuevo.precio_float * nuevo.cantidad:.2f}"
-                    self.carrito[i] = nuevo
-                else:
-                    self.carrito.pop(i)
-                return
-
-    def vaciar_carrito(self) -> None:
-        self.carrito = []
-
-    def toggle_carrito(self) -> None:
-        self.carrito_visible = not self.carrito_visible
-
-    def set_nombre_cliente_qr(self, v: str) -> None:
-        self.nombre_cliente_qr = v
-
-    def enviar_self_order(self) -> None:
-        if not self.mesa_token or not self.carrito:
-            return
-        self.pedido_error = ""
-        slug = self.router.page.params.get("slug", "")
-        with tenant_bypass(), get_session() as session:
-            cfg = session.exec(
-                select(ConfigImpresora).where(ConfigImpresora.slug == slug)
-            ).first()
-            if not cfg:
-                self.pedido_error = "Local no encontrado."
-                return
-            mesa = session.exec(
-                select(Mesa).where(
-                    Mesa.company_id == cfg.company_id,
-                    Mesa.qr_token == self.mesa_token,
-                    Mesa.activa.is_(True),
-                )
-            ).first()
-            if not mesa:
-                self.pedido_error = "Mesa no válida. Escanee el QR nuevamente."
-                return
-            pedido = Pedido(
-                company_id=cfg.company_id,
-                mesa_id=mesa.id,
-                tipo_pedido=TipoPedido.MESA.value,
-                nombre_cliente=self.nombre_cliente_qr.strip() or None,
-                estado=EstadoPedido.ENVIADO.value,
-                abierto_en=utc_now_naive(),
-                self_order=True,
-                self_order_aprobado=False,
-                sucursal_id=mesa.sucursal_id,
-            )
-            session.add(pedido)
-            session.flush()
-            for item in self.carrito:
-                producto = session.get(Producto, item.producto_id)
-                if not producto or producto.company_id != cfg.company_id:
-                    continue
-                detalle = DetallePedido(
-                    pedido_id=pedido.id,
-                    company_id=cfg.company_id,
-                    producto_id=item.producto_id,
-                    cantidad=item.cantidad,
-                    precio_unitario=producto.precio,
-                    subtotal=producto.precio * item.cantidad,
-                    impreso_cocina=False,
-                )
-                session.add(detalle)
-            _recalculate_order_total(session, pedido)
-            session.commit()
-        self.carrito = []
-        self.carrito_visible = False
-        self.pedido_enviado = True
-
-    def volver_a_carta(self) -> None:
-        self.pedido_enviado = False
-
-    def set_carrito_visible(self, v: bool) -> None:
-        self.carrito_visible = v
 
 
 class AdminLocalState(rx.State):
@@ -6824,4 +6117,5 @@ class AdminLocalState(rx.State):
         self.password_input = ""
         food_state = await self.get_state(FoodState)
         food_state.usuario_actual = None
+        food_state.session_token = ""
         return rx.redirect("/admin/login")

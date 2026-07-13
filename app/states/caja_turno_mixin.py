@@ -12,6 +12,7 @@ y `_ticket_paper_width_mm()`.
 
 from __future__ import annotations
 
+import io
 import json
 from decimal import Decimal, InvalidOperation
 
@@ -22,11 +23,14 @@ from sqlmodel import select
 from tuwayki_core.utils.timezone import format_local_datetime, utc_now_naive
 
 from app.models.food import (
+    DetallePedido,
     EstadoPedido,
     EstadoTurnoCaja,
+    Mesa,
     MovimientoCaja,
     PagoPedido,
     Pedido,
+    Producto,
     TipoMovimientoCaja,
     TurnoCaja,
     UsuarioFood,
@@ -702,43 +706,34 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 )
                 session.commit()
                 session.refresh(turno)
-                usuarios = {
-                    u.id: u.nombre
-                    for u in session.exec(
-                        select(UsuarioFood).where(
-                            UsuarioFood.company_id == self._company_id()
-                        )
-                    ).all()
-                }
-                descuadre = _dec(turno.descuadre)
-                if descuadre > 0:
-                    descuadre_texto = f"+{CURRENCY_SYMBOL} {descuadre:.2f} (sobra)"
-                elif descuadre < 0:
-                    descuadre_texto = f"-{CURRENCY_SYMBOL} {abs(descuadre):.2f} (falta)"
-                else:
-                    descuadre_texto = f"{CURRENCY_SYMBOL} 0.00 (cuadra)"
+                data = self._build_cierre_data(session, turno)
+                det_pedidos = [
+                    {**p, "neto_texto": _money(p["neto"])} for p in data["pedidos"]
+                ]
                 ticket_html = generate_cash_close_ticket_html(
-                    company_name=self.config_nombre_local or "TUWAYKIFOOD",
+                    company_name=data["empresa"],
                     turno_id=turno.id or 0,
-                    abierto_por=usuarios.get(turno.abierto_por_id or 0, "—"),
-                    cerrado_por=usuarios.get(turno.cerrado_por_id or 0, "—"),
-                    abierto_en_texto=_hora_local(turno.abierto_en),
-                    cerrado_en_texto=_hora_local(turno.cerrado_en),
+                    abierto_por=data["abierto_por"],
+                    cerrado_por=data["cerrado_por"],
+                    abierto_en_texto=data["abierto_en"],
+                    cerrado_en_texto=data["cerrado_en"],
                     resumen_rows=[
-                        ("Fondo inicial", _money(turno.monto_inicial)),
-                        ("Ventas efectivo", _money(turno.total_efectivo)),
-                        ("Ventas tarjeta", _money(turno.total_tarjeta)),
-                        ("Ventas QR/Yape", _money(turno.total_qr)),
-                        ("Fiado", _money(turno.total_fiado)),
-                        ("Propinas", _money(turno.total_propinas)),
-                        ("Otros ingresos", _money(turno.total_ingresos)),
-                        ("Egresos", "- " + _money(turno.total_egresos)),
-                        ("Esperado en caja", _money(turno.esperado_efectivo)),
-                        ("Contado en caja", _money(turno.contado_efectivo)),
+                        ("Fondo inicial", data["fondo_inicial"]),
+                        ("Ventas efectivo", data["total_efectivo"]),
+                        ("Ventas tarjeta", data["total_tarjeta"]),
+                        ("Ventas QR/Yape", data["total_qr"]),
+                        ("Fiado", data["total_fiado"]),
+                        ("Propinas", data["total_propinas"]),
+                        ("Otros ingresos", data["total_ingresos"]),
+                        ("Egresos", f"- {data['total_egresos']}"),
+                        ("Esperado en caja", data["esperado"]),
+                        ("Contado en caja", data["contado"]),
                     ],
-                    descuadre_texto=descuadre_texto,
-                    notas=turno.notas_cierre or "",
+                    descuadre_texto=data["descuadre_texto"],
+                    notas=data["notas"],
                     paper_width_mm=self._ticket_paper_width_mm(),
+                    detalle_pedidos=det_pedidos,
+                    detalle_movimientos=data["movimientos"],
                 )
         except ValueError as exc:
             self.turno_cierre_error = str(exc)
@@ -754,3 +749,290 @@ class CajaTurnoMixin(rx.State, mixin=True):
 
     def toggle_historial_turnos(self) -> None:
         self.turno_historial_visible = not self.turno_historial_visible
+
+    # ── PDF / impresión detallada del cierre ────────────────────────────────
+
+    def _build_cierre_data(self, session, turno: TurnoCaja) -> dict:
+        """Recolecta toda la info del turno para PDF e impresión."""
+        usuarios = {
+            u.id: u.nombre
+            for u in session.exec(
+                select(UsuarioFood).where(UsuarioFood.company_id == turno.company_id)
+            ).all()
+        }
+        mesas = {
+            m.id: m.nombre or f"Mesa {m.numero}"
+            for m in session.exec(
+                select(Mesa).where(Mesa.company_id == turno.company_id)
+            ).all()
+        }
+        pedidos = session.exec(
+            select(Pedido).where(
+                Pedido.company_id == turno.company_id,
+                Pedido.turno_caja_id == turno.id,
+                Pedido.estado != EstadoPedido.CANCELADO.value,
+            ).order_by(Pedido.cerrado_en)
+        ).all()
+        pagos = session.exec(
+            select(PagoPedido).where(
+                PagoPedido.company_id == turno.company_id,
+                PagoPedido.turno_caja_id == turno.id,
+            )
+        ).all()
+        pagos_por_pedido: dict[int, list] = {}
+        for p in pagos:
+            pagos_por_pedido.setdefault(p.pedido_id, []).append(p)
+        productos = {
+            p.id: p.nombre
+            for p in session.exec(
+                select(Producto).where(Producto.company_id == turno.company_id)
+            ).all()
+        }
+        detalle_pedidos = []
+        for ped in pedidos:
+            items = session.exec(
+                select(DetallePedido).where(DetallePedido.pedido_id == ped.id)
+            ).all()
+            items_texto = ", ".join(
+                f"{productos.get(d.producto_id, '?')} (x{d.cantidad})" for d in items if d.cantidad > 0
+            )
+            pags = pagos_por_pedido.get(ped.id or 0, [])
+            if pags:
+                metodo = ", ".join(
+                    f"{(p.metodo or 'efectivo').capitalize()}: {_money(p.monto)}" for p in pags
+                )
+            else:
+                metodo = (ped.metodo_pago or "efectivo").capitalize()
+            neto = _dec(ped.total) - _dec(ped.descuento)
+            detalle_pedidos.append({
+                "id": ped.id,
+                "hora": _hora_local(ped.cerrado_en or ped.updated_at),
+                "mesa": mesas.get(ped.mesa_id or 0, "Para llevar"),
+                "mozo": usuarios.get(ped.mozo_id or 0, "—"),
+                "metodo": metodo,
+                "items": items_texto,
+                "descuento": _dec(ped.descuento),
+                "propina": _dec(ped.propina),
+                "neto": neto,
+            })
+        movimientos = session.exec(
+            select(MovimientoCaja).where(
+                MovimientoCaja.company_id == turno.company_id,
+                MovimientoCaja.turno_id == turno.id,
+            ).order_by(MovimientoCaja.created_at)
+        ).all()
+        movs = [{
+            "hora": _hora_local(m.created_at),
+            "tipo": m.tipo.capitalize(),
+            "categoria": m.categoria,
+            "monto": _money(m.monto),
+            "motivo": m.motivo,
+            "usuario": usuarios.get(m.usuario_id or 0, "—"),
+        } for m in movimientos]
+        descuadre = _dec(turno.descuadre)
+        if descuadre > 0:
+            descuadre_texto = f"+{_money(descuadre)} (sobra)"
+        elif descuadre < 0:
+            descuadre_texto = f"-{_money(abs(descuadre))} (falta)"
+        else:
+            descuadre_texto = f"{_money(0)} (cuadra)"
+        return {
+            "empresa": self.config_nombre_local or "TUWAYKIFOOD",
+            "turno_id": turno.id,
+            "abierto_por": usuarios.get(turno.abierto_por_id or 0, "—"),
+            "cerrado_por": usuarios.get(turno.cerrado_por_id or 0, "—"),
+            "abierto_en": _hora_local(turno.abierto_en),
+            "cerrado_en": _hora_local(turno.cerrado_en),
+            "fondo_inicial": _money(turno.monto_inicial),
+            "total_efectivo": _money(turno.total_efectivo),
+            "total_tarjeta": _money(turno.total_tarjeta),
+            "total_qr": _money(turno.total_qr),
+            "total_fiado": _money(turno.total_fiado),
+            "total_propinas": _money(turno.total_propinas),
+            "total_ingresos": _money(turno.total_ingresos),
+            "total_egresos": _money(turno.total_egresos),
+            "esperado": _money(turno.esperado_efectivo),
+            "contado": _money(turno.contado_efectivo),
+            "descuadre_texto": descuadre_texto,
+            "notas": turno.notas_cierre or "",
+            "pedidos": detalle_pedidos,
+            "movimientos": movs,
+            "total_ventas_neto": _money(
+                _dec(turno.total_efectivo) + _dec(turno.total_tarjeta)
+                + _dec(turno.total_qr) + _dec(turno.total_fiado)
+            ),
+        }
+
+    def descargar_pdf_cierre(self):
+        if self.turno_activo_id == 0:
+            return rx.toast.error("No hay turno para generar el PDF.")
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm, mm
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+        with self._tenant_session() as session:
+            turno = session.get(TurnoCaja, self.turno_activo_id)
+            if turno is None:
+                return rx.toast.error("El turno ya no existe.")
+            data = self._build_cierre_data(session, turno)
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+            topMargin=1.2 * cm, bottomMargin=1.2 * cm,
+        )
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(
+            "PDFTitle", parent=styles["Title"], fontSize=16, spaceAfter=2 * mm,
+        ))
+        styles.add(ParagraphStyle(
+            "PDFSub", parent=styles["Normal"], fontSize=9,
+            textColor=colors.grey, spaceAfter=6 * mm,
+        ))
+        styles.add(ParagraphStyle(
+            "Section", parent=styles["Heading2"], fontSize=12,
+            spaceBefore=5 * mm, spaceAfter=2 * mm,
+            textColor=colors.HexColor("#1E293B"),
+        ))
+        hdr_style = TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ])
+        elems = []
+        elems.append(Paragraph(f"Resumen de Caja — {data['empresa']}", styles["PDFTitle"]))
+        elems.append(Paragraph(
+            f"Turno #{data['turno_id']} · Apertura: {data['abierto_en']} por {data['abierto_por']}"
+            f" · Cierre: {data['cerrado_en']} por {data['cerrado_por']}",
+            styles["PDFSub"],
+        ))
+
+        # Resumen
+        elems.append(Paragraph("Resumen de Caja", styles["Section"]))
+        res_data = [
+            ["Concepto", "Monto"],
+            ["Fondo inicial", data["fondo_inicial"]],
+            ["Ventas efectivo", data["total_efectivo"]],
+            ["Ventas tarjeta", data["total_tarjeta"]],
+            ["Ventas QR / Yape", data["total_qr"]],
+            ["Fiado", data["total_fiado"]],
+            ["Propinas", data["total_propinas"]],
+            ["Otros ingresos", data["total_ingresos"]],
+            ["Egresos / gastos", f"- {data['total_egresos']}"],
+            ["Esperado en caja", data["esperado"]],
+            ["Contado en caja", data["contado"]],
+            ["Descuadre", data["descuadre_texto"]],
+        ]
+        t = Table(res_data, colWidths=[10 * cm, 7 * cm])
+        t.setStyle(hdr_style)
+        elems.append(t)
+        elems.append(Spacer(1, 4 * mm))
+
+        # Ingresos por método
+        elems.append(Paragraph("Ingresos por Método", styles["Section"]))
+        met_data = [["Método", "Monto"]]
+        for label, val in [
+            ("Efectivo", data["total_efectivo"]),
+            ("Tarjeta", data["total_tarjeta"]),
+            ("QR / Yape", data["total_qr"]),
+            ("Fiado", data["total_fiado"]),
+        ]:
+            met_data.append([label, val])
+        met_data.append(["Total ventas", data["total_ventas_neto"]])
+        t2 = Table(met_data, colWidths=[10 * cm, 7 * cm])
+        t2.setStyle(hdr_style)
+        elems.append(t2)
+        elems.append(Spacer(1, 4 * mm))
+
+        # Detalle de pedidos
+        if data["pedidos"]:
+            elems.append(Paragraph(f"Detalle de Ingresos ({len(data['pedidos'])} pedidos)", styles["Section"]))
+            ped_data = [["Hora", "Mesa", "Método", "Detalle", "Monto"]]
+            for p in data["pedidos"]:
+                items_p = Paragraph(p["items"][:80], styles["Normal"]) if len(p["items"]) > 40 else p["items"][:80]
+                ped_data.append([
+                    p["hora"], p["mesa"], p["metodo"],
+                    items_p, _money(p["neto"]),
+                ])
+            col_w = [2.2 * cm, 2 * cm, 3 * cm, 7 * cm, 2.8 * cm]
+            t3 = Table(ped_data, colWidths=col_w, repeatRows=1)
+            t3.setStyle(hdr_style)
+            elems.append(t3)
+            elems.append(Spacer(1, 4 * mm))
+
+        # Movimientos de caja
+        if data["movimientos"]:
+            elems.append(Paragraph("Movimientos de Caja", styles["Section"]))
+            mov_data = [["Hora", "Tipo", "Categoría", "Motivo", "Monto"]]
+            for m in data["movimientos"]:
+                mov_data.append([m["hora"], m["tipo"], m["categoria"], m["motivo"], m["monto"]])
+            t4 = Table(mov_data, colWidths=[2.2 * cm, 2 * cm, 2.5 * cm, 7.5 * cm, 2.8 * cm])
+            t4.setStyle(hdr_style)
+            elems.append(t4)
+            elems.append(Spacer(1, 4 * mm))
+
+        if data["notas"]:
+            elems.append(Paragraph(f"Notas: {data['notas']}", styles["Normal"]))
+
+        doc.build(elems)
+        from tuwayki_core.utils.timezone import utc_now_naive as _now
+        filename = f"cierre_caja_{_now().strftime('%Y%m%d_%H%M')}.pdf"
+        return rx.download(data=buf.getvalue(), filename=filename)
+
+    def _print_cierre_ticket(self, turno_id: int):
+        """Genera e imprime el ticket detallado de cierre para cualquier turno."""
+        with self._tenant_session() as session:
+            turno = session.get(TurnoCaja, turno_id)
+            if turno is None:
+                return rx.toast.error("El turno ya no existe.")
+            data = self._build_cierre_data(session, turno)
+            det_pedidos = [
+                {**p, "neto_texto": _money(p["neto"])} for p in data["pedidos"]
+            ]
+            ticket_html = generate_cash_close_ticket_html(
+                company_name=data["empresa"],
+                turno_id=turno.id or 0,
+                abierto_por=data["abierto_por"],
+                cerrado_por=data["cerrado_por"],
+                abierto_en_texto=data["abierto_en"],
+                cerrado_en_texto=data["cerrado_en"],
+                resumen_rows=[
+                    ("Fondo inicial", data["fondo_inicial"]),
+                    ("Ventas efectivo", data["total_efectivo"]),
+                    ("Ventas tarjeta", data["total_tarjeta"]),
+                    ("Ventas QR/Yape", data["total_qr"]),
+                    ("Fiado", data["total_fiado"]),
+                    ("Propinas", data["total_propinas"]),
+                    ("Otros ingresos", data["total_ingresos"]),
+                    ("Egresos", f"- {data['total_egresos']}"),
+                    ("Esperado en caja", data["esperado"]),
+                    ("Contado en caja", data["contado"]),
+                ],
+                descuadre_texto=data["descuadre_texto"],
+                notas=data["notas"],
+                paper_width_mm=self._ticket_paper_width_mm(),
+                detalle_pedidos=det_pedidos,
+                detalle_movimientos=data["movimientos"],
+            )
+        return rx.call_script(build_print_script(ticket_html))
+
+    def imprimir_resumen_cierre(self):
+        """Imprime ticket detallado del cierre del turno activo."""
+        if self.turno_activo_id == 0:
+            return rx.toast.error("No hay turno para imprimir.")
+        return self._print_cierre_ticket(self.turno_activo_id)
+
+    def reimprimir_cierre_turno(self, turno_id: int):
+        """Reimprime ticket de cierre desde el historial de turnos cerrados."""
+        return self._print_cierre_ticket(turno_id)

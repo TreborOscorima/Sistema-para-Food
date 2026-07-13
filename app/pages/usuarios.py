@@ -31,7 +31,8 @@ from app.components.shared import (
     section_card,
     surface_card,
 )
-from app.states.food_state import FoodState, UsuarioAdminView
+from app.states.food_state import UsuarioAdminView
+from app.states.usuarios_state import UsuariosAdminState
 
 
 _USR_GRID_COLS = "2fr 1fr 1fr 90px"
@@ -97,7 +98,7 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
         rx.hstack(
             rx.link(
                 "✏️ Editar",
-                on_click=FoodState.editar_usuario(u.id),
+                on_click=UsuariosAdminState.editar_usuario(u.id),
                 font_size="12px", font_weight="600", color=ACCENT,
                 cursor="pointer", _hover={"color": ACCENT_HOVER},
             ),
@@ -110,7 +111,7 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
                         rx.icon(tag="toggle_right", size=14),
                         rx.icon(tag="toggle_left", size=14),
                     ),
-                    on_click=FoodState.toggle_usuario_activo(u.id),
+                    on_click=UsuariosAdminState.toggle_usuario_activo(u.id),
                     background="transparent",
                     color=rx.cond(u.activo, SUCCESS_TEXT, TEXT_MUTED),
                     border="none", padding="0", cursor="pointer",
@@ -172,7 +173,7 @@ def _perm_toggle(
 
 def _permisos_section() -> rx.Component:
     return rx.cond(
-        FoodState.usuario_form_rol == "Admin",
+        UsuariosAdminState.usuario_form_rol == "Admin",
         rx.hstack(
             rx.icon(tag="shield_check", size=14, color=SUCCESS_TEXT),
             rx.text(
@@ -206,46 +207,46 @@ def _permisos_section() -> rx.Component:
             _perm_toggle(
                 "Aplicar descuentos",
                 "Puede ingresar descuentos al cobrar",
-                FoodState.usuario_form_perm_descuento,
-                FoodState.toggle_uf_perm_descuento,
+                UsuariosAdminState.usuario_form_perm_descuento,
+                UsuariosAdminState.toggle_uf_perm_descuento,
             ),
             _perm_toggle(
                 "Ver reportes",
                 "Acceso al módulo de reportes",
-                FoodState.usuario_form_perm_reportes,
-                FoodState.toggle_uf_perm_reportes,
+                UsuariosAdminState.usuario_form_perm_reportes,
+                UsuariosAdminState.toggle_uf_perm_reportes,
             ),
             _perm_toggle(
                 "Abrir/cerrar turno",
                 "Puede abrir y cerrar turnos de caja",
-                FoodState.usuario_form_perm_turno,
-                FoodState.toggle_uf_perm_turno,
+                UsuariosAdminState.usuario_form_perm_turno,
+                UsuariosAdminState.toggle_uf_perm_turno,
             ),
             _perm_toggle(
                 "Gestionar inventario",
                 "Puede crear insumos, registrar entradas, mermas y ajustes",
-                FoodState.usuario_form_perm_inventario,
-                FoodState.toggle_uf_perm_inventario,
+                UsuariosAdminState.usuario_form_perm_inventario,
+                UsuariosAdminState.toggle_uf_perm_inventario,
             ),
             _perm_toggle(
                 "Ver costos y márgenes",
                 "Acceso a costos de recetas y margen por plato",
-                FoodState.usuario_form_perm_costos,
-                FoodState.toggle_uf_perm_costos,
+                UsuariosAdminState.usuario_form_perm_costos,
+                UsuariosAdminState.toggle_uf_perm_costos,
             ),
             _perm_toggle(
                 "Reimprimir comprobantes",
                 "Puede reimprimir tickets de cobro",
-                FoodState.usuario_form_perm_reimprimir,
-                FoodState.toggle_uf_perm_reimprimir,
+                UsuariosAdminState.usuario_form_perm_reimprimir,
+                UsuariosAdminState.toggle_uf_perm_reimprimir,
             ),
             rx.cond(
-                FoodState.usuario_form_rol == "Caja",
+                UsuariosAdminState.usuario_form_rol == "Caja",
                 _perm_toggle(
                     "Anular pedidos",
                     "Puede anular pedidos desde Caja",
-                    FoodState.usuario_form_perm_anular,
-                    FoodState.toggle_uf_perm_anular,
+                    UsuariosAdminState.usuario_form_perm_anular,
+                    UsuariosAdminState.toggle_uf_perm_anular,
                 ),
                 rx.fragment(),
             ),
@@ -263,15 +264,15 @@ def _permisos_section() -> rx.Component:
 def _usuario_form() -> rx.Component:
     return rx.vstack(
         rx.text(
-            rx.cond(FoodState.usuario_form_es_edicion, "Editar usuario", "Nuevo usuario"),
+            rx.cond(UsuariosAdminState.usuario_form_es_edicion, "Editar usuario", "Nuevo usuario"),
             font_size="14px",
             font_weight="700",
             color=ACCENT,
         ),
         rx.input(
             placeholder="Nombre completo *",
-            value=FoodState.usuario_form_nombre,
-            on_change=FoodState.on_change_uf_nombre,
+            value=UsuariosAdminState.usuario_form_nombre,
+            on_change=UsuariosAdminState.on_change_uf_nombre,
             background="#1E293B",
             border=f"1px solid {BORDER_COLOR}",
             color=TEXT_PRIMARY,
@@ -282,9 +283,9 @@ def _usuario_form() -> rx.Component:
             width="100%",
         ),
         rx.select(
-            FoodState.roles_disponibles,
-            value=FoodState.usuario_form_rol,
-            on_change=FoodState.on_change_uf_rol,
+            UsuariosAdminState.roles_disponibles,
+            value=UsuariosAdminState.usuario_form_rol,
+            on_change=UsuariosAdminState.on_change_uf_rol,
             background="#1E293B",
             color=TEXT_PRIMARY,
             border=f"1px solid {BORDER_COLOR}",
@@ -297,12 +298,12 @@ def _usuario_form() -> rx.Component:
         rx.hstack(
             rx.input(
                 placeholder=rx.cond(
-                    FoodState.usuario_form_es_edicion,
+                    UsuariosAdminState.usuario_form_es_edicion,
                     "Nuevo PIN (dejar vacío para no cambiar)",
                     "PIN (4-6 dígitos) *",
                 ),
-                value=FoodState.usuario_form_pin,
-                on_change=FoodState.on_change_uf_pin,
+                value=UsuariosAdminState.usuario_form_pin,
+                on_change=UsuariosAdminState.on_change_uf_pin,
                 type="password",
                 max_length=6,
                 background="#1E293B",
@@ -316,8 +317,8 @@ def _usuario_form() -> rx.Component:
             ),
             rx.input(
                 placeholder="Confirmar PIN",
-                value=FoodState.usuario_form_pin_confirm,
-                on_change=FoodState.on_change_uf_pin_confirm,
+                value=UsuariosAdminState.usuario_form_pin_confirm,
+                on_change=UsuariosAdminState.on_change_uf_pin_confirm,
                 type="password",
                 max_length=6,
                 background="#1E293B",
@@ -333,27 +334,27 @@ def _usuario_form() -> rx.Component:
             width="100%",
         ),
         rx.cond(
-            FoodState.usuario_form_es_edicion,
+            UsuariosAdminState.usuario_form_es_edicion,
             rx.hstack(
                 rx.button(
                     rx.cond(
-                        FoodState.usuario_form_activo,
+                        UsuariosAdminState.usuario_form_activo,
                         "Estado: Activo",
                         "Estado: Inactivo",
                     ),
-                    on_click=FoodState.toggle_uf_activo,
+                    on_click=UsuariosAdminState.toggle_uf_activo,
                     background=rx.cond(
-                        FoodState.usuario_form_activo,
+                        UsuariosAdminState.usuario_form_activo,
                         SUCCESS_BG,
                         DANGER_BG,
                     ),
                     color=rx.cond(
-                        FoodState.usuario_form_activo,
+                        UsuariosAdminState.usuario_form_activo,
                         SUCCESS_TEXT,
                         DANGER_TEXT,
                     ),
                     border=rx.cond(
-                        FoodState.usuario_form_activo,
+                        UsuariosAdminState.usuario_form_activo,
                         f"1px solid {SUCCESS_BORDER}",
                         f"1px solid {DANGER_BORDER}",
                     ),
@@ -373,7 +374,7 @@ def _usuario_form() -> rx.Component:
         rx.hstack(
             rx.button(
                 "Cancelar",
-                on_click=FoodState.cancelar_usuario_form,
+                on_click=UsuariosAdminState.cancelar_usuario_form,
                 background=SURFACE_MUTED,
                 color=TEXT_SECONDARY,
                 border=f"1px solid {BORDER_COLOR}",
@@ -383,8 +384,8 @@ def _usuario_form() -> rx.Component:
                 _hover={"opacity": "0.85"},
             ),
             rx.button(
-                rx.cond(FoodState.usuario_form_es_edicion, "Guardar cambios", "Crear usuario"),
-                on_click=FoodState.guardar_usuario,
+                rx.cond(UsuariosAdminState.usuario_form_es_edicion, "Guardar cambios", "Crear usuario"),
+                on_click=UsuariosAdminState.guardar_usuario,
                 background=ACCENT,
                 color="#FFFFFF",
                 border_radius="8px",
@@ -456,23 +457,24 @@ def _usuarios_content() -> rx.Component:
                         rx.text("Nuevo usuario", font_size="13px", font_weight="700"),
                         spacing="1", align="center",
                     ),
-                    on_click=FoodState.nuevo_usuario_form,
+                    on_click=UsuariosAdminState.nuevo_usuario_form,
                     background=ACCENT, color="#FFFFFF", border_radius="9px",
                     padding_x="16px", padding_y="9px", cursor="pointer",
                     _hover={"background": ACCENT_HOVER},
                 ),
                 rx.dialog.content(
+                    rx.dialog.title("Usuario", visibility="hidden", height="0", margin="0", padding="0"),
                     _usuario_modal_content(),
                     background="#0F172A", border="1px solid #1E293B",
                 ),
-                open=FoodState.usuario_form_visible,
-                on_open_change=FoodState.set_usuario_form_visible,
+                open=UsuariosAdminState.usuario_form_visible,
+                on_open_change=UsuariosAdminState.set_usuario_form_visible,
             ),
             width="100%", align="center",
         ),
         _usuarios_table_header(),
         rx.cond(
-            FoodState.usuarios_admin.length() == 0,
+            UsuariosAdminState.usuarios_admin.length() == 0,
             rx.box(
                 rx.text(
                     "No hay usuarios registrados.",
@@ -486,7 +488,7 @@ def _usuarios_content() -> rx.Component:
                 width="100%",
             ),
             rx.vstack(
-                rx.foreach(FoodState.usuarios_admin, _usuario_row),
+                rx.foreach(UsuariosAdminState.usuarios_admin, _usuario_row),
                 spacing="2",
                 width="100%",
             ),
@@ -496,6 +498,6 @@ def _usuarios_content() -> rx.Component:
     )
 
 
-@rx.page(route="/usuarios", on_load=FoodState.on_load_usuarios, title="TUWAYKIFOOD | Usuarios")
+@rx.page(route="/usuarios", on_load=UsuariosAdminState.on_load_usuarios, title="TUWAYKIFOOD | Usuarios")
 def usuarios_page() -> rx.Component:
     return app_shell(_usuarios_content(), page_key="usuarios")

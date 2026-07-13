@@ -275,6 +275,8 @@ def generate_cash_close_ticket_html(
     notas: str = "",
     paper_width_mm: int = 80,
     width: int = 0,
+    detalle_pedidos: list[dict] | None = None,
+    detalle_movimientos: list[dict] | None = None,
 ) -> str:
     """Ticket de cierre de turno de caja (arqueo) para impresora térmica."""
     if width == 0:
@@ -294,6 +296,31 @@ def generate_cash_close_ticket_html(
         lines.append(_row(etiqueta, monto, width))
     lines.append(_line(width))
     lines.append(_row("DESCUADRE", descuadre_texto, width))
+
+    if detalle_pedidos:
+        lines.append("")
+        lines.append(_center("DETALLE DE VENTAS", width))
+        lines.append(_line(width))
+        for p in detalle_pedidos:
+            lines.append(f"{p.get('hora', '')}  {p.get('mesa', '')}")
+            lines.append(f"Metodo: {p.get('metodo', '')}")
+            items = p.get("items", "")
+            if items:
+                for item_line in _wrap(f"  {items}", width):
+                    lines.append(item_line)
+            lines.append(_row("Total:", p.get("neto_texto", ""), width))
+            lines.append(_line(width))
+
+    if detalle_movimientos:
+        lines.append("")
+        lines.append(_center("MOVIMIENTOS DE CAJA", width))
+        lines.append(_line(width))
+        for m in detalle_movimientos:
+            lines.append(f"{m.get('hora', '')} {m.get('tipo', '')}")
+            lines.append(f"  {m.get('categoria', '')}: {m.get('motivo', '')}")
+            lines.append(_row("Monto:", m.get("monto", ""), width))
+            lines.append(_line(width))
+
     if notas:
         lines.append("")
         for note_line in _wrap(f"Notas: {notas}", width):
@@ -322,10 +349,6 @@ def build_print_script(html_content: str) -> str:
         var w = window.open(url, '_blank');
         if (!w) {{ URL.revokeObjectURL(url); return; }}
         w.focus();
-        w.addEventListener('afterprint', function() {{
-            w.close();
-            URL.revokeObjectURL(url);
-        }});
         function doPrint() {{
             setTimeout(function() {{ w.print(); }}, 400);
         }}
