@@ -4150,9 +4150,9 @@ class FoodState(
         ]
         for a in alertas_stock:
             if a["agotado"]:
-                toasts.append(rx.toast(f"⚠️ {a['nombre']} AGOTADO — marcado como 86", variant="warning", duration=6000))
+                toasts.append(rx.toast.warning(f"⚠️ {a['nombre']} AGOTADO — marcado como 86", duration=6000))
             else:
-                toasts.append(rx.toast(f"⚠️ {a['nombre']}: quedan {a['restante']} unidades", variant="warning", duration=5000))
+                toasts.append(rx.toast.warning(f"⚠️ {a['nombre']}: quedan {a['restante']} unidades", duration=5000))
         return toasts
 
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
@@ -5774,9 +5774,9 @@ class FoodState(
         toasts: list = [rx.toast.success(f"Pedido #{pedido_id} enviado a cocina")]
         for a in alertas_stock:
             if a["agotado"]:
-                toasts.append(rx.toast(f"⚠️ {a['nombre']} AGOTADO — marcado como 86", variant="warning", duration=6000))
+                toasts.append(rx.toast.warning(f"⚠️ {a['nombre']} AGOTADO — marcado como 86", duration=6000))
             else:
-                toasts.append(rx.toast(f"⚠️ {a['nombre']}: quedan {a['restante']} unidades", variant="warning", duration=5000))
+                toasts.append(rx.toast.warning(f"⚠️ {a['nombre']}: quedan {a['restante']} unidades", duration=5000))
         return toasts
 
     def cargar_pedidos_mostrador_pendientes(self) -> None:

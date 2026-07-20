@@ -1171,7 +1171,7 @@ class CartaMixin(rx.State, mixin=True):
         self.cargar_menu()
         if nuevo_estado:
             return rx.toast.success(f"{nombre} disponible nuevamente")
-        return rx.toast(f"{nombre} marcado como agotado (86)", variant="warning")
+        return rx.toast.warning(f"{nombre} marcado como agotado (86)")
 
     def _reset_producto_form(self) -> None:
         self.producto_form_id = 0
