@@ -16,8 +16,11 @@ FoodState provee en runtime: ``_tenant_session()``, ``_company_id()``,
 from __future__ import annotations
 
 import json as _json
+import logging
 import pathlib
 import uuid
+
+_log = logging.getLogger(__name__)
 
 from app.utils.image import optimize_image
 from decimal import Decimal
@@ -1200,10 +1203,11 @@ class CartaMixin(rx.State, mixin=True):
                 upload_dir.mkdir(parents=True, exist_ok=True)
                 (upload_dir / filename).write_bytes(data)
                 self.producto_form_imagen_url = f"{_FOOD_API_URL}/_upload/food_productos/{filename}"
-            except Exception:
+            except Exception as exc:
+                _log.exception("handle_upload_imagen_producto failed: %s", exc)
                 return rx.toast.error(
-                    "Error al subir la imagen. Verifique permisos del servidor.",
-                    duration=5000,
+                    f"Error al subir la imagen: {exc}",
+                    duration=8000,
                 )
             break
 

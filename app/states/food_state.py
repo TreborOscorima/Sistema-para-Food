@@ -2893,10 +2893,12 @@ class FoodState(
                 upload_dir.mkdir(parents=True, exist_ok=True)
                 (upload_dir / filename).write_bytes(data)
                 self.config_logo_url = f"{_FOOD_API_URL}/_upload/food_empresas/{filename}"
-            except Exception:
+            except Exception as exc:
+                import logging as _logging
+                _logging.getLogger(__name__).exception("handle_upload_logo_empresa failed: %s", exc)
                 return rx.toast.error(
-                    "Error al subir la imagen. Verifique permisos del servidor.",
-                    duration=5000,
+                    f"Error al subir logo: {exc}",
+                    duration=8000,
                 )
             break
 
