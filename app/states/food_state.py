@@ -72,6 +72,7 @@ from app.services.analitica_service import (
     ventas_por_mozo,
 )
 from app.services.auditoria_service import registrar_auditoria
+from app.utils.image import optimize_image
 from app.services.anulacion_service import (
     anular_pedido_abierto,
     anular_venta_cobrada,
@@ -2840,7 +2841,7 @@ class FoodState(
                 data = await file.read()
                 if len(data) > 5 * 1024 * 1024:
                     return rx.toast.error("La imagen excede 5 MB.", duration=4000)
-                ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
+                data, ext = optimize_image(data)
                 filename = f"food_logo_{uuid.uuid4().hex[:12]}{ext}"
                 upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_empresas"
                 upload_dir.mkdir(parents=True, exist_ok=True)

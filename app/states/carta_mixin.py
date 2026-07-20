@@ -18,6 +18,8 @@ from __future__ import annotations
 import json as _json
 import pathlib
 import uuid
+
+from app.utils.image import optimize_image
 from decimal import Decimal
 
 import reflex as rx
@@ -1169,7 +1171,7 @@ class CartaMixin(rx.State, mixin=True):
                 data = await file.read()
                 if len(data) > 5 * 1024 * 1024:
                     return rx.toast.error("La imagen excede 5 MB.", duration=4000)
-                ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
+                data, ext = optimize_image(data)
                 filename = f"food_prod_{uuid.uuid4().hex[:12]}{ext}"
                 upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_productos"
                 upload_dir.mkdir(parents=True, exist_ok=True)
