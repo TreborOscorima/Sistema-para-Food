@@ -50,7 +50,7 @@ WORKDIR /app
 
 RUN groupadd --system --gid 1000 app \
     && useradd --system --uid 1000 --gid app --no-create-home --shell /sbin/nologin app \
-    && mkdir -p /app/.web \
+    && mkdir -p /app/.web /app/uploaded_files/food_productos /app/uploaded_files/food_empresas \
     && chown -R app:app /app
 
 COPY --chown=app:app . .

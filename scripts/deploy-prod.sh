@@ -157,6 +157,11 @@ fi
 info "Levantando stack (prod + NPM)..."
 docker compose up -d --remove-orphans
 
+# ─── 3b. Permisos de volumen de uploads ──────────────────────────────────────
+info "Asegurando permisos de uploaded_files..."
+docker compose exec -T -u root "$SERVICE" chown -R app:app /app/uploaded_files 2>/dev/null && \
+    ok "Permisos de uploads OK" || warn "No se pudieron ajustar permisos de uploads"
+
 # ─── 4. Esperar healthy ─────────────────────────────────────────────────────
 info "Esperando healthy de $SERVICE (máx $((HEALTH_WAIT_MAX * 15 / 60)) min)..."
 all_healthy=false
