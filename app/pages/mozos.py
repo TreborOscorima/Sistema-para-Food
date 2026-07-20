@@ -391,11 +391,28 @@ def _producto_card_compact(producto: ProductoView) -> rx.Component:
                         color=TEXT_PRIMARY,
                         no_of_lines=1,
                     ),
-                    rx.text(
-                        producto.precio_texto,
-                        font_size="12px",
-                        font_weight="700",
-                        color=ACCENT,
+                    rx.hstack(
+                        rx.text(
+                            producto.precio_texto,
+                            font_size="12px",
+                            font_weight="700",
+                            color=ACCENT,
+                        ),
+                        rx.cond(
+                            producto.stock_diario >= 0,
+                            rx.badge(
+                                "Stock: " + producto.stock_diario.to_string(),
+                                variant="surface",
+                                size="1",
+                                color_scheme=rx.cond(
+                                    producto.stock_diario > producto.stock_diario_alerta,
+                                    "blue",
+                                    rx.cond(producto.stock_diario > 0, "orange", "red"),
+                                ),
+                            ),
+                        ),
+                        spacing="2",
+                        align="center",
                     ),
                     spacing="0",
                     align="start",

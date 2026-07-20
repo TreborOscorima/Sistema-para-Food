@@ -1253,6 +1253,40 @@ def _descontar_stock_diario(
     return alertas
 
 
+def _reponer_stock_diario(session, pedido_id: int, company_id: int) -> None:
+    """Repone stock_diario de productos al anular un pedido."""
+    detalles = session.exec(
+        select(DetallePedido).where(
+            DetallePedido.pedido_id == pedido_id,
+            DetallePedido.impreso_cocina.is_(True),
+        )
+    ).all()
+    if not detalles:
+        return
+    uso: dict[int, int] = {}
+    for d in detalles:
+        uso[d.producto_id] = uso.get(d.producto_id, 0) + d.cantidad
+    productos = {
+        p.id: p
+        for p in session.exec(
+            select(Producto).where(
+                Producto.company_id == company_id,
+                Producto.id.in_(list(uso.keys())),
+                Producto.stock_diario.isnot(None),
+            )
+        ).all()
+    }
+    for pid, cant in uso.items():
+        prod = productos.get(pid)
+        if prod is None:
+            continue
+        prod.stock_diario = (prod.stock_diario or 0) + cant
+        if not prod.disponible and prod.stock_diario > 0:
+            prod.disponible = True
+        prod.updated_at = _utcnow()
+        session.add(prod)
+
+
 def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> None:
     """Descuenta stock de insumos según las recetas de los ítems del pedido."""
     detalles = session.exec(
@@ -4998,6 +5032,7 @@ class FoodState(
                     self.anulacion_error = "El pedido ya no existe."
                     return
                 usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
+                _reponer_stock_diario(session, pedido.id or 0, pedido.company_id)
                 if self.anulacion_es_venta:
                     fiado_revertido = anular_venta_cobrada(
                         session, pedido, usuario_id, self.anulacion_motivo
@@ -5011,6 +5046,7 @@ class FoodState(
         referencia = self.anulacion_referencia
         es_venta = self.anulacion_es_venta
         self.cancelar_anulacion()
+        self.cargar_menu()
         if self.caja_cobro_mesa_id:
             self.cancelar_cobro()
         self.cargar_mesas()
@@ -5079,6 +5115,7 @@ class FoodState(
                     self.reversion_error = "Solo se pueden anular cobros del turno actual."
                     return
                 usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
+                _reponer_stock_diario(session, pedido.id or 0, pedido.company_id)
                 fiado_revertido = anular_venta_cobrada(
                     session, pedido, usuario_id, motivo
                 )
@@ -5087,6 +5124,7 @@ class FoodState(
             self.reversion_error = str(exc)
             return
         self.cancelar_reversion()
+        self.cargar_menu()
         self.cargar_mesas()
         self.cargar_cocina()
         self.cargar_ultimos_cobros()
@@ -5520,6 +5558,7 @@ class FoodState(
                     ))
                 cliente = pedido.nombre_cliente or ""
                 usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
+                _reponer_stock_diario(session, pedido.id or 0, pedido.company_id)
                 anular_pedido_abierto(session, pedido, usuario_id, "Re-edición desde Caja")
                 session.commit()
         except ValueError as exc:
@@ -5527,6 +5566,7 @@ class FoodState(
         self.mostrador_carrito = carrito
         self.mostrador_cliente_nombre = cliente
         self.cancelar_cobro()
+        self.cargar_menu()
         self.cargar_pedidos_mostrador_pendientes()
         return [rx.toast.success(f"Pedido #{pedido_id} cargado en Mostrador para edición."), rx.redirect("/mostrador")]
 
