@@ -187,8 +187,16 @@ docker exec "$SERVICE" curl -sf http://localhost:3000/api/ping >/dev/null \
     || fail "Ping falló en $SERVICE"
 ok "Ping OK: $SERVICE"
 
-# ─── 6. NPM + health externo ──────────────────────────────────────────────────
+# ─── 6. NPM: upload size + restart ───────────────────────────────────────────
 if ! $SKIP_NPM; then
+    # Configurar client_max_body_size si hay credenciales NPM
+    if [[ -f "$APP_DIR/.env" ]]; then
+        set -a; source "$APP_DIR/.env" 2>/dev/null || true; set +a
+    fi
+    if [[ -n "${NPM_EMAIL:-}" && -n "${NPM_PASSWORD:-}" ]]; then
+        bash "$APP_DIR/scripts/configure-npm-upload.sh" || warn "Config NPM upload falló — continuando"
+    fi
+
     NPM_CONTAINER="$(docker ps --format '{{.Names}}' | grep -iE 'nginx-proxy-manager|npm' | head -1 || true)"
     if [[ -n "$NPM_CONTAINER" ]]; then
         info "Reiniciando proxy: $NPM_CONTAINER"

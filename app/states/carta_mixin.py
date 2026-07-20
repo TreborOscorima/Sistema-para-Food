@@ -1165,14 +1165,22 @@ class CartaMixin(rx.State, mixin=True):
 
     async def handle_upload_imagen_producto(self, files: list[rx.UploadFile]) -> None:
         for file in files:
-            data = await file.read()
-            ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
-            filename = f"food_prod_{uuid.uuid4().hex[:12]}{ext}"
-            upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_productos"
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            (upload_dir / filename).write_bytes(data)
-            self.producto_form_imagen_url = f"{_FOOD_API_URL}/_upload/food_productos/{filename}"
-            break  # solo primera imagen
+            try:
+                data = await file.read()
+                if len(data) > 5 * 1024 * 1024:
+                    return rx.toast.error("La imagen excede 5 MB.", duration=4000)
+                ext = pathlib.Path(file.name).suffix.lower() or ".jpg"
+                filename = f"food_prod_{uuid.uuid4().hex[:12]}{ext}"
+                upload_dir = pathlib.Path(rx.get_upload_dir()) / "food_productos"
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                (upload_dir / filename).write_bytes(data)
+                self.producto_form_imagen_url = f"{_FOOD_API_URL}/_upload/food_productos/{filename}"
+            except Exception:
+                return rx.toast.error(
+                    "Error al subir la imagen. Verifique permisos del servidor.",
+                    duration=5000,
+                )
+            break
 
     def quitar_imagen_producto(self) -> None:
         self.producto_form_imagen_url = ""

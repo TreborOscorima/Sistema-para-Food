@@ -65,13 +65,22 @@ else
     warn "Migraciones saltadas (SKIP_MIGRATE=true)"
 fi
 
-# ─── 3. Pre-init Reflex ─────────────────────────────────────────────────────
+# ─── 3. Directorios de upload ──────────────────────────────────────────────
+info "Preparando directorios de upload..."
+mkdir -p /app/uploaded_files/food_productos /app/uploaded_files/food_empresas 2>/dev/null || true
+if [ -w /app/uploaded_files ]; then
+    ok "Directorio de uploads OK (writable)"
+else
+    warn "uploaded_files NO es escribible — las subidas de imágenes fallarán"
+fi
+
+# ─── 4. Pre-init Reflex ─────────────────────────────────────────────────────
 info "Limpiando frontend para recompilación limpia..."
 rm -rf /app/.web 2>/dev/null || true
 
 info "Pre-inicializando frontend (reflex init)..."
 reflex init 2>&1 | tail -3 && ok "reflex init OK" || warn "reflex init con error — continuando"
 
-# ─── 4. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
+# ─── 5. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
 info "Iniciando Reflex: $*"
 exec "$@"
