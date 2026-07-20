@@ -18,28 +18,38 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _column_exists(table: str, column: str) -> bool:
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_name = :table AND column_name = :col"
+        ),
+        {"table": table, "col": column},
+    )
+    return result.scalar() > 0
+
+
 def upgrade() -> None:
-    op.add_column(
-        "food_usuarios",
-        sa.Column("acceso_mozos", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-    )
-    op.add_column(
-        "food_usuarios",
-        sa.Column("acceso_caja", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-    )
-    op.add_column(
-        "food_usuarios",
-        sa.Column("acceso_cocina", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-    )
-    op.add_column(
-        "food_usuarios",
-        sa.Column("acceso_mostrador", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-    )
-    op.execute("UPDATE food_usuarios SET acceso_mozos=1 WHERE rol='Mozo'")
-    op.execute("UPDATE food_usuarios SET acceso_caja=1, acceso_mostrador=1 WHERE rol='Caja'")
-    op.execute("UPDATE food_usuarios SET acceso_cocina=1 WHERE rol='Cocina'")
+    cols = [
+        ("acceso_mozos", sa.Boolean(), sa.text("0")),
+        ("acceso_caja", sa.Boolean(), sa.text("0")),
+        ("acceso_cocina", sa.Boolean(), sa.text("0")),
+        ("acceso_mostrador", sa.Boolean(), sa.text("0")),
+    ]
+    for name, type_, default in cols:
+        if not _column_exists("food_usuarios", name):
+            op.add_column(
+                "food_usuarios",
+                sa.Column(name, type_, nullable=False, server_default=default),
+            )
+
+    op.execute("UPDATE food_usuarios SET acceso_mozos=1 WHERE rol='Mozo' AND acceso_mozos=0")
+    op.execute("UPDATE food_usuarios SET acceso_caja=1, acceso_mostrador=1 WHERE rol='Caja' AND acceso_caja=0")
+    op.execute("UPDATE food_usuarios SET acceso_cocina=1 WHERE rol='Cocina' AND acceso_cocina=0")
     op.execute(
-        "UPDATE food_usuarios SET acceso_mozos=1, acceso_caja=1, acceso_cocina=1, acceso_mostrador=1 WHERE rol='Admin'"
+        "UPDATE food_usuarios SET acceso_mozos=1, acceso_caja=1, acceso_cocina=1, acceso_mostrador=1 "
+        "WHERE rol='Admin' AND acceso_mozos=0"
     )
 
 
