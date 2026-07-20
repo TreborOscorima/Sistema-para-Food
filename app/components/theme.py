@@ -61,22 +61,32 @@ TEXT_WHITE        = "#FFFFFF"
 # ─── Semantic: success (dark) ───────────────────────────────────────────────
 SUCCESS_BG       = "rgba(34,197,94,0.10)"
 SUCCESS_TEXT     = "#4ADE80"
+SUCCESS_SOLID    = "#22C55E"
+SUCCESS_DARK     = "#16A34A"
 SUCCESS_BORDER   = "rgba(34,197,94,0.25)"
 
 # ─── Semantic: danger (dark) ────────────────────────────────────────────────
 DANGER_BG        = "rgba(239,68,68,0.10)"
 DANGER_TEXT      = "#F87171"
+DANGER_SOLID     = "#DC2626"
+DANGER_ICON      = "#EF4444"
 DANGER_BORDER    = "rgba(239,68,68,0.25)"
 
 # ─── Semantic: warning (dark) ───────────────────────────────────────────────
 WARNING_BG       = "rgba(245,158,11,0.10)"
 WARNING_TEXT     = "#FBBF24"
+WARNING_SOLID    = "#F59E0B"
 WARNING_BORDER   = "rgba(245,158,11,0.25)"
 
 # ─── Semantic: info (dark) ──────────────────────────────────────────────────
 INFO_BG          = "rgba(59,130,246,0.10)"
 INFO_TEXT         = "#60A5FA"
+INFO_SOLID       = "#3B82F6"
 INFO_BORDER      = "rgba(59,130,246,0.25)"
+
+# ─── Semantic: purple (roles, features) ────────────────────────────────────
+PURPLE           = "#7C3AED"
+PURPLE_LIGHT     = "#A78BFA"
 
 # ─── Shadows ─────────────────────────────────────────────────────────────────
 GLOW             = "0 1px 3px rgba(0,0,0,0.3),0 1px 2px rgba(0,0,0,0.2)"

@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.shared import anulacion_modal, app_shell, loading_placeholder
+from app.components.shared import (
+    anulacion_modal, app_shell, loading_placeholder,
+    ACCENT, ACCENT_HOVER,
+    DANGER_SOLID,
+    DARK_700, DARK_800,
+    PAGE_BACKGROUND,
+    SUCCESS_SOLID,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
+    WARNING_SOLID,
+)
 from app.states.food_state import (
     AnulacionView,
     DescuentoRankView,
@@ -51,14 +60,14 @@ def _kpi_card(label: str, value, icon: str, accent: str, bg: str, border: str) -
                 ),
                 rx.spacer(),
             ),
-            rx.text(value, font_size="22px", font_weight="800", color="#F1F5F9", line_height="1"),
-            rx.text(label, font_size="11px", font_weight="600", color="#94A3B8",
+            rx.text(value, font_size="22px", font_weight="800", color=TEXT_PRIMARY, line_height="1"),
+            rx.text(label, font_size="11px", font_weight="600", color=TEXT_MUTED,
                     text_transform="uppercase", letter_spacing="0.06em"),
             spacing="2",
             align="start",
             width="100%",
         ),
-        background="#1E293B",
+        background=DARK_800,
         border=f"1px solid {border}",
         border_radius="12px",
         padding="14px 16px",
@@ -73,7 +82,7 @@ def _top_plato_row(plato: TopPlatoView, idx: int) -> rx.Component:
         rx.box(
             rx.text(
                 (idx + 1).to_string(),
-                font_size="11px", font_weight="700", color="#EA580C",
+                font_size="11px", font_weight="700", color=ACCENT,
             ),
             width="22px",
             height="22px",
@@ -90,7 +99,7 @@ def _top_plato_row(plato: TopPlatoView, idx: int) -> rx.Component:
         rx.badge(
             plato.cantidad.to_string() + " uds",
             background="rgba(234,88,12,0.08)",
-            color="#EA580C",
+            color=ACCENT,
             border_radius="5px",
             font_size="10px",
             font_weight="700",
@@ -98,15 +107,15 @@ def _top_plato_row(plato: TopPlatoView, idx: int) -> rx.Component:
             flex_shrink="0",
         ),
         rx.text(plato.total_texto, font_size="13px", font_weight="700",
-                color="#22C55E", min_width="72px", text_align="right", flex_shrink="0"),
+                color=SUCCESS_SOLID, min_width="72px", text_align="right", flex_shrink="0"),
         width="100%",
         align="center",
         padding="8px 10px",
-        background="#1E293B",
+        background=DARK_800,
         border_radius="8px",
-        border="1px solid #1E293B",
+        border=f"1px solid {DARK_800}",
         gap="8px",
-        _hover={"background": "#334155"},
+        _hover={"background": DARK_700},
     )
 
 
@@ -138,22 +147,22 @@ def _metodo_badge(metodo: str) -> rx.Component:
 
 def _mozo_row(m) -> rx.Component:
     return rx.hstack(
-        rx.text(m.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
-        rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color="#94A3B8",
+        rx.text(m.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY, flex="1"),
+        rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color=TEXT_MUTED,
                 min_width="52px", text_align="right"),
         rx.vstack(
             rx.text(m.total_texto, font_size="13px", font_weight="800",
-                    color="#22C55E", text_align="right"),
+                    color=SUCCESS_SOLID, text_align="right"),
             rx.cond(
                 m.propinas_texto != "",
                 rx.text("prop. " + m.propinas_texto, font_size="10px",
-                        color="#F59E0B", text_align="right"),
+                        color=WARNING_SOLID, text_align="right"),
                 rx.fragment(),
             ),
             spacing="0", align="end", min_width="90px",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -161,13 +170,13 @@ def _propina_row(m) -> rx.Component:
     return rx.cond(
         m.propinas > 0,
         rx.hstack(
-            rx.text(m.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
-            rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color="#94A3B8",
+            rx.text(m.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY, flex="1"),
+            rx.text(m.pedidos.to_string() + " ped.", font_size="12px", color=TEXT_MUTED,
                     min_width="52px", text_align="right"),
             rx.text(m.propinas_texto, font_size="14px", font_weight="800",
-                    color="#F59E0B", text_align="right", min_width="80px"),
+                    color=WARNING_SOLID, text_align="right", min_width="80px"),
             width="100%", align="center", gap="8px",
-            padding="8px 4px", border_bottom="1px solid #334155",
+            padding="8px 4px", border_bottom=f"1px solid {DARK_700}",
         ),
         rx.fragment(),
     )
@@ -189,7 +198,7 @@ def _ventas_hora_chart() -> rx.Component:
                 content_style={"fontSize": "12px", "borderRadius": "8px"},
             ),
             rx.recharts.bar(
-                data_key="total", fill="#EA580C", radius=[4, 4, 0, 0],
+                data_key="total", fill=ACCENT, radius=[4, 4, 0, 0],
                 name="Total (S/)",
             ),
             rx.recharts.bar(
@@ -220,7 +229,7 @@ def _ventas_mozo_chart() -> rx.Component:
                 content_style={"fontSize": "12px", "borderRadius": "8px"},
             ),
             rx.recharts.bar(
-                data_key="total", fill="#EA580C", radius=[4, 4, 0, 0],
+                data_key="total", fill=ACCENT, radius=[4, 4, 0, 0],
                 name="Total (S/)",
             ),
             rx.recharts.bar(
@@ -236,12 +245,12 @@ def _ventas_mozo_chart() -> rx.Component:
 
 def _margen_row(p) -> rx.Component:
     return rx.hstack(
-        rx.text(p.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1",
+        rx.text(p.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY, flex="1",
                 min_width="0", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
-        rx.text("P " + p.precio_texto, font_size="12px", color="#94A3B8",
+        rx.text("P " + p.precio_texto, font_size="12px", color=TEXT_MUTED,
                 min_width="86px", text_align="right",
                 display=rx.breakpoints(initial="none", sm="block")),
-        rx.text("C " + p.costo_texto, font_size="12px", color="#94A3B8",
+        rx.text("C " + p.costo_texto, font_size="12px", color=TEXT_MUTED,
                 min_width="86px", text_align="right",
                 display=rx.breakpoints(initial="none", sm="block")),
         rx.text(p.margen_texto, font_size="13px", font_weight="700", color="#CBD5E1",
@@ -249,19 +258,19 @@ def _margen_row(p) -> rx.Component:
         rx.hstack(
             rx.badge(
                 p.margen_pct_texto,
-                background="#1E293B", color=p.color,
+                background=DARK_800, color=p.color,
                 border="1.5px solid", border_color=p.color,
                 border_radius="8px", font_size="11px", font_weight="800",
             ),
             rx.cond(
                 p.costo_completo,
                 rx.fragment(),
-                rx.text("costos incompletos", font_size="10px", color="#94A3B8"),
+                rx.text("costos incompletos", font_size="10px", color=TEXT_MUTED),
             ),
             spacing="1", align="center", min_width="70px", justify="end",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -270,7 +279,7 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         rx.text(
             "#" + venta.pedido_id.to_string(),
             font_size="11px",
-            color="#94A3B8",
+            color=TEXT_MUTED,
             min_width="36px",
             flex_shrink="0",
         ),
@@ -289,13 +298,13 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         _metodo_badge(venta.metodo_pago),
         rx.text(
             venta.mozo_nombre,
-            font_size="12px", color="#94A3B8",
+            font_size="12px", color=TEXT_MUTED,
             min_width="72px", text_align="center", flex_shrink="0",
             display=rx.breakpoints(initial="none", sm="block"),
         ),
         rx.text(
             venta.cajero_nombre,
-            font_size="12px", color="#94A3B8",
+            font_size="12px", color=TEXT_MUTED,
             min_width="72px", text_align="center", flex_shrink="0",
             display=rx.breakpoints(initial="none", lg="block"),
         ),
@@ -307,16 +316,16 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
                     border_radius="6px", font_size="10px", font_weight="800",
                 ),
                 rx.text(venta.total_con_propina_texto, font_size="13px", font_weight="700",
-                        color="#22C55E", text_align="right"),
+                        color=SUCCESS_SOLID, text_align="right"),
             ),
             rx.cond(
                 venta.anulada,
-                rx.text(venta.total_con_propina_texto, font_size="10px", color="#94A3B8",
+                rx.text(venta.total_con_propina_texto, font_size="10px", color=TEXT_MUTED,
                         text_decoration="line-through", text_align="right"),
                 rx.cond(
                     venta.propina > 0,
                     rx.text("+ " + venta.propina_texto + " prop.",
-                            font_size="10px", color="#F59E0B", text_align="right"),
+                            font_size="10px", color=WARNING_SOLID, text_align="right"),
                     rx.fragment(),
                 ),
             ),
@@ -341,14 +350,14 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
         width="100%",
         align="center",
         padding="10px 12px",
-        background="#1E293B",
+        background=DARK_800,
         border_radius="8px",
-        border="1px solid #334155",
+        border=f"1px solid {DARK_700}",
         gap="8px",
         cursor="pointer",
         opacity=rx.cond(venta.anulada, "0.75", "1"),
         on_click=ReportesState.abrir_detalle_venta(venta.pedido_id),
-        _hover={"background": "#334155"},
+        _hover={"background": DARK_700},
     )
 
 
@@ -356,20 +365,20 @@ def _venta_detalle_item_row(item: VentaDetalleItemView) -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.text(item.cantidad.to_string() + "x", font_size="12px",
-                     color="#94A3B8", min_width="26px", flex_shrink="0"),
-            rx.text(item.nombre, font_size="13px", color="#F1F5F9", flex="1"),
+                     color=TEXT_MUTED, min_width="26px", flex_shrink="0"),
+            rx.text(item.nombre, font_size="13px", color=TEXT_PRIMARY, flex="1"),
             rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
-                     color="#F1F5F9", flex_shrink="0"),
+                     color=TEXT_PRIMARY, flex_shrink="0"),
             width="100%", align="center", gap="8px",
         ),
         rx.cond(
             item.notas != "",
-            rx.text("Nota: " + item.notas, font_size="11px", color="#94A3B8",
+            rx.text("Nota: " + item.notas, font_size="11px", color=TEXT_MUTED,
                      padding_left="34px"),
             rx.fragment(),
         ),
         spacing="1", width="100%", padding="8px 0",
-        border_bottom="1px solid #1E293B",
+        border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -380,49 +389,49 @@ def _venta_detalle_modal() -> rx.Component:
                 rx.hstack(
                     rx.vstack(
                         rx.dialog.title("Pedido #" + ReportesState.venta_detalle_pedido_id.to_string(),
-                                font_size="16px", font_weight="800", color="#F1F5F9", margin="0"),
-                        rx.text(ReportesState.venta_detalle_mesa_label, font_size="13px", color="#94A3B8"),
+                                font_size="16px", font_weight="800", color=TEXT_PRIMARY, margin="0"),
+                        rx.text(ReportesState.venta_detalle_mesa_label, font_size="13px", color=TEXT_MUTED),
                         spacing="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(
-                        rx.icon(tag="x", size=16, color="#94A3B8", cursor="pointer"),
+                        rx.icon(tag="x", size=16, color=TEXT_MUTED, cursor="pointer"),
                     ),
                     width="100%", align="start",
                 ),
                 rx.hstack(
                     _metodo_badge(ReportesState.venta_detalle_metodo),
-                    rx.text("Mozo: " + ReportesState.venta_detalle_mozo, font_size="12px", color="#94A3B8"),
-                    rx.text("Cajero: " + ReportesState.venta_detalle_cajero, font_size="12px", color="#94A3B8"),
+                    rx.text("Mozo: " + ReportesState.venta_detalle_mozo, font_size="12px", color=TEXT_MUTED),
+                    rx.text("Cajero: " + ReportesState.venta_detalle_cajero, font_size="12px", color=TEXT_MUTED),
                     spacing="3", align="center", wrap="wrap",
                 ),
-                rx.box(height="1px", width="100%", background="#334155"),
+                rx.box(height="1px", width="100%", background=DARK_700),
                 rx.vstack(
                     rx.foreach(ReportesState.venta_detalle_items, _venta_detalle_item_row),
                     spacing="0", width="100%", max_height="280px", overflow_y="auto",
                 ),
-                rx.box(height="1px", width="100%", background="#334155"),
+                rx.box(height="1px", width="100%", background=DARK_700),
                 rx.hstack(
                     rx.vstack(
-                        rx.text("Total", font_size="14px", font_weight="700", color="#F1F5F9"),
+                        rx.text("Total", font_size="14px", font_weight="700", color=TEXT_PRIMARY),
                         rx.cond(
                             ReportesState.venta_detalle_propina_texto != "",
                             rx.text("Incluye propina " + ReportesState.venta_detalle_propina_texto,
-                                     font_size="11px", color="#F59E0B"),
+                                     font_size="11px", color=WARNING_SOLID),
                             rx.fragment(),
                         ),
                         spacing="0",
                     ),
                     rx.spacer(),
                     rx.text(ReportesState.venta_detalle_total_texto, font_size="18px",
-                             font_weight="800", color="#22C55E"),
+                             font_weight="800", color=SUCCESS_SOLID),
                     width="100%", align="center",
                 ),
                 spacing="3", width="100%",
             ),
             max_width="420px",
-            background="#0F172A",
-            border="1px solid #1E293B",
+            background=PAGE_BACKGROUND,
+            border=f"1px solid {DARK_800}",
         ),
         open=ReportesState.venta_detalle_visible,
         on_open_change=ReportesState.set_venta_detalle_visible,
@@ -435,14 +444,14 @@ def _filtros_bar() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.icon(tag="filter", size=14, color="#94A3B8"),
+                rx.icon(tag="filter", size=14, color=TEXT_MUTED),
                 rx.text("Filtros", font_size="13px", font_weight="700", color="#CBD5E1"),
                 rx.cond(
                     ReportesState.historial_filtro_activo,
                     rx.badge(
                         "Activo",
                         background="rgba(234,88,12,0.08)",
-                        color="#EA580C",
+                        color=ACCENT,
                         border_radius="5px",
                         font_size="10px",
                         font_weight="700",
@@ -456,14 +465,14 @@ def _filtros_bar() -> rx.Component:
             rx.grid(
                 # Fecha desde
                 rx.vstack(
-                    rx.text("Desde", font_size="11px", font_weight="600", color="#94A3B8"),
+                    rx.text("Desde", font_size="11px", font_weight="600", color=TEXT_MUTED),
                     rx.input(
                         value=ReportesState.historial_filtro_fecha_desde,
                         on_change=ReportesState.set_historial_filtro_fecha_desde,
                         type="date",
-                        background="#1E293B",
-                        border="1px solid #334155",
-                        color="#F1F5F9",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
+                        color=TEXT_PRIMARY,
                         border_radius="8px",
                         padding_x="10px",
                         padding_y="7px",
@@ -476,14 +485,14 @@ def _filtros_bar() -> rx.Component:
                 ),
                 # Fecha hasta
                 rx.vstack(
-                    rx.text("Hasta", font_size="11px", font_weight="600", color="#94A3B8"),
+                    rx.text("Hasta", font_size="11px", font_weight="600", color=TEXT_MUTED),
                     rx.input(
                         value=ReportesState.historial_filtro_fecha_hasta,
                         on_change=ReportesState.set_historial_filtro_fecha_hasta,
                         type="date",
-                        background="#1E293B",
-                        border="1px solid #334155",
-                        color="#F1F5F9",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
+                        color=TEXT_PRIMARY,
                         border_radius="8px",
                         padding_x="10px",
                         padding_y="7px",
@@ -496,7 +505,7 @@ def _filtros_bar() -> rx.Component:
                 ),
                 # Método de pago
                 rx.vstack(
-                    rx.text("Método", font_size="11px", font_weight="600", color="#94A3B8"),
+                    rx.text("Método", font_size="11px", font_weight="600", color=TEXT_MUTED),
                     rx.select(
                         [label for _, label in _METODOS_FILTRO],
                         value=rx.cond(
@@ -522,9 +531,9 @@ def _filtros_bar() -> rx.Component:
                             rx.cond(v == "QR / Yape", "qr",
                             rx.cond(v == "Fiado / CC", "fiado", "mixto")))))
                         ),
-                        background="#1E293B",
-                        border="1px solid #334155",
-                        color="#F1F5F9",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
+                        color=TEXT_PRIMARY,
                         border_radius="8px",
                         font_size="13px",
                         width="100%",
@@ -545,13 +554,13 @@ def _filtros_bar() -> rx.Component:
                         spacing="1", align="center",
                     ),
                     on_click=ReportesState.buscar_historial_manual,
-                    background="#EA580C",
-                    color="#FFFFFF",
+                    background=ACCENT,
+                    color=TEXT_WHITE,
                     border_radius="8px",
                     padding_x="14px",
                     padding_y="8px",
                     cursor="pointer",
-                    _hover={"background": "#C2410C"},
+                    _hover={"background": ACCENT_HOVER},
                 ),
                 rx.cond(
                     ReportesState.historial_filtro_activo,
@@ -562,9 +571,9 @@ def _filtros_bar() -> rx.Component:
                             spacing="1", align="center",
                         ),
                         on_click=ReportesState.limpiar_filtros_historial,
-                        background="#1E293B",
-                        color="#94A3B8",
-                        border="1px solid #334155",
+                        background=DARK_800,
+                        color=TEXT_MUTED,
+                        border=f"1px solid {DARK_700}",
                         border_radius="8px",
                         padding_x="14px",
                         padding_y="8px",
@@ -578,8 +587,8 @@ def _filtros_bar() -> rx.Component:
             spacing="3",
             width="100%",
         ),
-        background="#0F172A",
-        border="1px solid #334155",
+        background=PAGE_BACKGROUND,
+        border=f"1px solid {DARK_700}",
         border_radius="10px",
         padding="12px 14px",
         width="100%",
@@ -590,20 +599,20 @@ def _filtros_bar() -> rx.Component:
 
 def _historial_header() -> rx.Component:
     return rx.hstack(
-        rx.text("#", font_size="11px", color="#94A3B8", min_width="36px", flex_shrink="0"),
-        rx.text("Mesa / Pedido", font_size="11px", color="#94A3B8", flex="1"),
-        rx.text("Método", font_size="11px", color="#94A3B8", min_width="60px", flex_shrink="0"),
+        rx.text("#", font_size="11px", color=TEXT_MUTED, min_width="36px", flex_shrink="0"),
+        rx.text("Mesa / Pedido", font_size="11px", color=TEXT_MUTED, flex="1"),
+        rx.text("Método", font_size="11px", color=TEXT_MUTED, min_width="60px", flex_shrink="0"),
         rx.text(
-            "Mozo", font_size="11px", color="#94A3B8",
+            "Mozo", font_size="11px", color=TEXT_MUTED,
             min_width="72px", text_align="center", flex_shrink="0",
             display=rx.breakpoints(initial="none", sm="block"),
         ),
         rx.text(
-            "Cajero", font_size="11px", color="#94A3B8",
+            "Cajero", font_size="11px", color=TEXT_MUTED,
             min_width="72px", text_align="center", flex_shrink="0",
             display=rx.breakpoints(initial="none", lg="block"),
         ),
-        rx.text("Total", font_size="11px", color="#94A3B8",
+        rx.text("Total", font_size="11px", color=TEXT_MUTED,
                 min_width="80px", text_align="right", flex_shrink="0"),
         width="100%",
         padding_x="12px",
@@ -659,14 +668,14 @@ def _pyl_line_row(line: PylLineView) -> rx.Component:
         width="100%",
         align="center",
         padding="8px 4px",
-        border_top=rx.cond(line.es_total, "2px solid #475569", "1px solid #334155"),
+        border_top=rx.cond(line.es_total, "2px solid #475569", f"1px solid {DARK_700}"),
     )
 
 
 def _excel_btn(on_click) -> rx.Component:
     return rx.button(
-        rx.icon(tag="download", size=12, color="#22C55E"),
-        rx.text("Excel", font_size="11px", font_weight="700", color="#22C55E"),
+        rx.icon(tag="download", size=12, color=SUCCESS_SOLID),
+        rx.text("Excel", font_size="11px", font_weight="700", color=SUCCESS_SOLID),
         on_click=on_click,
         background="rgba(34,197,94,0.08)",
         border="1px solid #BBF7D0",
@@ -685,7 +694,7 @@ def _pyl_section() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.icon(tag="file_text", size=14, color="#EA580C"),
+                rx.icon(tag="file_text", size=14, color=ACCENT),
                 rx.text("Estado de resultados (P&L)", font_size="13px",
                         font_weight="700", color="#CBD5E1"),
                 rx.spacer(),
@@ -721,8 +730,8 @@ def _pyl_section() -> rx.Component:
                             "12",
                             )))))))))))
                         ),
-                        background="#1E293B",
-                        border="1px solid #334155",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
                         border_radius="8px",
                         font_size="12px",
                         width="130px",
@@ -731,8 +740,8 @@ def _pyl_section() -> rx.Component:
                         value=ReportesState.pyl_anio.to_string(),
                         on_change=ReportesState.set_pyl_anio,
                         type="number",
-                        background="#1E293B",
-                        border="1px solid #334155",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
                         border_radius="8px",
                         font_size="12px",
                         width="80px",
@@ -742,7 +751,7 @@ def _pyl_section() -> rx.Component:
                         rx.icon(tag="refresh_cw", size=13),
                         on_click=ReportesState.actualizar_pyl,
                         background="rgba(234,88,12,0.08)",
-                        color="#EA580C",
+                        color=ACCENT,
                         border="1px solid rgba(234,88,12,0.40)",
                         border_radius="8px",
                         padding="6px 10px",
@@ -760,11 +769,11 @@ def _pyl_section() -> rx.Component:
                     rx.foreach(ReportesState.pyl_lineas, _pyl_line_row),
                     spacing="0", width="100%",
                 ),
-                rx.text("Sin datos para el mes seleccionado.", font_size="12px", color="#94A3B8"),
+                rx.text("Sin datos para el mes seleccionado.", font_size="12px", color=TEXT_MUTED),
             ),
             spacing="3", width="100%",
         ),
-        background="#0F172A", border="1px solid #334155",
+        background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
         border_radius="10px", padding="12px 14px", width="100%",
     )
 
@@ -775,8 +784,8 @@ def _pyl_section() -> rx.Component:
 def _igv_kpi(label: str, value, icon: str) -> rx.Component:
     return rx.box(
         rx.vstack(
-            rx.text(label, font_size="11px", font_weight="600", color="#94A3B8"),
-            rx.text(value, font_size="18px", font_weight="800", color="#F1F5F9",
+            rx.text(label, font_size="11px", font_weight="600", color=TEXT_MUTED),
+            rx.text(value, font_size="18px", font_weight="800", color=TEXT_PRIMARY,
                     line_height="1"),
             spacing="1", align="start",
         ),
@@ -788,7 +797,7 @@ def _igv_section() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.icon(tag="receipt", size=14, color="#EA580C"),
+                rx.icon(tag="receipt", size=14, color=ACCENT),
                 rx.text("Resumen IGV mensual", font_size="13px",
                         font_weight="700", color="#CBD5E1"),
                 rx.spacer(),
@@ -824,8 +833,8 @@ def _igv_section() -> rx.Component:
                             "12",
                             )))))))))))
                         ),
-                        background="#1E293B",
-                        border="1px solid #334155",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
                         border_radius="8px",
                         font_size="12px",
                         width="130px",
@@ -834,8 +843,8 @@ def _igv_section() -> rx.Component:
                         value=ReportesState.igv_anio.to_string(),
                         on_change=ReportesState.set_igv_anio,
                         type="number",
-                        background="#1E293B",
-                        border="1px solid #334155",
+                        background=DARK_800,
+                        border=f"1px solid {DARK_700}",
                         border_radius="8px",
                         font_size="12px",
                         width="80px",
@@ -845,7 +854,7 @@ def _igv_section() -> rx.Component:
                         rx.icon(tag="refresh_cw", size=13),
                         on_click=ReportesState.actualizar_igv,
                         background="rgba(234,88,12,0.08)",
-                        color="#EA580C",
+                        color=ACCENT,
                         border="1px solid rgba(234,88,12,0.40)",
                         border_radius="8px",
                         padding="6px 10px",
@@ -868,11 +877,11 @@ def _igv_section() -> rx.Component:
                     ),
                     rx.text(
                         ReportesState.igv_pedidos.to_string() + " pedidos cobrados en el mes.",
-                        font_size="11px", color="#94A3B8",
+                        font_size="11px", color=TEXT_MUTED,
                     ),
                     spacing="3", width="100%",
                 ),
-                rx.text("Sin pedidos cobrados para el mes seleccionado.", font_size="12px", color="#94A3B8"),
+                rx.text("Sin pedidos cobrados para el mes seleccionado.", font_size="12px", color=TEXT_MUTED),
             ),
             spacing="3", width="100%",
         ),
@@ -894,12 +903,12 @@ _CAT_COLORS = {
 def _matriz_row(p: MatrizProductoView) -> rx.Component:
     return rx.hstack(
         rx.text(p.categoria_emoji, font_size="16px", flex_shrink="0", width="22px"),
-        rx.text(p.nombre, font_size="13px", font_weight="600", color="#F1F5F9",
+        rx.text(p.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY,
                 flex="1", min_width="0", text_overflow="ellipsis",
                 overflow="hidden", white_space="nowrap"),
-        rx.text(p.unidades.to_string() + " uds", font_size="12px", color="#94A3B8",
+        rx.text(p.unidades.to_string() + " uds", font_size="12px", color=TEXT_MUTED,
                 min_width="55px", text_align="right"),
-        rx.text(p.ingreso_texto, font_size="12px", font_weight="600", color="#F1F5F9",
+        rx.text(p.ingreso_texto, font_size="12px", font_weight="600", color=TEXT_PRIMARY,
                 min_width="75px", text_align="right"),
         rx.badge(
             p.margen_pct_texto,
@@ -917,7 +926,7 @@ def _matriz_row(p: MatrizProductoView) -> rx.Component:
             padding="2px 6px", min_width="55px", text_align="center",
         ),
         width="100%", align="center", gap="8px",
-        padding="6px 4px", border_bottom="1px solid #1E293B",
+        padding="6px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -925,7 +934,7 @@ def _matriz_section() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.icon(tag="grid_2x2", size=14, color="#EA580C"),
+                rx.icon(tag="grid_2x2", size=14, color=ACCENT),
                 rx.text("Matriz estrella / perro", font_size="13px",
                         font_weight="700", color="#CBD5E1"),
                 rx.spacer(),
@@ -933,7 +942,7 @@ def _matriz_section() -> rx.Component:
                     rx.icon(tag="refresh_cw", size=13),
                     on_click=ReportesState.cargar_matriz_productos,
                     background="rgba(234,88,12,0.08)",
-                    color="#EA580C",
+                    color=ACCENT,
                     border="1px solid rgba(234,88,12,0.40)",
                     border_radius="8px",
                     padding="6px 10px",
@@ -948,7 +957,7 @@ def _matriz_section() -> rx.Component:
                 rx.vstack(
                     rx.hstack(
                         rx.badge("⭐ " + ReportesState.matriz_estrellas.to_string(),
-                                 background="rgba(245,158,11,0.12)", color="#F59E0B",
+                                 background="rgba(245,158,11,0.12)", color=WARNING_SOLID,
                                  border_radius="6px", font_size="11px",
                                  font_weight="700", padding="3px 8px"),
                         rx.badge("\U0001F42E " + ReportesState.matriz_vacas.to_string(),
@@ -973,7 +982,7 @@ def _matriz_section() -> rx.Component:
                     ),
                     spacing="3", width="100%",
                 ),
-                rx.text("Sin datos de ventas para el período.", font_size="12px", color="#94A3B8"),
+                rx.text("Sin datos de ventas para el período.", font_size="12px", color=TEXT_MUTED),
             ),
             spacing="3", width="100%",
         ),
@@ -987,11 +996,11 @@ def _matriz_section() -> rx.Component:
 
 def _descuento_rank_row(d: DescuentoRankView) -> rx.Component:
     return rx.hstack(
-        rx.text(d.cajero, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
-        rx.text(d.pedidos.to_string() + " ped.", font_size="12px", color="#94A3B8",
+        rx.text(d.cajero, font_size="13px", font_weight="600", color=TEXT_PRIMARY, flex="1"),
+        rx.text(d.pedidos.to_string() + " ped.", font_size="12px", color=TEXT_MUTED,
                 min_width="52px", text_align="right"),
         rx.text(d.total_descuento_texto, font_size="13px", font_weight="700",
-                color="#DC2626", min_width="86px", text_align="right"),
+                color=DANGER_SOLID, min_width="86px", text_align="right"),
         rx.badge(
             d.pct_descuento_texto,
             background="rgba(239,68,68,0.12)", color="#F87171",
@@ -999,27 +1008,27 @@ def _descuento_rank_row(d: DescuentoRankView) -> rx.Component:
             padding="2px 6px",
         ),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
 def _anulacion_row(a: AnulacionView) -> rx.Component:
     return rx.hstack(
-        rx.text("#" + a.pedido_id.to_string(), font_size="11px", color="#94A3B8",
+        rx.text("#" + a.pedido_id.to_string(), font_size="11px", color=TEXT_MUTED,
                 min_width="36px", flex_shrink="0"),
         rx.vstack(
             rx.text(a.motivo, font_size="13px", color="#CBD5E1", width="100%",
                     text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
             rx.text(
                 a.cancelado_por + " — " + a.cancelado_en_texto,
-                font_size="10px", color="#94A3B8",
+                font_size="10px", color=TEXT_MUTED,
             ),
             spacing="0", flex="1", min_width="0",
         ),
-        rx.text(a.total_texto, font_size="13px", font_weight="700", color="#DC2626",
+        rx.text(a.total_texto, font_size="13px", font_weight="700", color=DANGER_SOLID,
                 min_width="80px", text_align="right", flex_shrink="0"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -1029,7 +1038,7 @@ def _descuentos_anulaciones_section() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="percent", size=14, color="#DC2626"),
+                    rx.icon(tag="percent", size=14, color=DANGER_SOLID),
                     rx.text("Descuentos por cajero", font_size="13px",
                             font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
@@ -1047,18 +1056,18 @@ def _descuentos_anulaciones_section() -> rx.Component:
                         rx.foreach(ReportesState.descuentos_rank, _descuento_rank_row),
                         spacing="0", width="100%",
                     ),
-                    rx.text("Sin descuentos en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin descuentos en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         # Anulaciones
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="trash_2", size=14, color="#DC2626"),
+                    rx.icon(tag="trash_2", size=14, color=DANGER_SOLID),
                     rx.text("Anulaciones", font_size="13px",
                             font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
@@ -1076,18 +1085,18 @@ def _descuentos_anulaciones_section() -> rx.Component:
                         rx.foreach(ReportesState.anulaciones_lista, _anulacion_row),
                         spacing="0", width="100%", max_height="300px", overflow_y="auto",
                     ),
-                    rx.text("Sin anulaciones en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin anulaciones en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         # Reversiones de cobro
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="undo_2", size=14, color="#F59E0B"),
+                    rx.icon(tag="undo_2", size=14, color=WARNING_SOLID),
                     rx.text("Reversiones de cobro", font_size="13px",
                             font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
@@ -1105,11 +1114,11 @@ def _descuentos_anulaciones_section() -> rx.Component:
                         rx.foreach(ReportesState.reversiones_lista, _reversion_row),
                         spacing="0", width="100%", max_height="300px", overflow_y="auto",
                     ),
-                    rx.text("Sin reversiones en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin reversiones en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         _excel_btn(ReportesState.exportar_descuentos_excel),
@@ -1121,21 +1130,21 @@ def _descuentos_anulaciones_section() -> rx.Component:
 
 def _reversion_row(r: ReversionView) -> rx.Component:
     return rx.hstack(
-        rx.text("#" + r.pedido_id.to_string(), font_size="11px", color="#94A3B8",
+        rx.text("#" + r.pedido_id.to_string(), font_size="11px", color=TEXT_MUTED,
                 min_width="36px", flex_shrink="0"),
         rx.vstack(
             rx.text(r.motivo, font_size="13px", color="#CBD5E1", width="100%",
                     text_overflow="ellipsis", overflow="hidden", white_space="nowrap"),
             rx.text(
                 r.revertido_por + " — " + r.revertido_en_texto,
-                font_size="10px", color="#94A3B8",
+                font_size="10px", color=TEXT_MUTED,
             ),
             spacing="0", flex="1", min_width="0",
         ),
-        rx.text(r.total_texto, font_size="13px", font_weight="700", color="#F59E0B",
+        rx.text(r.total_texto, font_size="13px", font_weight="700", color=WARNING_SOLID,
                 min_width="80px", text_align="right", flex_shrink="0"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -1144,26 +1153,26 @@ def _reversion_row(r: ReversionView) -> rx.Component:
 
 def _merma_cat_row(c: MermaCategoriaView) -> rx.Component:
     return rx.hstack(
-        rx.text(c.categoria, font_size="13px", font_weight="600", color="#F1F5F9", flex="1"),
-        rx.text(c.registros.to_string() + " reg.", font_size="12px", color="#94A3B8",
+        rx.text(c.categoria, font_size="13px", font_weight="600", color=TEXT_PRIMARY, flex="1"),
+        rx.text(c.registros.to_string() + " reg.", font_size="12px", color=TEXT_MUTED,
                 min_width="52px", text_align="right"),
-        rx.text(c.valor_texto, font_size="13px", font_weight="700", color="#DC2626",
+        rx.text(c.valor_texto, font_size="13px", font_weight="700", color=DANGER_SOLID,
                 min_width="86px", text_align="right"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
 def _merma_insumo_row(i: MermaInsumoView) -> rx.Component:
     return rx.hstack(
-        rx.text(i.nombre, font_size="13px", font_weight="600", color="#F1F5F9", flex="1",
+        rx.text(i.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY, flex="1",
                 min_width="0", overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
-        rx.text(i.cantidad_texto + " " + i.unidad, font_size="12px", color="#94A3B8",
+        rx.text(i.cantidad_texto + " " + i.unidad, font_size="12px", color=TEXT_MUTED,
                 min_width="80px", text_align="right"),
-        rx.text(i.valor_texto, font_size="13px", font_weight="700", color="#DC2626",
+        rx.text(i.valor_texto, font_size="13px", font_weight="700", color=DANGER_SOLID,
                 min_width="86px", text_align="right"),
         width="100%", align="center", gap="8px",
-        padding="8px 4px", border_bottom="1px solid #1E293B",
+        padding="8px 4px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -1173,13 +1182,13 @@ def _mermas_section() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="trash_2", size=14, color="#F59E0B"),
+                    rx.icon(tag="trash_2", size=14, color=WARNING_SOLID),
                     rx.text("Mermas por categoría", font_size="13px",
                             font_weight="700", color="#CBD5E1"),
                     rx.spacer(),
                     rx.badge(
                         ReportesState.mermas_total_texto,
-                        background="rgba(245,158,11,0.12)", color="#F59E0B",
+                        background="rgba(245,158,11,0.12)", color=WARNING_SOLID,
                         border_radius="6px", font_size="11px", font_weight="800",
                         padding="2px 8px",
                     ),
@@ -1191,18 +1200,18 @@ def _mermas_section() -> rx.Component:
                         rx.foreach(ReportesState.mermas_por_categoria, _merma_cat_row),
                         spacing="0", width="100%",
                     ),
-                    rx.text("Sin mermas en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin mermas en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         # Por insumo (top 20)
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="package_x", size=14, color="#F59E0B"),
+                    rx.icon(tag="package_x", size=14, color=WARNING_SOLID),
                     rx.text("Mermas por insumo (top 20)", font_size="13px",
                             font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center",
@@ -1213,11 +1222,11 @@ def _mermas_section() -> rx.Component:
                         rx.foreach(ReportesState.mermas_por_insumo, _merma_insumo_row),
                         spacing="0", width="100%", max_height="300px", overflow_y="auto",
                     ),
-                    rx.text("Sin mermas en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin mermas en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
                 spacing="3", width="100%",
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
         ),
         _excel_btn(ReportesState.exportar_mermas_excel),
@@ -1236,14 +1245,14 @@ def _reportes_content() -> rx.Component:
         # Header
         rx.hstack(
             rx.vstack(
-                rx.text("Reportes", font_size="22px", font_weight="800", color="#F1F5F9"),
-                rx.text("Dashboard y ventas del día", font_size="13px", color="#94A3B8"),
+                rx.text("Reportes", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
+                rx.text("Dashboard y ventas del día", font_size="13px", color=TEXT_MUTED),
                 spacing="0",
             ),
             rx.cond(
                 FoodState.tiene_sucursales,
                 rx.hstack(
-                    rx.icon(tag="map_pin", size=14, color="#94A3B8"),
+                    rx.icon(tag="map_pin", size=14, color=TEXT_MUTED),
                     rx.button(
                         "Todas",
                         on_click=ReportesState.cambiar_sucursal_reportes("0"),
@@ -1257,11 +1266,11 @@ def _reportes_content() -> rx.Component:
                         ),
                         border=rx.cond(
                             ReportesState.reportes_sucursal_id == 0,
-                            "1px solid #EA580C", "1px solid #334155",
+                            "1px solid #EA580C", f"1px solid {DARK_700}",
                         ),
                         border_radius="7px", font_size="11px", font_weight="600",
                         padding_x="10px", padding_y="5px", cursor="pointer",
-                        _hover={"border_color": "#EA580C"},
+                        _hover={"border_color": ACCENT},
                     ),
                     rx.foreach(
                         FoodState.sucursales_empresa,
@@ -1280,11 +1289,11 @@ def _reportes_content() -> rx.Component:
                             ),
                             border=rx.cond(
                                 ReportesState.reportes_sucursal_id == s.id,
-                                "1px solid #EA580C", "1px solid #334155",
+                                "1px solid #EA580C", f"1px solid {DARK_700}",
                             ),
                             border_radius="7px", font_size="11px", font_weight="600",
                             padding_x="10px", padding_y="5px", cursor="pointer",
-                            _hover={"border_color": "#EA580C"},
+                            _hover={"border_color": ACCENT},
                         ),
                     ),
                     spacing="1", align="center", flex_wrap="wrap",
@@ -1295,30 +1304,30 @@ def _reportes_content() -> rx.Component:
             rx.hstack(
                 rx.button(
                     "Hoy", on_click=ReportesState.filtro_rapido_hoy,
-                    background=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "#EA580C", "#1E293B"),
+                    background=rx.cond(ReportesState.historial_filtro_rapido == "hoy", ACCENT, DARK_800),
                     color=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "#FFFFFF", "#94A3B8"),
-                    border=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "1px solid #EA580C", "1px solid #334155"),
+                    border=rx.cond(ReportesState.historial_filtro_rapido == "hoy", "1px solid #EA580C", f"1px solid {DARK_700}"),
                     border_radius="8px", font_size="12px", font_weight="700",
                     padding_x="14px", padding_y="7px", cursor="pointer",
-                    _hover={"border_color": "#EA580C", "color": "#EA580C"},
+                    _hover={"border_color": ACCENT, "color": ACCENT},
                 ),
                 rx.button(
                     "Semana", on_click=ReportesState.filtro_rapido_semana,
-                    background=rx.cond(ReportesState.historial_filtro_rapido == "semana", "#EA580C", "#1E293B"),
+                    background=rx.cond(ReportesState.historial_filtro_rapido == "semana", ACCENT, DARK_800),
                     color=rx.cond(ReportesState.historial_filtro_rapido == "semana", "#FFFFFF", "#94A3B8"),
-                    border=rx.cond(ReportesState.historial_filtro_rapido == "semana", "1px solid #EA580C", "1px solid #334155"),
+                    border=rx.cond(ReportesState.historial_filtro_rapido == "semana", "1px solid #EA580C", f"1px solid {DARK_700}"),
                     border_radius="8px", font_size="12px", font_weight="600",
                     padding_x="14px", padding_y="7px", cursor="pointer",
-                    _hover={"border_color": "#EA580C", "color": "#EA580C"},
+                    _hover={"border_color": ACCENT, "color": ACCENT},
                 ),
                 rx.button(
                     "Mes", on_click=ReportesState.filtro_rapido_mes,
-                    background=rx.cond(ReportesState.historial_filtro_rapido == "mes", "#EA580C", "#1E293B"),
+                    background=rx.cond(ReportesState.historial_filtro_rapido == "mes", ACCENT, DARK_800),
                     color=rx.cond(ReportesState.historial_filtro_rapido == "mes", "#FFFFFF", "#94A3B8"),
-                    border=rx.cond(ReportesState.historial_filtro_rapido == "mes", "1px solid #EA580C", "1px solid #334155"),
+                    border=rx.cond(ReportesState.historial_filtro_rapido == "mes", "1px solid #EA580C", f"1px solid {DARK_700}"),
                     border_radius="8px", font_size="12px", font_weight="600",
                     padding_x="14px", padding_y="7px", cursor="pointer",
-                    _hover={"border_color": "#EA580C", "color": "#EA580C"},
+                    _hover={"border_color": ACCENT, "color": ACCENT},
                 ),
                 rx.button(
                     rx.hstack(
@@ -1328,7 +1337,7 @@ def _reportes_content() -> rx.Component:
                     ),
                     on_click=[ReportesState.cargar_dashboard, ReportesState.cargar_historial_ventas],
                     background="rgba(234,88,12,0.08)",
-                    color="#EA580C",
+                    color=ACCENT,
                     border="1px solid rgba(234,88,12,0.40)",
                     border_radius="8px",
                     font_size="13px",
@@ -1337,9 +1346,9 @@ def _reportes_content() -> rx.Component:
                 ),
                 rx.button(
                     rx.hstack(
-                        rx.icon(tag="download", size=13, color="#FFFFFF"),
+                        rx.icon(tag="download", size=13, color=TEXT_WHITE),
                         rx.text("Exportar Excel", font_size="13px", font_weight="700",
-                                color="#FFFFFF"),
+                                color=TEXT_WHITE),
                         spacing="1", align="center",
                     ),
                     on_click=ReportesState.exportar_ventas_excel,
@@ -1351,9 +1360,9 @@ def _reportes_content() -> rx.Component:
                 ),
                 rx.button(
                     rx.hstack(
-                        rx.icon(tag="file_text", size=13, color="#FFFFFF"),
+                        rx.icon(tag="file_text", size=13, color=TEXT_WHITE),
                         rx.text("PDF Ejecutivo", font_size="13px", font_weight="700",
-                                color="#FFFFFF"),
+                                color=TEXT_WHITE),
                         spacing="1", align="center",
                     ),
                     on_click=ReportesState.exportar_pdf_ejecutivo,
@@ -1403,7 +1412,7 @@ def _reportes_content() -> rx.Component:
             rx.box(
                 rx.vstack(
                     rx.hstack(
-                        rx.icon(tag="star", size=14, color="#EA580C"),
+                        rx.icon(tag="star", size=14, color=ACCENT),
                         rx.text("Top platos hoy", font_size="13px", font_weight="700", color="#CBD5E1"),
                         spacing="2", align="center",
                     ),
@@ -1411,8 +1420,8 @@ def _reportes_content() -> rx.Component:
                     spacing="2",
                     width="100%",
                 ),
-                background="#0F172A",
-                border="1px solid #334155",
+                background=PAGE_BACKGROUND,
+                border=f"1px solid {DARK_700}",
                 border_radius="10px",
                 padding="12px 14px",
                 width="100%",
@@ -1425,31 +1434,31 @@ def _reportes_content() -> rx.Component:
             # Ranking por mozo
             rx.box(
                 rx.hstack(
-                    rx.icon(tag="users", size=14, color="#EA580C"),
+                    rx.icon(tag="users", size=14, color=ACCENT),
                     rx.text("Ventas por mozo", font_size="13px", font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center", margin_bottom="10px",
                 ),
                 rx.cond(
                     ReportesState.reporte_mozos.length() > 0,
                     _ventas_mozo_chart(),
-                    rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin ventas en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
-                background="#0F172A", border="1px solid #334155",
+                background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
                 border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
             ),
             # Ventas por hora
             rx.box(
                 rx.hstack(
-                    rx.icon(tag="clock", size=14, color="#EA580C"),
+                    rx.icon(tag="clock", size=14, color=ACCENT),
                     rx.text("Ventas por hora", font_size="13px", font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center", margin_bottom="10px",
                 ),
                 rx.cond(
                     ReportesState.reporte_horas.length() > 0,
                     _ventas_hora_chart(),
-                    rx.text("Sin ventas en el período.", font_size="12px", color="#94A3B8"),
+                    rx.text("Sin ventas en el período.", font_size="12px", color=TEXT_MUTED),
                 ),
-                background="#0F172A", border="1px solid #334155",
+                background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
                 border_radius="10px", padding="12px 14px", flex="1", min_width="260px",
             ),
             gap="12px", width="100%",
@@ -1459,14 +1468,14 @@ def _reportes_content() -> rx.Component:
         rx.box(
             rx.hstack(
                 rx.hstack(
-                    rx.icon(tag="hand_coins", size=14, color="#F59E0B"),
+                    rx.icon(tag="hand_coins", size=14, color=WARNING_SOLID),
                     rx.text("Propinas por mozo", font_size="13px",
                             font_weight="700", color="#CBD5E1"),
                     spacing="2", align="center",
                 ),
                 rx.text(
                     "Total: " + ReportesState.reporte_propinas_total_texto,
-                    font_size="13px", font_weight="800", color="#F59E0B",
+                    font_size="13px", font_weight="800", color=WARNING_SOLID,
                 ),
                 width="100%", justify="between", align="center",
                 margin_bottom="10px",
@@ -1478,7 +1487,7 @@ def _reportes_content() -> rx.Component:
                     spacing="0", width="100%",
                 ),
                 rx.text("Sin propinas registradas en el período.", font_size="12px",
-                        color="#94A3B8"),
+                        color=TEXT_MUTED),
             ),
             background="rgba(245,158,11,0.10)", border="1px solid rgba(245,158,11,0.20)",
             border_radius="10px", padding="12px 14px", width="100%",
@@ -1486,7 +1495,7 @@ def _reportes_content() -> rx.Component:
         # Desglose por método de pago
         rx.box(
             rx.hstack(
-                rx.icon(tag="credit_card", size=14, color="#EA580C"),
+                rx.icon(tag="credit_card", size=14, color=ACCENT),
                 rx.text("Desglose por método de pago", font_size="13px", font_weight="700", color="#CBD5E1"),
                 spacing="2", align="center", margin_bottom="10px",
             ),
@@ -1507,7 +1516,7 @@ def _reportes_content() -> rx.Component:
                             content_style={"fontSize": "12px", "borderRadius": "8px"},
                         ),
                         rx.recharts.bar(
-                            data_key="total", fill="#EA580C", radius=[4, 4, 0, 0],
+                            data_key="total", fill=ACCENT, radius=[4, 4, 0, 0],
                             name="Total (S/)",
                         ),
                         rx.recharts.bar(
@@ -1519,15 +1528,15 @@ def _reportes_content() -> rx.Component:
                     ),
                     width="100%", height=220,
                 ),
-                rx.text("Sin pagos en el período.", font_size="12px", color="#94A3B8"),
+                rx.text("Sin pagos en el período.", font_size="12px", color=TEXT_MUTED),
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
         # Comparativa entre períodos
         rx.box(
             rx.hstack(
-                rx.icon(tag="git_compare_arrows", size=14, color="#EA580C"),
+                rx.icon(tag="git_compare_arrows", size=14, color=ACCENT),
                 rx.text("Comparativa con período anterior", font_size="13px",
                         font_weight="700", color="#CBD5E1"),
                 spacing="2", align="center", margin_bottom="10px",
@@ -1535,13 +1544,13 @@ def _reportes_content() -> rx.Component:
             rx.grid(
                 # Ventas
                 rx.box(
-                    rx.text("Ventas", font_size="11px", color="#94A3B8", margin_bottom="2px"),
+                    rx.text("Ventas", font_size="11px", color=TEXT_MUTED, margin_bottom="2px"),
                     rx.text(ReportesState.comp_ventas_actual, font_size="18px",
-                            font_weight="800", color="#F1F5F9"),
+                            font_weight="800", color=TEXT_PRIMARY),
                     rx.hstack(
                         rx.text(
                             "vs " + ReportesState.comp_ventas_anterior,
-                            font_size="11px", color="#94A3B8",
+                            font_size="11px", color=TEXT_MUTED,
                         ),
                         rx.text(
                             rx.cond(ReportesState.comp_ventas_pct >= 0, "+", "") + ReportesState.comp_ventas_pct.to_string() + "%",
@@ -1551,18 +1560,18 @@ def _reportes_content() -> rx.Component:
                         spacing="1", align="center",
                     ),
                     rx.text(ReportesState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
-                    padding="10px", background="#1E293B", border_radius="8px",
-                    border="1px solid #334155",
+                    padding="10px", background=DARK_800, border_radius="8px",
+                    border=f"1px solid {DARK_700}",
                 ),
                 # Pedidos
                 rx.box(
-                    rx.text("Pedidos", font_size="11px", color="#94A3B8", margin_bottom="2px"),
+                    rx.text("Pedidos", font_size="11px", color=TEXT_MUTED, margin_bottom="2px"),
                     rx.text(ReportesState.comp_pedidos_actual.to_string(), font_size="18px",
-                            font_weight="800", color="#F1F5F9"),
+                            font_weight="800", color=TEXT_PRIMARY),
                     rx.hstack(
                         rx.text(
                             "vs " + ReportesState.comp_pedidos_anterior.to_string(),
-                            font_size="11px", color="#94A3B8",
+                            font_size="11px", color=TEXT_MUTED,
                         ),
                         rx.text(
                             rx.cond(ReportesState.comp_pedidos_diff >= 0, "+", "") + ReportesState.comp_pedidos_diff.to_string(),
@@ -1572,18 +1581,18 @@ def _reportes_content() -> rx.Component:
                         spacing="1", align="center",
                     ),
                     rx.text(ReportesState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
-                    padding="10px", background="#1E293B", border_radius="8px",
-                    border="1px solid #334155",
+                    padding="10px", background=DARK_800, border_radius="8px",
+                    border=f"1px solid {DARK_700}",
                 ),
                 # Ticket promedio
                 rx.box(
-                    rx.text("Ticket promedio", font_size="11px", color="#94A3B8", margin_bottom="2px"),
+                    rx.text("Ticket promedio", font_size="11px", color=TEXT_MUTED, margin_bottom="2px"),
                     rx.text(ReportesState.comp_ticket_actual, font_size="18px",
-                            font_weight="800", color="#F1F5F9"),
+                            font_weight="800", color=TEXT_PRIMARY),
                     rx.hstack(
                         rx.text(
                             "vs " + ReportesState.comp_ticket_anterior,
-                            font_size="11px", color="#94A3B8",
+                            font_size="11px", color=TEXT_MUTED,
                         ),
                         rx.text(
                             rx.cond(ReportesState.comp_ticket_pct >= 0, "+", "") + ReportesState.comp_ticket_pct.to_string() + "%",
@@ -1593,12 +1602,12 @@ def _reportes_content() -> rx.Component:
                         spacing="1", align="center",
                     ),
                     rx.text(ReportesState.comp_label_anterior, font_size="10px", color="#CBD5E1"),
-                    padding="10px", background="#1E293B", border_radius="8px",
-                    border="1px solid #334155",
+                    padding="10px", background=DARK_800, border_radius="8px",
+                    border=f"1px solid {DARK_700}",
                 ),
                 columns="3", spacing="3", width="100%",
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
         # ── Secciones avanzadas (requieren plan profesional) ────────────────
@@ -1613,7 +1622,7 @@ def _reportes_content() -> rx.Component:
             ),
             rx.box(
                 rx.hstack(
-                    rx.icon(tag="lock", size=16, color="#EA580C"),
+                    rx.icon(tag="lock", size=16, color=ACCENT),
                     rx.text(
                         "P&L, IGV, matriz productos, descuentos/anulaciones y mermas requieren el plan Profesional.",
                         font_size="13px", font_weight="600", color="#CBD5E1",
@@ -1622,7 +1631,7 @@ def _reportes_content() -> rx.Component:
                 ),
                 rx.text(
                     "Contacte a TUWAYKI para actualizar su plan y acceder a reportes avanzados.",
-                    font_size="12px", color="#94A3B8", margin_top="4px",
+                    font_size="12px", color=TEXT_MUTED, margin_top="4px",
                 ),
                 background="rgba(234,88,12,0.08)", border="1px solid rgba(234,88,12,0.40)",
                 border_radius="10px", padding="14px 16px", width="100%",
@@ -1632,7 +1641,7 @@ def _reportes_content() -> rx.Component:
         # Margen por plato
         rx.box(
             rx.hstack(
-                rx.icon(tag="chef_hat", size=14, color="#EA580C"),
+                rx.icon(tag="chef_hat", size=14, color=ACCENT),
                 rx.text("Margen por plato (precio vs costo de receta)",
                         font_size="13px", font_weight="700", color="#CBD5E1"),
                 rx.spacer(),
@@ -1647,23 +1656,23 @@ def _reportes_content() -> rx.Component:
                 ),
                 rx.text(
                     "Carga recetas y costos de insumos en Inventario para ver el margen de cada plato.",
-                    font_size="12px", color="#94A3B8",
+                    font_size="12px", color=TEXT_MUTED,
                 ),
             ),
-            background="#0F172A", border="1px solid #334155",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
 
         # ── Historial con filtros ─────────────────────────────────────────────
         rx.vstack(
             rx.hstack(
-                rx.text("Historial de ventas", font_size="15px", font_weight="700", color="#F1F5F9"),
+                rx.text("Historial de ventas", font_size="15px", font_weight="700", color=TEXT_PRIMARY),
                 rx.cond(
                     ReportesState.historial_ventas.length() > 0,
                     rx.badge(
                         ReportesState.historial_ventas.length().to_string() + " registros",
-                        background="#1E293B",
-                        color="#94A3B8",
+                        background=DARK_800,
+                        color=TEXT_MUTED,
                         border_radius="5px",
                         font_size="10px",
                         font_weight="600",
@@ -1686,7 +1695,7 @@ def _reportes_content() -> rx.Component:
                                 "Sin resultados para los filtros aplicados.",
                                 "Sin ventas registradas.",
                             ),
-                            font_size="14px", color="#94A3B8", text_align="center",
+                            font_size="14px", color=TEXT_MUTED, text_align="center",
                         ),
                         spacing="2",
                         align="center",
@@ -1700,8 +1709,8 @@ def _reportes_content() -> rx.Component:
                         position="sticky",
                         top="0",
                         z_index="10",
-                        background="#0F172A",
-                        border_bottom="1px solid #334155",
+                        background=PAGE_BACKGROUND,
+                        border_bottom=f"1px solid {DARK_700}",
                         padding_y="4px",
                     ),
                     rx.foreach(ReportesState.historial_ventas, _venta_row),
@@ -1710,37 +1719,37 @@ def _reportes_content() -> rx.Component:
                         rx.button(
                             rx.icon(tag="chevron_left", size=14),
                             on_click=ReportesState.historial_pagina_anterior,
-                            background="#1E293B",
-                            color="#94A3B8",
-                            border="1px solid #334155",
+                            background=DARK_800,
+                            color=TEXT_MUTED,
+                            border=f"1px solid {DARK_700}",
                             border_radius="7px",
                             padding_x="10px",
                             padding_y="6px",
                             cursor="pointer",
                             disabled=~ReportesState.historial_tiene_anterior,
                             opacity=rx.cond(ReportesState.historial_tiene_anterior, "1", "0.4"),
-                            _hover={"background": "#334155"},
+                            _hover={"background": DARK_700},
                         ),
                         rx.text(
                             ReportesState.historial_pagina_label,
                             font_size="12px",
-                            color="#94A3B8",
+                            color=TEXT_MUTED,
                             flex="1",
                             text_align="center",
                         ),
                         rx.button(
                             rx.icon(tag="chevron_right", size=14),
                             on_click=ReportesState.historial_pagina_siguiente,
-                            background="#1E293B",
-                            color="#94A3B8",
-                            border="1px solid #334155",
+                            background=DARK_800,
+                            color=TEXT_MUTED,
+                            border=f"1px solid {DARK_700}",
                             border_radius="7px",
                             padding_x="10px",
                             padding_y="6px",
                             cursor="pointer",
                             disabled=~ReportesState.historial_tiene_siguiente,
                             opacity=rx.cond(ReportesState.historial_tiene_siguiente, "1", "0.4"),
-                            _hover={"background": "#334155"},
+                            _hover={"background": DARK_700},
                         ),
                         width="100%",
                         align="center",

@@ -24,6 +24,7 @@ from app.states.food_state import (
     _ROL_BADGE_BG,
     _ROL_BADGE_TEXT,
     _ROL_PERM_DEFAULTS,
+    _ROL_ACCESO_DEFAULTS,
 )
 from app.utils.db import get_session
 from app.utils.tenant import set_tenant_context
@@ -71,6 +72,10 @@ class UsuariosAdminState(rx.State):
     usuario_form_perm_inventario: bool = False
     usuario_form_perm_costos: bool = False
     usuario_form_perm_reimprimir: bool = False
+    usuario_form_acceso_mozos: bool = False
+    usuario_form_acceso_caja: bool = False
+    usuario_form_acceso_cocina: bool = False
+    usuario_form_acceso_mostrador: bool = False
 
     # ─── Helpers internos ─────────────────────────────────────────────────────
 
@@ -121,6 +126,11 @@ class UsuariosAdminState(rx.State):
         self.usuario_form_perm_inventario = _defs.get("inventario", False)
         self.usuario_form_perm_costos = _defs.get("costos", False)
         self.usuario_form_perm_reimprimir = _defs.get("reimprimir", False)
+        _acc = _ROL_ACCESO_DEFAULTS.get(value, {})
+        self.usuario_form_acceso_mozos = _acc.get("mozos", False)
+        self.usuario_form_acceso_caja = _acc.get("caja", False)
+        self.usuario_form_acceso_cocina = _acc.get("cocina", False)
+        self.usuario_form_acceso_mostrador = _acc.get("mostrador", False)
 
     def toggle_uf_perm_descuento(self) -> None:
         self.usuario_form_perm_descuento = not self.usuario_form_perm_descuento
@@ -142,6 +152,18 @@ class UsuariosAdminState(rx.State):
 
     def toggle_uf_perm_reimprimir(self) -> None:
         self.usuario_form_perm_reimprimir = not self.usuario_form_perm_reimprimir
+
+    def toggle_uf_acceso_mozos(self) -> None:
+        self.usuario_form_acceso_mozos = not self.usuario_form_acceso_mozos
+
+    def toggle_uf_acceso_caja(self) -> None:
+        self.usuario_form_acceso_caja = not self.usuario_form_acceso_caja
+
+    def toggle_uf_acceso_cocina(self) -> None:
+        self.usuario_form_acceso_cocina = not self.usuario_form_acceso_cocina
+
+    def toggle_uf_acceso_mostrador(self) -> None:
+        self.usuario_form_acceso_mostrador = not self.usuario_form_acceso_mostrador
 
     def on_change_uf_pin(self, value: str) -> None:
         self.usuario_form_pin = value
@@ -168,6 +190,11 @@ class UsuariosAdminState(rx.State):
         self.usuario_form_perm_inventario = _defs["inventario"]
         self.usuario_form_perm_costos = _defs["costos"]
         self.usuario_form_perm_reimprimir = _defs["reimprimir"]
+        _acc = _ROL_ACCESO_DEFAULTS[RolUsuario.MOZO.value]
+        self.usuario_form_acceso_mozos = _acc["mozos"]
+        self.usuario_form_acceso_caja = _acc["caja"]
+        self.usuario_form_acceso_cocina = _acc["cocina"]
+        self.usuario_form_acceso_mostrador = _acc["mostrador"]
 
     def set_usuario_form_visible(self, v: bool) -> None:
         self.usuario_form_visible = v
@@ -200,6 +227,10 @@ class UsuariosAdminState(rx.State):
                 perm_inventario=u.perm_inventario,
                 perm_costos=u.perm_costos,
                 perm_reimprimir=u.perm_reimprimir,
+                acceso_mozos=u.acceso_mozos,
+                acceso_caja=u.acceso_caja,
+                acceso_cocina=u.acceso_cocina,
+                acceso_mostrador=u.acceso_mostrador,
             )
             for u in rows
         ]
@@ -232,6 +263,10 @@ class UsuariosAdminState(rx.State):
         self.usuario_form_perm_inventario = u.perm_inventario
         self.usuario_form_perm_costos = u.perm_costos
         self.usuario_form_perm_reimprimir = u.perm_reimprimir
+        self.usuario_form_acceso_mozos = u.acceso_mozos
+        self.usuario_form_acceso_caja = u.acceso_caja
+        self.usuario_form_acceso_cocina = u.acceso_cocina
+        self.usuario_form_acceso_mostrador = u.acceso_mostrador
         self.usuario_form_visible = True
 
     async def guardar_usuario(self) -> None:
@@ -298,6 +333,10 @@ class UsuariosAdminState(rx.State):
                 u.perm_inventario = self.usuario_form_perm_inventario
                 u.perm_costos = self.usuario_form_perm_costos
                 u.perm_reimprimir = self.usuario_form_perm_reimprimir
+                u.acceso_mozos = self.usuario_form_acceso_mozos
+                u.acceso_caja = self.usuario_form_acceso_caja
+                u.acceso_cocina = self.usuario_form_acceso_cocina
+                u.acceso_mostrador = self.usuario_form_acceso_mostrador
                 u.updated_at = _utcnow()
                 session.add(u)
                 session.commit()
@@ -319,6 +358,10 @@ class UsuariosAdminState(rx.State):
                     perm_inventario=self.usuario_form_perm_inventario,
                     perm_costos=self.usuario_form_perm_costos,
                     perm_reimprimir=self.usuario_form_perm_reimprimir,
+                    acceso_mozos=self.usuario_form_acceso_mozos,
+                    acceso_caja=self.usuario_form_acceso_caja,
+                    acceso_cocina=self.usuario_form_acceso_cocina,
+                    acceso_mostrador=self.usuario_form_acceso_mostrador,
                 )
                 session.add(u)
                 session.commit()

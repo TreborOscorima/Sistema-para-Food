@@ -29,6 +29,13 @@ from app.components.theme import (
     WARNING_TEXT as _AMBER,
     WARNING_BG as _AMBER_LT,
     WARNING_BORDER as _AMBER_BD,
+    WARNING_SOLID as _WARN_SOLID,
+    DARK_800 as _SLATE_800,
+    TEXT_PRIMARY as _TEXT,
+    SUCCESS_SOLID as _GREEN_SOLID,
+    DANGER_SOLID as _RED,
+    INFO_SOLID as _BLUE_SOLID,
+    PURPLE as _PURPLE,
 )
 
 
@@ -99,14 +106,14 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
                     FoodState.empresa_plan == "profesional",
                     "rgba(59,130,246,0.12)", rx.cond(
                         FoodState.empresa_plan == "trial",
-                        _AMBER_LT, "#F1F5F9",
+                        _AMBER_LT, _TEXT,
                     ),
                 ),
                 color=rx.cond(
                     FoodState.empresa_plan == "profesional",
                     "#60A5FA", rx.cond(
                         FoodState.empresa_plan == "trial",
-                        _AMBER, "#94A3B8",
+                        _AMBER, _SLATE_500,
                     ),
                 ),
                 border=rx.cond(
@@ -167,7 +174,7 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                         color=rx.cond(active, _ORANGE, "#E2E8F0")),
                 width="34px", height="34px",
                 border_radius="9px",
-                background=rx.cond(active, _ORANGE_LT, "#1E293B"),
+                background=rx.cond(active, _ORANGE_LT, _SLATE_800),
                 border=rx.cond(active, f"1px solid {_ORANGE_BD}",
                                "1px solid transparent"),
                 display="flex", align_items="center",
@@ -179,11 +186,11 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                 rx.vstack(
                     rx.text(label, font_size="13px",
                             font_weight="600",
-                            color=rx.cond(active, "#FFFFFF", "#FFFFFF"),
+                            color=rx.cond(active, _WHITE, _WHITE),
                             line_height="1"),
                     rx.text(desc, font_size="11px",
                             font_weight="500",
-                            color=rx.cond(active, "#E2E8F0", "#94A3B8"),
+                            color=rx.cond(active, "#E2E8F0", _SLATE_500),
                             line_height="1"),
                     spacing="1", align="start",
                 ),
@@ -221,7 +228,7 @@ def _admin_sidebar() -> rx.Component:
             rx.cond(
                 AdminPanelState.sidebar_open,
                 rx.text("Menú", font_size="10px", font_weight="700",
-                        color="#94A3B8", text_transform="uppercase",
+                        color=_SLATE_500, text_transform="uppercase",
                         letter_spacing="0.08em", padding_x="4px",
                         padding_bottom="4px"),
                 rx.fragment(),
@@ -254,7 +261,7 @@ def _kpi_trend(value, suffix: str = "%") -> rx.Component:
             suffix, " vs ayer",
             font_size="12px", font_weight="600",
         ),
-        color=rx.cond(value >= 0, _GREEN, "#DC2626"),
+        color=rx.cond(value >= 0, _GREEN, _RED),
         margin_top="4px",
     )
 
@@ -279,7 +286,7 @@ def _kpi_card(label: str, value, icon: str, accent: str, bg: str,
             rx.text(value,
                     font_size=rx.breakpoints(initial="20px", sm="24px", md="26px"),
                     font_weight="800",
-                    color="#F1F5F9", line_height="1", margin_top="4px"),
+                    color=_TEXT, line_height="1", margin_top="4px"),
             rx.text(label, font_size="11px", font_weight="600",
                     color=_SLATE_500, text_transform="uppercase",
                     letter_spacing="0.05em"),
@@ -347,7 +354,7 @@ def _top_plato_row(plato, index: int) -> rx.Component:
         ),
         rx.vstack(
             rx.text(plato.nombre, font_size="13px", font_weight="600",
-                    color="#F1F5F9", width="100%", overflow="hidden",
+                    color=_TEXT, width="100%", overflow="hidden",
                     text_overflow="ellipsis", white_space="nowrap"),
             rx.box(
                 rx.box(
@@ -427,9 +434,9 @@ def _alerta_stock() -> rx.Component:
                 ),
                 rx.vstack(
                     rx.text("Stock bajo", font_size="12px",
-                            font_weight="700", color="#F1F5F9"),
+                            font_weight="700", color=_TEXT),
                     rx.text(FoodState.inv_alertas_bajo_stock_texto,
-                            font_size="11px", color="#F59E0B"),
+                            font_size="11px", color=_WARN_SOLID),
                     spacing="0", align="start",
                 ),
                 rx.spacer(),
@@ -466,7 +473,7 @@ def _quick_link_card(label: str, desc: str, icon: str, href: str, emoji: str = "
             ),
             rx.vstack(
                 rx.text(label, font_size="13px", font_weight="700",
-                        color="#F1F5F9"),
+                        color=_TEXT),
                 rx.text(desc, font_size="11px", color=_SLATE_500,
                         line_height="1.3"),
                 spacing="0", align="start",
@@ -497,7 +504,7 @@ def _section_resumen() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text("Resumen del día", font_size="18px",
-                        font_weight="800", color="#F1F5F9", line_height="1"),
+                        font_weight="800", color=_TEXT, line_height="1"),
                 rx.text("Vista general de tu negocio hoy",
                         font_size="13px", color=_SLATE_500),
                 spacing="1", align="start",
@@ -580,11 +587,11 @@ def _section_resumen() -> rx.Component:
                       trend=_kpi_trend(ReportesState.dashboard_pedidos_trend, suffix="")),
             _kpi_card("Ticket promedio",
                       ReportesState.dashboard_ticket_promedio_texto,
-                      "calculator", "#7C3AED", "rgba(124,58,237,0.08)",
+                      "calculator", _PURPLE, "rgba(124,58,237,0.08)",
                       trend=_kpi_trend(ReportesState.dashboard_ticket_trend_pct)),
             _kpi_card("Propinas hoy",
                       ReportesState.dashboard_propina_hoy_texto,
-                      "heart", "#EA580C", _ORANGE_LT,
+                      "heart", _ORANGE, _ORANGE_LT,
                       trend=_kpi_trend(ReportesState.dashboard_propina_trend_pct)),
             gap="12px", width="100%", flex_wrap="wrap",
         ),
@@ -599,7 +606,7 @@ def _section_resumen() -> rx.Component:
                       "chef_hat", "#D97706", _AMBER_LT),
             _kpi_card("Reservas hoy",
                       ReportesState.dashboard_reservas_hoy.to_string(),
-                      "calendar_clock", "#7C3AED", "rgba(124,58,237,0.08)"),
+                      "calendar_clock", _PURPLE, "rgba(124,58,237,0.08)"),
             gap="12px", width="100%", flex_wrap="wrap",
         ),
         # Alertas
@@ -716,7 +723,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.text(r.nombre_cliente, font_size="14px", font_weight="700",
-                        color="#F1F5F9", no_of_lines=1),
+                        color=_TEXT, no_of_lines=1),
                 rx.badge(
                     r.estado_label,
                     background=r.badge_bg,
@@ -763,7 +770,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
             ),
             rx.cond(
                 r.notas != "",
-                rx.text(r.notas, font_size="11px", color="#94A3B8",
+                rx.text(r.notas, font_size="11px", color=_SLATE_500,
                         font_style="italic", no_of_lines=1),
                 rx.fragment(),
             ),
@@ -775,7 +782,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 rx.button(
                     rx.icon(tag="check", size=13),
                     on_click=DonoOperacionesState.confirmar_reserva(r.id),
-                    background="rgba(34,197,94,0.12)", color="#22C55E",
+                    background="rgba(34,197,94,0.12)", color=_GREEN_SOLID,
                     border="1px solid #BBF7D0", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
                     title="Confirmar",
@@ -788,7 +795,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 rx.button(
                     rx.icon(tag="armchair", size=13),
                     on_click=DonoOperacionesState.sentar_reserva(r.id),
-                    background="rgba(59,130,246,0.12)", color="#3B82F6",
+                    background="rgba(59,130,246,0.12)", color=_BLUE_SOLID,
                     border="1px solid #93C5FD", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
                     title="Sentar",
@@ -852,7 +859,7 @@ def _reserva_form_dialog() -> rx.Component:
                     rx.dialog.title(
                         rx.cond(DonoOperacionesState.reserva_form_id > 0,
                                 "Editar reserva", "Nueva reserva"),
-                        font_size="16px", font_weight="700", color="#F1F5F9", margin="0",
+                        font_size="16px", font_weight="700", color=_TEXT, margin="0",
                     ),
                     rx.spacer(),
                     rx.dialog.close(
@@ -877,7 +884,7 @@ def _reserva_form_dialog() -> rx.Component:
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
                             border_radius="8px",
-                            color="#F1F5F9",
+                            color=_TEXT,
                             font_size="13px",
                             width="100%",
                             _focus={"border_color": _ORANGE},
@@ -895,7 +902,7 @@ def _reserva_form_dialog() -> rx.Component:
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
                             border_radius="8px",
-                            color="#F1F5F9",
+                            color=_TEXT,
                             font_size="13px",
                             width="100%",
                             _focus={"border_color": _ORANGE},
@@ -916,7 +923,7 @@ def _reserva_form_dialog() -> rx.Component:
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
                             border_radius="8px",
-                            color="#F1F5F9",
+                            color=_TEXT,
                             font_size="13px",
                             width="100%",
                             _focus={"border_color": _ORANGE},
@@ -934,7 +941,7 @@ def _reserva_form_dialog() -> rx.Component:
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
                             border_radius="8px",
-                            color="#F1F5F9",
+                            color=_TEXT,
                             font_size="13px",
                             width="100%",
                             _focus={"border_color": _ORANGE},
@@ -953,7 +960,7 @@ def _reserva_form_dialog() -> rx.Component:
                             background=_SLATE_50,
                             border=f"1px solid {_SLATE_200}",
                             border_radius="8px",
-                            color="#F1F5F9",
+                            color=_TEXT,
                             font_size="13px",
                             width="100%",
                             _focus={"border_color": _ORANGE},
@@ -973,7 +980,7 @@ def _reserva_form_dialog() -> rx.Component:
                         background=_SLATE_50,
                         border=f"1px solid {_SLATE_200}",
                         border_radius="8px",
-                        color="#F1F5F9",
+                        color=_TEXT,
                         font_size="13px",
                         width="100%",
                         rows="2",
@@ -1028,7 +1035,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.text(d.nombre_cliente, font_size="14px", font_weight="700",
-                        color="#F1F5F9", no_of_lines=1),
+                        color=_TEXT, no_of_lines=1),
                 rx.badge(
                     d.delivery_estado_label,
                     background=d.badge_bg,
@@ -1040,7 +1047,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 ),
                 rx.cond(
                     d.pagado,
-                    rx.badge("Pagado", background="rgba(34,197,94,0.12)", color="#22C55E",
+                    rx.badge("Pagado", background="rgba(34,197,94,0.12)", color=_GREEN_SOLID,
                              border_radius="5px", font_size="10px",
                              font_weight="700", padding="2px 8px"),
                     rx.fragment(),
@@ -1073,25 +1080,25 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 spacing="3", align="center", flex_wrap="wrap",
             ),
             rx.hstack(
-                rx.text(d.items_resumen, font_size="11px", color="#94A3B8",
+                rx.text(d.items_resumen, font_size="11px", color=_SLATE_500,
                         no_of_lines=1, flex="1"),
                 rx.text(d.total_texto, font_size="13px", font_weight="700",
-                        color="#F1F5F9"),
+                        color=_TEXT),
                 spacing="2", align="center", width="100%",
             ),
             rx.cond(
                 d.repartidor_nombre != "",
                 rx.hstack(
-                    rx.icon(tag="bike", size=12, color="#7C3AED"),
+                    rx.icon(tag="bike", size=12, color=_PURPLE),
                     rx.text(d.repartidor_nombre, font_size="12px",
-                            font_weight="600", color="#7C3AED"),
+                            font_weight="600", color=_PURPLE),
                     spacing="1", align="center",
                 ),
                 rx.fragment(),
             ),
             rx.cond(
                 d.notas != "",
-                rx.text(d.notas, font_size="11px", color="#94A3B8",
+                rx.text(d.notas, font_size="11px", color=_SLATE_500,
                         font_style="italic", no_of_lines=1),
                 rx.fragment(),
             ),
@@ -1103,7 +1110,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 rx.button(
                     rx.icon(tag="bike", size=13),
                     on_click=DonoOperacionesState.delivery_marcar_en_camino(d.pedido_id),
-                    background="rgba(59,130,246,0.12)", color="#3B82F6",
+                    background="rgba(59,130,246,0.12)", color=_BLUE_SOLID,
                     border="1px solid #93C5FD", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
                     title="En camino",
@@ -1116,7 +1123,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 rx.button(
                     rx.icon(tag="check", size=13),
                     on_click=DonoOperacionesState.delivery_marcar_entregado(d.pedido_id),
-                    background="rgba(34,197,94,0.12)", color="#22C55E",
+                    background="rgba(34,197,94,0.12)", color=_GREEN_SOLID,
                     border="1px solid #BBF7D0", border_radius="7px",
                     padding="6px", cursor="pointer", height="auto",
                     title="Entregado",
@@ -1153,7 +1160,7 @@ def _delivery_form_dialog() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.dialog.title("Nuevo pedido delivery",
-                            font_weight="800", color="#F1F5F9"),
+                            font_weight="800", color=_TEXT),
             rx.vstack(
                 rx.text("Nombre del cliente *", font_size="12px",
                         font_weight="600", color="#CBD5E1"),
@@ -1162,7 +1169,7 @@ def _delivery_form_dialog() -> rx.Component:
                     on_change=DonoOperacionesState.on_change_delivery_nombre,
                     placeholder="Juan Pérez",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
-                    border_radius="8px", color="#F1F5F9",
+                    border_radius="8px", color=_TEXT,
                     _focus={"border_color": _ORANGE},
                 ),
                 rx.text("Dirección *", font_size="12px",
@@ -1172,7 +1179,7 @@ def _delivery_form_dialog() -> rx.Component:
                     on_change=DonoOperacionesState.on_change_delivery_direccion,
                     placeholder="Av. Principal 123, Dpto 4B",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
-                    border_radius="8px", color="#F1F5F9",
+                    border_radius="8px", color=_TEXT,
                     _focus={"border_color": _ORANGE},
                 ),
                 rx.text("Teléfono", font_size="12px",
@@ -1182,7 +1189,7 @@ def _delivery_form_dialog() -> rx.Component:
                     on_change=DonoOperacionesState.on_change_delivery_telefono,
                     placeholder="987 654 321",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
-                    border_radius="8px", color="#F1F5F9",
+                    border_radius="8px", color=_TEXT,
                     _focus={"border_color": _ORANGE},
                 ),
                 rx.text("Notas", font_size="12px",
@@ -1192,7 +1199,7 @@ def _delivery_form_dialog() -> rx.Component:
                     on_change=DonoOperacionesState.on_change_delivery_notas,
                     placeholder="Indicaciones de entrega...",
                     background=_SURFACE, border=f"1px solid {_SLATE_200}",
-                    border_radius="8px", color="#F1F5F9", rows="2",
+                    border_radius="8px", color=_TEXT, rows="2",
                     _focus={"border_color": _ORANGE},
                 ),
                 spacing="2", width="100%",
@@ -1243,7 +1250,7 @@ def _section_delivery() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text("Delivery", font_size="18px", font_weight="800",
-                        color="#F1F5F9", line_height="1"),
+                        color=_TEXT, line_height="1"),
                 rx.text("Pedidos a domicilio",
                         font_size="13px", color=_SLATE_500),
                 spacing="1", align="start",
@@ -1280,7 +1287,7 @@ def _section_delivery() -> rx.Component:
                     rx.text("Sin pedidos delivery",
                             font_size="14px", color=_SLATE_500),
                     rx.text("Crea un nuevo pedido con el botón de arriba",
-                            font_size="12px", color="#94A3B8"),
+                            font_size="12px", color=_SLATE_500),
                     spacing="2", align="center",
                 ),
                 padding_y="48px", width="100%",
@@ -1302,7 +1309,7 @@ def _section_reservas() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text("Reservas", font_size="18px", font_weight="800",
-                        color="#F1F5F9", line_height="1"),
+                        color=_TEXT, line_height="1"),
                 rx.text("Gestión de reservas de mesas",
                         font_size="13px", color=_SLATE_500),
                 spacing="1", align="start",
@@ -1316,7 +1323,7 @@ def _section_reservas() -> rx.Component:
                     background=_SURFACE,
                     border=f"1px solid {_SLATE_200}",
                     border_radius="8px",
-                    color="#F1F5F9",
+                    color=_TEXT,
                     font_size="13px",
                     width="160px",
                     _focus={"border_color": _ORANGE},
@@ -1347,7 +1354,7 @@ def _section_reservas() -> rx.Component:
                     rx.text("Sin reservas para esta fecha",
                             font_size="14px", color=_SLATE_500),
                     rx.text("Crea una nueva reserva con el botón de arriba",
-                            font_size="12px", color="#94A3B8"),
+                            font_size="12px", color=_SLATE_500),
                     spacing="2", align="center",
                 ),
                 padding_y="48px", width="100%",
@@ -1372,7 +1379,7 @@ def _upgrade_banner(modulo: str) -> rx.Component:
             rx.icon(tag="lock", size=48, color=_AMBER),
             rx.heading(
                 f"{modulo} — Plan Profesional",
-                size="4", color="#F1F5F9",
+                size="4", color=_TEXT,
             ),
             rx.text(
                 MSG_UPGRADE,
@@ -1580,7 +1587,7 @@ def _brand_banner_empresa() -> rx.Component:
                 ),
                 width="100%", height="100%",
                 display="flex", align_items="center", justify_content="center",
-                background="#334155",
+                background=_SLATE_700,
                 border_radius="20px",
             ),
         ),
@@ -1618,7 +1625,7 @@ def dono_login_page() -> rx.Component:
                             font_weight="800", color=_WHITE,
                             text_align="center"),
                     rx.text("Ingrese con su email y contraseña",
-                            font_size="13px", color="#94A3B8",
+                            font_size="13px", color=_SLATE_500,
                             text_align="center"),
                     spacing="1", align="center",
                 ),
@@ -1645,7 +1652,7 @@ def dono_login_page() -> rx.Component:
                         ),
                         rx.vstack(
                             rx.text("Email", font_size="11px",
-                                    font_weight="600", color="#94A3B8",
+                                    font_weight="600", color=_SLATE_500,
                                     text_transform="uppercase",
                                     letter_spacing="0.06em"),
                             rx.input(
@@ -1661,7 +1668,7 @@ def dono_login_page() -> rx.Component:
                         ),
                         rx.vstack(
                             rx.text("Contraseña", font_size="11px",
-                                    font_weight="600", color="#94A3B8",
+                                    font_weight="600", color=_SLATE_500,
                                     text_transform="uppercase",
                                     letter_spacing="0.06em"),
                             rx.box(
@@ -1691,12 +1698,12 @@ def dono_login_page() -> rx.Component:
                                     on_click=AdminLocalState.toggle_show_password,
                                     type="button",
                                     background="transparent",
-                                    color="#94A3B8",
+                                    color=_SLATE_500,
                                     border="none",
                                     width="26px",
                                     height="26px",
                                     _hover={"background": "rgba(255,255,255,0.06)",
-                                            "color": "#FFFFFF"},
+                                            "color": _WHITE},
                                     position="absolute",
                                     right="6px",
                                     top="50%",
@@ -1722,8 +1729,8 @@ def dono_login_page() -> rx.Component:
                         ),
                         spacing="4", width="100%",
                     ),
-                    background="#1E293B",
-                    border="1px solid #334155",
+                    background=_SLATE_800,
+                    border=f"1px solid {_SLATE_700}",
                     border_radius="20px",
                     padding="32px 28px",
                     box_shadow="0 20px 60px rgba(0,0,0,0.4)",
@@ -1731,7 +1738,7 @@ def dono_login_page() -> rx.Component:
                 ),
                 rx.center(
                     rx.hstack(
-                        rx.text("¿Eres empleado?", font_size="12px", color="#94A3B8"),
+                        rx.text("¿Eres empleado?", font_size="12px", color=_SLATE_500),
                         rx.link(
                             "Ingresar con PIN",
                             href="/login?empresa=" + AdminLocalState.login_empresa_slug,
@@ -1746,7 +1753,7 @@ def dono_login_page() -> rx.Component:
                 width="100%", max_width="400px",
             ),
             min_height="100vh",
-            background="#0F172A",
+            background=_SLATE_50,
             padding="24px 16px",
         ),
     )

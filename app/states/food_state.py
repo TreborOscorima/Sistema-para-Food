@@ -260,6 +260,12 @@ _ROL_PERM_DEFAULTS: dict[str, dict[str, bool]] = {
     RolUsuario.MOZO.value:   {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False},
     RolUsuario.COCINA.value: {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False},
 }
+_ROL_ACCESO_DEFAULTS: dict[str, dict[str, bool]] = {
+    RolUsuario.ADMIN.value:  {"mozos": True,  "caja": True,  "cocina": True,  "mostrador": True},
+    RolUsuario.MOZO.value:   {"mozos": True,  "caja": False, "cocina": False, "mostrador": False},
+    RolUsuario.CAJA.value:   {"mozos": False, "caja": True,  "cocina": False, "mostrador": True},
+    RolUsuario.COCINA.value: {"mozos": False, "caja": False, "cocina": True,  "mostrador": False},
+}
 
 # Base URLs leídas del entorno en tiempo de importación. El company_id ya no es
 # fijo: FoodState._company_id() lo resuelve por sesión (ver clase FoodState).
@@ -864,6 +870,10 @@ class UsuarioSesion(BaseModel):
     perm_inventario: bool = False
     perm_costos: bool = False
     perm_reimprimir: bool = False
+    acceso_mozos: bool = False
+    acceso_caja: bool = False
+    acceso_cocina: bool = False
+    acceso_mostrador: bool = False
 
 
 class CompanyOptionView(BaseModel):
@@ -1144,6 +1154,10 @@ class UsuarioAdminView(BaseModel):
     perm_inventario: bool = False
     perm_costos: bool = False
     perm_reimprimir: bool = False
+    acceso_mozos: bool = False
+    acceso_caja: bool = False
+    acceso_cocina: bool = False
+    acceso_mostrador: bool = False
 
 
 # ─── Helpers de inventario ───────────────────────────────────────────────────
@@ -1519,25 +1533,25 @@ class FoodState(
     def puede_ver_mozos(self) -> bool:
         if self.usuario_actual is None:
             return False
-        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["mozos"]
+        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["mozos"] or self.usuario_actual.acceso_mozos
 
     @rx.var
     def puede_ver_caja(self) -> bool:
         if self.usuario_actual is None:
             return False
-        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["caja"]
+        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["caja"] or self.usuario_actual.acceso_caja
 
     @rx.var
     def puede_ver_mostrador(self) -> bool:
         if self.usuario_actual is None:
             return False
-        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["mostrador"]
+        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["mostrador"] or self.usuario_actual.acceso_mostrador
 
     @rx.var
     def puede_ver_cocina(self) -> bool:
         if self.usuario_actual is None:
             return False
-        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["cocina"]
+        return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["cocina"] or self.usuario_actual.acceso_cocina
 
     @rx.var
     def puede_ver_carta(self) -> bool:
@@ -1972,6 +1986,10 @@ class FoodState(
             perm_inventario=usuario.perm_inventario,
             perm_costos=usuario.perm_costos,
             perm_reimprimir=usuario.perm_reimprimir,
+            acceso_mozos=usuario.acceso_mozos,
+            acceso_caja=usuario.acceso_caja,
+            acceso_cocina=usuario.acceso_cocina,
+            acceso_mostrador=usuario.acceso_mostrador,
         )
         self.ultima_actividad = _utcnow().isoformat()
         self.login_selected_company_id = cid
@@ -1991,7 +2009,8 @@ class FoodState(
             self._clear_operational_context()
             self.login_error = "Sesión expirada por inactividad."
             return rx.redirect("/login", replace=True)
-        if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES[route_key] and not also_allowed:
+        _acceso_extra = getattr(self.usuario_actual, f"acceso_{route_key}", False)
+        if self.usuario_actual.rol not in ROLE_ALLOWED_ROUTES[route_key] and not also_allowed and not _acceso_extra:
             return [
                 rx.window_alert("No tienes permiso para este módulo."),
                 rx.redirect(self.usuario_home_route, replace=True),
@@ -2251,6 +2270,10 @@ class FoodState(
             perm_inventario=usuario.perm_inventario,
             perm_costos=usuario.perm_costos,
             perm_reimprimir=usuario.perm_reimprimir,
+            acceso_mozos=usuario.acceso_mozos,
+            acceso_caja=usuario.acceso_caja,
+            acceso_cocina=usuario.acceso_cocina,
+            acceso_mostrador=usuario.acceso_mostrador,
         )
         self.ultima_actividad = _utcnow().isoformat()
         self.login_pin_input = ""
@@ -6096,6 +6119,10 @@ class AdminLocalState(rx.State):
                 perm_inventario=True,
                 perm_costos=True,
                 perm_reimprimir=True,
+                acceso_mozos=True,
+                acceso_caja=True,
+                acceso_cocina=True,
+                acceso_mostrador=True,
             )
         else:
             food_state.usuario_actual = UsuarioSesion(
@@ -6106,6 +6133,10 @@ class AdminLocalState(rx.State):
                 perm_descuento=True,
                 perm_anular=True,
                 perm_reportes=True,
+                acceso_mozos=True,
+                acceso_caja=True,
+                acceso_cocina=True,
+                acceso_mostrador=True,
             )
         food_state.cargar_config_impresora()
         food_state._cargar_plan_empresa()
