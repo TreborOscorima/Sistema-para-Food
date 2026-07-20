@@ -47,6 +47,7 @@ from app.states.food_state import (
     ProductoView,
     _emoji_para_producto,
     _ensure_open_order,
+    _FOOD_API_URL,
     _money_text,
     _parse_positive_price,
     _recalculate_order_total,
