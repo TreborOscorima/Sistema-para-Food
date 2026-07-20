@@ -202,6 +202,8 @@ class Producto(TimestampedModel, table=True):
     emoji: str | None = Field(default=None, max_length=16)
     estacion: str | None = Field(default=None, max_length=20)
     tags: list[str] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    stock_diario: int | None = Field(default=None, nullable=True)
+    stock_diario_alerta: int = Field(default=5, nullable=False)
 
     categoria: Categoria | None = Relationship(back_populates="productos")
     detalles: list["DetallePedido"] = Relationship(back_populates="producto")

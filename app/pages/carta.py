@@ -591,6 +591,50 @@ def _prod_modal() -> rx.Component:
                     spacing="2", width="100%",
                 ),
                 rx.box(height="1px", width="100%", background=DARK_800),
+                rx.vstack(
+                    rx.text("Stock diario (opcional)", font_size="12px", font_weight="600", color=TEXT_MUTED),
+                    rx.hstack(
+                        rx.vstack(
+                            rx.text("Cantidad preparada", font_size="11px", color=TEXT_MUTED),
+                            rx.input(
+                                placeholder="Ej: 30 (vacío = ilimitado)",
+                                value=FoodState.producto_form_stock_diario,
+                                on_change=FoodState.set_producto_form_stock_diario,
+                                background=DARK_800,
+                                color=TEXT_WHITE,
+                                border=f"1px solid {DARK_700}",
+                                border_radius="8px",
+                                font_size="13px",
+                                type="number",
+                                min_="0",
+                            ),
+                            spacing="1", flex="1",
+                        ),
+                        rx.vstack(
+                            rx.text("Alerta mínima", font_size="11px", color=TEXT_MUTED),
+                            rx.input(
+                                placeholder="5",
+                                value=FoodState.producto_form_stock_diario_alerta,
+                                on_change=FoodState.set_producto_form_stock_diario_alerta,
+                                background=DARK_800,
+                                color=TEXT_WHITE,
+                                border=f"1px solid {DARK_700}",
+                                border_radius="8px",
+                                font_size="13px",
+                                type="number",
+                                min_="1",
+                            ),
+                            spacing="1", flex="1",
+                        ),
+                        spacing="2", width="100%",
+                    ),
+                    rx.text(
+                        "Deja vacío si el producto no necesita control de stock. Al llegar a 0 se marca como 86 automáticamente.",
+                        font_size="10px", color=TEXT_MUTED, line_height="1.3",
+                    ),
+                    spacing="1", width="100%",
+                ),
+                rx.box(height="1px", width="100%", background=DARK_800),
                 rx.hstack(
                     rx.button(
                         rx.cond(FoodState.producto_form_disponible, "Disponible", "No disponible"),

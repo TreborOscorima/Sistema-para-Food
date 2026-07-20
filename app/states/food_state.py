@@ -968,6 +968,8 @@ class ProductoView(BaseModel):
     emoji: str = "🍽️"
     tiene_modificadores: bool = False
     margen_pct: float = -1.0
+    stock_diario: int = -1
+    stock_diario_alerta: int = 5
 
 
 class CarritoItem(BaseModel):
@@ -1205,6 +1207,50 @@ def _validar_stock_para_items(session, items: list[tuple[int, int]], company_id:
         if stock < uso:
             errores.append(f"{ins.nombre}: necesario {uso:.2f}, disponible {stock:.2f} {ins.unidad}")
     return errores
+
+
+def _descontar_stock_diario(
+    session, items: list[tuple[int, int]], company_id: int
+) -> list[dict]:
+    """Descuenta stock_diario de productos y devuelve alertas.
+
+    items: lista de (producto_id, cantidad).
+    Returns lista de dicts con info de alerta: {nombre, restante, agotado}.
+    """
+    if not items:
+        return []
+    producto_ids = list({pid for pid, _ in items})
+    productos = {
+        p.id: p
+        for p in session.exec(
+            select(Producto).where(
+                Producto.company_id == company_id,
+                Producto.id.in_(producto_ids),
+                Producto.stock_diario.isnot(None),
+            )
+        ).all()
+    }
+    if not productos:
+        return []
+    uso_por_producto: dict[int, int] = {}
+    for pid, cantidad in items:
+        uso_por_producto[pid] = uso_por_producto.get(pid, 0) + cantidad
+    alertas: list[dict] = []
+    for pid, uso in uso_por_producto.items():
+        prod = productos.get(pid)
+        if prod is None:
+            continue
+        stock_antes = prod.stock_diario or 0
+        nuevo_stock = max(stock_antes - uso, 0)
+        prod.stock_diario = nuevo_stock
+        prod.updated_at = _utcnow()
+        if nuevo_stock <= 0:
+            prod.disponible = False
+            alertas.append({"nombre": prod.nombre, "restante": 0, "agotado": True})
+        elif nuevo_stock <= prod.stock_diario_alerta:
+            alertas.append({"nombre": prod.nombre, "restante": nuevo_stock, "agotado": False})
+        session.add(prod)
+    return alertas
 
 
 def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> None:
@@ -3496,6 +3542,8 @@ class FoodState(
                     emoji=p.emoji or _emoji_para_producto(p.nombre),
                     tiene_modificadores=(p.id or 0) in productos_con_mods,
                     margen_pct=margen_map.get(p.id or 0, -1.0),
+                    stock_diario=p.stock_diario if p.stock_diario is not None else -1,
+                    stock_diario_alerta=p.stock_diario_alerta,
                 )
                 for p in productos_db
             ]
@@ -4082,6 +4130,8 @@ class FoodState(
             mesa.updated_at = now
             session.add(pedido)
             session.add(mesa)
+            stock_items = [(d.producto_id, d.cantidad) for d in detalles_pendientes]
+            alertas_stock = _descontar_stock_diario(session, stock_items, self._company_id())
             session.commit()
             pedido_id = pedido.id or 0
             mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
@@ -4090,10 +4140,18 @@ class FoodState(
         self._cargar_historial_mesa(self.mesa_seleccionada_id)
         self.cargar_mesas()
         self.cargar_cocina()
-        return [
+        if alertas_stock:
+            self.cargar_menu()
+        toasts: list = [
             rx.toast.success(f"Pedido #{pedido_id} enviado a cocina"),
             rx.call_script(_VIBRATE_JS),
         ]
+        for a in alertas_stock:
+            if a["agotado"]:
+                toasts.append(rx.toast(f"⚠️ {a['nombre']} AGOTADO — marcado como 86", variant="warning", duration=6000))
+            else:
+                toasts.append(rx.toast(f"⚠️ {a['nombre']}: quedan {a['restante']} unidades", variant="warning", duration=5000))
+        return toasts
 
     # ─── Cocina (KDS) ────────────────────────────────────────────────────────
 
@@ -5697,6 +5755,8 @@ class FoodState(
                     ))
             _recalculate_order_total(session, pedido)
             _sync_order_status(session, pedido)
+            stock_mostrador = [(item.producto_id, item.cantidad) for item in self.mostrador_carrito if not item.es_combo]
+            alertas_stock = _descontar_stock_diario(session, stock_mostrador, self._company_id())
             session.commit()
             pedido_id = pedido.id or 0
 
@@ -5707,7 +5767,15 @@ class FoodState(
         self.busqueda_producto_mostrador = ""
         self.cargar_cocina()
         self.cargar_pedidos_mostrador_pendientes()
-        return rx.toast.success(f"Pedido #{pedido_id} enviado a cocina")
+        if alertas_stock:
+            self.cargar_menu()
+        toasts: list = [rx.toast.success(f"Pedido #{pedido_id} enviado a cocina")]
+        for a in alertas_stock:
+            if a["agotado"]:
+                toasts.append(rx.toast(f"⚠️ {a['nombre']} AGOTADO — marcado como 86", variant="warning", duration=6000))
+            else:
+                toasts.append(rx.toast(f"⚠️ {a['nombre']}: quedan {a['restante']} unidades", variant="warning", duration=5000))
+        return toasts
 
     def cargar_pedidos_mostrador_pendientes(self) -> None:
         """Carga órdenes de mostrador sin cobrar (pagado=False) — usada en Mostrador y Caja."""

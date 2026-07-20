@@ -82,6 +82,8 @@ class CartaMixin(rx.State, mixin=True):
     producto_form_imagen_url: str = ""
     producto_form_emoji: str = ""
     producto_form_tags: list[str] = []
+    producto_form_stock_diario: str = ""
+    producto_form_stock_diario_alerta: str = "5"
 
     # Modificadores (admin)
     grupos_modificadores: list[GrupoModificadorAdminView] = []
@@ -1035,6 +1037,12 @@ class CartaMixin(rx.State, mixin=True):
     def set_producto_form_emoji(self, v: str) -> None:
         self.producto_form_emoji = str(v)[:8]
 
+    def set_producto_form_stock_diario(self, v: str) -> None:
+        self.producto_form_stock_diario = v
+
+    def set_producto_form_stock_diario_alerta(self, v: str) -> None:
+        self.producto_form_stock_diario_alerta = v
+
     def toggle_producto_tag(self, tag: str) -> None:
         if tag in self.producto_form_tags:
             self.producto_form_tags = [t for t in self.producto_form_tags if t != tag]
@@ -1070,6 +1078,10 @@ class CartaMixin(rx.State, mixin=True):
                 prod.imagen_url = self.producto_form_imagen_url or None
                 prod.emoji = self.producto_form_emoji.strip() or None
                 prod.tags = self.producto_form_tags or None
+                sd = self.producto_form_stock_diario.strip()
+                prod.stock_diario = int(sd) if sd else None
+                sda = self.producto_form_stock_diario_alerta.strip()
+                prod.stock_diario_alerta = int(sda) if sda and int(sda) > 0 else 5
                 prod.updated_at = _utcnow()
                 session.add(prod)
                 if precio != precio_anterior:
@@ -1081,6 +1093,8 @@ class CartaMixin(rx.State, mixin=True):
                         detalle={"nombre": nombre, "anterior": str(precio_anterior), "nuevo": str(precio)},
                     )
             else:
+                sd = self.producto_form_stock_diario.strip()
+                sda = self.producto_form_stock_diario_alerta.strip()
                 prod = Producto(
                     company_id=self._company_id(),
                     categoria_id=cat.id or 0,
@@ -1091,6 +1105,8 @@ class CartaMixin(rx.State, mixin=True):
                     imagen_url=self.producto_form_imagen_url or None,
                     emoji=self.producto_form_emoji.strip() or None,
                     tags=self.producto_form_tags or None,
+                    stock_diario=int(sd) if sd else None,
+                    stock_diario_alerta=int(sda) if sda and int(sda) > 0 else 5,
                 )
                 session.add(prod)
             session.commit()
@@ -1114,6 +1130,8 @@ class CartaMixin(rx.State, mixin=True):
             prod_db = session.get(Producto, producto_id)
             self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
             self.producto_form_tags = list(prod_db.tags) if prod_db and prod_db.tags else []
+            self.producto_form_stock_diario = str(prod_db.stock_diario) if prod_db and prod_db.stock_diario is not None else ""
+            self.producto_form_stock_diario_alerta = str(prod_db.stock_diario_alerta) if prod_db else "5"
         self.carta_prod_modal = True
 
     def duplicar_producto(self, producto_id: int) -> None:
@@ -1131,6 +1149,8 @@ class CartaMixin(rx.State, mixin=True):
             prod_db = session.get(Producto, producto_id)
             self.producto_form_emoji = (prod_db.emoji or "") if prod_db else ""
             self.producto_form_tags = list(prod_db.tags) if prod_db and prod_db.tags else []
+            self.producto_form_stock_diario = str(prod_db.stock_diario) if prod_db and prod_db.stock_diario is not None else ""
+            self.producto_form_stock_diario_alerta = str(prod_db.stock_diario_alerta) if prod_db else "5"
         self.carta_prod_modal = True
 
     def toggle_producto_disponible(self, producto_id: int):
@@ -1158,6 +1178,8 @@ class CartaMixin(rx.State, mixin=True):
         self.producto_form_imagen_url = ""
         self.producto_form_emoji = ""
         self.producto_form_tags = []
+        self.producto_form_stock_diario = ""
+        self.producto_form_stock_diario_alerta = "5"
         if self.categorias:
             self.producto_form_categoria_nombre = self.categorias[0].nombre
 
