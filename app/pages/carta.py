@@ -129,6 +129,41 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                     rx.badge("Disponible", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID, border_radius="5px", font_size="10px"),
                     rx.badge("No disponible", background="rgba(239,68,68,0.12)", color="#F87171", border_radius="5px", font_size="10px"),
                 ),
+                rx.cond(
+                    prod.stock_diario >= 0,
+                    rx.badge(
+                        rx.cond(
+                            prod.stock_diario > prod.stock_diario_alerta,
+                            "Stock: " + prod.stock_diario.to_string(),
+                            rx.cond(
+                                prod.stock_diario > 0,
+                                "Stock: " + prod.stock_diario.to_string(),
+                                "AGOTADO",
+                            ),
+                        ),
+                        background=rx.cond(
+                            prod.stock_diario > prod.stock_diario_alerta,
+                            "rgba(59,130,246,0.12)",
+                            rx.cond(
+                                prod.stock_diario > 0,
+                                "rgba(245,158,11,0.15)",
+                                "rgba(239,68,68,0.15)",
+                            ),
+                        ),
+                        color=rx.cond(
+                            prod.stock_diario > prod.stock_diario_alerta,
+                            "#60A5FA",
+                            rx.cond(
+                                prod.stock_diario > 0,
+                                "#F59E0B",
+                                "#F87171",
+                            ),
+                        ),
+                        border_radius="5px", font_size="10px", font_weight="700",
+                        padding="1px 6px",
+                    ),
+                    rx.fragment(),
+                ),
                 spacing="2",
                 align="center",
                 flex_wrap="wrap",
