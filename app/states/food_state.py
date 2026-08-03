@@ -226,6 +226,7 @@ ROLE_ALLOWED_ROUTES: dict[str, set[str]] = {
     "caja": {RolUsuario.CAJA.value, RolUsuario.ADMIN.value},
     "mostrador": {RolUsuario.CAJA.value, RolUsuario.ADMIN.value},
     "cocina": {RolUsuario.COCINA.value, RolUsuario.ADMIN.value},
+    "estacion_impresion": {RolUsuario.CAJA.value, RolUsuario.COCINA.value, RolUsuario.ADMIN.value},
     "carta": {RolUsuario.ADMIN.value},
     "reportes": {RolUsuario.ADMIN.value},
     "usuarios": {RolUsuario.ADMIN.value},
@@ -1493,6 +1494,11 @@ class FoodState(
     cocina_auto_print_max_id: int = 0
     cocina_filtro_estacion: str = ""
 
+    # Estación de impresión dedicada (corre en la PC de la caja con la térmica)
+    estacion_impresion_polling_enabled: bool = False
+    estacion_ultima_impresion: str = ""
+    estacion_tickets_impresos: int = 0
+
     sonidos_activos: bool = True
     _prev_tickets_pendientes: int = -1
     _prev_mesas_alerta_entrega: int = -1
@@ -1627,6 +1633,14 @@ class FoodState(
         if self.usuario_actual is None:
             return False
         return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["mostrador"] or self.usuario_actual.acceso_mostrador
+
+    @rx.var
+    def puede_ver_estacion_impresion(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return (self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["estacion_impresion"]
+                or self.usuario_actual.acceso_caja
+                or self.usuario_actual.acceso_cocina)
 
     @rx.var
     def puede_ver_cocina(self) -> bool:
@@ -2176,6 +2190,7 @@ class FoodState(
         self.stop_caja_polling()
         self.stop_cocina_polling()
         self.stop_mostrador_polling()
+        self.stop_estacion_impresion_polling()
         result = self._route_access_result("mozos")
         self.pagina_cargada = True
         return result
@@ -2185,7 +2200,7 @@ class FoodState(
         self.stop_mozos_polling()
         self.stop_cocina_polling()
         self.stop_mostrador_polling()
-        self._init_cocina_auto_print()
+        self.stop_estacion_impresion_polling()
         result = self._route_access_result("caja")
         if result is not None:
             self.pagina_cargada = True
@@ -2200,6 +2215,7 @@ class FoodState(
         self.stop_mozos_polling()
         self.stop_caja_polling()
         self.stop_cocina_polling()
+        self.stop_estacion_impresion_polling()
         result = self._route_access_result("mostrador")
         if result is not None:
             self.pagina_cargada = True
@@ -2215,10 +2231,29 @@ class FoodState(
         self.stop_mozos_polling()
         self.stop_caja_polling()
         self.stop_mostrador_polling()
-        self._init_cocina_auto_print()
+        self.stop_estacion_impresion_polling()
         result = self._route_access_result("cocina")
         self.pagina_cargada = True
         return result
+
+    def on_load_estacion_impresion(self):
+        """Estación de impresión dedicada: corre en la PC de la caja (con la
+        impresora térmica USB) y auto-imprime las comandas que envían los mozos
+        desde cualquier dispositivo. Es el ÚNICO punto de impresión de comandas
+        para evitar tickets duplicados."""
+        self.pagina_cargada = False
+        self.stop_mozos_polling()
+        self.stop_caja_polling()
+        self.stop_cocina_polling()
+        self.stop_mostrador_polling()
+        self._init_cocina_auto_print()
+        result = self._route_access_result("estacion_impresion")
+        if result is not None:
+            self.pagina_cargada = True
+            return result
+        self.cargar_config_impresora()
+        self.pagina_cargada = True
+        return None
 
     def on_load_carta(self):
         return self._route_access_result("carta")
@@ -3277,7 +3312,6 @@ class FoodState(
         while True:
             await asyncio.sleep(3)
             try:
-                print_html = ""
                 play_sound = False
                 async with self:
                     if not self.cocina_polling_enabled:
@@ -3286,9 +3320,10 @@ class FoodState(
                         self.cocina_polling_enabled = False
                         break
                     play_sound = self._refresh_cocina_slice()
-                    print_html = self._check_cocina_auto_print()
-                if print_html:
-                    yield rx.call_script(build_print_script(print_html))
+                # NOTA: la impresión de comandas NO se hace aquí. El KDS de
+                # cocina suele correr en una pantalla sin impresora. La
+                # auto-impresión está centralizada en /estacion-impresion (la
+                # PC de la caja con la térmica) para evitar tickets duplicados.
                 if play_sound:
                     yield rx.call_script(_SOUND_BELL_JS)
                     yield rx.call_script(_VIBRATE_JS)
@@ -3297,6 +3332,38 @@ class FoodState(
 
     def stop_cocina_polling(self) -> None:
         self.cocina_polling_enabled = False
+
+    @rx.event(background=True)
+    async def start_estacion_impresion_polling(self) -> None:
+        """Polling dedicado de la estación de impresión. Cada 3s revisa si hay
+        comandas nuevas enviadas a cocina (desde cualquier dispositivo) y las
+        imprime en la impresora térmica local vía iframe oculto. Es el único
+        punto de auto-impresión de comandas del sistema."""
+        async with self:
+            if self.estacion_impresion_polling_enabled:
+                return
+            self.estacion_impresion_polling_enabled = True
+        while True:
+            await asyncio.sleep(3)
+            try:
+                print_html = ""
+                async with self:
+                    if not self.estacion_impresion_polling_enabled:
+                        break
+                    if self._check_session_expiry():
+                        self.estacion_impresion_polling_enabled = False
+                        break
+                    print_html = self._check_cocina_auto_print()
+                    if print_html:
+                        self.estacion_tickets_impresos += 1
+                        self.estacion_ultima_impresion = ahora_local_pe().strftime("%H:%M:%S")
+                if print_html:
+                    yield rx.call_script(build_print_script(print_html))
+            except Exception:
+                break
+
+    def stop_estacion_impresion_polling(self) -> None:
+        self.estacion_impresion_polling_enabled = False
 
     def toggle_cocina_fullscreen(self) -> None:
         self.cocina_fullscreen = not self.cocina_fullscreen
@@ -3315,7 +3382,6 @@ class FoodState(
         while True:
             await asyncio.sleep(3)
             try:
-                print_html = ""
                 async with self:
                     if not self.caja_polling_enabled:
                         break
@@ -3323,9 +3389,8 @@ class FoodState(
                         self.caja_polling_enabled = False
                         break
                     self._refresh_caja_slice()
-                    print_html = self._check_cocina_auto_print()
-                if print_html:
-                    yield rx.call_script(build_print_script(print_html))
+                # La auto-impresión de comandas se centraliza en
+                # /estacion-impresion (ver start_estacion_impresion_polling).
             except Exception:
                 break
 

@@ -331,31 +331,50 @@ def generate_cash_close_ticket_html(
 
 
 def build_print_script(html_content: str) -> str:
-    """JS que abre el comprobante en una ventana nueva y dispara el diálogo
-    de impresión del navegador — imprime en la impresora ya instalada en el
-    sistema operativo local (USB o red, da igual).
+    """JS que imprime el comprobante usando un IFRAME OCULTO (no un popup).
 
-    Usa Blob + URL.createObjectURL para evitar problemas de document.write
-    en browsers modernos (Chrome 120+ restringe document.write en popups).
-    El setTimeout de 400ms espera a que el navegador termine de renderizar;
-    sin él los trabajos llegan al buffer de la impresora térmica antes de que
-    se complete el render y los tickets se mezclan en el mismo papel.
-    El afterprint cierra la ventana automáticamente al terminar.
+    Antes se usaba window.open(), pero los navegadores bloquean los popups que
+    NO nacen de un click directo del usuario. La auto-impresión de comandas se
+    dispara desde un polling en segundo plano (sin gesto del usuario), así que
+    el popup se bloqueaba silenciosamente y no salía ningún ticket. Un iframe
+    oculto no está sujeto al bloqueador de popups y permite imprimir directo en
+    la impresora instalada en el sistema operativo local (USB o red, da igual).
+
+    En modo kiosk-printing de Chrome/Edge (`--kiosk-printing`) la impresión es
+    silenciosa (sin diálogo), ideal para la impresora térmica de la caja.
+
+    El setTimeout de 400ms espera a que el iframe termine de renderizar antes
+    de imprimir; sin él, el trabajo llega al buffer de la térmica antes de que
+    se complete el render y los tickets se mezclan en el mismo papel. Se usa
+    `srcdoc` (fiable para disparar onload) con un timeout de respaldo por si el
+    onload no dispara. El iframe se elimina 2s después de imprimir.
     """
     return f"""
     (function() {{
-        var blob = new Blob([{json.dumps(html_content)}], {{type: 'text/html; charset=utf-8'}});
-        var url = URL.createObjectURL(blob);
-        var w = window.open(url, '_blank');
-        if (!w) {{ URL.revokeObjectURL(url); return; }}
-        w.focus();
+        var html = {json.dumps(html_content)};
+        var iframe = document.createElement('iframe');
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+        var printed = false;
+        function cleanup() {{
+            setTimeout(function() {{
+                if (iframe && iframe.parentNode) {{ iframe.parentNode.removeChild(iframe); }}
+            }}, 2000);
+        }}
         function doPrint() {{
-            setTimeout(function() {{ w.print(); }}, 400);
+            if (printed) {{ return; }}
+            printed = true;
+            setTimeout(function() {{
+                try {{
+                    iframe.contentWindow.focus();
+                    iframe.contentWindow.print();
+                }} catch (e) {{}}
+                cleanup();
+            }}, 400);
         }}
-        if (w.document.readyState === 'complete') {{
-            doPrint();
-        }} else {{
-            w.onload = doPrint;
-        }}
+        iframe.onload = doPrint;
+        document.body.appendChild(iframe);
+        iframe.srcdoc = html;
+        setTimeout(doPrint, 1500);
     }})();
     """
