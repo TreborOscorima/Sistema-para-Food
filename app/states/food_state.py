@@ -2201,6 +2201,7 @@ class FoodState(
         self.stop_cocina_polling()
         self.stop_mostrador_polling()
         self.stop_estacion_impresion_polling()
+        self._init_cocina_auto_print()
         result = self._route_access_result("caja")
         if result is not None:
             self.pagina_cargada = True
@@ -3382,6 +3383,7 @@ class FoodState(
         while True:
             await asyncio.sleep(3)
             try:
+                print_html = ""
                 async with self:
                     if not self.caja_polling_enabled:
                         break
@@ -3389,8 +3391,15 @@ class FoodState(
                         self.caja_polling_enabled = False
                         break
                     self._refresh_caja_slice()
-                # La auto-impresión de comandas se centraliza en
-                # /estacion-impresion (ver start_estacion_impresion_polling).
+                    # Auto-impresión de comandas desde la página de Caja: es la
+                    # que el cajero tiene abierta durante el servicio, así que
+                    # imprime al usar el sistema de forma normal (sin depender
+                    # de un acceso directo especial). La /estacion-impresion
+                    # sigue disponible como pantalla dedicada alternativa —
+                    # usar UNA sola a la vez para no duplicar tickets.
+                    print_html = self._check_cocina_auto_print()
+                if print_html:
+                    yield rx.call_script(build_print_script(print_html))
             except Exception:
                 break
 
