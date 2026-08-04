@@ -1607,7 +1607,7 @@ def _mozos_content() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text(
-                    "Salón",
+                    "Mozos",
                     font_size="22px",
                     font_weight="800",
                     color=TEXT_WHITE,
@@ -1651,7 +1651,7 @@ def _mozos_content() -> rx.Component:
     route="/mozos",
     on_load=[FoodState.on_load_mozos, FoodState.start_mozos_polling,
              FoodState.cargar_clientes],
-    title="TUWAYKIFOOD | Salón",
+    title="TUWAYKIFOOD | Mozos",
 )
 def mozos_page() -> rx.Component:
     return app_shell(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.states.food_state import FoodState
+from app.components.modulos import MODULOS as _M
 
 
 # ─── PALETA — re-exportada desde theme.py (fuente única de verdad) ───────────
@@ -370,32 +371,32 @@ def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
     nav_item = _mobile_nav_item if mobile else _desktop_nav_item
     return rx.vstack(
         rx.cond(FoodState.puede_ver_mozos,
-                nav_item("Mozos", "/mozos", "layout_grid", active == "mozos"),
+                nav_item(_M["mozos"].label, "/mozos", _M["mozos"].icon, active == "mozos"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_caja,
-                nav_item("Caja", "/caja", "wallet", active == "caja"),
+                nav_item(_M["caja"].label, "/caja", _M["caja"].icon, active == "caja"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_mostrador,
-                nav_item("Mostrador", "/mostrador", "shopping_bag", active == "mostrador"),
+                nav_item(_M["mostrador"].label, "/mostrador", _M["mostrador"].icon, active == "mostrador"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_cocina,
-                nav_item("Cocina", "/cocina", "chef_hat", active == "cocina"),
+                nav_item(_M["cocina"].label, "/cocina", _M["cocina"].icon, active == "cocina"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_estacion_impresion,
-                nav_item("Impresión", "/estacion-impresion", "printer",
+                nav_item(_M["impresion"].label, "/estacion-impresion", _M["impresion"].icon,
                          active == "estacion_impresion"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_carta,
-                nav_item("Carta", "/carta", "book_open", active == "carta"),
+                nav_item(_M["carta"].label, "/carta", _M["carta"].icon, active == "carta"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_reportes,
-                nav_item("Reportes", "/reportes", "receipt_text", active == "reportes"),
+                nav_item(_M["reportes"].label, "/reportes", _M["reportes"].icon, active == "reportes"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_usuarios,
-                nav_item("Usuarios", "/usuarios", "users", active == "usuarios"),
+                nav_item(_M["usuarios"].label, "/usuarios", _M["usuarios"].icon, active == "usuarios"),
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_configuracion,
-                nav_item("Configuración", "/configuracion", "settings",
+                nav_item(_M["config"].label, "/configuracion", _M["config"].icon,
                          active == "configuracion"),
                 rx.fragment()),
         width="100%",
