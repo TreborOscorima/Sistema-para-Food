@@ -76,6 +76,8 @@ def _producto_card(producto: ProductoView) -> rx.Component:
                 ),
                 spacing="0", align="start", flex="1", min_width="0",
             ),
+            # «+» decorativo: la tarjeta entera es la zona táctil (on_click abajo),
+            # por eso el indicador puede quedar chico sin afectar el target de 40px.
             rx.box(
                 rx.icon(tag="plus", size=12, color=TEXT_WHITE),
                 width="22px", height="22px", border_radius="6px",
@@ -168,14 +170,16 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     background=PAGE_BACKGROUND, border=f"1px solid {DARK_600}",
                     color=TEXT_PRIMARY, border_radius="6px",
                     font_size="11px", padding_x="8px", padding_y="4px",
-                    width="100%", height="28px",
+                    width="100%", height=rx.breakpoints(initial="40px", md="30px"),
                     _focus={"border": f"1px solid {ACCENT}"},
                     _placeholder={"color": TEXT_MUTED},
                 ),
                 rx.button(
-                    rx.icon(tag="check", size=11),
+                    rx.icon(tag="check", size=14),
                     on_click=FoodState.guardar_nota_item_mostrador(item.producto_id),
-                    width="28px", height="28px",
+                    width=rx.breakpoints(initial="40px", md="30px"),
+                    height=rx.breakpoints(initial="40px", md="30px"),
+                    flex_shrink="0",
                     background=DARK_800, color=SUCCESS_SOLID,
                     border=f"1px solid {DARK_700}", border_radius="6px",
                     cursor="pointer", padding="0",
