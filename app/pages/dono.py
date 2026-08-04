@@ -498,6 +498,97 @@ def _quick_link_card(label: str, desc: str, icon: str, href: str, emoji: str = "
 
 # ── SECCIÓN: RESUMEN ──────────────────────────────────────────────────────────
 
+def _ob_paso(numero: int, label: str, done, href: str) -> rx.Component:
+    return rx.hstack(
+        rx.cond(
+            done,
+            rx.icon(tag="circle_check_big", size=20, color=_GREEN_SOLID),
+            rx.box(
+                rx.text(str(numero), font_size="12px", font_weight="800", color=_SLATE_500),
+                min_width="22px", height="22px", border_radius="50%",
+                border=f"2px solid {_SLATE_200}", display="flex",
+                align_items="center", justify_content="center", flex_shrink="0",
+            ),
+        ),
+        rx.text(
+            label, font_size="13px", font_weight="600",
+            color=rx.cond(done, _SLATE_500, _TEXT),
+            text_decoration=rx.cond(done, "line-through", "none"),
+        ),
+        rx.spacer(),
+        rx.cond(
+            done,
+            rx.fragment(),
+            rx.link(
+                rx.hstack(
+                    rx.text("Configurar", font_size="12px", font_weight="700", color=_ORANGE),
+                    rx.icon(tag="arrow_right", size=13, color=_ORANGE),
+                    spacing="1", align="center",
+                ),
+                href=href, text_decoration="none", _hover={"opacity": "0.75"},
+                flex_shrink="0",
+            ),
+        ),
+        width="100%", align="center", spacing="3", padding_y="4px",
+    )
+
+
+def _onboarding_card() -> rx.Component:
+    return rx.cond(
+        FoodState.onboarding_visible,
+        rx.box(
+            rx.vstack(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="rocket", size=18, color=_ORANGE),
+                        min_width="34px", height="34px", border_radius="9px",
+                        background=_ORANGE_LT, display="flex",
+                        align_items="center", justify_content="center", flex_shrink="0",
+                    ),
+                    rx.vstack(
+                        rx.text("Primeros pasos", font_size="15px", font_weight="800", color=_TEXT),
+                        rx.text(
+                            "Deja tu local listo — "
+                            + FoodState.onboarding_pasos_ok.to_string()
+                            + " de 5 completados",
+                            font_size="12px", color=_SLATE_500,
+                        ),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.button(
+                        "No mostrar más",
+                        on_click=FoodState.descartar_onboarding,
+                        background="transparent", color=_SLATE_500,
+                        border=f"1px solid {_SLATE_200}", border_radius="7px",
+                        font_size="11px", font_weight="600",
+                        padding_x="10px", padding_y="5px", cursor="pointer",
+                        _hover={"color": _TEXT, "border_color": _SLATE_500},
+                        flex_shrink="0",
+                    ),
+                    width="100%", align="center", gap="10px", flex_wrap="wrap",
+                ),
+                rx.box(height="1px", width="100%", background=_SLATE_200),
+                _ob_paso(1, "Ponle nombre a tu local", FoodState.ob_nombre_ok, "/configuracion"),
+                _ob_paso(2, "Carga tu carta (categorías y productos)", FoodState.ob_carta_ok, "/carta"),
+                _ob_paso(3, "Configura tus mesas y sectores", FoodState.ob_mesas_ok, "/configuracion"),
+                _ob_paso(4, "Crea los usuarios y PINs de tu equipo", FoodState.ob_usuarios_ok, "/usuarios"),
+                _ob_paso(5, "Configura la impresión (navegador o agente)", FoodState.ob_impresion_ok, "/configuracion"),
+                _ob_paso(6, "Opcional: activa tu carta digital QR", FoodState.ob_qr_ok, "/configuracion"),
+                spacing="2", width="100%",
+            ),
+            background=_SURFACE,
+            border=f"1px solid {_ORANGE_BD}",
+            border_left=f"3px solid {_ORANGE}",
+            border_radius="14px",
+            padding="16px 20px",
+            width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        rx.fragment(),
+    )
+
+
 def _section_resumen() -> rx.Component:
     return rx.vstack(
         # Encabezado
@@ -576,6 +667,7 @@ def _section_resumen() -> rx.Component:
             ),
             width="100%", align="center",
         ),
+        _onboarding_card(),
         # KPIs
         rx.flex(
             _kpi_card("Ventas hoy", ReportesState.dashboard_ventas_hoy_texto,

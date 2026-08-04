@@ -2318,6 +2318,60 @@ class FoodState(
         self.cargar_agentes_config()
         return None
 
+    # ─── T-04 · Onboarding "Primeros pasos" (checklist de puesta en marcha) ───
+    ob_nombre_ok: bool = False
+    ob_carta_ok: bool = False
+    ob_mesas_ok: bool = False
+    ob_usuarios_ok: bool = False
+    ob_impresion_ok: bool = False
+    ob_qr_ok: bool = False
+    ob_descartado: str = rx.LocalStorage("")
+
+    @rx.var
+    def onboarding_pasos_ok(self) -> int:
+        return (
+            int(self.ob_nombre_ok) + int(self.ob_carta_ok) + int(self.ob_mesas_ok)
+            + int(self.ob_usuarios_ok) + int(self.ob_impresion_ok)
+        )
+
+    @rx.var
+    def onboarding_visible(self) -> bool:
+        completo = (
+            self.ob_nombre_ok and self.ob_carta_ok and self.ob_mesas_ok
+            and self.ob_usuarios_ok and self.ob_impresion_ok
+        )
+        return (not completo) and self.ob_descartado != "1"
+
+    def descartar_onboarding(self) -> None:
+        self.ob_descartado = "1"
+
+    def cargar_onboarding(self) -> None:
+        """Calcula los checks de puesta en marcha desde la BD del tenant."""
+        cid = self._company_id()
+        with self._tenant_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == cid)
+            ).first()
+            self.ob_nombre_ok = bool(
+                cfg and cfg.nombre_local and cfg.nombre_local not in ("", "Mi Restaurante")
+            )
+            self.ob_impresion_ok = bool(
+                cfg and (cfg.cocina_activa or cfg.caja_activa or cfg.modo_impresion == "agente")
+            )
+            cat = session.exec(select(Categoria.id).where(Categoria.company_id == cid)).first()
+            prod = session.exec(select(Producto.id).where(Producto.company_id == cid)).first()
+            self.ob_carta_ok = cat is not None and prod is not None
+            self.ob_qr_ok = self.ob_carta_ok
+            mesa = session.exec(select(Mesa.id).where(Mesa.company_id == cid)).first()
+            self.ob_mesas_ok = mesa is not None
+            usuarios = session.exec(
+                select(UsuarioFood.id).where(
+                    UsuarioFood.company_id == cid,
+                    UsuarioFood.activo.is_(True),
+                )
+            ).all()
+            self.ob_usuarios_ok = len(usuarios) > 1
+
     def on_load_dono_page(self) -> None:
         self._cargar_plan_empresa()
         self.cargar_config_impresora()
@@ -2326,6 +2380,7 @@ class FoodState(
         self.cargar_clientes()
         self.cargar_promociones()
         self.cargar_cuentas()
+        self.cargar_onboarding()
 
     # ─── Autenticación (PIN + company_id) ────────────────────────────────────
 
