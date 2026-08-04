@@ -6,6 +6,7 @@ import reflex as rx
 
 from app.states.food_state import FoodState, PromocionView, AdminLocalState
 from app.pages.dono import _dono_shell, AdminPanelState
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_SOLID,
@@ -16,6 +17,31 @@ from app.components.shared import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE,
     WARNING_SOLID,
 )
+
+
+def _promociones_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="Promociones y cupones",
+        subtitulo="Dos formas de dar descuentos. Elige la pestaña según lo que necesites.",
+        secciones=[
+            {
+                "titulo": "Automáticas",
+                "pasos": [
+                    "Descuentos que caja aplica SOLA al cobrar, sin que el cliente haga nada.",
+                    "Por horario (happy hour), por producto o por categoría.",
+                    "Ejemplo: -20% en tragos de 18 a 20 h.",
+                ],
+            },
+            {
+                "titulo": "Cupones",
+                "pasos": [
+                    "Códigos que el cliente PRESENTA y caja ingresa a mano al cobrar.",
+                    "Creas un lote, repartes los códigos y luego ves cuántos se usaron.",
+                    "Ejemplo: código VERANO10 que da -10%.",
+                ],
+            },
+        ],
+    )
 
 
 def _tipo_label(tipo: str) -> rx.Component:
@@ -395,11 +421,12 @@ def _promociones_content() -> rx.Component:
         rx.hstack(
             rx.vstack(
                 rx.text("Promociones", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
-                rx.text("Descuentos automáticos y cupones de código",
+                rx.text("Automáticas (happy hour) y cupones por código",
                         font_size="13px", color=TEXT_MUTED),
                 spacing="0", align="start",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             # Botón contextual cambia según el tab activo
             rx.cond(
                 AdminPanelState.promo_tab == "automaticas",
@@ -450,6 +477,19 @@ def _promociones_content() -> rx.Component:
             border_radius="10px",
             width="fit-content",
         ),
+        # ── Hint según el tab activo (deslinde automáticas vs cupones) ──────
+        rx.hstack(
+            rx.icon(tag="info", size=14, color=TEXT_MUTED, flex_shrink="0"),
+            rx.text(
+                rx.cond(
+                    AdminPanelState.promo_tab == "automaticas",
+                    "Se aplican solas al cobrar (happy hour, por producto o categoría). El cliente no hace nada.",
+                    "Códigos que el cliente presenta y caja ingresa a mano al cobrar.",
+                ),
+                font_size="12px", color=TEXT_MUTED, line_height="1.4",
+            ),
+            spacing="2", align="center", width="100%",
+        ),
         # ── Contenido por tab ────────────────────────────────────────────
         rx.cond(
             AdminPanelState.promo_tab == "automaticas",
@@ -465,6 +505,7 @@ def _promociones_content() -> rx.Component:
             ),
             _cupones_body(),
         ),
+        _promociones_ayuda(),
         spacing="4", width="100%",
     )
 

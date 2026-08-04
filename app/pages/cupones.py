@@ -6,6 +6,7 @@ import reflex as rx
 
 from app.states.food_state import CuponLoteView, FoodState, AdminLocalState
 from app.pages.dono import _dono_shell
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
@@ -291,15 +292,42 @@ def _cupones_body() -> rx.Component:
     )
 
 
+def _cupones_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funcionan los Cupones?",
+        subtitulo="Códigos que el cliente presenta y caja ingresa al cobrar.",
+        secciones=[
+            {
+                "titulo": None,
+                "pasos": [
+                    "Crea un lote con su código, descuento y vigencia.",
+                    "Reparte o imprime los códigos para tus clientes.",
+                    "Al cobrar, caja ingresa el código y se aplica el descuento.",
+                    "Aquí ves cuántos se usaron de cada lote.",
+                ],
+            },
+            {
+                "titulo": "¿En qué se diferencian de las promociones?",
+                "pasos": [
+                    "Los cupones los presenta el cliente. Las promociones (happy hour, "
+                    "por producto) se aplican solas — están en el módulo Promociones.",
+                ],
+            },
+        ],
+    )
+
+
 def _cupones_content() -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.vstack(
                 rx.text("Cupones", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
-                rx.text("Códigos de descuento por lote", font_size="13px", color=TEXT_MUTED),
+                rx.text("Códigos que el cliente presenta y caja ingresa al cobrar",
+                        font_size="13px", color=TEXT_MUTED),
                 spacing="0", align="start",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.button(
                 rx.hstack(
                     rx.icon(tag="plus", size=13),
@@ -311,9 +339,10 @@ def _cupones_content() -> rx.Component:
                 padding_x="16px", padding_y="9px", cursor="pointer",
                 _hover={"background": ACCENT_HOVER},
             ),
-            width="100%", align="center",
+            width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
         _cupones_body(),
+        _cupones_ayuda(),
         spacing="4", width="100%",
     )
 

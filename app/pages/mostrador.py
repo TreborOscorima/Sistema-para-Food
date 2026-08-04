@@ -15,6 +15,7 @@ from app.components.shared import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
 )
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.states.food_state import (
     CarritoItem,
     FoodState,
@@ -22,6 +23,22 @@ from app.states.food_state import (
     MostradorPendienteView,
     ProductoView,
 )
+
+
+def _mostrador_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Mostrador?",
+        subtitulo="Pedidos para llevar, sin mesa.",
+        secciones=[{
+            "titulo": None,
+            "pasos": [
+                "Arma el pedido eligiendo productos del catálogo.",
+                "Opcional: escribe el nombre del cliente para identificarlo.",
+                "Envía el pedido a cocina.",
+                "Cuando esté listo, lo entregas y el cobro se hace en Caja.",
+            ],
+        }],
+    )
 
 
 # ─── Producto card compacto ─────────────────────────────────────────────────
@@ -420,12 +437,18 @@ def _mobile_cart_bar() -> rx.Component:
 def _mostrador_content() -> rx.Component:
     return rx.vstack(
         _modal_seleccion_mods_m(),
+        _mostrador_ayuda(),
         cumpleanos_banner(),
         # Header
-        rx.vstack(
-            rx.text("Mostrador", font_size="22px", font_weight="800", color=TEXT_WHITE),
-            rx.text("Pedidos para llevar", font_size="13px", color=TEXT_MUTED),
-            spacing="0",
+        rx.hstack(
+            rx.vstack(
+                rx.text("Mostrador", font_size="22px", font_weight="800", color=TEXT_WHITE),
+                rx.text("Pedidos para llevar", font_size="13px", color=TEXT_MUTED),
+                spacing="0",
+            ),
+            rx.spacer(),
+            ayuda_trigger(),
+            width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
         # Contenido: 2 columnas principales
         rx.flex(
