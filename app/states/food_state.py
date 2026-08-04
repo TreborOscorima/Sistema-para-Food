@@ -1491,7 +1491,6 @@ class FoodState(
     cocina_fullscreen: bool = False
     caja_polling_enabled: bool = False
     mostrador_polling_enabled: bool = False
-    cocina_auto_print_max_id: int = 0
     cocina_filtro_estacion: str = ""
 
     # Estación de impresión dedicada (corre en la PC de la caja con la térmica)
@@ -3167,43 +3166,63 @@ class FoodState(
     # ─── Auto-impresión de tickets de cocina ───────────────────────────────
 
     def _init_cocina_auto_print(self) -> None:
-        """Marca el max detalle ID actual para no reimprimir tickets viejos."""
-        with self._tenant_session() as session:
-            result = session.exec(
-                select(DetallePedido.id)
-                .where(DetallePedido.company_id == self._company_id())
-                .order_by(DetallePedido.id.desc())
-                .limit(1)
-            ).first()
-            self.cocina_auto_print_max_id = result or 0
+        """Ya no se usa un watermark en memoria: la dedupe de impresión vive en
+        la BD (DetallePedido.ticket_impreso_at), así cada comanda sale UNA sola
+        vez imprima quien imprima. Se conserva como no-op para los on_load que
+        aún lo invocan."""
+        return None
 
     def _check_cocina_auto_print(self) -> str:
-        """Detecta items nuevos enviados a cocina y genera ticket HTML combinado."""
+        """Detecta comandas enviadas a cocina AÚN NO impresas en papel y genera
+        el ticket HTML combinado.
+
+        Hace un 'claim' atómico sobre ticket_impreso_at
+        (UPDATE ... WHERE ticket_impreso_at IS NULL) y solo imprime las líneas que
+        ESTA llamada logró marcar (rowcount == 1). Si otra pantalla (Caja u otra
+        /estacion-impresion) gana la carrera, su UPDATE afecta 0 filas y esa
+        comanda se salta: así cada comanda sale UNA sola vez sin importar cuántas
+        pantallas estén imprimiendo ni en qué módulo esté navegando cada quien."""
         with self._tenant_session() as session:
-            if self.cocina_auto_print_max_id == 0:
-                cur_max = session.exec(
-                    select(DetallePedido.id)
-                    .where(DetallePedido.company_id == self._company_id())
-                    .order_by(DetallePedido.id.desc())
-                    .limit(1)
-                ).first()
-                self.cocina_auto_print_max_id = cur_max or 0
-                return ""
-            new_detalles = session.exec(
+            candidates = session.exec(
                 select(DetallePedido)
                 .where(
                     DetallePedido.company_id == self._company_id(),
                     DetallePedido.impreso_cocina.is_(True),
-                    DetallePedido.id > self.cocina_auto_print_max_id,
+                    DetallePedido.ticket_impreso_at.is_(None),
                 )
                 .order_by(DetallePedido.id)
             ).all()
-            if not new_detalles:
+            if not candidates:
                 return ""
-            self.cocina_auto_print_max_id = max(d.id or 0 for d in new_detalles)
+            # Claim atómico por fila. Capturamos los datos que necesitamos ANTES
+            # del commit (evita recargas por expiración) y commiteamos enseguida
+            # para soltar los locks rápido, antes de armar el HTML.
+            now = _utcnow()
+            claimed: list[dict] = []
+            for d in candidates:
+                res = session.exec(
+                    sa_update(DetallePedido)
+                    .where(
+                        DetallePedido.id == d.id,
+                        DetallePedido.ticket_impreso_at.is_(None),
+                    )
+                    .values(ticket_impreso_at=now)
+                )
+                if (res.rowcount or 0) == 1:
+                    claimed.append(
+                        {
+                            "pedido_id": d.pedido_id,
+                            "producto_id": d.producto_id,
+                            "cantidad": d.cantidad,
+                            "notas": d.notas,
+                        }
+                    )
+            session.commit()
+            if not claimed:
+                return ""
             pedido_groups: dict[int, list] = {}
-            for d in new_detalles:
-                pedido_groups.setdefault(d.pedido_id, []).append(d)
+            for d in claimed:
+                pedido_groups.setdefault(d["pedido_id"], []).append(d)
             pedido_ids = list(pedido_groups.keys())
             pedidos = {p.id: p for p in session.exec(select(Pedido).where(Pedido.id.in_(pedido_ids))).all()}
             mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == self._company_id())).all()}
@@ -3223,9 +3242,9 @@ class FoodState(
                     mesa_label = f"Pedido #{pid}"
                 lines = [
                     TicketLine(
-                        name=(productos.get(d.producto_id).nombre if productos.get(d.producto_id) else f"Producto {d.producto_id}"),
-                        quantity=d.cantidad,
-                        note=d.notas or "",
+                        name=(productos.get(d["producto_id"]).nombre if productos.get(d["producto_id"]) else f"Producto {d['producto_id']}"),
+                        quantity=d["cantidad"],
+                        note=d["notas"] or "",
                     )
                     for d in detalles
                 ]

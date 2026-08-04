@@ -725,6 +725,10 @@ class DetallePedido(TimestampedModel, table=True):
     )
     impreso_cocina: bool = Field(default=False, nullable=False)
     impreso_caja: bool = Field(default=False, nullable=False)
+    # Marca de "comanda ya impresa en papel". La pone la primera pantalla que
+    # la imprime (Caja o /estacion-impresion), de forma atómica, para que cada
+    # comanda salga UNA sola vez sin importar cuántas pantallas estén abiertas.
+    ticket_impreso_at: datetime | None = Field(default=None, index=True)
     modificadores_json: str | None = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
