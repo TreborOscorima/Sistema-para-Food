@@ -44,3 +44,7 @@ reflex.lock/
 
 # Backups MySQL (generados por scripts/backup-mysql.sh)
 backups/*.sql.gz
+
+# Imagenes de prueba sueltas
+test_burger.jpg
+test_*.jpg
