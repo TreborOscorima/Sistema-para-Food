@@ -1407,6 +1407,9 @@ class FoodState(
     productos: list[ProductoView] = []
     carrito: list[CarritoItem] = []
     mostrador_carrito: list[CarritoItem] = []
+    # Panel deslizable del carrito en móvil (bottom sheet). En escritorio el
+    # carrito va siempre visible en la columna derecha y esta var no aplica.
+    mostrador_cart_sheet_abierto: bool = False
     historial_pedido: list[HistorialItem] = []
     tickets_cocina: list[CocinaTicketView] = []
     pedidos_mostrador_pendientes: list[MostradorPendienteView] = []
@@ -6075,12 +6078,16 @@ class FoodState(
         self.mostrador_carrito = carrito_actualizado
         return rx.toast.success("Carrito de mostrador actualizado.")
 
+    def set_mostrador_cart_sheet_abierto(self, valor: bool) -> None:
+        self.mostrador_cart_sheet_abierto = valor
+
     def limpiar_carrito_mostrador(self) -> None:
         self.mostrador_carrito = []
         self.mostrador_metodo_pago = "efectivo"
         self.busqueda_producto_mostrador = ""
         self.nota_producto_activo_id = 0
         self.nota_input_temporal = ""
+        self.mostrador_cart_sheet_abierto = False
         return rx.toast.success("Carrito de mostrador limpio.")
 
     def abrir_nota_item_mostrador(self, producto_id: int) -> None:
@@ -6226,6 +6233,7 @@ class FoodState(
         self.mostrador_carrito = []
         self.mostrador_cliente_nombre = ""
         self.busqueda_producto_mostrador = ""
+        self.mostrador_cart_sheet_abierto = False
         self.cargar_cocina()
         self.cargar_pedidos_mostrador_pendientes()
         if alertas_stock:

@@ -256,6 +256,167 @@ def _entregado_card(pedido: MostradorEntregadoView) -> rx.Component:
 
 # ─── Layout principal ───────────────────────────────────────────────────────
 
+def _carrito_panel_inner(items_max_height: str) -> rx.Component:
+    """Contenido del carrito (encabezado + total + ítems + acciones). Se reutiliza
+    en la columna derecha (escritorio) y en el panel deslizable (móvil)."""
+    return rx.vstack(
+        rx.hstack(
+            rx.icon(tag="shopping_cart", size=14, color=ACCENT),
+            rx.text("Pedido para llevar", font_size="13px", font_weight="700", color=ACCENT),
+            rx.spacer(),
+            rx.hstack(
+                rx.cond(
+                    FoodState.mostrador_cupon_id_aplicado > 0,
+                    rx.text(FoodState.total_mostrador_texto, font_size="11px",
+                            color=TEXT_MUTED, text_decoration="line-through"),
+                    rx.fragment(),
+                ),
+                rx.text(FoodState.total_mostrador_neto_texto, font_size="15px",
+                        font_weight="800", color=TEXT_WHITE),
+                spacing="2", align="center",
+            ),
+            width="100%", align="center",
+        ),
+        rx.box(
+            rx.cond(
+                FoodState.mostrador_carrito.length() == 0,
+                rx.center(
+                    rx.vstack(
+                        rx.icon(tag="clipboard_list", size=24, color=TEXT_MUTED),
+                        rx.text("Agrega productos", font_size="11px", color=TEXT_MUTED),
+                        spacing="1", align="center",
+                    ),
+                    padding_y="20px",
+                ),
+                rx.vstack(
+                    rx.foreach(FoodState.mostrador_carrito, _carrito_item),
+                    width="100%", spacing="0",
+                ),
+            ),
+            overflow_y="auto", max_height=items_max_height, width="100%", flex="1",
+        ),
+        rx.hstack(
+            rx.button(
+                "Limpiar",
+                on_click=FoodState.limpiar_carrito_mostrador,
+                background="transparent", color=TEXT_MUTED,
+                border=f"1px solid {DARK_700}", border_radius="8px",
+                font_size="12px", cursor="pointer", padding_x="14px", height="42px",
+                _hover={"border_color": DANGER_SOLID, "color": "#FCA5A5"},
+            ),
+            rx.button(
+                rx.hstack(rx.icon(tag="send", size=15), rx.text("Enviar a Cocina"),
+                          spacing="2", align="center"),
+                on_click=FoodState.enviar_pedido_mostrador,
+                is_loading=FoodState.mostrador_enviando,
+                background=ACCENT, color=TEXT_WHITE, border_radius="8px",
+                font_size="14px", font_weight="700", cursor="pointer", height="42px",
+                _hover={"background": ACCENT_HOVER}, flex="1",
+                is_disabled=FoodState.mostrador_carrito.length() == 0,
+            ),
+            spacing="2", width="100%",
+        ),
+        spacing="2", width="100%",
+    )
+
+
+def _pendientes_panel() -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.icon(tag="clock", size=13, color="#FCD34D"),
+            rx.text("Pendientes de cobro", font_size="13px", font_weight="700", color="#FCD34D"),
+            spacing="2", align="center",
+        ),
+        rx.cond(
+            FoodState.pedidos_mostrador_pendientes.length() == 0,
+            rx.center(rx.text("Sin pedidos en espera", font_size="12px", color=TEXT_MUTED),
+                      padding_y="10px"),
+            rx.vstack(rx.foreach(FoodState.pedidos_mostrador_pendientes, _pendiente_card),
+                      spacing="2", width="100%"),
+        ),
+        spacing="2", width="100%",
+    )
+
+
+def _cobrados_panel() -> rx.Component:
+    return rx.vstack(
+        rx.text("Cobrados hoy", font_size="13px", font_weight="700", color=TEXT_MUTED),
+        rx.cond(
+            FoodState.pedidos_mostrador_entregados.length() == 0,
+            rx.center(rx.text("Sin historial", font_size="12px", color=TEXT_MUTED),
+                      padding_y="10px"),
+            rx.vstack(rx.foreach(FoodState.pedidos_mostrador_entregados, _entregado_card),
+                      spacing="2", width="100%"),
+        ),
+        spacing="2", width="100%",
+    )
+
+
+def _mobile_cart_bar() -> rx.Component:
+    """Barra fija abajo (solo móvil) que muestra ítems + total y abre el carrito
+    en un panel deslizable. Se muestra únicamente cuando hay ítems en el carrito."""
+    return rx.box(
+        rx.drawer.root(
+            rx.drawer.trigger(
+                rx.box(
+                    rx.hstack(
+                        rx.box(
+                            rx.icon(tag="shopping_cart", size=20, color=TEXT_WHITE),
+                            rx.box(
+                                rx.text(FoodState.mostrador_carrito.length().to_string(),
+                                        font_size="10px", font_weight="800", color=ACCENT),
+                                background=TEXT_WHITE, border_radius="50%",
+                                min_width="18px", height="18px", display="flex",
+                                align_items="center", justify_content="center",
+                                position="absolute", top="-6px", right="-8px",
+                            ),
+                            position="relative", flex_shrink="0", display="flex",
+                        ),
+                        rx.vstack(
+                            rx.text("Ver pedido", font_size="14px", font_weight="800",
+                                    color=TEXT_WHITE, line_height="1.15"),
+                            rx.text(FoodState.mostrador_carrito.length().to_string() + " producto(s)",
+                                    font_size="10px", color="rgba(255,255,255,0.85)", line_height="1.15"),
+                            spacing="0", align="start",
+                        ),
+                        rx.spacer(),
+                        rx.text(FoodState.total_mostrador_neto_texto, font_size="17px",
+                                font_weight="800", color=TEXT_WHITE),
+                        rx.icon(tag="chevron_up", size=20, color=TEXT_WHITE),
+                        spacing="3", align="center", width="100%",
+                    ),
+                    background=ACCENT, border_radius="12px", padding="12px 16px",
+                    box_shadow="0 6px 20px rgba(234,88,12,0.5)", cursor="pointer",
+                    width="100%",
+                )
+            ),
+            rx.drawer.portal(
+                rx.drawer.overlay(background="rgba(15,23,42,0.6)", z_index="1000"),
+                rx.drawer.content(
+                    rx.vstack(
+                        rx.drawer.close(
+                            rx.box(width="44px", height="5px", background=DARK_600,
+                                   border_radius="3px", margin="2px auto 4px", cursor="pointer"),
+                        ),
+                        _carrito_panel_inner("50vh"),
+                        spacing="3", width="100%",
+                    ),
+                    background=DARK_800, border_top=f"1px solid {DARK_700}",
+                    border_radius="16px 16px 0 0", padding="10px 16px 24px",
+                    max_height="85vh", z_index="1001",
+                ),
+            ),
+            open=FoodState.mostrador_cart_sheet_abierto,
+            on_open_change=FoodState.set_mostrador_cart_sheet_abierto,
+            direction="bottom",
+        ),
+        position="fixed", bottom="0", left="0", right="0", z_index="900",
+        padding="10px 12px calc(12px + env(safe-area-inset-bottom))",
+        background="linear-gradient(to top, rgba(15,23,42,0.98) 55%, rgba(15,23,42,0))",
+        display=rx.breakpoints(initial="block", lg="none"),
+    )
+
+
 def _mostrador_content() -> rx.Component:
     return rx.vstack(
         _modal_seleccion_mods_m(),
@@ -412,147 +573,45 @@ def _mostrador_content() -> rx.Component:
                 min_width="0",
                 height=rx.breakpoints(initial="auto", lg="calc(100vh - 140px)"),
             ),
-            # ─── Columna derecha: carrito + pendientes + cobrados ───
+            # ─── Columna derecha (SOLO ESCRITORIO): carrito + pendientes + cobrados ───
+            # En móvil el carrito vive en la barra fija + panel deslizable (abajo),
+            # y pendientes/cobrados se muestran apilados debajo del catálogo.
             rx.vstack(
-                # Panel de carrito
-                rx.vstack(
-                    rx.hstack(
-                        rx.icon(tag="shopping_cart", size=14, color=ACCENT),
-                        rx.text("Pedido para llevar", font_size="13px", font_weight="700", color=ACCENT),
-                        rx.spacer(),
-                        rx.hstack(
-                            rx.cond(
-                                FoodState.mostrador_cupon_id_aplicado > 0,
-                                rx.text(
-                                    FoodState.total_mostrador_texto,
-                                    font_size="11px", color=TEXT_MUTED,
-                                    text_decoration="line-through",
-                                ),
-                                rx.fragment(),
-                            ),
-                            rx.text(
-                                FoodState.total_mostrador_neto_texto,
-                                font_size="14px", font_weight="700", color=TEXT_WHITE,
-                            ),
-                            spacing="2", align="center",
-                        ),
-                        width="100%", align="center",
-                    ),
-                    # Items del carrito
-                    rx.box(
-                        rx.cond(
-                            FoodState.mostrador_carrito.length() == 0,
-                            rx.center(
-                                rx.vstack(
-                                    rx.icon(tag="clipboard_list", size=24, color=TEXT_MUTED),
-                                    rx.text("Agrega productos", font_size="11px", color=TEXT_MUTED),
-                                    spacing="1", align="center",
-                                ),
-                                padding_y="20px",
-                            ),
-                            rx.vstack(
-                                rx.foreach(FoodState.mostrador_carrito, _carrito_item),
-                                width="100%",
-                                spacing="0",
-                            ),
-                        ),
-                        overflow_y="auto",
-                        max_height="22vh",
-                        width="100%",
-                        flex="1",
-                    ),
-                    # Botones de acción
-                    rx.hstack(
-                        rx.button(
-                            "Limpiar",
-                            on_click=FoodState.limpiar_carrito_mostrador,
-                            background="transparent",
-                            color=TEXT_MUTED,
-                            border=f"1px solid {DARK_700}",
-                            border_radius="8px",
-                            font_size="12px",
-                            cursor="pointer",
-                            padding_x="14px",
-                            _hover={"border_color": DANGER_SOLID, "color": "#FCA5A5"},
-                        ),
-                        rx.button(
-                            rx.hstack(
-                                rx.icon(tag="send", size=13),
-                                rx.text("Enviar a Cocina"),
-                                spacing="2", align="center",
-                            ),
-                            on_click=FoodState.enviar_pedido_mostrador,
-                            is_loading=FoodState.mostrador_enviando,
-                            background=ACCENT,
-                            color=TEXT_WHITE,
-                            border_radius="8px",
-                            font_size="13px",
-                            font_weight="700",
-                            cursor="pointer",
-                            _hover={"background": ACCENT_HOVER},
-                            flex="1",
-                            is_disabled=FoodState.mostrador_carrito.length() == 0,
-                        ),
-                        spacing="2",
-                        width="100%",
-                    ),
-                    spacing="2",
-                    width="100%",
-                    background=DARK_800,
-                    border=f"1px solid {DARK_700}",
-                    border_radius="10px",
-                    padding="12px",
+                rx.box(
+                    _carrito_panel_inner("22vh"),
+                    width="100%", background=DARK_800,
+                    border=f"1px solid {DARK_700}", border_radius="10px", padding="12px",
                 ),
-                # Separador
                 rx.divider(border_color=TEXT_MUTED),
-                # Pendientes de cobro
-                rx.vstack(
-                    rx.hstack(
-                        rx.icon(tag="clock", size=13, color="#FCD34D"),
-                        rx.text("Pendientes de cobro", font_size="13px", font_weight="700", color="#FCD34D"),
-                        spacing="2", align="center",
-                    ),
-                    rx.cond(
-                        FoodState.pedidos_mostrador_pendientes.length() == 0,
-                        rx.center(
-                            rx.text("Sin pedidos en espera", font_size="12px", color=TEXT_MUTED),
-                            padding_y="10px",
-                        ),
-                        rx.vstack(
-                            rx.foreach(FoodState.pedidos_mostrador_pendientes, _pendiente_card),
-                            spacing="2",
-                            width="100%",
-                        ),
-                    ),
-                    spacing="2", width="100%",
-                ),
-                # Cobrados hoy
-                rx.vstack(
-                    rx.text("Cobrados hoy", font_size="13px", font_weight="700", color=TEXT_MUTED),
-                    rx.cond(
-                        FoodState.pedidos_mostrador_entregados.length() == 0,
-                        rx.center(
-                            rx.text("Sin historial", font_size="12px", color=TEXT_MUTED),
-                            padding_y="10px",
-                        ),
-                        rx.vstack(
-                            rx.foreach(FoodState.pedidos_mostrador_entregados, _entregado_card),
-                            spacing="2",
-                            width="100%",
-                        ),
-                    ),
-                    spacing="2", width="100%",
-                ),
+                _pendientes_panel(),
+                _cobrados_panel(),
                 spacing="3",
                 flex="2",
                 min_width="0",
                 height=rx.breakpoints(initial="auto", lg="calc(100vh - 140px)"),
                 overflow_y="auto",
+                display=rx.breakpoints(initial="none", lg="flex"),
             ),
             direction=rx.breakpoints(initial="column", lg="row"),
             gap="16px",
             width="100%",
             flex="1",
+        ),
+        # ─── Pendientes + cobrados (SOLO MÓVIL), debajo del catálogo ───
+        rx.vstack(
+            rx.divider(border_color=DARK_700),
+            _pendientes_panel(),
+            _cobrados_panel(),
+            spacing="3", width="100%",
+            display=rx.breakpoints(initial="flex", lg="none"),
+        ),
+        # Espacio para que la barra fija no tape el último contenido en móvil.
+        rx.box(height="88px", width="100%", display=rx.breakpoints(initial="block", lg="none")),
+        # ─── Barra fija del carrito (SOLO MÓVIL) ───
+        rx.cond(
+            FoodState.mostrador_carrito.length() > 0,
+            _mobile_cart_bar(),
+            rx.fragment(),
         ),
         spacing="4",
         width="100%",
