@@ -1386,6 +1386,15 @@ def _section_delivery() -> rx.Component:
             ),
             width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
+        rx.hstack(
+            rx.icon(tag="info", size=14, color=_SLATE_500, flex_shrink="0"),
+            rx.text(
+                "Cada pedido avanza por Pendiente → En camino → Entregado. "
+                "Cambia el estado desde cada tarjeta; el cobro se hace en Caja al entregar.",
+                font_size="12px", color=_SLATE_500, line_height="1.4",
+            ),
+            spacing="2", align="center", width="100%",
+        ),
         rx.cond(
             DonoOperacionesState.deliveries_lista.length() == 0,
             rx.center(
@@ -1452,6 +1461,15 @@ def _section_reservas() -> rx.Component:
                 spacing="2", align="center",
             ),
             width="100%", align="center", flex_wrap="wrap", gap="8px",
+        ),
+        rx.hstack(
+            rx.icon(tag="info", size=14, color=_SLATE_500, flex_shrink="0"),
+            rx.text(
+                "Al anotar una reserva, esa mesa aparece morada en el salón del mozo "
+                "a la hora reservada, para que no la ocupe otro cliente.",
+                font_size="12px", color=_SLATE_500, line_height="1.4",
+            ),
+            spacing="2", align="center", width="100%",
         ),
         rx.cond(
             DonoOperacionesState.reservas_lista.length() == 0,
