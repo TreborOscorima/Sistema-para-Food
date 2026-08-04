@@ -35,8 +35,29 @@ from app.components.shared import (
     section_card,
     surface_card,
 )
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.states.food_state import UsuarioAdminView
 from app.states.usuarios_state import UsuariosAdminState
+
+
+def _usuarios_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Usuarios?",
+        subtitulo="Personal, PINs y permisos",
+        secciones=[
+            {"titulo": "Cómo entra tu equipo", "pasos": [
+                "Cada empleado entra con su PIN de 4 dígitos desde la pantalla de inicio.",
+                "El rol define qué módulos ve: Mozo → Mozos y Mostrador; Cocina → pantalla KDS; "
+                "Caja → Caja y cobros; Admin → todo el sistema.",
+                "Tú (el dueño) entras al Panel Administrativo con email y contraseña, no con PIN.",
+            ]},
+            {"titulo": "Permisos finos", "pasos": [
+                "Dentro de cada rol puedes activar permisos extra (aplicar descuentos, ver reportes, "
+                "abrir/cerrar turno, gestionar inventario, anular ventas).",
+                "Desactiva un usuario para bloquearle el acceso sin borrar su historial.",
+            ]},
+        ],
+    )
 
 
 _USR_GRID_COLS = "2fr 1fr 1fr 90px"
@@ -508,6 +529,7 @@ def _usuario_modal_content() -> rx.Component:
 
 def _usuarios_content() -> rx.Component:
     return rx.vstack(
+        _usuarios_ayuda(),
         rx.hstack(
             rx.vstack(
                 rx.text("Usuarios", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
@@ -515,6 +537,7 @@ def _usuarios_content() -> rx.Component:
                 spacing="0", align="start",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.dialog.root(
                 rx.button(
                     rx.hstack(

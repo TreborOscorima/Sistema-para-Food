@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
-from app.components.ayuda import empty_state
+from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
     app_shell,
     ACCENT, ACCENT_HOVER,
@@ -608,7 +608,7 @@ def _prod_modal() -> rx.Component:
                         rx.upload(
                             rx.vstack(
                                 rx.icon(tag="image_plus", size=20, color=TEXT_MUTED),
-                                rx.text("Arrastre o haga clic", font_size="11px", color=TEXT_MUTED),
+                                rx.text("Arrastra o toca aquí", font_size="11px", color=TEXT_MUTED),
                                 rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px", color=TEXT_MUTED),
                                 spacing="1", align="center",
                             ),
@@ -1261,6 +1261,26 @@ def _modificadores_section() -> rx.Component:
     )
 
 
+def _carta_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona la Carta?",
+        subtitulo="Todo lo que vendes se arma acá",
+        secciones=[
+            {"titulo": "Las 4 piezas", "pasos": [
+                "Categorías: ordenan la carta (ej. Entradas, Platos, Bebidas). Arrástralas para cambiar el orden.",
+                "Productos: cada ítem con precio, foto y estación (Cocina o Barra).",
+                "Modificadores: opciones que el mozo elige al pedir (ej. término de cocción, sin cebolla).",
+                "Combos: varios productos en un paquete a precio fijo.",
+            ]},
+            {"titulo": "Dónde repercute", "pasos": [
+                "Lo que cargas acá aparece al toque en Mozos, Mostrador y en tu carta digital QR.",
+                "La estación decide a qué pantalla de cocina llega cada producto.",
+                "Si un producto tiene receta en Inventario, al venderse descuenta el stock solo.",
+            ]},
+        ],
+    )
+
+
 def _carta_content() -> rx.Component:
     return rx.vstack(
         _cat_modal(),
@@ -1268,6 +1288,7 @@ def _carta_content() -> rx.Component:
         _mod_grupo_modal(),
         _mod_asignar_modal(),
         _combo_modal(),
+        _carta_ayuda(),
         # ── Header ────────────────────────────────────────────────────────────
         rx.hstack(
             rx.vstack(
@@ -1276,6 +1297,7 @@ def _carta_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.hstack(
                 rx.button(
                     rx.hstack(

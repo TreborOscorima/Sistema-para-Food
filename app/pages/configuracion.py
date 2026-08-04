@@ -170,6 +170,19 @@ def _qr_section() -> rx.Component:
             ),
             _field_row("Slug URL", FoodState.config_slug,
                        FoodState.set_config_slug, "mi-restaurante"),
+            rx.text(
+                "El slug es el final de la dirección de tu carta "
+                "(tuwayki.app/menu/tu-nombre). Imprime el QR y pégalo en las mesas.",
+                font_size="11px", color=TEXT_MUTED, margin_top="-4px",
+            ),
+            rx.hstack(
+                rx.icon(tag="triangle_alert", size=13, color="#F59E0B"),
+                rx.text(
+                    "Si cambias el slug, los QR ya impresos dejarán de funcionar.",
+                    font_size="11px", color="#FBBF24", font_weight="600",
+                ),
+                spacing="2", align="center",
+            ),
             rx.cond(
                 FoodState.config_menu_url != "",
                 rx.vstack(
@@ -396,6 +409,11 @@ def _mesas_section() -> rx.Component:
     return rx.box(
         rx.vstack(
             _section_header("Gestión de Mesas", "layout_grid", "🍽️"),
+            rx.text(
+                "Cada mesa que agregues aparece en el salón de los mozos. "
+                "Usa sectores (Terraza, Barra) para agruparlas.",
+                font_size="12px", color=TEXT_MUTED,
+            ),
             # Formulario compacto
             rx.hstack(
                 rx.input(
@@ -509,7 +527,9 @@ def _admin_cuenta_section() -> rx.Component:
         rx.vstack(
             _section_header("Cuenta del Dueño", "key_round"),
             rx.text(
-                "Configura email y contraseña para acceder al panel del dueño en /admin",
+                "Esta cuenta (email + contraseña) es la del dueño y entra al Panel "
+                "Administrativo. El personal, en cambio, entra con su PIN desde la "
+                "pantalla de inicio.",
                 font_size="12px", color=TEXT_MUTED, font_style="italic",
             ),
             _field_row("Email", FoodState.config_admin_email,
@@ -781,7 +801,8 @@ def _content_local() -> rx.Component:
                 rx.vstack(
                     _section_header("Identificación del local", "store", "🏪"),
                     rx.text(
-                        "Estos datos aparecen en el encabezado del comprobante de pago.",
+                        "Estos datos aparecen en el encabezado del comprobante de pago "
+                        "y en tu carta digital. Complétalos antes de imprimir tickets.",
                         font_size="12px", color=TEXT_MUTED,
                     ),
                     _field_row("Nombre del local", FoodState.config_nombre_local,
@@ -828,7 +849,7 @@ def _content_local() -> rx.Component:
                             rx.upload(
                                 rx.vstack(
                                     rx.icon(tag="image_plus", size=20, color=TEXT_MUTED),
-                                    rx.text("Arrastre o haga clic", font_size="11px",
+                                    rx.text("Arrastra o toca aquí", font_size="11px",
                                             color=TEXT_MUTED),
                                     rx.text("JPG, PNG, WEBP — max 5MB", font_size="10px",
                                             color=TEXT_MUTED),
@@ -1437,6 +1458,10 @@ def _content_impresoras() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.text("Ancho de papel", font_size="13px", color="#CBD5E1", font_weight="600"),
+                rx.text(
+                    "58 mm = tickets angostos; 80 mm = estándar. Elige según tu impresora.",
+                    font_size="11px", color=TEXT_MUTED,
+                ),
                 rx.hstack(
                     _paper_width_option("58mm", "58"),
                     _paper_width_option("80mm", "80"),
@@ -1520,8 +1545,9 @@ def _content_sucursales() -> rx.Component:
             rx.vstack(
                 _section_header("Sucursales", "map_pin"),
                 rx.text(
-                    "Configura los locales de tu empresa. Los usuarios, mesas, "
-                    "pedidos e inventario se filtran por sucursal activa.",
+                    "Si tienes más de un local, cada sucursal tiene sus propias mesas, "
+                    "impresoras y turnos, y el personal elige sucursal al iniciar sesión. "
+                    "Con un solo local no necesitas tocar nada acá.",
                     font_size="12px", color=TEXT_MUTED,
                 ),
                 rx.button(
