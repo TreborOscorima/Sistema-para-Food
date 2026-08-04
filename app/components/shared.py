@@ -289,7 +289,16 @@ _NAV_DESCRIPTIONS = {
 
 def _desktop_nav_item(label: str, href: str, icon_tag: str,
                       active: bool) -> rx.Component:
-    desc = _NAV_DESCRIPTIONS.get(label, "Módulo operativo")
+    # T-08: la entrada "Impresión" refleja el modo activo (navegador imprime
+    # comandas; el agente local solo se monitorea desde la estación).
+    if label == "Impresión":
+        desc = rx.cond(
+            FoodState.config_modo_impresion == "navegador",
+            "Comandas a la térmica",
+            "Estado de impresión",
+        )
+    else:
+        desc = _NAV_DESCRIPTIONS.get(label, "Módulo operativo")
     return rx.link(
         rx.box(
             rx.hstack(
@@ -418,20 +427,23 @@ def _desktop_sidebar(active: str) -> rx.Component:
                              border_radius="9px", alt="TUWAYKIFOOD"),
                     _brand(compact=False, dark=True),
                 ),
-                rx.icon_button(
-                    rx.icon(
-                        tag=rx.cond(FoodState.sidebar_collapsed, "panel_left_open", "panel_left_close"),
-                        size=14,
+                rx.tooltip(
+                    rx.icon_button(
+                        rx.icon(
+                            tag=rx.cond(FoodState.sidebar_collapsed, "panel_left_open", "panel_left_close"),
+                            size=14,
+                        ),
+                        on_click=FoodState.toggle_sidebar,
+                        background="rgba(255,255,255,0.07)",
+                        color="rgba(255,255,255,0.45)",
+                        border="none",
+                        border_radius="7px",
+                        width="28px",
+                        height="28px",
+                        flex_shrink="0",
+                        _hover={"background": "rgba(255,255,255,0.12)", "color": "#fff"},
                     ),
-                    on_click=FoodState.toggle_sidebar,
-                    background="rgba(255,255,255,0.07)",
-                    color="rgba(255,255,255,0.45)",
-                    border="none",
-                    border_radius="7px",
-                    width="28px",
-                    height="28px",
-                    flex_shrink="0",
-                    _hover={"background": "rgba(255,255,255,0.12)", "color": "#fff"},
+                    content=rx.cond(FoodState.sidebar_collapsed, "Expandir menú", "Contraer menú"),
                 ),
                 width="100%",
                 justify="between",
@@ -456,8 +468,15 @@ def _desktop_sidebar(active: str) -> rx.Component:
                         rx.cond(
                             FoodState.sidebar_collapsed,
                             rx.fragment(),
-                            rx.text("Panel Administrativo", font_size="12px",
-                                    color="rgba(255,255,255,0.6)", font_weight="600"),
+                            rx.vstack(
+                                rx.text("Panel Administrativo", font_size="12px",
+                                        color="rgba(255,255,255,0.6)", font_weight="600",
+                                        line_height="1.1"),
+                                rx.text("Reportes del dueño, inventario y más",
+                                        font_size="10px", color="rgba(255,255,255,0.4)",
+                                        line_height="1.1"),
+                                spacing="1", align="start",
+                            ),
                         ),
                         spacing="2", align="center",
                     ),

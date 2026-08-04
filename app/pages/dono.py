@@ -222,26 +222,34 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
     )
 
 
+def _admin_group_label(text: str) -> rx.Component:
+    """Encabezado de grupo del sidebar del dono (T-07). Cuando el sidebar está
+    colapsado se reemplaza por un pequeño espacio que separa los grupos."""
+    return rx.cond(
+        AdminPanelState.sidebar_open,
+        rx.text(text, font_size="10px", font_weight="700",
+                color=_SLATE_500, text_transform="uppercase",
+                letter_spacing="0.08em", padding_x="4px",
+                padding_top="10px", padding_bottom="2px"),
+        rx.box(height="10px", width="100%"),
+    )
+
+
 def _admin_sidebar() -> rx.Component:
     return rx.box(
         rx.vstack(
-            # Etiqueta "Menú" — solo visible cuando está expandido
-            rx.cond(
-                AdminPanelState.sidebar_open,
-                rx.text("Menú", font_size="10px", font_weight="700",
-                        color=_SLATE_500, text_transform="uppercase",
-                        letter_spacing="0.08em", padding_x="4px",
-                        padding_bottom="4px"),
-                rx.fragment(),
-            ),
+            _admin_group_label("Análisis"),
             _admin_nav_item("resumen", "Resumen", "layout_dashboard", "Vista general del día"),
             _admin_nav_item("ventas", _M["reportes"].label, _M["reportes"].icon, _M["reportes"].desc),
+            _admin_group_label("Clientes"),
             _admin_nav_item("clientes", _M["clientes"].label, _M["clientes"].icon, _M["clientes"].desc),
             _admin_nav_item("cuentas", _M["cuentas"].label, _M["cuentas"].icon, _M["cuentas"].desc),
             _admin_nav_item("promociones", _M["promociones"].label, _M["promociones"].icon, _M["promociones"].desc),
+            _admin_group_label("Operación extendida"),
             _admin_nav_item("reservas", _M["reservas"].label, _M["reservas"].icon, _M["reservas"].desc),
             _admin_nav_item("delivery", _M["delivery"].label, _M["delivery"].icon, _M["delivery"].desc),
             _admin_nav_item("inventario", _M["inventario"].label, _M["inventario"].icon, _M["inventario"].desc),
+            _admin_group_label("Sistema"),
             _admin_nav_item("usuarios", _M["usuarios"].label, _M["usuarios"].icon, _M["usuarios"].desc),
             _admin_nav_item("config", _M["config"].label, _M["config"].icon, _M["config"].desc),
             spacing="1", width="100%", align="start",

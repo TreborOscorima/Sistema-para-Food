@@ -337,19 +337,22 @@ def _cocina_content() -> rx.Component:
                 spacing="4", align="center",
                 display=rx.breakpoints(initial="none", lg="flex"),
             ),
-            rx.button(
-                rx.icon(
-                    tag=rx.cond(FoodState.sonidos_activos, "volume_2", "volume_off"),
-                    size=16,
+            rx.tooltip(
+                rx.button(
+                    rx.icon(
+                        tag=rx.cond(FoodState.sonidos_activos, "volume_2", "volume_off"),
+                        size=16,
+                    ),
+                    on_click=FoodState.toggle_sonidos,
+                    background=rx.cond(FoodState.sonidos_activos, DARK_800, PAGE_BACKGROUND),
+                    color=rx.cond(FoodState.sonidos_activos, ACCENT, DARK_600),
+                    border=rx.cond(FoodState.sonidos_activos, f"1px solid {DARK_700}", f"1px solid {DARK_800}"),
+                    border_radius="8px",
+                    cursor="pointer",
+                    padding="8px",
+                    _hover={"border_color": ACCENT},
                 ),
-                on_click=FoodState.toggle_sonidos,
-                background=rx.cond(FoodState.sonidos_activos, DARK_800, PAGE_BACKGROUND),
-                color=rx.cond(FoodState.sonidos_activos, ACCENT, DARK_600),
-                border=rx.cond(FoodState.sonidos_activos, f"1px solid {DARK_700}", f"1px solid {DARK_800}"),
-                border_radius="8px",
-                cursor="pointer",
-                padding="8px",
-                _hover={"border_color": ACCENT},
+                content=rx.cond(FoodState.sonidos_activos, "Silenciar avisos sonoros", "Activar avisos sonoros"),
             ),
             rx.button(
                 rx.icon(
@@ -376,11 +379,14 @@ def _cocina_content() -> rx.Component:
                     FoodState.ultima_actualizacion,
                     font_size="11px", color=TEXT_MUTED,
                 ),
-                rx.icon(
-                    tag="refresh_cw", size=14, color=ACCENT,
-                    cursor="pointer",
-                    on_click=FoodState.cargar_cocina,
-                    _hover={"opacity": "0.7"},
+                rx.tooltip(
+                    rx.icon(
+                        tag="refresh_cw", size=14, color=ACCENT,
+                        cursor="pointer",
+                        on_click=FoodState.cargar_cocina,
+                        _hover={"opacity": "0.7"},
+                    ),
+                    content="Actualizar ahora",
                 ),
                 spacing="1", align="center",
             ),
