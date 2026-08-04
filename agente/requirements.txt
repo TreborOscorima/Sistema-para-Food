@@ -1,0 +1,7 @@
+# Agente de impresión local TUWAYKIFOOD
+python-escpos>=3.0        # impresión ESC/POS: Network (red) y Win32Raw (USB en Windows)
+requests>=2.31            # polling HTTPS a la API del agente
+pystray>=0.19            # ícono en la bandeja del sistema
+pillow>=10.0             # imagen del ícono (dependencia de pystray)
+pywin32>=306; platform_system == "Windows"   # backend Win32Raw (impresoras USB por nombre)
+pyinstaller>=6.0         # empaquetado a .exe (solo para build)

@@ -489,6 +489,102 @@ class ConfigImpresora(TimestampedModel, table=True):
     nombre_impuesto: str = Field(default="IGV", max_length=20, nullable=False)
     porcentaje_iva: float = Field(default=18.0, nullable=False)
     kds_minutos_alerta: int = Field(default=15, nullable=False)
+    # Quién imprime: "navegador" (kiosk-printing actual) o "agente" (agente local
+    # que jala los trabajos desde la nube). Ver Impresora/TrabajoImpresion/AgenteImpresion.
+    modo_impresion: str = Field(default="navegador", max_length=20, nullable=False)
+
+
+# ─── Impresión con agente local ──────────────────────────────────────────────
+
+
+class RolImpresora(str, Enum):
+    COCINA = "cocina"
+    CAJA = "caja"
+
+
+class TipoImpresora(str, Enum):
+    RED = "red"
+    USB = "usb"
+
+
+class TipoDocumento(str, Enum):
+    COMANDA = "comanda"
+    COMPROBANTE = "comprobante"
+    PRUEBA = "prueba"
+
+
+class EstadoTrabajo(str, Enum):
+    PENDIENTE = "pendiente"
+    ENTREGADO = "entregado"
+    IMPRESO = "impreso"
+    ERROR = "error"
+
+
+class ModoImpresion(str, Enum):
+    NAVEGADOR = "navegador"
+    AGENTE = "agente"
+
+
+class Impresora(TimestampedModel, table=True):
+    """Impresora física de un restaurante (red por IP o USB local), con un rol
+    (cocina/caja). El agente local la usa para rutear cada trabajo a su destino."""
+
+    __tablename__ = "food_impresoras"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(
+        default=None, foreign_key="food_sucursales.id", index=True
+    )
+    nombre: str = Field(max_length=120, nullable=False)
+    rol: str = Field(default=RolImpresora.COCINA.value, max_length=20, nullable=False)
+    tipo: str = Field(default=TipoImpresora.RED.value, max_length=10, nullable=False)
+    # tipo == "red": impresora ESC/POS en la LAN del local
+    ip: str = Field(default="", max_length=64, nullable=False)
+    puerto: int = Field(default=9100, nullable=False)
+    # tipo == "usb": nombre de la impresora en el SO / identificador del device
+    usb_target: str = Field(default="", max_length=160, nullable=False)
+    # None → usa ConfigImpresora.ticket_paper_width_mm de la empresa
+    paper_width_mm: int | None = Field(default=None)
+    activa: bool = Field(default=True, nullable=False)
+
+
+class TrabajoImpresion(TimestampedModel, table=True):
+    """Cola de trabajos de impresión. El backend encola; el agente los jala,
+    imprime y confirma (ack). El `contenido` es el texto ya formateado al ancho."""
+
+    __tablename__ = "food_trabajos_impresion"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(default=None, index=True)
+    rol: str = Field(default=RolImpresora.COCINA.value, index=True, max_length=20, nullable=False)
+    tipo_doc: str = Field(default=TipoDocumento.COMANDA.value, max_length=20, nullable=False)
+    contenido: str = Field(sa_column=Column(Text, nullable=False))
+    paper_width_mm: int = Field(default=80, nullable=False)
+    pedido_id: int | None = Field(default=None, index=True)
+    estado: str = Field(default=EstadoTrabajo.PENDIENTE.value, index=True, max_length=20, nullable=False)
+    intentos: int = Field(default=0, nullable=False)
+    error_msg: str | None = Field(default=None, max_length=300)
+    claimed_at: datetime | None = Field(default=None)
+    done_at: datetime | None = Field(default=None)
+
+
+class AgenteImpresion(TimestampedModel, table=True):
+    """Agente local autorizado a jalar trabajos de una empresa (1 por local).
+    Se guarda solo el hash del token; el token en claro se muestra una sola vez."""
+
+    __tablename__ = "food_agentes_impresion"
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    sucursal_id: int | None = Field(
+        default=None, foreign_key="food_sucursales.id", index=True
+    )
+    nombre: str = Field(default="Agente de impresión", max_length=120, nullable=False)
+    token_hash: str = Field(max_length=128, index=True, nullable=False)
+    activo: bool = Field(default=True, nullable=False)
+    last_seen_at: datetime | None = Field(default=None)
 
 
 class Insumo(TimestampedModel, table=True):

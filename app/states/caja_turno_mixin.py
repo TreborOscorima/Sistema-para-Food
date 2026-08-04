@@ -36,8 +36,9 @@ from app.models.food import (
     UsuarioFood,
 )
 from app.services.receipt_service import (
-    build_print_script,
-    generate_cash_close_ticket_html,
+    build_cash_close_ticket_lines,
+    render_ticket_html,
+    ticket_text,
 )
 
 CURRENCY_SYMBOL = "S/"
@@ -710,7 +711,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 det_pedidos = [
                     {**p, "neto_texto": _money(p["neto"])} for p in data["pedidos"]
                 ]
-                ticket_html = generate_cash_close_ticket_html(
+                _cierre_lines = build_cash_close_ticket_lines(
                     company_name=data["empresa"],
                     turno_id=turno.id or 0,
                     abierto_por=data["abierto_por"],
@@ -735,6 +736,9 @@ class CajaTurnoMixin(rx.State, mixin=True):
                     detalle_pedidos=det_pedidos,
                     detalle_movimientos=data["movimientos"],
                 )
+                ticket_html = render_ticket_html(
+                    "Cierre de Caja", _cierre_lines, self._ticket_paper_width_mm()
+                )
         except ValueError as exc:
             self.turno_cierre_error = str(exc)
             self.turno_cerrando = False
@@ -743,7 +747,16 @@ class CajaTurnoMixin(rx.State, mixin=True):
         self.turno_cierre_visible = False
         self.turno_cierre_conteo = {}
         self.cargar_turno_caja()
-        return [rx.toast.success("Turno de caja cerrado. Arqueo registrado."), rx.call_script(build_print_script(ticket_html))]
+        eventos = [rx.toast.success("Turno de caja cerrado. Arqueo registrado.")]
+        _evt = self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="comprobante",
+            texto=ticket_text(_cierre_lines),
+            html=ticket_html,
+        )
+        if _evt is not None:
+            eventos.append(_evt)
+        return eventos
 
     # ── Historial ────────────────────────────────────────────────────────────
 
@@ -1000,7 +1013,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
             det_pedidos = [
                 {**p, "neto_texto": _money(p["neto"])} for p in data["pedidos"]
             ]
-            ticket_html = generate_cash_close_ticket_html(
+            _cierre_lines = build_cash_close_ticket_lines(
                 company_name=data["empresa"],
                 turno_id=turno.id or 0,
                 abierto_por=data["abierto_por"],
@@ -1025,7 +1038,15 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 detalle_pedidos=det_pedidos,
                 detalle_movimientos=data["movimientos"],
             )
-        return rx.call_script(build_print_script(ticket_html))
+            ticket_html = render_ticket_html(
+                "Cierre de Caja", _cierre_lines, self._ticket_paper_width_mm()
+            )
+        return self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="comprobante",
+            texto=ticket_text(_cierre_lines),
+            html=ticket_html,
+        )
 
     def imprimir_resumen_cierre(self):
         """Imprime ticket detallado del cierre del turno activo."""

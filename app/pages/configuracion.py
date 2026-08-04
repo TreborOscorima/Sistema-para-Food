@@ -14,7 +14,21 @@ from app.components.shared import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
 )
-from app.states.food_state import FoodState, MesaAdminView, SucursalView
+from app.states.food_state import (
+    FoodState,
+    MesaAdminView,
+    SucursalView,
+    ImpresoraView,
+    AgenteView,
+)
+
+
+# URL de descarga del agente (GitHub Release, repo público). "latest" apunta
+# siempre a la última versión publicada del agente.
+AGENTE_DOWNLOAD_URL = (
+    "https://github.com/TreborOscorima/Sistema-para-Food/"
+    "releases/latest/download/TuwaykifoodAgente.exe"
+)
 
 
 # ─── Estado local para la sección activa ──────────────────────────────────────
@@ -316,7 +330,7 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
                 rx.alert_dialog.description(
                     "Se eliminará \"" + mesa.nombre + "\" permanentemente. "
                     "Esta acción no se puede deshacer. Si preferís conservarla "
-                    "pero dejarla fuera de uso, usá \"Desactivar\" en su lugar.",
+                    "pero dejarla fuera de uso, usa \"Desactivar\" en su lugar.",
                     size="2",
                 ),
                 rx.hstack(
@@ -359,7 +373,7 @@ def _mesas_qr_grid() -> rx.Component:
                 rx.text("QR Self-Order por mesa", font_size="14px",
                         font_weight="700", color=TEXT_PRIMARY),
                 rx.spacer(),
-                rx.text("Imprimí cada QR y pegalo en la mesa correspondiente.",
+                rx.text("Imprime cada QR y pégalo en la mesa correspondiente.",
                         font_size="11px", color=TEXT_MUTED, font_style="italic"),
                 spacing="2", align="center", width="100%",
             ),
@@ -1026,40 +1040,194 @@ def _paper_width_option(label: str, value: str) -> rx.Component:
     )
 
 
-def _content_impresoras() -> rx.Component:
-    return rx.vstack(
-        rx.box(
-            rx.vstack(
-                _section_header("Impresión de tickets", "printer"),
-                rx.text(
-                    "Los tickets (comanda de cocina y comprobante de caja) se "
-                    "imprimen desde el navegador de la tablet o PC donde estés "
-                    "trabajando — se abre el diálogo de impresión del sistema "
-                    "y usa la impresora ya instalada ahí, sea por USB o por red. "
-                    "No hace falta configurar una IP.",
-                    font_size="12px", color=TEXT_MUTED,
-                ),
-                rx.text("Ancho de papel", font_size="13px", color="#CBD5E1",
-                        font_weight="600"),
-                rx.hstack(
-                    _paper_width_option("58mm", "58"),
-                    _paper_width_option("80mm", "80"),
-                    spacing="3",
-                ),
-                spacing="3", width="100%",
-            ),
-            background=DARK_800, border=f"1px solid {DARK_700}",
-            border_radius="12px", padding="20px",
-            width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+def _modo_option(label: str, value: str, desc: str) -> rx.Component:
+    seleccionado = FoodState.config_modo_impresion == value
+    return rx.box(
+        rx.vstack(
+            rx.text(label, font_size="13px", font_weight="700"),
+            rx.text(desc, font_size="11px", opacity="0.85"),
+            spacing="1", align="start",
         ),
+        on_click=FoodState.set_modo_impresion(value),
+        background=rx.cond(seleccionado, ACCENT, DARK_800),
+        color=rx.cond(seleccionado, "#FFFFFF", "#CBD5E1"),
+        border=rx.cond(seleccionado, "1px solid #EA580C", f"1px solid {DARK_700}"),
+        border_radius="10px", padding="12px 16px", cursor="pointer", flex="1",
+        _hover={"border_color": ACCENT},
+    )
+
+
+def _mini_badge(text, bg: str, color: str) -> rx.Component:
+    return rx.badge(text, background=bg, color=color, border_radius="5px",
+                    font_size="10px", padding="1px 7px")
+
+
+def _impresora_row(imp: ImpresoraView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.hstack(
+                rx.text(imp.nombre, font_size="13px", font_weight="700", color=TEXT_PRIMARY),
+                _mini_badge(imp.rol, "rgba(234,88,12,0.12)", ACCENT),
+                _mini_badge(imp.tipo, "rgba(59,130,246,0.12)", "#60A5FA"),
+                rx.cond(
+                    imp.activa,
+                    _mini_badge("Activa", "rgba(34,197,94,0.12)", SUCCESS_SOLID),
+                    _mini_badge("Inactiva", "rgba(239,68,68,0.12)", "#F87171"),
+                ),
+                spacing="2", align="center", flex_wrap="wrap",
+            ),
+            rx.text(
+                rx.cond(
+                    imp.tipo == "red",
+                    "Red · " + imp.ip + ":" + imp.puerto.to_string(),
+                    "USB · " + imp.usb_target,
+                ),
+                font_size="11px", color=TEXT_MUTED, font_family="monospace",
+            ),
+            spacing="1", align="start", flex="1", min_width="0",
+        ),
+        rx.button("Probar", on_click=FoodState.imprimir_prueba_impresora(imp.rol),
+                  background="rgba(59,130,246,0.08)", color="#60A5FA",
+                  border="1px solid #BFDBFE", border_radius="6px", font_size="10px",
+                  cursor="pointer", padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"}),
+        rx.button("Editar", on_click=FoodState.editar_impresora_config(imp.id),
+                  background="rgba(234,88,12,0.08)", color=ACCENT, border="1px solid rgba(234,88,12,0.40)",
+                  border_radius="6px", font_size="10px", cursor="pointer",
+                  padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"}),
+        rx.button(
+            rx.cond(imp.activa, "Desactivar", "Activar"),
+            on_click=FoodState.toggle_impresora_activa(imp.id),
+            background=rx.cond(imp.activa, "rgba(239,68,68,0.08)", "rgba(34,197,94,0.08)"),
+            color=rx.cond(imp.activa, "#F87171", "#22C55E"),
+            border=rx.cond(imp.activa, "1px solid #FECACA", "1px solid #BBF7D0"),
+            border_radius="6px", font_size="10px", cursor="pointer",
+            padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+        ),
+        rx.alert_dialog.root(
+            rx.alert_dialog.trigger(
+                rx.button(
+                    rx.icon(tag="trash_2", size=12, color="#F87171"),
+                    background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
+                    border_radius="6px", cursor="pointer",
+                    padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+                ),
+            ),
+            rx.alert_dialog.content(
+                rx.alert_dialog.title("¿Eliminar impresora?"),
+                rx.alert_dialog.description(
+                    "Se eliminará \"" + imp.nombre + "\" de forma permanente.", size="2",
+                ),
+                rx.hstack(
+                    rx.alert_dialog.cancel(
+                        rx.button("Cancelar", background=DARK_800, color=TEXT_MUTED,
+                                  border=f"1px solid {DARK_700}", border_radius="8px",
+                                  font_size="13px", cursor="pointer", padding_x="14px", padding_y="8px"),
+                    ),
+                    rx.alert_dialog.action(
+                        rx.button("Eliminar", on_click=FoodState.eliminar_impresora_config(imp.id),
+                                  background="#DC2626", color=TEXT_WHITE, border_radius="8px",
+                                  font_size="13px", font_weight="700", cursor="pointer",
+                                  padding_x="14px", padding_y="8px", _hover={"background": "#F87171"}),
+                    ),
+                    spacing="3", justify="end", width="100%", margin_top="16px",
+                ),
+            ),
+        ),
+        width="100%", align="center", padding="8px 10px", background=DARK_800,
+        border_radius="8px", border=f"1px solid {DARK_700}", gap="8px", flex_wrap="wrap",
+    )
+
+
+def _impresora_form() -> rx.Component:
+    _inp = dict(background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
+                color=TEXT_PRIMARY, border_radius="8px", padding_x="10px",
+                padding_y="7px", font_size="13px",
+                _focus={"border_color": ACCENT, "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"})
+    return rx.vstack(
+        rx.hstack(
+            rx.input(placeholder="Nombre (ej: Cocina)", value=FoodState.impresora_form_nombre,
+                     on_change=FoodState.set_impresora_form_nombre, flex="1", min_width="140px", **_inp),
+            rx.select(["cocina", "caja"], value=FoodState.impresora_form_rol,
+                      on_change=FoodState.set_impresora_form_rol, width="120px"),
+            rx.select(["red", "usb"], value=FoodState.impresora_form_tipo,
+                      on_change=FoodState.set_impresora_form_tipo, width="110px"),
+            spacing="2", width="100%", align="center", flex_wrap="wrap",
+        ),
+        rx.cond(
+            FoodState.impresora_form_tipo == "red",
+            rx.hstack(
+                rx.input(placeholder="IP (ej: 192.168.1.50)", value=FoodState.impresora_form_ip,
+                         on_change=FoodState.set_impresora_form_ip, flex="1", min_width="160px", **_inp),
+                rx.input(placeholder="Puerto", value=FoodState.impresora_form_puerto,
+                         on_change=FoodState.set_impresora_form_puerto, type="number",
+                         width="100px", **_inp),
+                spacing="2", width="100%", align="center", flex_wrap="wrap",
+            ),
+            rx.input(placeholder="Nombre exacto de la impresora en Windows",
+                     value=FoodState.impresora_form_usb_target,
+                     on_change=FoodState.set_impresora_form_usb_target, width="100%", **_inp),
+        ),
+        rx.hstack(
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="plus", size=14, color=TEXT_WHITE),
+                    rx.text(rx.cond(FoodState.impresora_form_id > 0, "Actualizar", "Agregar impresora"),
+                            font_size="12px", font_weight="700", color=TEXT_WHITE),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.guardar_impresora_config,
+                background=ACCENT, border_radius="8px", cursor="pointer",
+                padding_x="14px", padding_y="7px", _hover={"background": ACCENT_HOVER},
+            ),
+            rx.cond(
+                FoodState.impresora_form_id > 0,
+                rx.button(rx.icon(tag="x", size=14, color=TEXT_MUTED),
+                          on_click=FoodState.cancelar_impresora_form,
+                          background=DARK_800, border=f"1px solid {DARK_700}",
+                          border_radius="8px", cursor="pointer", padding="7px",
+                          _hover={"background": DARK_700}),
+                rx.fragment(),
+            ),
+            spacing="2", width="100%",
+        ),
+        spacing="3", width="100%",
+    )
+
+
+def _agente_row(a: AgenteView) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.text(a.nombre, font_size="13px", font_weight="700", color=TEXT_PRIMARY),
+            rx.text("Última conexión: " + a.last_seen_texto, font_size="11px", color=TEXT_MUTED),
+            spacing="1", align="start", flex="1", min_width="0",
+        ),
+        rx.cond(
+            a.activo,
+            _mini_badge("Activo", "rgba(34,197,94,0.12)", SUCCESS_SOLID),
+            _mini_badge("Revocado", "rgba(148,163,184,0.15)", TEXT_MUTED),
+        ),
+        rx.cond(
+            a.activo,
+            rx.button("Revocar", on_click=FoodState.revocar_agente(a.id),
+                      background="rgba(239,68,68,0.08)", color="#F87171", border="1px solid #FECACA",
+                      border_radius="6px", font_size="10px", cursor="pointer",
+                      padding_x="8px", padding_y="3px", _hover={"opacity": "0.85"}),
+            rx.fragment(),
+        ),
+        width="100%", align="center", padding="8px 10px", background=DARK_800,
+        border_radius="8px", border=f"1px solid {DARK_700}", gap="8px",
+    )
+
+
+def _bloque_navegador() -> rx.Component:
+    return rx.vstack(
         rx.box(
             rx.hstack(
                 rx.icon(tag="info", size=14, color="#60A5FA"),
                 rx.text(
-                    "Para que la impresora quede configurada, instalala como "
-                    "impresora normal en el sistema operativo de esa tablet/PC "
-                    "(con el driver del fabricante si es USB) — el navegador se "
-                    "encarga del resto.",
+                    "En modo navegador los tickets se imprimen desde la pestaña "
+                    "abierta (con --kiosk-printing sale sin diálogo). Instala la "
+                    "impresora en el sistema operativo de esa tablet/PC.",
                     font_size="12px", color="#CBD5E1",
                 ),
                 spacing="2", align="start",
@@ -1067,66 +1235,233 @@ def _content_impresoras() -> rx.Component:
             background="rgba(59,130,246,0.08)", border="1px solid #BFDBFE",
             border_radius="8px", padding="12px 14px", width="100%",
         ),
+        rx.button(
+            rx.hstack(
+                rx.icon(tag="printer", size=14, color=ACCENT),
+                rx.text("Imprimir ticket de prueba", font_size="13px",
+                        font_weight="700", color=ACCENT),
+                spacing="2", align="center",
+            ),
+            on_click=FoodState.imprimir_ticket_prueba,
+            background="rgba(234,88,12,0.08)", border="1px solid rgba(234,88,12,0.40)",
+            border_radius="8px", padding_x="16px", padding_y="9px", cursor="pointer",
+            align_self="start",
+            _hover={"background": "rgba(234,88,12,0.12)", "border_color": ACCENT},
+        ),
+        spacing="4", width="100%",
+    )
+
+
+def _paso_agente(numero: str, texto) -> rx.Component:
+    return rx.hstack(
+        rx.box(
+            rx.text(numero, font_size="12px", font_weight="800", color=TEXT_WHITE),
+            background=ACCENT, border_radius="50%",
+            min_width="22px", height="22px", display="flex",
+            align_items="center", justify_content="center", flex_shrink="0",
+        ),
+        rx.text(texto, font_size="13px", color=TEXT_PRIMARY, line_height="1.5"),
+        spacing="3", align="start", width="100%",
+    )
+
+
+def _bloque_agente() -> rx.Component:
+    return rx.vstack(
+        # ── Descargar e instalar el agente ──
         rx.box(
             rx.vstack(
-                _section_header("Pantalla de cocina (KDS)", "chef_hat"),
+                _section_header("Descargar e instalar el agente", "download"),
+                rx.text("Instala esta app UNA sola vez en la PC de la caja (la que "
+                        "tiene las impresoras). Imprime en segundo plano, sin dejar "
+                        "ninguna pestaña abierta.",
+                        font_size="12px", color=TEXT_MUTED),
+                rx.link(
+                    rx.hstack(
+                        rx.icon(tag="download", size=16, color=TEXT_WHITE),
+                        rx.text("Descargar agente (Windows)", font_size="13px",
+                                font_weight="700", color=TEXT_WHITE),
+                        spacing="2", align="center",
+                    ),
+                    href=AGENTE_DOWNLOAD_URL,
+                    is_external=True,
+                    background=ACCENT, border_radius="8px", padding="10px 16px",
+                    text_decoration="none", width="fit-content",
+                    _hover={"background": ACCENT_HOVER},
+                ),
+                rx.vstack(
+                    _paso_agente("1", "Descarga el archivo TuwaykifoodAgente.exe y "
+                                      "guárdalo en la PC de la caja."),
+                    _paso_agente("2", "Ábrelo con doble clic. La primera vez crea un "
+                                      "archivo config.ini justo al lado y aparece un "
+                                      "ícono en la bandeja del sistema (junto al reloj)."),
+                    _paso_agente("3", "Genera un token aquí abajo y pégalo dentro de "
+                                      "config.ini (ábrelo con el Bloc de notas)."),
+                    _paso_agente("4", "Cierra y vuelve a abrir el agente. El ícono "
+                                      "queda en verde y ya imprime solo."),
+                    spacing="3", align="start", width="100%",
+                    background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
+                    border_radius="10px", padding="16px",
+                ),
+                spacing="4", width="100%",
+            ),
+            background=DARK_800, border=f"1px solid {DARK_700}",
+            border_radius="12px", padding="20px", width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        # ── Impresoras ──
+        rx.box(
+            rx.vstack(
+                _section_header("Impresoras", "printer"),
+                rx.text("Carga cada impresora física del local (de red por IP o USB "
+                        "conectada a la PC de la caja) y su rol.",
+                        font_size="12px", color=TEXT_MUTED),
+                _impresora_form(),
+                rx.cond(
+                    FoodState.impresoras_config.length() == 0,
+                    rx.center(rx.text("Sin impresoras. Agrega una arriba.",
+                                      font_size="12px", color=TEXT_MUTED),
+                              padding_y="16px", width="100%"),
+                    rx.vstack(rx.foreach(FoodState.impresoras_config, _impresora_row),
+                              spacing="2", width="100%"),
+                ),
+                spacing="4", width="100%",
+            ),
+            background=DARK_800, border=f"1px solid {DARK_700}",
+            border_radius="12px", padding="20px", width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        # ── Agentes ──
+        rx.box(
+            rx.vstack(
+                _section_header("Agente de impresión", "monitor"),
+                rx.text("Genera un token y pégalo en el archivo config.ini del agente "
+                        "instalado en la PC de la caja.",
+                        font_size="12px", color=TEXT_MUTED),
                 rx.hstack(
-                    rx.vstack(
-                        rx.text("Minutos para alerta de demorado", font_size="13px",
-                                color="#CBD5E1", font_weight="600"),
-                        rx.text("Un ticket se marca como demorado si supera este tiempo.",
-                                font_size="12px", color=TEXT_MUTED),
-                        spacing="0", align="start", flex="1",
+                    rx.input(placeholder="Nombre del agente (ej: Caja principal)",
+                             value=FoodState.agente_form_nombre,
+                             on_change=FoodState.set_agente_form_nombre, flex="1",
+                             background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
+                             color=TEXT_PRIMARY, border_radius="8px", padding_x="10px",
+                             padding_y="7px", font_size="13px"),
+                    rx.button(
+                        rx.hstack(rx.icon(tag="key_round", size=14, color=TEXT_WHITE),
+                                  rx.text("Generar agente", font_size="12px",
+                                          font_weight="700", color=TEXT_WHITE),
+                                  spacing="1", align="center"),
+                        on_click=FoodState.crear_agente_impresion,
+                        background=ACCENT, border_radius="8px", cursor="pointer",
+                        padding_x="14px", padding_y="7px", white_space="nowrap",
+                        _hover={"background": ACCENT_HOVER},
                     ),
-                    rx.input(
-                        value=FoodState.config_kds_minutos_alerta,
-                        on_change=FoodState.set_config_kds_minutos_alerta,
-                        type="number", min="1", max="120",
-                        width="80px",
-                        background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
-                        border_radius="7px", font_size="14px", font_weight="700",
-                        text_align="center",
-                        padding_y="8px",
-                        _focus={"border": f"1px solid {ACCENT}"},
+                    spacing="2", width="100%", align="center", flex_wrap="wrap",
+                ),
+                rx.cond(
+                    FoodState.agente_token_revelado != "",
+                    rx.box(
+                        rx.vstack(
+                            rx.hstack(
+                                rx.icon(tag="triangle_alert", size=14, color=WARNING_SOLID),
+                                rx.text("Token — cópialo ahora, se muestra una sola vez",
+                                        font_size="12px", font_weight="700", color=TEXT_PRIMARY),
+                                spacing="2", align="center",
+                            ),
+                            rx.box(
+                                rx.text(FoodState.agente_token_revelado, font_size="12px",
+                                        color="#CBD5E1", word_break="break-all",
+                                        font_family="monospace"),
+                                background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
+                                border_radius="6px", padding="8px 10px", width="100%",
+                            ),
+                            rx.hstack(
+                                rx.button(
+                                    rx.hstack(rx.icon(tag="copy", size=13), rx.text("Copiar", font_size="12px"),
+                                              spacing="1", align="center"),
+                                    on_click=rx.set_clipboard(FoodState.agente_token_revelado),
+                                    background=ACCENT, color=TEXT_WHITE, border_radius="7px",
+                                    cursor="pointer", padding_x="12px", padding_y="6px",
+                                    _hover={"background": ACCENT_HOVER},
+                                ),
+                                rx.button("Ya lo copié", on_click=FoodState.ocultar_token_revelado,
+                                          background=DARK_800, color=TEXT_MUTED,
+                                          border=f"1px solid {DARK_700}", border_radius="7px",
+                                          font_size="12px", cursor="pointer",
+                                          padding_x="12px", padding_y="6px"),
+                                spacing="2",
+                            ),
+                            spacing="3", width="100%",
+                        ),
+                        background="rgba(234,179,8,0.08)", border="1px solid rgba(234,179,8,0.40)",
+                        border_radius="10px", padding="14px", width="100%",
                     ),
-                    rx.text("min", font_size="13px", color=TEXT_MUTED, font_weight="600"),
-                    spacing="3", align="center", width="100%",
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    FoodState.agentes_config.length() == 0,
+                    rx.fragment(),
+                    rx.vstack(rx.foreach(FoodState.agentes_config, _agente_row),
+                              spacing="2", width="100%"),
+                ),
+                spacing="4", width="100%",
+            ),
+            background=DARK_800, border=f"1px solid {DARK_700}",
+            border_radius="12px", padding="20px", width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        spacing="4", width="100%",
+    )
+
+
+def _content_impresoras() -> rx.Component:
+    return rx.vstack(
+        # ── Selector de modo ──
+        rx.box(
+            rx.vstack(
+                _section_header("Modo de impresión", "printer"),
+                rx.text("Elige cómo se imprimen las comandas y comprobantes.",
+                        font_size="12px", color=TEXT_MUTED),
+                rx.hstack(
+                    _modo_option("Navegador (kiosk)", "navegador",
+                                 "Imprime desde la pestaña abierta."),
+                    _modo_option("Agente local", "agente",
+                                 "Una app en la PC imprime en red o USB."),
+                    spacing="3", width="100%", flex_wrap="wrap",
                 ),
                 spacing="3", width="100%",
             ),
             background=DARK_800, border=f"1px solid {DARK_700}",
-            border_radius="12px", padding="20px",
-            width="100%", box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+            border_radius="12px", padding="20px", width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
-        rx.hstack(
-            rx.button(
+        # ── Ancho de papel (aplica a ambos modos) ──
+        rx.box(
+            rx.vstack(
+                rx.text("Ancho de papel", font_size="13px", color="#CBD5E1", font_weight="600"),
                 rx.hstack(
-                    rx.icon(tag="printer", size=14, color=ACCENT),
-                    rx.text("Imprimir ticket de prueba", font_size="13px",
-                            font_weight="700", color=ACCENT),
-                    spacing="2", align="center",
+                    _paper_width_option("58mm", "58"),
+                    _paper_width_option("80mm", "80"),
+                    rx.spacer(),
+                    rx.button(
+                        rx.hstack(rx.icon(tag="save", size=14, color=TEXT_WHITE),
+                                  rx.text("Guardar", font_size="13px", font_weight="700", color=TEXT_WHITE),
+                                  spacing="2", align="center"),
+                        on_click=FoodState.guardar_config_impresora,
+                        background=ACCENT, border_radius="8px", padding_x="16px", padding_y="9px",
+                        cursor="pointer", _hover={"background": ACCENT_HOVER},
+                    ),
+                    spacing="3", width="100%", align="center",
                 ),
-                on_click=FoodState.imprimir_ticket_prueba,
-                background="rgba(234,88,12,0.08)", border="1px solid rgba(234,88,12,0.40)",
-                border_radius="8px",
-                padding_x="16px", padding_y="9px",
-                cursor="pointer",
-                _hover={"background": "rgba(234,88,12,0.12)", "border_color": ACCENT},
+                spacing="3", width="100%",
             ),
-            rx.spacer(),
-            rx.button(
-                rx.hstack(
-                    rx.icon(tag="save", size=14, color=TEXT_WHITE),
-                    rx.text("Guardar configuración", font_size="13px",
-                            font_weight="700", color=TEXT_WHITE),
-                    spacing="2", align="center",
-                ),
-                on_click=FoodState.guardar_config_impresora,
-                background=ACCENT, border_radius="8px",
-                padding_x="16px", padding_y="9px",
-                cursor="pointer", _hover={"background": ACCENT_HOVER},
-            ),
-            width="100%", align="center",
+            background=DARK_800, border=f"1px solid {DARK_700}",
+            border_radius="12px", padding="20px", width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        # ── Bloque según modo ──
+        rx.cond(
+            FoodState.config_modo_impresion == "agente",
+            _bloque_agente(),
+            _bloque_navegador(),
         ),
         width="100%",
         spacing="4",

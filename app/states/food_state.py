@@ -26,6 +26,7 @@ from sqlmodel import select
 
 from app.models.company import Company
 from app.models.food import (
+    AgenteImpresion,
     Categoria,
     Cliente,
     Combo,
@@ -34,6 +35,7 @@ from app.models.food import (
     CuponLote,
     CuentaCorriente,
     DetallePedido,
+    Impresora,
     EstacionCocina,
     EstadoMesa,
     EstadoPedido,
@@ -58,11 +60,14 @@ from app.models.food import (
 )
 from app.services.receipt_service import (
     TicketLine,
+    build_cashier_ticket_lines,
+    build_precuenta_lines,
     build_print_script,
-    generate_cashier_ticket_html,
     generate_kitchen_ticket_html,
-    generate_precuenta_html,
+    render_ticket_html,
+    ticket_text,
 )
+from app.services.print_queue import crear_agente, encolar_trabajo
 from tuwayki_core.utils.timezone import format_local_datetime, utc_now_naive
 
 from app.models.food import MovimientoInsumo, PagoPedido, TipoMovimientoInsumo
@@ -691,6 +696,25 @@ class MesaAdminView(BaseModel):
     qr_token: str = ""
     qr_url: str = ""
     qr_base64: str = ""
+
+
+class ImpresoraView(BaseModel):
+    id: int = 0
+    nombre: str = ""
+    rol: str = "cocina"
+    tipo: str = "red"
+    ip: str = ""
+    puerto: int = 9100
+    usb_target: str = ""
+    paper_width_mm: int = 0
+    activa: bool = True
+
+
+class AgenteView(BaseModel):
+    id: int = 0
+    nombre: str = ""
+    activo: bool = True
+    last_seen_texto: str = "Nunca"
 
 
 class InsumoView(BaseModel):
@@ -1568,6 +1592,8 @@ class FoodState(
     config_nombre_local: str = "Mi Restaurante"
     config_logo_url: str = ""
     config_ticket_paper_width_mm: str = "80"
+    # "navegador" (kiosk-printing) | "agente" (agente local jala los trabajos)
+    config_modo_impresion: str = "navegador"
     config_slug: str = "mi-restaurante"
     config_menu_qr_base64: str = ""
     config_menu_url: str = ""
@@ -1593,6 +1619,19 @@ class FoodState(
     mesa_config_form_nombre: str = ""
     mesa_config_form_capacidad: str = "4"
     mesa_config_form_sector: str = "Salón"
+
+    # CRUD impresoras + agentes (modo agente de impresión)
+    impresoras_config: list[ImpresoraView] = []
+    agentes_config: list[AgenteView] = []
+    impresora_form_id: int = 0
+    impresora_form_nombre: str = ""
+    impresora_form_rol: str = "cocina"
+    impresora_form_tipo: str = "red"
+    impresora_form_ip: str = ""
+    impresora_form_puerto: str = "9100"
+    impresora_form_usb_target: str = ""
+    agente_form_nombre: str = ""
+    agente_token_revelado: str = ""
 
     # ─── Computed vars ────────────────────────────────────────────────────────
 
@@ -2269,6 +2308,8 @@ class FoodState(
         self.cargar_config_impresora()
         self.cargar_mesas_config()
         self.cargar_sucursales_admin()
+        self.cargar_impresoras_config()
+        self.cargar_agentes_config()
         return None
 
     def on_load_dono_page(self) -> None:
@@ -2742,6 +2783,7 @@ class FoodState(
                 self.config_nombre_impuesto = cfg.nombre_impuesto or "IGV"
                 self.config_porcentaje_iva = str(cfg.porcentaje_iva)
                 self.config_kds_minutos_alerta = str(cfg.kds_minutos_alerta)
+                self.config_modo_impresion = cfg.modo_impresion or "navegador"
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
@@ -2778,6 +2820,9 @@ class FoodState(
                 cfg.kds_minutos_alerta = kds_min if 1 <= kds_min <= 120 else 15
             except (ValueError, AttributeError):
                 cfg.kds_minutos_alerta = 15
+            cfg.modo_impresion = (
+                "agente" if self.config_modo_impresion == "agente" else "navegador"
+            )
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
             cfg.updated_at = _utcnow()
@@ -2793,6 +2838,207 @@ class FoodState(
         self.config_menu_url = url
         self.config_menu_qr_base64 = _generar_qr_base64(url)
         return rx.toast.success("Configuración guardada.")
+
+    # ─── Impresoras + agentes (modo agente de impresión) ──────────────────────
+
+    def cargar_impresoras_config(self) -> None:
+        with self._tenant_session() as session:
+            rows = session.exec(
+                select(Impresora)
+                .where(Impresora.company_id == self._company_id())
+                .order_by(Impresora.id)
+            ).all()
+            self.impresoras_config = [
+                ImpresoraView(
+                    id=i.id or 0, nombre=i.nombre, rol=i.rol, tipo=i.tipo,
+                    ip=i.ip, puerto=i.puerto, usb_target=i.usb_target,
+                    paper_width_mm=i.paper_width_mm or 0, activa=i.activa,
+                )
+                for i in rows
+            ]
+
+    def cargar_agentes_config(self) -> None:
+        with self._tenant_session() as session:
+            rows = session.exec(
+                select(AgenteImpresion)
+                .where(AgenteImpresion.company_id == self._company_id())
+                .order_by(AgenteImpresion.id)
+            ).all()
+            self.agentes_config = [
+                AgenteView(
+                    id=a.id or 0, nombre=a.nombre, activo=a.activo,
+                    last_seen_texto=(format_local_datetime(a.last_seen_at) if a.last_seen_at else "Nunca"),
+                )
+                for a in rows
+            ]
+
+    def _reset_impresora_form(self) -> None:
+        self.impresora_form_id = 0
+        self.impresora_form_nombre = ""
+        self.impresora_form_rol = "cocina"
+        self.impresora_form_tipo = "red"
+        self.impresora_form_ip = ""
+        self.impresora_form_puerto = "9100"
+        self.impresora_form_usb_target = ""
+
+    def cancelar_impresora_form(self) -> None:
+        self._reset_impresora_form()
+
+    def editar_impresora_config(self, impresora_id: int) -> None:
+        imp = next((i for i in self.impresoras_config if i.id == impresora_id), None)
+        if imp is None:
+            return
+        self.impresora_form_id = imp.id
+        self.impresora_form_nombre = imp.nombre
+        self.impresora_form_rol = imp.rol
+        self.impresora_form_tipo = imp.tipo
+        self.impresora_form_ip = imp.ip
+        self.impresora_form_puerto = str(imp.puerto or 9100)
+        self.impresora_form_usb_target = imp.usb_target
+
+    def guardar_impresora_config(self):
+        nombre = self.impresora_form_nombre.strip()
+        if not nombre:
+            return rx.toast.error("El nombre de la impresora es obligatorio.")
+        rol = self.impresora_form_rol if self.impresora_form_rol in ("cocina", "caja") else "cocina"
+        tipo = self.impresora_form_tipo if self.impresora_form_tipo in ("red", "usb") else "red"
+        if tipo == "red" and not self.impresora_form_ip.strip():
+            return rx.toast.error("Ingresa la IP de la impresora de red.")
+        if tipo == "usb" and not self.impresora_form_usb_target.strip():
+            return rx.toast.error("Ingresa el nombre de la impresora USB (como figura en Windows).")
+        try:
+            puerto = int(self.impresora_form_puerto.strip() or "9100")
+        except ValueError:
+            puerto = 9100
+        with self._tenant_session() as session:
+            if self.impresora_form_id > 0:
+                imp = session.get(Impresora, self.impresora_form_id)
+                if imp is None or imp.company_id != self._company_id():
+                    return rx.toast.error("Impresora no encontrada.")
+            else:
+                imp = Impresora(company_id=self._company_id())
+            imp.nombre = nombre
+            imp.rol = rol
+            imp.tipo = tipo
+            imp.ip = self.impresora_form_ip.strip() if tipo == "red" else ""
+            imp.puerto = puerto
+            imp.usb_target = self.impresora_form_usb_target.strip() if tipo == "usb" else ""
+            imp.updated_at = _utcnow()
+            session.add(imp)
+            session.commit()
+        accion = "actualizada" if self.impresora_form_id > 0 else "creada"
+        self._reset_impresora_form()
+        self.cargar_impresoras_config()
+        return rx.toast.success(f"Impresora {accion}.")
+
+    def eliminar_impresora_config(self, impresora_id: int):
+        with self._tenant_session() as session:
+            imp = session.get(Impresora, impresora_id)
+            if imp is not None and imp.company_id == self._company_id():
+                session.delete(imp)
+                session.commit()
+        self.cargar_impresoras_config()
+        return rx.toast.success("Impresora eliminada.")
+
+    def toggle_impresora_activa(self, impresora_id: int) -> None:
+        with self._tenant_session() as session:
+            imp = session.get(Impresora, impresora_id)
+            if imp is not None and imp.company_id == self._company_id():
+                imp.activa = not imp.activa
+                imp.updated_at = _utcnow()
+                session.add(imp)
+                session.commit()
+        self.cargar_impresoras_config()
+
+    def set_modo_impresion(self, valor: str):
+        modo = "agente" if valor == "agente" else "navegador"
+        self.config_modo_impresion = modo
+        with self._tenant_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == self._company_id())
+            ).first()
+            if cfg is None:
+                cfg = ConfigImpresora(company_id=self._company_id())
+            cfg.modo_impresion = modo
+            cfg.updated_at = _utcnow()
+            session.add(cfg)
+            session.commit()
+        if modo == "agente":
+            self.cargar_impresoras_config()
+            self.cargar_agentes_config()
+        return rx.toast.success(
+            "Modo agente activado." if modo == "agente" else "Modo navegador activado."
+        )
+
+    def crear_agente_impresion(self):
+        nombre = self.agente_form_nombre.strip() or "Agente de impresión"
+        with self._tenant_session() as session:
+            _, token = crear_agente(session, company_id=self._company_id(), nombre=nombre)
+        self.agente_token_revelado = token
+        self.agente_form_nombre = ""
+        self.cargar_agentes_config()
+        return rx.toast.success("Agente creado. Copia el token ahora — se muestra una sola vez.")
+
+    def ocultar_token_revelado(self) -> None:
+        self.agente_token_revelado = ""
+
+    def revocar_agente(self, agente_id: int):
+        with self._tenant_session() as session:
+            ag = session.get(AgenteImpresion, agente_id)
+            if ag is not None and ag.company_id == self._company_id():
+                ag.activo = False
+                ag.updated_at = _utcnow()
+                session.add(ag)
+                session.commit()
+        self.cargar_agentes_config()
+        return rx.toast.success("Agente revocado.")
+
+    def imprimir_prueba_impresora(self, rol: str):
+        try:
+            ancho = int(self.config_ticket_paper_width_mm.strip())
+        except (ValueError, AttributeError):
+            ancho = 80
+        cols = 32 if ancho <= 58 else 42
+        texto = "\n".join([
+            "TUWAYKIFOOD".center(cols),
+            "Ticket de prueba".center(cols),
+            "-" * cols,
+            f"Rol: {rol}",
+            "Si ves esto, la impresora funciona.",
+            "-" * cols,
+        ])
+        with self._tenant_session() as session:
+            encolar_trabajo(
+                session,
+                company_id=self._company_id(),
+                rol=rol,
+                tipo_doc="prueba",
+                contenido=texto,
+                paper_width_mm=ancho,
+                sucursal_id=self._sucursal_id() or None,
+            )
+        return rx.toast.success(f"Prueba encolada para '{rol}'. El agente la imprimirá.")
+
+    def set_impresora_form_nombre(self, v: str) -> None:
+        self.impresora_form_nombre = v
+
+    def set_impresora_form_rol(self, v: str) -> None:
+        self.impresora_form_rol = v
+
+    def set_impresora_form_tipo(self, v: str) -> None:
+        self.impresora_form_tipo = v
+
+    def set_impresora_form_ip(self, v: str) -> None:
+        self.impresora_form_ip = v
+
+    def set_impresora_form_puerto(self, v: str) -> None:
+        self.impresora_form_puerto = v
+
+    def set_impresora_form_usb_target(self, v: str) -> None:
+        self.impresora_form_usb_target = v
+
+    def set_agente_form_nombre(self, v: str) -> None:
+        self.agente_form_nombre = v
 
     @rx.var
     def ticket_preview_text(self) -> str:
@@ -2857,7 +3103,7 @@ class FoodState(
             TicketLine(name="Inka Cola 500ml", quantity=2, unit_price=5.0, subtotal=10.0, note="bien fría"),
             TicketLine(name="Ceviche Clásico", quantity=1, unit_price=38.0, subtotal=38.0),
         ]
-        html = generate_cashier_ticket_html(
+        _lines = build_cashier_ticket_lines(
             order_reference="Mesa 1",
             pedido_id=0,
             items=items_demo,
@@ -2876,7 +3122,12 @@ class FoodState(
             porcentaje_iva=float(self.config_porcentaje_iva.strip() or "18"),
             paper_width_mm=paper_mm,
         )
-        return rx.call_script(build_print_script(html))
+        return self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="prueba",
+            texto=ticket_text(_lines),
+            html=render_ticket_html("Comprobante de Pago", _lines, paper_mm),
+        )
 
     def set_config_nombre_local(self, v: str) -> None:
         self.config_nombre_local = v
@@ -3165,6 +3416,44 @@ class FoodState(
 
     # ─── Auto-impresión de tickets de cocina ───────────────────────────────
 
+    def _imprimir_o_encolar(
+        self,
+        *,
+        rol: str,
+        tipo_doc: str,
+        texto: str,
+        html: str,
+        pedido_id: int | None = None,
+    ):
+        """Emite un documento según el modo de impresión de la empresa.
+
+        - modo "navegador": devuelve el evento de impresión por iframe (kiosk),
+          para incluirlo en la lista de eventos del handler.
+        - modo "agente": encola el `texto` para que el agente local lo imprima y
+          devuelve None (el caller lo omite de la lista).
+        """
+        with self._tenant_session() as session:
+            cfg = session.exec(
+                select(ConfigImpresora).where(
+                    ConfigImpresora.company_id == self._company_id()
+                )
+            ).first()
+            modo = cfg.modo_impresion if cfg else "navegador"
+            width = cfg.ticket_paper_width_mm if cfg else 80
+            if modo == "agente":
+                encolar_trabajo(
+                    session,
+                    company_id=self._company_id(),
+                    rol=rol,
+                    tipo_doc=tipo_doc,
+                    contenido=texto,
+                    paper_width_mm=width,
+                    sucursal_id=self._sucursal_id() or None,
+                    pedido_id=pedido_id,
+                )
+                return None
+        return rx.call_script(build_print_script(html))
+
     def _init_cocina_auto_print(self) -> None:
         """Ya no se usa un watermark en memoria: la dedupe de impresión vive en
         la BD (DetallePedido.ticket_impreso_at), así cada comanda sale UNA sola
@@ -3183,6 +3472,16 @@ class FoodState(
         comanda se salta: así cada comanda sale UNA sola vez sin importar cuántas
         pantallas estén imprimiendo ni en qué módulo esté navegando cada quien."""
         with self._tenant_session() as session:
+            # En modo "agente" la impresión la hace el agente local (reclama las
+            # comandas por la API); el navegador NO imprime ni reclama, para no
+            # duplicar. Ver ConfigImpresora.modo_impresion.
+            modo = session.exec(
+                select(ConfigImpresora.modo_impresion).where(
+                    ConfigImpresora.company_id == self._company_id()
+                )
+            ).first()
+            if modo == "agente":
+                return ""
             candidates = session.exec(
                 select(DetallePedido)
                 .where(
@@ -3841,7 +4140,7 @@ class FoodState(
                     mozo = session.get(UsuarioFood, pedido.mozo_id) if pedido.mozo_id else None
                     if mozo:
                         attended_by = _actor_name(mozo.nombre)
-        html_ticket = generate_precuenta_html(
+        _lines = build_precuenta_lines(
             order_reference=mesa_label,
             pedido_id=pedido_id,
             items=ticket_lines,
@@ -3860,7 +4159,13 @@ class FoodState(
         for i in range(len(items)):
             items[i] = items[i].model_copy(update={"sel_precuenta": False})
         self.historial_pedido = items
-        return rx.call_script(build_print_script(html_ticket))
+        return self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="comprobante",
+            texto=ticket_text(_lines),
+            html=render_ticket_html("Pre-cuenta", _lines, self._ticket_paper_width_mm()),
+            pedido_id=pedido_id,
+        )
         self.transfer_modal_abierto = v
 
     def transferir_a_mesa(self, mesa_destino_id: int) -> None:
@@ -4837,7 +5142,7 @@ class FoodState(
             _pct_iva = float(self.config_porcentaje_iva or "18.0")
         except (ValueError, AttributeError):
             _pct_iva = 18.0
-        html_ticket = generate_cashier_ticket_html(
+        _lines = build_cashier_ticket_lines(
             order_reference=mesa_label,
             pedido_id=pedido_id,
             items=ticket_lines,
@@ -4859,7 +5164,13 @@ class FoodState(
             porcentaje_iva=_pct_iva,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
-        return rx.call_script(build_print_script(html_ticket))
+        return self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="comprobante",
+            texto=ticket_text(_lines),
+            html=render_ticket_html("Comprobante de Pago", _lines, self._ticket_paper_width_mm()),
+            pedido_id=pedido_id,
+        )
 
     # ─── Caja — Cobro dividido / pago mixto ──────────────────────────────────
 
@@ -5467,7 +5778,7 @@ class FoodState(
             _pct_iva = float(self.config_porcentaje_iva or "18.0")
         except (ValueError, AttributeError):
             _pct_iva = 18.0
-        html_ticket = generate_cashier_ticket_html(
+        comprobante_lines = build_cashier_ticket_lines(
             order_reference=mesa_label,
             pedido_id=pedido_id,
             items=ticket_lines,
@@ -5489,15 +5800,24 @@ class FoodState(
             porcentaje_iva=_pct_iva,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
-        desc_txt = f" - descuento {_money_text(descuento)}" if descuento > 0 else ""
-        propina_txt = f" + propina {_money_text(propina)}" if propina > 0 else ""
-        recargo_txt = f" + recargo {_money_text(recargo)}" if recargo > 0 else ""
-        return [
-            rx.toast.success(f"{mesa_label} cobrado — {_money_text(total_final)}"),
-            rx.call_script(build_print_script(html_ticket)),
+        html_ticket = render_ticket_html(
+            "Comprobante de Pago", comprobante_lines, self._ticket_paper_width_mm()
+        )
+        eventos = [rx.toast.success(f"{mesa_label} cobrado — {_money_text(total_final)}")]
+        print_evt = self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="comprobante",
+            texto=ticket_text(comprobante_lines),
+            html=html_ticket,
+            pedido_id=pedido_id,
+        )
+        if print_evt is not None:
+            eventos.append(print_evt)
+        eventos += [
             ReportesState.cargar_historial_ventas,
             ReportesState.cargar_dashboard,
         ]
+        return eventos
 
     # ─── Caja — Cobro de mesa ─────────────────────────────────────────────────
 
@@ -5548,7 +5868,7 @@ class FoodState(
             total = float(pedido.total)
             descuento = float(pedido.descuento or 0)
 
-        html_ticket = generate_precuenta_html(
+        _lines = build_precuenta_lines(
             order_reference=mesa_label,
             pedido_id=pedido_id,
             items=ticket_lines,
@@ -5562,7 +5882,13 @@ class FoodState(
             descuento=descuento,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
-        return rx.call_script(build_print_script(html_ticket))
+        return self._imprimir_o_encolar(
+            rol="caja",
+            tipo_doc="comprobante",
+            texto=ticket_text(_lines),
+            html=render_ticket_html("Pre-cuenta", _lines, self._ticket_paper_width_mm()),
+            pedido_id=pedido_id,
+        )
 
     def abrir_cobro_pedido_mostrador(self, pedido_id: int) -> None:
         """Abre el panel de cobro para una orden de mostrador pendiente de pago."""

@@ -1,0 +1,12 @@
+# Artefactos de build de PyInstaller
+build/
+dist/
+*.spec
+
+# Config real con el token del agente (usar config.example.ini como plantilla)
+config.ini
+
+# Logs y cachés
+agente.log
+__pycache__/
+*.pyc

@@ -911,7 +911,7 @@ def _mod_asignar_modal() -> rx.Component:
                 rx.cond(
                     FoodState.grupos_modificadores.length() == 0,
                     rx.text(
-                        "No hay grupos definidos. Creá uno primero en la sección Modificadores.",
+                        "No hay grupos definidos. Crea uno primero en la sección Modificadores.",
                         font_size="12px", color=TEXT_MUTED,
                     ),
                     rx.vstack(
@@ -1192,7 +1192,7 @@ def _combos_section() -> rx.Component:
             FoodState.combos_admin.length() == 0,
             rx.box(
                 rx.text(
-                    "Sin combos. Creá uno para ofrecer paquetes a precio fijo (ej: hamburguesa + papas + bebida).",
+                    "Sin combos. Crea uno para ofrecer paquetes a precio fijo (ej: hamburguesa + papas + bebida).",
                     font_size="12px", color=TEXT_MUTED, text_align="center",
                 ),
                 padding="24px 16px", width="100%",
@@ -1237,7 +1237,7 @@ def _modificadores_section() -> rx.Component:
             FoodState.grupos_modificadores.length() == 0,
             rx.box(
                 rx.text(
-                    "Sin grupos de modificadores. Creá uno para agregar opciones como tamaño, extras o término de cocción.",
+                    "Sin grupos de modificadores. Crea uno para agregar opciones como tamaño, extras o término de cocción.",
                     font_size="12px", color=TEXT_MUTED, text_align="center",
                 ),
                 padding="24px 16px", width="100%",

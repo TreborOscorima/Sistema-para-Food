@@ -106,41 +106,74 @@ def _estacion_content() -> rx.Component:
                 align="center",
                 width="100%",
             ),
-            # Estado ACTIVA
-            rx.hstack(
-                rx.box(
-                    width="12px",
-                    height="12px",
-                    border_radius="50%",
-                    background=SUCCESS_DARK,
-                    box_shadow=f"0 0 0 4px rgba(34,197,94,0.20)",
-                    flex_shrink="0",
-                ),
-                rx.vstack(
-                    rx.text(
-                        "Activa — escuchando comandas",
-                        font_size="15px",
-                        font_weight="700",
-                        color=TEXT_WHITE,
+            # Estado — depende del modo de impresión configurado
+            rx.cond(
+                FoodState.config_modo_impresion == "agente",
+                # Modo agente: esta pantalla no imprime; lo hace el agente local
+                rx.hstack(
+                    rx.icon(tag="info", size=18, color=ACCENT, flex_shrink="0"),
+                    rx.vstack(
+                        rx.text(
+                            "El agente local está a cargo de la impresión",
+                            font_size="15px",
+                            font_weight="700",
+                            color=TEXT_WHITE,
+                        ),
+                        rx.text(
+                            "Tienes el modo \"Agente local\" activado, así que las "
+                            "comandas se imprimen solas en segundo plano. No necesitas "
+                            "dejar esta pantalla abierta.",
+                            font_size="12px",
+                            color=TEXT_MUTED,
+                            line_height="1.5",
+                        ),
+                        spacing="1",
+                        align="start",
                     ),
-                    rx.text(
-                        "Las comandas enviadas desde cualquier celular o tablet "
-                        "se imprimen aquí automáticamente. Deja esta pantalla "
-                        "abierta durante todo el servicio.",
-                        font_size="12px",
-                        color=TEXT_MUTED,
-                        line_height="1.5",
-                    ),
-                    spacing="1",
-                    align="start",
+                    spacing="3",
+                    align="center",
+                    background=DARK_800,
+                    border=f"1px solid {DARK_700}",
+                    border_radius="12px",
+                    padding="16px 18px",
+                    width="100%",
                 ),
-                spacing="3",
-                align="center",
-                background=DARK_800,
-                border=f"1px solid {SUCCESS_DARK}",
-                border_radius="12px",
-                padding="16px 18px",
-                width="100%",
+                # Modo navegador (kiosk): esta pantalla es la que imprime
+                rx.hstack(
+                    rx.box(
+                        width="12px",
+                        height="12px",
+                        border_radius="50%",
+                        background=SUCCESS_DARK,
+                        box_shadow=f"0 0 0 4px rgba(34,197,94,0.20)",
+                        flex_shrink="0",
+                    ),
+                    rx.vstack(
+                        rx.text(
+                            "Activa — escuchando comandas",
+                            font_size="15px",
+                            font_weight="700",
+                            color=TEXT_WHITE,
+                        ),
+                        rx.text(
+                            "Las comandas enviadas desde cualquier celular o tablet "
+                            "se imprimen aquí automáticamente. Deja esta pantalla "
+                            "abierta durante todo el servicio.",
+                            font_size="12px",
+                            color=TEXT_MUTED,
+                            line_height="1.5",
+                        ),
+                        spacing="1",
+                        align="start",
+                    ),
+                    spacing="3",
+                    align="center",
+                    background=DARK_800,
+                    border=f"1px solid {SUCCESS_DARK}",
+                    border_radius="12px",
+                    padding="16px 18px",
+                    width="100%",
+                ),
             ),
             # Métricas
             rx.hstack(

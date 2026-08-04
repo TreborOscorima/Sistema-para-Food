@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from tuwayki_core.utils.timezone import utc_now_naive
 
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from starlette.applications import Starlette
@@ -33,7 +34,13 @@ from tuwayki_core.utils.validators import validate_email, validate_password
 from tuwayki_core.utils.logger import get_logger
 
 from app.models.company import Company
-from app.models.food import ConfigImpresora
+from app.models.food import (
+    ConfigImpresora,
+    EstadoTrabajo,
+    Impresora,
+    TrabajoImpresion,
+)
+from app.services import print_queue
 from app.utils.db import get_session
 from app.utils.tenant import tenant_bypass
 
@@ -429,6 +436,149 @@ async def _admin_set_plan(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=200)
 
 
+# ─── API del agente de impresión local ────────────────────────────────────────
+# El agente se autentica con `X-Agent-Token: "<id>.<secreto>"`. Todas las rutas
+# filtran explícitamente por company_id del agente bajo tenant_bypass().
+
+# Segundos sin ack tras los que un trabajo "entregado" se reencola (agente que
+# crasheó mientras imprimía).
+_ACK_TIMEOUT_S = 90
+
+
+def _agente_from_request(session, request: Request):
+    token = request.headers.get("X-Agent-Token", "")
+    agente = print_queue.verificar_token(session, token)
+    if agente is not None:
+        agente.last_seen_at = utc_now_naive()
+        session.add(agente)
+        session.commit()
+    return agente
+
+
+def _reaper_reencolar(session, company_id: int) -> None:
+    cutoff = utc_now_naive() - timedelta(seconds=_ACK_TIMEOUT_S)
+    session.exec(
+        sa_update(TrabajoImpresion)
+        .where(
+            TrabajoImpresion.company_id == company_id,
+            TrabajoImpresion.estado == EstadoTrabajo.ENTREGADO.value,
+            TrabajoImpresion.claimed_at < cutoff,
+        )
+        .values(estado=EstadoTrabajo.PENDIENTE.value, claimed_at=None)
+    )
+    session.commit()
+
+
+async def _agente_config(request: Request) -> JSONResponse:
+    with tenant_bypass():
+        with get_session() as session:
+            agente = _agente_from_request(session, request)
+            if agente is None:
+                return JSONResponse({"error": "No autorizado."}, status_code=401)
+            cfg = session.exec(
+                select(ConfigImpresora).where(
+                    ConfigImpresora.company_id == agente.company_id
+                )
+            ).first()
+            default_width = cfg.ticket_paper_width_mm if cfg else 80
+            stmt = select(Impresora).where(
+                Impresora.company_id == agente.company_id,
+                Impresora.activa.is_(True),
+            )
+            if agente.sucursal_id is not None:
+                stmt = stmt.where(Impresora.sucursal_id == agente.sucursal_id)
+            imps = session.exec(stmt.order_by(Impresora.id)).all()
+            items = [
+                {
+                    "id": i.id,
+                    "nombre": i.nombre,
+                    "rol": i.rol,
+                    "tipo": i.tipo,
+                    "ip": i.ip,
+                    "puerto": i.puerto,
+                    "usb_target": i.usb_target,
+                    "paper_width_mm": i.paper_width_mm or default_width,
+                }
+                for i in imps
+            ]
+    return JSONResponse(
+        {"impresoras": items, "default_paper_width_mm": default_width},
+        status_code=200,
+    )
+
+
+async def _agente_trabajos(request: Request) -> JSONResponse:
+    with tenant_bypass():
+        with get_session() as session:
+            agente = _agente_from_request(session, request)
+            if agente is None:
+                return JSONResponse({"error": "No autorizado."}, status_code=401)
+            # Reencolar trabajos entregados sin ack (agente caído).
+            _reaper_reencolar(session, agente.company_id)
+            # Reclamar comandas nuevas de cocina y encolarlas.
+            print_queue.reclamar_comandas_pendientes(
+                session, agente.company_id, agente.sucursal_id
+            )
+            # Entregar todos los pendientes de esta empresa/sucursal.
+            stmt = select(TrabajoImpresion).where(
+                TrabajoImpresion.company_id == agente.company_id,
+                TrabajoImpresion.estado == EstadoTrabajo.PENDIENTE.value,
+            )
+            if agente.sucursal_id is not None:
+                stmt = stmt.where(TrabajoImpresion.sucursal_id == agente.sucursal_id)
+            trabajos = session.exec(stmt.order_by(TrabajoImpresion.id)).all()
+            now = utc_now_naive()
+            items = []
+            for t in trabajos:
+                t.estado = EstadoTrabajo.ENTREGADO.value
+                t.claimed_at = now
+                session.add(t)
+                items.append(
+                    {
+                        "id": t.id,
+                        "rol": t.rol,
+                        "tipo_doc": t.tipo_doc,
+                        "contenido": t.contenido,
+                        "paper_width_mm": t.paper_width_mm,
+                        "pedido_id": t.pedido_id,
+                    }
+                )
+            session.commit()
+    return JSONResponse({"trabajos": items}, status_code=200)
+
+
+async def _agente_ack(request: Request) -> JSONResponse:
+    try:
+        trabajo_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    ok = bool(body.get("ok", True))
+    error_msg = (body.get("error") or "")[:300]
+
+    with tenant_bypass():
+        with get_session() as session:
+            agente = _agente_from_request(session, request)
+            if agente is None:
+                return JSONResponse({"error": "No autorizado."}, status_code=401)
+            trabajo = session.get(TrabajoImpresion, trabajo_id)
+            if trabajo is None or trabajo.company_id != agente.company_id:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            trabajo.estado = (
+                EstadoTrabajo.IMPRESO.value if ok else EstadoTrabajo.ERROR.value
+            )
+            trabajo.error_msg = None if ok else (error_msg or "Error de impresión")
+            trabajo.intentos = (trabajo.intentos or 0) + 1
+            trabajo.done_at = utc_now_naive()
+            session.add(trabajo)
+            session.commit()
+            result = {"id": trabajo.id, "estado": trabajo.estado}
+    return JSONResponse(result, status_code=200)
+
+
 health_app = Starlette(
     routes=[
         Route("/api/health", _health, methods=["GET"]),
@@ -441,5 +591,8 @@ health_app = Starlette(
         Route("/api/admin/companies/{id}/suspend", _admin_suspend, methods=["POST"]),
         Route("/api/admin/companies/{id}/extend-trial", _admin_extend_trial, methods=["POST"]),
         Route("/api/admin/companies/{id}/set-plan", _admin_set_plan, methods=["POST"]),
+        Route("/api/agente/config", _agente_config, methods=["GET"]),
+        Route("/api/agente/trabajos", _agente_trabajos, methods=["GET"]),
+        Route("/api/agente/trabajos/{id}/ack", _agente_ack, methods=["POST"]),
     ],
 )

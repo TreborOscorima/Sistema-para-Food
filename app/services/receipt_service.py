@@ -87,7 +87,17 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </html>"""
 
 
-def generate_kitchen_ticket_html(
+def ticket_text(lines: list[str]) -> str:
+    """Texto plano final de un ticket (lo que consume el agente de impresión)."""
+    return "\n".join(lines)
+
+
+def render_ticket_html(title: str, lines: list[str], paper_width_mm: int) -> str:
+    """Envuelve unas líneas de ticket en el HTML de impresión del navegador."""
+    return _render_html(title, lines, paper_width_mm)
+
+
+def build_kitchen_ticket_lines(
     *,
     mesa_label: str,
     pedido_id: int,
@@ -95,7 +105,8 @@ def generate_kitchen_ticket_html(
     notes: str = "",
     paper_width_mm: int = 80,
     width: int = 0,
-) -> str:
+) -> list[str]:
+    """Líneas de texto de la comanda de cocina (reutilizable por HTML y agente)."""
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
     lines: list[str] = [_center("COCINA", width), ""]
@@ -112,10 +123,30 @@ def generate_kitchen_ticket_html(
         lines.append("")
         for note_line in _wrap(f"Notas: {notes}", width):
             lines.append(note_line)
+    return lines
+
+
+def generate_kitchen_ticket_html(
+    *,
+    mesa_label: str,
+    pedido_id: int,
+    items: Iterable[TicketLine],
+    notes: str = "",
+    paper_width_mm: int = 80,
+    width: int = 0,
+) -> str:
+    lines = build_kitchen_ticket_lines(
+        mesa_label=mesa_label,
+        pedido_id=pedido_id,
+        items=items,
+        notes=notes,
+        paper_width_mm=paper_width_mm,
+        width=width,
+    )
     return _render_html("Comanda de Cocina", lines, paper_width_mm)
 
 
-def generate_cashier_ticket_html(
+def build_cashier_ticket_lines(
     *,
     order_reference: str,
     pedido_id: int,
@@ -138,7 +169,8 @@ def generate_cashier_ticket_html(
     porcentaje_iva: float = 18.0,
     paper_width_mm: int = 80,
     width: int = 0,
-) -> str:
+) -> list[str]:
+    """Líneas de texto del comprobante de pago (reutilizable por HTML y agente)."""
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
     now = datetime.now()
@@ -198,10 +230,63 @@ def generate_cashier_ticket_html(
         _line(width),
         _center(footer, width),
     ]
-    return _render_html("Comprobante de Pago", lines, paper_width_mm)
+    return lines
 
 
-def generate_precuenta_html(
+def generate_cashier_ticket_html(
+    *,
+    order_reference: str,
+    pedido_id: int,
+    items: Iterable[TicketLine],
+    total: float,
+    attended_by: str = "",
+    company_name: str = "TUWAYKIFOOD",
+    company_ruc: str = "",
+    company_sucursal: str = "",
+    company_direccion: str = "",
+    company_telefono: str = "",
+    descuento: float = 0.0,
+    propina: float = 0.0,
+    recargo: float = 0.0,
+    recargo_concepto: str = "",
+    metodo_pago: str = "",
+    mensaje_footer: str = "",
+    mostrar_iva: bool = False,
+    nombre_impuesto: str = "IGV",
+    porcentaje_iva: float = 18.0,
+    paper_width_mm: int = 80,
+    width: int = 0,
+) -> str:
+    return _render_html(
+        "Comprobante de Pago",
+        build_cashier_ticket_lines(
+            order_reference=order_reference,
+            pedido_id=pedido_id,
+            items=items,
+            total=total,
+            attended_by=attended_by,
+            company_name=company_name,
+            company_ruc=company_ruc,
+            company_sucursal=company_sucursal,
+            company_direccion=company_direccion,
+            company_telefono=company_telefono,
+            descuento=descuento,
+            propina=propina,
+            recargo=recargo,
+            recargo_concepto=recargo_concepto,
+            metodo_pago=metodo_pago,
+            mensaje_footer=mensaje_footer,
+            mostrar_iva=mostrar_iva,
+            nombre_impuesto=nombre_impuesto,
+            porcentaje_iva=porcentaje_iva,
+            paper_width_mm=paper_width_mm,
+            width=width,
+        ),
+        paper_width_mm,
+    )
+
+
+def build_precuenta_lines(
     *,
     order_reference: str,
     pedido_id: int,
@@ -216,7 +301,7 @@ def generate_precuenta_html(
     descuento: float = 0.0,
     paper_width_mm: int = 80,
     width: int = 0,
-) -> str:
+) -> list[str]:
     """Pre-cuenta (proforma): sin métodos de pago, con aviso legal."""
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
@@ -259,10 +344,47 @@ def generate_precuenta_html(
         _line(width),
         _center("Documento sin valor fiscal", width),
     ]
-    return _render_html("Pre-cuenta", lines, paper_width_mm)
+    return lines
 
 
-def generate_cash_close_ticket_html(
+def generate_precuenta_html(
+    *,
+    order_reference: str,
+    pedido_id: int,
+    items: Iterable[TicketLine],
+    total: float,
+    attended_by: str = "",
+    company_name: str = "TUWAYKIFOOD",
+    company_ruc: str = "",
+    company_sucursal: str = "",
+    company_direccion: str = "",
+    company_telefono: str = "",
+    descuento: float = 0.0,
+    paper_width_mm: int = 80,
+    width: int = 0,
+) -> str:
+    return _render_html(
+        "Pre-cuenta",
+        build_precuenta_lines(
+            order_reference=order_reference,
+            pedido_id=pedido_id,
+            items=items,
+            total=total,
+            attended_by=attended_by,
+            company_name=company_name,
+            company_ruc=company_ruc,
+            company_sucursal=company_sucursal,
+            company_direccion=company_direccion,
+            company_telefono=company_telefono,
+            descuento=descuento,
+            paper_width_mm=paper_width_mm,
+            width=width,
+        ),
+        paper_width_mm,
+    )
+
+
+def build_cash_close_ticket_lines(
     *,
     company_name: str,
     turno_id: int,
@@ -277,7 +399,7 @@ def generate_cash_close_ticket_html(
     width: int = 0,
     detalle_pedidos: list[dict] | None = None,
     detalle_movimientos: list[dict] | None = None,
-) -> str:
+) -> list[str]:
     """Ticket de cierre de turno de caja (arqueo) para impresora térmica."""
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
@@ -327,7 +449,44 @@ def generate_cash_close_ticket_html(
             lines.append(note_line)
     lines.append("")
     lines.append(_center("Documento interno", width))
-    return _render_html("Cierre de Caja", lines, paper_width_mm)
+    return lines
+
+
+def generate_cash_close_ticket_html(
+    *,
+    company_name: str,
+    turno_id: int,
+    abierto_por: str,
+    cerrado_por: str,
+    abierto_en_texto: str,
+    cerrado_en_texto: str,
+    resumen_rows: Iterable[tuple[str, str]],
+    descuadre_texto: str,
+    notas: str = "",
+    paper_width_mm: int = 80,
+    width: int = 0,
+    detalle_pedidos: list[dict] | None = None,
+    detalle_movimientos: list[dict] | None = None,
+) -> str:
+    return _render_html(
+        "Cierre de Caja",
+        build_cash_close_ticket_lines(
+            company_name=company_name,
+            turno_id=turno_id,
+            abierto_por=abierto_por,
+            cerrado_por=cerrado_por,
+            abierto_en_texto=abierto_en_texto,
+            cerrado_en_texto=cerrado_en_texto,
+            resumen_rows=resumen_rows,
+            descuadre_texto=descuadre_texto,
+            notas=notas,
+            paper_width_mm=paper_width_mm,
+            width=width,
+            detalle_pedidos=detalle_pedidos,
+            detalle_movimientos=detalle_movimientos,
+        ),
+        paper_width_mm,
+    )
 
 
 def build_print_script(html_content: str) -> str:
