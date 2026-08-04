@@ -261,6 +261,7 @@ def _column(titulo: str, count, tickets, empty_msg: str) -> rx.Component:
         spacing="3",
         align="start",
         width="100%",
+        class_name="twk-panel",
     )
 
 
@@ -387,17 +388,24 @@ def _cocina_content() -> rx.Component:
             align="center",
             gap="16px",
         ),
-        _column(
-            "Pendiente", FoodState.cantidad_tickets_nuevos, FoodState.tickets_nuevos,
-            "Sin pedidos nuevos",
-        ),
-        _column(
-            "En preparación", FoodState.cantidad_tickets_en_preparacion,
-            FoodState.tickets_en_preparacion, "Sin pedidos en preparación",
-        ),
-        _column(
-            "Listo", FoodState.cantidad_tickets_listos,
-            FoodState.tickets_listos, "Sin pedidos listos",
+        rx.box(
+            _column(
+                "Pendiente", FoodState.cantidad_tickets_nuevos, FoodState.tickets_nuevos,
+                "Sin pedidos nuevos",
+            ),
+            _column(
+                "En preparación", FoodState.cantidad_tickets_en_preparacion,
+                FoodState.tickets_en_preparacion, "Sin pedidos en preparación",
+            ),
+            _column(
+                "Listo", FoodState.cantidad_tickets_listos,
+                FoodState.tickets_listos, "Sin pedidos listos",
+            ),
+            # initial/tablet-vertical: columnas apiladas (Pendiente arriba).
+            # Desde lg: 3 columnas lado a lado (KDS clásico en monitor/tablet horizontal).
+            class_name="twk-cols-lg",
+            align_items="start",
+            width="100%",
         ),
         _cocina_ayuda(),
         spacing="5",
