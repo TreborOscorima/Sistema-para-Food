@@ -1054,7 +1054,43 @@ def _modal_agregar_productos() -> rx.Component:
                         spacing="2", align="center", width="100%",
                     ),
                 ),
-                # Contenido: 2 columnas en desktop, stacked en mobile
+                # Toggle Carta / Pedido — SOLO MÓVIL (en escritorio se ven las 2 columnas)
+                rx.hstack(
+                    rx.button(
+                        "Carta",
+                        on_click=FoodState.set_mozos_modal_vista("carta"),
+                        background=rx.cond(FoodState.mozos_modal_vista == "carta", ACCENT, "transparent"),
+                        color=rx.cond(FoodState.mozos_modal_vista == "carta", TEXT_WHITE, TEXT_MUTED),
+                        border=f"1px solid {DARK_700}", border_radius="8px",
+                        font_size="12px", font_weight="700", cursor="pointer",
+                        flex="1", height="38px", _hover={"opacity": "0.85"},
+                    ),
+                    rx.button(
+                        rx.hstack(
+                            rx.text("Pedido"),
+                            rx.cond(
+                                FoodState.cantidad_items_carrito > 0,
+                                rx.badge(
+                                    FoodState.cantidad_items_carrito.to_string(),
+                                    background=rx.cond(FoodState.mozos_modal_vista == "pedido", TEXT_WHITE, ACCENT),
+                                    color=rx.cond(FoodState.mozos_modal_vista == "pedido", ACCENT, TEXT_WHITE),
+                                    border_radius="8px", font_size="10px", padding_x="6px",
+                                ),
+                                rx.fragment(),
+                            ),
+                            spacing="2", align="center",
+                        ),
+                        on_click=FoodState.set_mozos_modal_vista("pedido"),
+                        background=rx.cond(FoodState.mozos_modal_vista == "pedido", ACCENT, "transparent"),
+                        color=rx.cond(FoodState.mozos_modal_vista == "pedido", TEXT_WHITE, TEXT_MUTED),
+                        border=f"1px solid {DARK_700}", border_radius="8px",
+                        font_size="12px", font_weight="700", cursor="pointer",
+                        flex="1", height="38px", _hover={"opacity": "0.85"},
+                    ),
+                    spacing="2", width="100%", flex_shrink="0",
+                    display=rx.breakpoints(initial="flex", md="none"),
+                ),
+                # Contenido: 2 columnas en desktop, una vista por vez en mobile
                 rx.flex(
                     # ─── Columna izquierda: productos ───
                     rx.vstack(
@@ -1158,7 +1194,7 @@ def _modal_agregar_productos() -> rx.Component:
                             ),
                             overflow_y="auto",
                             min_height="0",
-                            max_height=rx.breakpoints(initial="120px", md="45vh"),
+                            max_height=rx.breakpoints(initial="58vh", md="45vh"),
                             width="100%",
                         ),
                         # Sección combos
@@ -1185,13 +1221,29 @@ def _modal_agregar_productos() -> rx.Component:
                             rx.fragment(),
                         ),
                         spacing="2",
-                        flex=rx.breakpoints(initial="0 0 auto", md="3"),
+                        flex=rx.breakpoints(initial="1", md="3"),
                         min_width="0",
                         overflow_y="auto",
                         overflow_x="hidden",
+                        display=rx.cond(
+                            FoodState.mozos_modal_vista == "carta",
+                            rx.breakpoints(initial="flex", md="flex"),
+                            rx.breakpoints(initial="none", md="flex"),
+                        ),
                     ),
                     # ─── Columna derecha: historial + carrito ───
                     rx.vstack(
+                        # Volver a la carta — SOLO MÓVIL
+                        rx.hstack(
+                            rx.icon(tag="arrow_left", size=15, color=ACCENT),
+                            rx.text("Volver a la carta", font_size="12px",
+                                    font_weight="600", color=ACCENT),
+                            on_click=FoodState.set_mozos_modal_vista("carta"),
+                            spacing="2", align="center", cursor="pointer",
+                            width="100%", flex_shrink="0",
+                            display=rx.breakpoints(initial="flex", md="none"),
+                            _hover={"opacity": "0.8"},
+                        ),
                         # Sección: Pedidos enviados a cocina
                         rx.cond(
                             FoodState.historial_pedido.length() > 0,
@@ -1441,6 +1493,11 @@ def _modal_agregar_productos() -> rx.Component:
                         border=f"1px solid {DARK_700}",
                         border_radius="10px",
                         padding="12px",
+                        display=rx.cond(
+                            FoodState.mozos_modal_vista == "pedido",
+                            rx.breakpoints(initial="flex", md="flex"),
+                            rx.breakpoints(initial="none", md="flex"),
+                        ),
                     ),
                     direction=rx.breakpoints(initial="column", md="row"),
                     gap="12px",
@@ -1448,6 +1505,44 @@ def _modal_agregar_productos() -> rx.Component:
                     flex="1",
                     min_height="0",
                     overflow="hidden",
+                ),
+                # Barra del carrito — SOLO MÓVIL, en vista "carta" y con ítems
+                rx.cond(
+                    (FoodState.mozos_modal_vista == "carta") & (FoodState.cantidad_items_carrito > 0),
+                    rx.box(
+                        rx.hstack(
+                            rx.box(
+                                rx.icon(tag="shopping_cart", size=19, color=TEXT_WHITE),
+                                rx.box(
+                                    rx.text(FoodState.cantidad_items_carrito.to_string(),
+                                            font_size="10px", font_weight="800", color=ACCENT),
+                                    background=TEXT_WHITE, border_radius="50%",
+                                    min_width="16px", height="16px", display="flex",
+                                    align_items="center", justify_content="center",
+                                    position="absolute", top="-7px", right="-8px",
+                                ),
+                                position="relative", flex_shrink="0", display="flex",
+                            ),
+                            rx.vstack(
+                                rx.text("Ver pedido", font_size="13px", font_weight="800",
+                                        color=TEXT_WHITE, line_height="1.15"),
+                                rx.text(FoodState.cantidad_items_carrito.to_string() + " ítem(s)",
+                                        font_size="10px", color="rgba(255,255,255,0.85)", line_height="1.15"),
+                                spacing="0", align="start",
+                            ),
+                            rx.spacer(),
+                            rx.text(FoodState.total_carrito_texto, font_size="16px",
+                                    font_weight="800", color=TEXT_WHITE),
+                            rx.icon(tag="chevron_up", size=19, color=TEXT_WHITE),
+                            spacing="3", align="center", width="100%",
+                        ),
+                        on_click=FoodState.set_mozos_modal_vista("pedido"),
+                        background=ACCENT, border_radius="12px", padding="10px 14px",
+                        box_shadow="0 4px 14px rgba(234,88,12,0.45)", cursor="pointer",
+                        width="100%", flex_shrink="0",
+                        display=rx.breakpoints(initial="block", md="none"),
+                    ),
+                    rx.fragment(),
                 ),
                 spacing="3",
                 width="100%",

@@ -1410,6 +1410,9 @@ class FoodState(
     # Panel deslizable del carrito en móvil (bottom sheet). En escritorio el
     # carrito va siempre visible en la columna derecha y esta var no aplica.
     mostrador_cart_sheet_abierto: bool = False
+    # Vista activa del modal de comanda de Mozos en móvil: "carta" o "pedido".
+    # En escritorio se ven las dos columnas y esta var no aplica.
+    mozos_modal_vista: str = "carta"
     historial_pedido: list[HistorialItem] = []
     tickets_cocina: list[CocinaTicketView] = []
     pedidos_mostrador_pendientes: list[MostradorPendienteView] = []
@@ -4003,6 +4006,7 @@ class FoodState(
         _toast_msg = f"{self.mesa_seleccionada_label} seleccionada. {self.cantidad_items_carrito} items pendientes.{alerta}"
         self.busqueda_producto_modal = ""
         self.categoria_activa_id = 0
+        self.mozos_modal_vista = "carta"
         self.modal_agregar_abierto = True
         return rx.toast.success(_toast_msg)
 
@@ -4445,10 +4449,14 @@ class FoodState(
         if not value:
             self.busqueda_producto_modal = ""
 
+    def set_mozos_modal_vista(self, vista: str) -> None:
+        self.mozos_modal_vista = vista
+
     def cerrar_modal_agregar(self) -> None:
         self.modal_agregar_abierto = False
         self.busqueda_producto_modal = ""
         self.precuenta_parcial_modo = False
+        self.mozos_modal_vista = "carta"
 
     def set_busqueda_producto_modal(self, value: str) -> None:
         self.busqueda_producto_modal = value
