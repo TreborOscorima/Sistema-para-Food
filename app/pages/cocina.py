@@ -13,7 +13,30 @@ from app.components.shared import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
 )
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.states.food_state import CocinaTicketView, FoodState
+
+
+def _cocina_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Cocina?",
+        subtitulo="Pantalla de preparación (KDS): las comandas llegan solas.",
+        secciones=[{
+            "titulo": None,
+            "pasos": [
+                "Cada tarjeta es una comanda enviada por los mozos o el mostrador.",
+                "Tócala para avanzarla: Pendiente → En preparación → Listo.",
+                "Usa los filtros (Todo / Cocina / Barra) para ver solo tu estación.",
+                "Una tarjeta en rojo está demorada: atiéndela primero.",
+            ],
+        }],
+        leyenda=[
+            (WARNING_SOLID, "Pendiente"),
+            (ACCENT, "En preparación"),
+            (SUCCESS_DARK, "Listo"),
+            (DANGER_SOLID, "Demorado"),
+        ],
+    )
 
 
 def _ticket_card_header_wrapped(ticket: CocinaTicketView) -> rx.Component:
@@ -255,6 +278,7 @@ def _cocina_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.hstack(
                 rx.button(
                     "Todo",
@@ -375,6 +399,7 @@ def _cocina_content() -> rx.Component:
             "Listo", FoodState.cantidad_tickets_listos,
             FoodState.tickets_listos, "Sin pedidos listos",
         ),
+        _cocina_ayuda(),
         spacing="5",
         width="100%",
     )

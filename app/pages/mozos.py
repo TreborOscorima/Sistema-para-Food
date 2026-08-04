@@ -15,7 +15,31 @@ from app.components.shared import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE,
     WARNING_SOLID,
 )
+from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.states.food_state import CarritoItem, FoodState, HistorialItem, MesaView, ProductoView, SelfOrderPendienteView
+
+
+def _mozos_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Mozos?",
+        subtitulo="Toma y gestiona los pedidos de cada mesa del salón.",
+        secciones=[{
+            "titulo": None,
+            "pasos": [
+                "Toca una mesa del salón para abrir su comanda.",
+                "Agrega productos —con sus opciones y notas— y envíalos a cocina.",
+                "La mesa cambia de color según su estado (ver abajo).",
+                "Cuando el cliente pida la cuenta, genera la precuenta desde la comanda.",
+                "El cobro final se hace en el módulo Caja.",
+            ],
+        }],
+        leyenda=[
+            ("#64748B", "Libre"),
+            ("#FDBA74", "Ocupada"),
+            ("#FCD34D", "Cuenta pedida"),
+            (PURPLE_LIGHT, "Reservada"),
+        ],
+    )
 
 
 # ─── Tarjeta de mesa ─────────────────────────────────────────────────────────
@@ -350,9 +374,20 @@ def _salon_content() -> rx.Component:
         ),
         rx.cond(
             FoodState.mesas.length() == 0,
-            rx.center(
-                rx.text("No hay mesas configuradas.", font_size="14px", color=TEXT_MUTED),
-                padding_y="40px",
+            rx.cond(
+                FoodState.puede_ver_configuracion,
+                empty_state(
+                    icono="layout_grid",
+                    titulo="No hay mesas configuradas",
+                    texto="Agrega tus mesas y sectores para empezar a tomar pedidos.",
+                    cta_label="Configurar mesas",
+                    cta_href="/configuracion",
+                ),
+                empty_state(
+                    icono="layout_grid",
+                    titulo="No hay mesas configuradas",
+                    texto="Pídele al administrador que configure las mesas en Configuración → Mesas.",
+                ),
             ),
             rx.cond(
                 (FoodState.sectores_unicos.length() > 1) & (FoodState.mozos_filtro_sector == ""),
@@ -1579,6 +1614,7 @@ def _mozos_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.button(
                 rx.icon(
                     tag=rx.cond(FoodState.sonidos_activos, "volume_2", "volume_off"),
@@ -1603,6 +1639,7 @@ def _mozos_content() -> rx.Component:
         _modal_transfer(),
         _modal_seleccion_mods(),
         anulacion_modal(),
+        _mozos_ayuda(),
         spacing="4",
         width="100%",
     )

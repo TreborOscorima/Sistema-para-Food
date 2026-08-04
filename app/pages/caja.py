@@ -20,8 +20,34 @@ from app.states.caja_turno_mixin import (
     ResumenCierreRow,
     TurnoHistorialView,
 )
+from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.states.food_state import FoodState, MesaView, CajaItemView, MostradorPendienteView, PagoStagedView, UltimoCobroView
 from app.states.reportes_state import ReportesState
+
+
+def _caja_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Caja?",
+        subtitulo="Cobra los pedidos y maneja el turno de caja.",
+        secciones=[
+            {
+                "titulo": "Cobrar",
+                "pasos": [
+                    "Elige una mesa (o un pedido para llevar) de la izquierda.",
+                    "Revisa el consumo y elige el método de pago.",
+                    "Confirma el cobro: se imprime el ticket y la mesa queda libre.",
+                ],
+            },
+            {
+                "titulo": "Turno de caja",
+                "pasos": [
+                    "Abre el turno con un fondo inicial. Nadie puede cobrar sin turno abierto.",
+                    "Opera durante el día; registra ingresos y gastos si hace falta.",
+                    "Ciérralo con el arqueo: el sistema compara lo contado con lo esperado.",
+                ],
+            },
+        ],
+    )
 
 _METODOS = [
     ("efectivo", "Efectivo", "💵"),
@@ -883,13 +909,11 @@ def _panel_central() -> rx.Component:
         rx.cond(
             FoodState.caja_cobro_activo,
             _cobro_panel(),
-            rx.center(
-                rx.vstack(
-                    rx.icon(tag="credit_card", size=32, color="#CBD5E1"),
-                    rx.text("Selecciona una mesa para cobrar", font_size="14px", color=TEXT_MUTED),
-                    spacing="2", align="center",
-                ),
-                padding_y="80px", width="100%",
+            empty_state(
+                icono="credit_card",
+                titulo="Selecciona una mesa para cobrar",
+                texto="Elige una mesa de la lista de la izquierda para ver su consumo y cobrar. "
+                      "Los pedidos para llevar aparecen más abajo.",
             ),
         ),
         flex="1", min_width="0", width="100%",
@@ -1519,6 +1543,7 @@ def _caja_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.hstack(
                 rx.text(
                     FoodState.ultima_actualizacion,
@@ -1532,7 +1557,7 @@ def _caja_content() -> rx.Component:
                 ),
                 spacing="1", align="center",
             ),
-            width="100%", align="center",
+            width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
         _turno_banner(),
         rx.flex(
@@ -1547,6 +1572,7 @@ def _caja_content() -> rx.Component:
         _ultimos_cobros_modal(),
         _reversion_modal(),
         anulacion_modal(),
+        _caja_ayuda(),
         spacing="4", width="100%",
     )
 
