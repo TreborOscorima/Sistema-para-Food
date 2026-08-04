@@ -530,6 +530,10 @@ def _usuarios_content() -> rx.Component:
                 rx.dialog.content(
                     rx.dialog.title("Usuario", visibility="hidden", height="0", margin="0", padding="0"),
                     _usuario_modal_content(),
+                    max_width="560px",
+                    width="92vw",
+                    max_height="90vh",
+                    overflow_y="auto",
                     background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
                 ),
                 open=UsuariosAdminState.usuario_form_visible,

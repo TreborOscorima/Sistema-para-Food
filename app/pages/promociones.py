@@ -445,6 +445,10 @@ def _promociones_content() -> rx.Component:
                     rx.dialog.content(
                         rx.dialog.title("Promoción", visibility="hidden", height="0", margin="0", padding="0"),
                         _promo_modal_content(),
+                        max_width="620px",
+                        width="92vw",
+                        max_height="90vh",
+                        overflow_y="auto",
                         background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
                     ),
                     open=FoodState.promo_form_visible,
