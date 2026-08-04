@@ -795,7 +795,7 @@ def _modal_transfer() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.text(
-                    "Seleccione la mesa destino. Si está ocupada, los pedidos se fusionarán.",
+                    "Selecciona la mesa destino. Si está ocupada, los pedidos se fusionarán.",
                     font_size="12px", color=TEXT_MUTED,
                 ),
                 rx.flex(
@@ -911,7 +911,7 @@ def _modal_seleccion_mods() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.text(
-                    "Seleccione las opciones para este producto",
+                    "Selecciona las opciones para este producto",
                     font_size="12px", color=TEXT_MUTED,
                 ),
                 rx.box(
@@ -1253,7 +1253,7 @@ def _modal_agregar_productos() -> rx.Component:
                                     rx.text(
                                         rx.cond(
                                             FoodState.precuenta_parcial_modo,
-                                            "Seleccione ítems para precuenta",
+                                            "Selecciona ítems para precuenta",
                                             "Enviado a cocina",
                                         ),
                                         font_size="12px", font_weight="700",

@@ -510,7 +510,7 @@ def _usuarios_content() -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.vstack(
-                rx.text("Usuarios del sistema", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
+                rx.text("Usuarios", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
                 rx.text("Empleados y roles", font_size="13px", color=TEXT_MUTED),
                 spacing="0", align="start",
             ),

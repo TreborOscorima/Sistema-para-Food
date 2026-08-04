@@ -226,7 +226,7 @@ def _pagos_divididos_panel() -> rx.Component:
                 ),
                 rx.cond(
                     FoodState.caja_split_por_items,
-                    rx.text("Seleccione ítems en la lista y asigne un pago por comensal.",
+                    rx.text("Selecciona ítems en la lista y asigna un pago por comensal.",
                             font_size="12px", color=TEXT_MUTED),
                     rx.text("Agrega un pago por comensal o por método.",
                             font_size="12px", color=TEXT_MUTED),
@@ -886,7 +886,7 @@ def _panel_central() -> rx.Component:
             rx.center(
                 rx.vstack(
                     rx.icon(tag="credit_card", size=32, color="#CBD5E1"),
-                    rx.text("Seleccione una mesa para cobrar", font_size="14px", color=TEXT_MUTED),
+                    rx.text("Selecciona una mesa para cobrar", font_size="14px", color=TEXT_MUTED),
                     spacing="2", align="center",
                 ),
                 padding_y="80px", width="100%",

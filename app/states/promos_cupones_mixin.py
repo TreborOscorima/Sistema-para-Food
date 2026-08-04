@@ -283,9 +283,9 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 if valor <= 0:
                     raise ValueError
             except (InvalidOperation, ValueError):
-                return rx.toast.error("Valor inválido. Ingrese un número mayor a 0.")
+                return rx.toast.error("Valor inválido. Ingresa un número mayor a 0.")
         if self.promo_form_dias_mask == 0:
-            return rx.toast.error("Seleccione al menos un día de la semana.")
+            return rx.toast.error("Selecciona al menos un día de la semana.")
         producto_id = None
         categoria_id = None
         if self.promo_form_alcance == "producto":
@@ -294,7 +294,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 None,
             )
             if prod is None:
-                return rx.toast.error("Seleccione el producto para la promoción.")
+                return rx.toast.error("Selecciona el producto para la promoción.")
             producto_id = prod.id
         elif self.promo_form_alcance == "categoria":
             cat = next(
@@ -302,7 +302,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
                 None,
             )
             if cat is None:
-                return rx.toast.error("Seleccione la categoría para la promoción.")
+                return rx.toast.error("Selecciona la categoría para la promoción.")
             categoria_id = cat.id
         if es_dosxuno and producto_id is None and categoria_id is None:
             return rx.toast.error("El 2x1 necesita un producto o una categoría como alcance.")
@@ -592,7 +592,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
             if valor <= 0:
                 raise ValueError
         except (ValueError, InvalidOperation):
-            return rx.toast.error("Valor inválido. Ingrese un número mayor a cero.")
+            return rx.toast.error("Valor inválido. Ingresa un número mayor a cero.")
         if self.cupon_form_tipo == "porcentaje" and valor > 100:
             return rx.toast.error("El porcentaje no puede superar 100%.")
         usos_max: int | None = None

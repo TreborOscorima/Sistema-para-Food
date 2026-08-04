@@ -59,13 +59,13 @@ class ProduccionMixin(rx.State, mixin=True):
     def prod_agregar_item(self) -> None:
         nombre = self.prod_agregar_nombre.strip()
         if not nombre:
-            return rx.toast.error("Seleccione un producto o combo.")
+            return rx.toast.error("Selecciona un producto o combo.")
         try:
             cantidad = int(self.prod_agregar_cantidad or "1")
             if cantidad < 1:
                 raise ValueError
         except ValueError:
-            return rx.toast.error("Cantidad inválida. Ingrese un número entero mayor a 0.")
+            return rx.toast.error("Cantidad inválida. Ingresa un número entero mayor a 0.")
 
         es_combo = nombre.startswith("[Combo] ")
         nombre_real = nombre.removeprefix("[Combo] ")
@@ -134,7 +134,7 @@ class ProduccionMixin(rx.State, mixin=True):
 
     def prod_calcular(self) -> None:
         if not self.prod_plan_items:
-            return rx.toast.error("Agregue al menos un producto al plan.")
+            return rx.toast.error("Agrega al menos un producto al plan.")
 
         plan = [(item.producto_id, item.cantidad) for item in self.prod_plan_items]
 
@@ -177,7 +177,7 @@ class ProduccionMixin(rx.State, mixin=True):
         self.prod_calculado = True
 
         if not resultado:
-            return rx.toast.error("Ningún producto del plan tiene receta cargada. Agregue insumos en la sección Recetas.")
+            return rx.toast.error("Ningún producto del plan tiene receta cargada. Agrega insumos en la sección Recetas.")
         elif faltan:
             return rx.toast.warning(f"Plan calculado. {len(faltan)} insumo(s) con stock insuficiente.")
         else:

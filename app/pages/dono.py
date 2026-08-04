@@ -1624,7 +1624,7 @@ def dono_login_page() -> rx.Component:
                     rx.text("Panel Administrativo", font_size="22px",
                             font_weight="800", color=_WHITE,
                             text_align="center"),
-                    rx.text("Ingrese con su email y contraseña",
+                    rx.text("Ingresa con tu email y contraseña",
                             font_size="13px", color=_SLATE_500,
                             text_align="center"),
                     spacing="1", align="center",

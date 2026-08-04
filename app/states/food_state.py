@@ -1766,7 +1766,7 @@ class FoodState(
             self.session_token = ""
             self.ultima_actividad = ""
             self._clear_operational_context()
-            self.mensaje = "Sesión expirada por inactividad. Ingrese nuevamente."
+            self.mensaje = "Sesión expirada por inactividad. Ingresa nuevamente."
             return True
         return False
 
@@ -2364,7 +2364,7 @@ class FoodState(
         normalized = _normalize_pin(pin)
         if len(normalized) < 4:
             self.login_pin_input = ""
-            self.login_error = "Ingrese un PIN válido de 4 a 6 dígitos."
+            self.login_error = "Ingresa un PIN válido de 4 a 6 dígitos."
             return
         company_id = self._company_id()
         rate_key = f"pin:company:{company_id}"
@@ -2400,7 +2400,7 @@ class FoodState(
             self.login_pin_input = ""
             self.login_error = (
                 f"Ese PIN pertenece al rol {usuario.rol}. "
-                f"Seleccione {usuario.rol} para ingresar."
+                f"Selecciona {usuario.rol} para ingresar."
             )
             return
         _clear_login_attempts(rate_key)
@@ -3186,7 +3186,7 @@ class FoodState(
     def guardar_admin_cuenta(self) -> None:
         email = self.config_admin_email.strip().lower()
         if not email or "@" not in email:
-            return rx.toast.error("Ingrese un email válido.")
+            return rx.toast.error("Ingresa un email válido.")
         nueva = self.config_admin_password_nueva.strip()
         confirm = self.config_admin_password_confirm.strip()
         if nueva and nueva != confirm:
@@ -4124,7 +4124,7 @@ class FoodState(
     def imprimir_precuenta_parcial(self):
         seleccionados = [it for it in self.historial_pedido if it.sel_precuenta]
         if not seleccionados:
-            return rx.toast.error("Seleccione al menos un ítem.")
+            return rx.toast.error("Selecciona al menos un ítem.")
         ticket_lines = [
             TicketLine(
                 name=it.nombre,
@@ -4321,7 +4321,7 @@ class FoodState(
 
     def agregar_producto(self, producto_id: int) -> None:
         if self.mesa_seleccionada_id == 0:
-            return rx.toast.error("Seleccione una mesa antes de agregar productos.")
+            return rx.toast.error("Selecciona una mesa antes de agregar productos.")
         prod_view = next((p for p in self.productos if p.id == producto_id), None)
         if prod_view and prod_view.tiene_modificadores:
             self._abrir_seleccion_modificadores(producto_id, prod_view.nombre, prod_view.precio)
@@ -4372,7 +4372,7 @@ class FoodState(
 
     def restar_producto(self, producto_id: int) -> None:
         if self.mesa_seleccionada_id == 0:
-            return rx.toast.error("Seleccione una mesa antes de editar el carrito.")
+            return rx.toast.error("Selecciona una mesa antes de editar el carrito.")
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None:
@@ -4523,7 +4523,7 @@ class FoodState(
 
     def solicitar_cuenta(self) -> None:
         if self.mesa_seleccionada_id == 0:
-            return rx.toast.error("Seleccione una mesa antes de solicitar cuenta.")
+            return rx.toast.error("Selecciona una mesa antes de solicitar cuenta.")
         if self.cantidad_items_carrito > 0:
             return rx.toast.error("Primero envía a cocina los ítems pendientes.")
         with self._tenant_session() as session:
@@ -4542,7 +4542,7 @@ class FoodState(
 
     def enviar_pedido(self) -> None:
         if self.mesa_seleccionada_id == 0:
-            return rx.toast.error("Seleccione una mesa antes de enviar el pedido.")
+            return rx.toast.error("Selecciona una mesa antes de enviar el pedido.")
         pedido_id = 0
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
@@ -5289,7 +5289,7 @@ class FoodState(
             items = list(self.caja_cobro_items)
             sel_indices = [i for i, it in enumerate(items) if it.seleccionado]
             if not sel_indices:
-                self.caja_cobro_error = "Seleccione al menos un ítem."
+                self.caja_cobro_error = "Selecciona al menos un ítem."
                 return
             monto = round(sum(items[i].subtotal_float for i in sel_indices), 2)
             if monto <= 0:
@@ -5681,7 +5681,7 @@ class FoodState(
                     return
             total_fiado = resultado_pagos.total_fiado if resultado_pagos else Decimal("0.00")
             if total_fiado > 0 and self.caja_cobro_cliente_id <= 0:
-                self.caja_cobro_error = "Seleccione el cliente para registrar el fiado."
+                self.caja_cobro_error = "Selecciona el cliente para registrar el fiado."
                 return
             now = _utcnow()
             for d in session.exec(
@@ -5840,7 +5840,7 @@ class FoodState(
     def imprimir_precuenta(self, mesa_id: int = 0):
         objetivo = mesa_id or self.caja_cobro_mesa_id or self.mesa_seleccionada_id
         if objetivo <= 0:
-            return rx.toast.error("Seleccione una mesa para imprimir la pre-cuenta.")
+            return rx.toast.error("Selecciona una mesa para imprimir la pre-cuenta.")
         ticket_lines: list[TicketLine] = []
         mesa_label = ""
         pedido_id = 0
@@ -6606,7 +6606,7 @@ class AdminLocalState(rx.State):
         password = self.password_input.strip()
         self.error_msg = ""
         if not email or not password:
-            self.error_msg = "Ingrese email y contraseña."
+            self.error_msg = "Ingresa email y contraseña."
             return
         if _is_rate_limited(email):
             remaining = _remaining_lockout_time(email)

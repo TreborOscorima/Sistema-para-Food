@@ -850,14 +850,14 @@ def _produccion_section() -> rx.Component:
         "Planificador de producción",
         "calculator",
         rx.text(
-            "Arme el plan del día: seleccione productos con sus cantidades y calcule los insumos necesarios.",
+            "Arma el plan del día: elige productos con sus cantidades y calcula los insumos necesarios.",
             font_size="12px", color=TEXT_MUTED,
         ),
         # Formulario para agregar productos al plan
         rx.hstack(
             rx.select(
                 FoodState.prod_opciones_productos,
-                placeholder="Seleccione producto o combo…",
+                placeholder="Selecciona producto o combo…",
                 value=FoodState.prod_agregar_nombre,
                 on_change=FoodState.set_prod_agregar_nombre,
                 background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
@@ -960,7 +960,7 @@ def _produccion_section() -> rx.Component:
                     ),
                     rx.center(
                         rx.text(
-                            "Sin resultados. Verifique que los productos tengan recetas cargadas.",
+                            "Sin resultados. Verifica que los productos tengan recetas cargadas.",
                             font_size="13px", color=TEXT_MUTED,
                         ),
                         padding_y="12px", width="100%",

@@ -338,7 +338,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
         import os
         numero = self.cli_dni_ruc.strip()
         if not numero:
-            self.cli_dni_ruc_error = "Ingrese un DNI (8 dígitos) o RUC (11 dígitos)."
+            self.cli_dni_ruc_error = "Ingresa un DNI (8 dígitos) o RUC (11 dígitos)."
             return
         if len(numero) not in (8, 11):
             self.cli_dni_ruc_error = "DNI debe tener 8 dígitos y RUC 11 dígitos."
@@ -473,7 +473,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
 
     def registrar_pago_cc(self) -> None:
         if self.cuenta_sel_id == 0:
-            return rx.toast.error("Seleccione un cliente con cuenta corriente.")
+            return rx.toast.error("Selecciona un cliente con cuenta corriente.")
         try:
             monto = Decimal(self.cc_pago_monto.replace(",", ".").strip() or "0")
             if monto <= 0:

@@ -482,7 +482,7 @@ def _mesas_section() -> rx.Component:
                         rx.icon(tag="layout_grid", size=28, color="#CBD5E1"),
                         rx.text("Sin mesas configuradas", font_size="13px",
                                 color=TEXT_MUTED),
-                        rx.text("Agregue mesas usando el formulario de arriba.",
+                        rx.text("Agrega mesas usando el formulario de arriba.",
                                 font_size="11px", color="#CBD5E1"),
                         spacing="1", align="center",
                     ),

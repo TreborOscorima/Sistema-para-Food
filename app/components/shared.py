@@ -733,13 +733,12 @@ def cumpleanos_banner() -> rx.Component:
 # ─── SKELETON DE CARGA ────────────────────────────────────────────────────────
 
 def loading_placeholder(*, dark: bool = False) -> rx.Component:
-    bg = "#1E293B" if dark else "#F1F5F9"
-    accent = "#334155" if dark else "#E2E8F0"
-    text_color = "#94A3B8" if dark else "#94A3B8"
+    # `dark` se mantiene por compatibilidad con las llamadas existentes; el
+    # spinner y el texto gris funcionan igual en ambos temas.
     return rx.center(
         rx.vstack(
             rx.spinner(size="3", color="#EA580C"),
-            rx.text("Cargando…", font_size="13px", color=text_color, font_weight="500"),
+            rx.text("Cargando…", font_size="13px", color="#94A3B8", font_weight="500"),
             spacing="3",
             align="center",
         ),

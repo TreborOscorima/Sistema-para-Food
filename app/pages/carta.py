@@ -905,7 +905,7 @@ def _mod_asignar_modal() -> rx.Component:
                     font_size="15px", font_weight="700", color=TEXT_PRIMARY, margin="0",
                 ),
                 rx.text(
-                    "Seleccione los grupos que aplican a este producto",
+                    "Selecciona los grupos que aplican a este producto",
                     font_size="12px", color=TEXT_MUTED,
                 ),
                 rx.cond(
@@ -1263,7 +1263,7 @@ def _carta_content() -> rx.Component:
         # ── Header ────────────────────────────────────────────────────────────
         rx.hstack(
             rx.vstack(
-                rx.text("Carta / Admin", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
+                rx.text("Carta", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
                 rx.text("Categorías y productos de la carta", font_size="13px", color=TEXT_MUTED),
                 spacing="0",
             ),
@@ -1325,7 +1325,7 @@ def _carta_content() -> rx.Component:
                 rx.cond(
                     FoodState.categorias.length() == 0,
                     rx.box(
-                        rx.text("Sin categorías. Haga clic en «Nueva Categoría» para empezar.",
+                        rx.text("Sin categorías. Toca «Nueva Categoría» para empezar.",
                                 font_size="13px", color=TEXT_MUTED, text_align="center"),
                         padding="32px 16px",
                         width="100%",
@@ -1404,7 +1404,7 @@ def _carta_content() -> rx.Component:
                                 font_size="13px", color=TEXT_MUTED, text_align="center",
                             ),
                             rx.text(
-                                "Sin productos. Haga clic en «Nuevo Producto» para empezar.",
+                                "Sin productos. Toca «Nuevo Producto» para empezar.",
                                 font_size="13px", color=TEXT_MUTED, text_align="center",
                             ),
                         ),

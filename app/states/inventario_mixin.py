@@ -208,7 +208,7 @@ class InventarioMixin(rx.State, mixin=True):
             if stock_actual < 0 or stock_minimo < 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            return rx.toast.error("Stock inválido. Ingrese números positivos.")
+            return rx.toast.error("Stock inválido. Ingresa números positivos.")
         fecha_venc = None
         if self.inv_form_vencimiento.strip():
             try:
@@ -220,7 +220,7 @@ class InventarioMixin(rx.State, mixin=True):
             if costo < 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            return rx.toast.error("Costo inválido. Ingrese un número positivo.")
+            return rx.toast.error("Costo inválido. Ingresa un número positivo.")
         with self._tenant_session() as session:
             if self.inv_form_id == 0:
                 existente = session.exec(
@@ -500,18 +500,18 @@ class InventarioMixin(rx.State, mixin=True):
 
     def guardar_receta_item(self) -> None:
         if self.inv_producto_sel_id == 0:
-            return rx.toast.error("Seleccione un producto primero.")
+            return rx.toast.error("Selecciona un producto primero.")
         insumo_match = next(
             (i for i in self.inv_insumos if i.nombre == self.inv_receta_insumo_sel_nombre), None
         )
         if insumo_match is None:
-            return rx.toast.error("Seleccione un insumo válido.")
+            return rx.toast.error("Selecciona un insumo válido.")
         try:
             cantidad = Decimal(self.inv_receta_cantidad.replace(",", ".").strip() or "0")
             if cantidad <= 0:
                 raise ValueError
         except (InvalidOperation, ValueError):
-            return rx.toast.error("Cantidad inválida. Ingrese un número mayor a 0.")
+            return rx.toast.error("Cantidad inválida. Ingresa un número mayor a 0.")
         insumo_id = insumo_match.id
         with self._tenant_session() as session:
             existente = session.exec(

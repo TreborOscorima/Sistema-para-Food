@@ -787,7 +787,7 @@ class CartaMixin(rx.State, mixin=True):
         if combo_data is None:
             return rx.toast.error("Combo no disponible.")
         if self.mesa_seleccionada_id == 0:
-            return rx.toast.error("Seleccione una mesa antes de agregar combos.")
+            return rx.toast.error("Selecciona una mesa antes de agregar combos.")
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None or mesa.company_id != self._company_id():
@@ -940,7 +940,7 @@ class CartaMixin(rx.State, mixin=True):
             elegidos = self.mod_seleccion_elegidos.get(gid, [])
             min_req = int(g.get("min", 0))
             if len(elegidos) < min_req:
-                return rx.toast.error(f"Seleccione al menos {min_req} opcion(es) en \"{g.get('nombre', '')}\".")
+                return rx.toast.error(f"Selecciona al menos {min_req} opcion(es) en \"{g.get('nombre', '')}\".")
 
         mods_snapshot: list[dict[str, object]] = []
         extra_total = Decimal("0")
@@ -987,7 +987,7 @@ class CartaMixin(rx.State, mixin=True):
 
     def _agregar_producto_con_mods(self, producto_id: int, mods_json: str, mods_texto: str, extra: Decimal) -> None:
         if self.mesa_seleccionada_id == 0:
-            return rx.toast.error("Seleccione una mesa antes de agregar productos.")
+            return rx.toast.error("Selecciona una mesa antes de agregar productos.")
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
             if mesa is None or mesa.company_id != self._company_id():

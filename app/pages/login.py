@@ -262,7 +262,7 @@ def _login_card() -> rx.Component:
             margin_bottom="28px",
         ),
         rx.text(
-            "Ingrese su PIN",
+            "Ingresa tu PIN",
             font_size="11px",
             font_weight="700",
             color=TEXT_MUTED,

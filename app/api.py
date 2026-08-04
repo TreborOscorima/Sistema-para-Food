@@ -171,7 +171,7 @@ async def _registro(request: Request) -> JSONResponse:
     if not company_name:
         return JSONResponse({"error": "El nombre del restaurante es obligatorio."}, status_code=400)
     if not email or not validate_email(email):
-        return JSONResponse({"error": "Ingrese un correo válido."}, status_code=400)
+        return JSONResponse({"error": "Ingresa un correo válido."}, status_code=400)
     if not phone:
         return JSONResponse({"error": "El número de contacto es obligatorio."}, status_code=400)
     if password != confirm_password:
