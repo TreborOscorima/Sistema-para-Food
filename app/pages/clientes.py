@@ -6,6 +6,7 @@ import reflex as rx
 
 from app.states.food_state import FoodState, ClienteView, AdminLocalState
 from app.pages.dono import _dono_shell
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
     ACCENT, ACCENT_HOVER, DARK_700, DARK_800, DANGER_SOLID,
     INFO_SOLID, INFO_TEXT, PAGE_BACKGROUND, SUCCESS_DARK,
@@ -343,8 +344,27 @@ def _cumpleanos_section() -> rx.Component:
     )
 
 
+def _clientes_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Clientes?",
+        subtitulo="Base de clientes del local",
+        secciones=[
+            {"titulo": "Registrar y buscar", "pasos": [
+                "Toca «+ Nuevo» y carga nombre, teléfono y los datos que tengas.",
+                "Usa el buscador para encontrar a un cliente por nombre o teléfono.",
+            ]},
+            {"titulo": "Para qué sirve", "pasos": [
+                "Al cobrar puedes asociar la venta a un cliente y llevar su historial.",
+                "Si le vendes fiado, la deuda se gestiona en Cuentas Corrientes.",
+                "El bloque de cumpleaños te ayuda a fidelizar con saludos y promos.",
+            ]},
+        ],
+    )
+
+
 def _clientes_content() -> rx.Component:
     return rx.vstack(
+        _clientes_ayuda(),
         rx.cond(
             FoodState.es_pagina_standalone,
             rx.hstack(
@@ -368,6 +388,7 @@ def _clientes_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.input(
                 placeholder="Buscar cliente...",
                 value=FoodState.cli_busqueda,

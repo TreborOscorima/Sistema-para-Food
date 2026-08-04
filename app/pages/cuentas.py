@@ -6,6 +6,7 @@ import reflex as rx
 
 from app.states.food_state import FoodState, CuentaView, MovimientoView, AdminLocalState
 from app.pages.dono import _dono_shell
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_TEXT, DANGER_SOLID, SUCCESS_SOLID, SUCCESS_DARK, WARNING_SOLID,
@@ -227,8 +228,30 @@ def _cuenta_detalle() -> rx.Component:
     )
 
 
+def _cuentas_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funcionan las Cuentas Corrientes?",
+        subtitulo="Fiado y créditos de clientes",
+        secciones=[
+            {"titulo": "Registrar deuda (fiado)", "pasos": [
+                "La cuenta se crea sola cuando cobras un pedido como «fiado» a un cliente.",
+                "El saldo pendiente aparece en «Clientes con deuda pendiente».",
+            ]},
+            {"titulo": "Cobrar un pago", "pasos": [
+                "Selecciona el cliente o toca «Cobrar» en la lista.",
+                "Ingresa el monto y una descripción, y toca «Registrar pago».",
+                "El saldo baja solo y el movimiento queda registrado en el historial.",
+            ]},
+            {"titulo": "Exportar", "pasos": [
+                "«Exportar Excel» descarga el detalle de deudas para tu contabilidad.",
+            ]},
+        ],
+    )
+
+
 def _cuentas_content() -> rx.Component:
     return rx.vstack(
+        _cuentas_ayuda(),
         rx.cond(
             FoodState.es_pagina_standalone,
             rx.hstack(
@@ -251,6 +274,7 @@ def _cuentas_content() -> rx.Component:
                 spacing="0",
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.button(
                 rx.hstack(
                     rx.icon(tag="download", size=13, color=TEXT_WHITE),

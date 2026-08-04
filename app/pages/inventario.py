@@ -13,6 +13,7 @@ from app.states.food_state import (
 )
 from app.states.food_state import AdminLocalState
 from app.pages.dono import _dono_shell
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
@@ -989,6 +990,32 @@ def _produccion_section() -> rx.Component:
 
 # ── Contenido principal ──────────────────────────────────────────────────────
 
+def _inventario_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Inventario?",
+        subtitulo="Insumos, stock y alertas de reposición",
+        secciones=[
+            {"titulo": "Insumos y stock", "pasos": [
+                "Da de alta cada insumo con su unidad y su stock mínimo.",
+                "Registra entradas (compras) con «+» y mermas con «−» en cada insumo.",
+                "El sistema te avisa cuando un insumo baja del mínimo o está por vencer.",
+            ]},
+            {"titulo": "Recetas y producción", "pasos": [
+                "Asocia insumos a cada plato en «Recetas» para descontar stock al vender.",
+                "En «Producción» armas preparaciones que consumen insumos y generan stock.",
+            ]},
+            {"titulo": "Kardex", "pasos": [
+                "El ícono de historial abre el kardex: todos los movimientos del insumo.",
+            ]},
+        ],
+        leyenda=[
+            ("#EF4444", "Bajo stock"),
+            ("#22C55E", "Stock OK"),
+            ("#94A3B8", "Inactivo"),
+        ],
+    )
+
+
 def _inventario_content() -> rx.Component:
     return rx.vstack(
         rx.cond(
@@ -1010,17 +1037,23 @@ def _inventario_content() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        rx.vstack(
-            rx.text(
-                "Inventario",
-                font_size="22px",
-                font_weight="800",
-                color=TEXT_PRIMARY,
+        rx.hstack(
+            rx.vstack(
+                rx.text(
+                    "Inventario",
+                    font_size="22px",
+                    font_weight="800",
+                    color=TEXT_PRIMARY,
+                ),
+                rx.text("Insumos, stock y alertas de reposición",
+                        font_size="13px", color=TEXT_MUTED),
+                spacing="0",
             ),
-            rx.text("Insumos, stock y alertas de reposición",
-                    font_size="13px", color=TEXT_MUTED),
-            spacing="0",
+            rx.spacer(),
+            ayuda_trigger(),
+            width="100%", align="center",
         ),
+        _inventario_ayuda(),
         _alerta_bajo_stock(),
         _alerta_vencimientos(),
         _insumos_section(),

@@ -29,6 +29,7 @@ from app.states.food_state import (
     VentaHistorialView,
 )
 from app.states.reportes_state import ReportesState
+from app.components.ayuda import ayuda_modal, ayuda_trigger
 
 _METODOS_FILTRO = [
     ("", "Todos los métodos"),
@@ -1238,10 +1239,32 @@ def _mermas_section() -> rx.Component:
 
 # ─── Contenido principal ─────────────────────────────────────────────────────
 
+def _reportes_ayuda() -> rx.Component:
+    return ayuda_modal(
+        titulo="¿Cómo funciona Reportes?",
+        subtitulo="Dashboard y ventas del local",
+        secciones=[
+            {"titulo": "Panel del período", "pasos": [
+                "Arriba ves los indicadores: ventas, tickets, ticket promedio y más.",
+                "Cambia el rango con «Hoy», «Semana» o eligiendo fechas propias.",
+                "Si tienes más de una sucursal, filtra por sucursal desde el header.",
+            ]},
+            {"titulo": "Historial de ventas", "pasos": [
+                "Abre cualquier venta para ver el detalle de productos y pagos.",
+                "Desde el detalle puedes anular una venta, si tienes el permiso.",
+            ]},
+            {"titulo": "Exportar", "pasos": [
+                "Cada tabla tiene un botón «Excel» para descargar los datos.",
+            ]},
+        ],
+    )
+
+
 def _reportes_content() -> rx.Component:
     return rx.vstack(
         _venta_detalle_modal(),
         anulacion_modal(),
+        _reportes_ayuda(),
         # Header
         rx.hstack(
             rx.vstack(
@@ -1301,6 +1324,7 @@ def _reportes_content() -> rx.Component:
                 rx.fragment(),
             ),
             rx.spacer(),
+            ayuda_trigger(),
             rx.hstack(
                 rx.button(
                     "Hoy", on_click=ReportesState.filtro_rapido_hoy,
