@@ -124,7 +124,7 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
             ),
             spacing="2", align="center",
         ),
-        columns=rx.breakpoints(initial="1fr auto", md=_USR_GRID_COLS),
+        columns=rx.breakpoints(initial="1fr", md=_USR_GRID_COLS),
         gap="8px", width="100%", align_items="center",
         padding="12px 14px",
         background=DARK_800,

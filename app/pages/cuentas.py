@@ -265,7 +265,7 @@ def _cuentas_content() -> rx.Component:
                 cursor="pointer",
                 _hover={"background": SUCCESS_SOLID},
             ),
-            width="100%", align="center",
+            width="100%", align="center", flex_wrap="wrap", gap="10px",
         ),
         rx.hstack(
             _cc_kpi_card("Total a cobrar", FoodState.cuentas_total_deuda_texto,
