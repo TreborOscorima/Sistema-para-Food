@@ -190,8 +190,23 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
     )
 
 
+def _paso_chip(n: int) -> rx.Component:
+    """Indicador de paso (ordinal). No usamos 'de N' porque el paso de sucursal
+    es condicional (solo multi-local) y su total no se conoce hasta autenticar."""
+    return rx.text(
+        f"PASO {n}",
+        font_size="10px", font_weight="800", color=ACCENT,
+        letter_spacing="0.1em",
+        background="rgba(234,88,12,0.10)",
+        border="1px solid rgba(234,88,12,0.30)",
+        border_radius="6px", padding="2px 8px",
+        width="fit-content", margin_bottom="14px",
+    )
+
+
 def _restaurant_selector_card() -> rx.Component:
     return rx.box(
+        _paso_chip(1),
         rx.text(
             "ELIGE TU RESTAURANTE",
             font_size="11px",
@@ -229,6 +244,7 @@ def _restaurant_selector_card() -> rx.Component:
 
 def _login_card() -> rx.Component:
     return rx.box(
+        _paso_chip(2),
         # Selector de rol
         rx.hstack(
             rx.text(
@@ -259,7 +275,19 @@ def _login_card() -> rx.Component:
             _rol_card("🖥️", "Caja", "Caja"),
             columns="3",
             gap="8px",
-            margin_bottom="28px",
+            margin_bottom="10px",
+        ),
+        # Descripción de lo que verá el rol elegido (M-01b)
+        rx.box(
+            rx.match(
+                FoodState.login_rol_seleccionado,
+                ("Mozo", rx.text("Verás: mesas y toma de pedidos", font_size="12px", color=ACCENT, font_weight="600")),
+                ("Cocina", rx.text("Verás: pantalla de preparación", font_size="12px", color=ACCENT, font_weight="600")),
+                ("Caja", rx.text("Verás: cobros y turno", font_size="12px", color=ACCENT, font_weight="600")),
+                rx.text("Elige tu rol para continuar", font_size="12px", color=TEXT_MUTED),
+            ),
+            height="18px", margin_bottom="18px",
+            display="flex", align_items="center", justify_content="center",
         ),
         rx.text(
             "Ingresa tu PIN",
@@ -367,6 +395,7 @@ def _sucursal_card(suc: SucursalView) -> rx.Component:
 
 def _sucursal_selector_card() -> rx.Component:
     return rx.box(
+        _paso_chip(3),
         rx.hstack(
             rx.text(
                 "ELIGE TU SUCURSAL",
