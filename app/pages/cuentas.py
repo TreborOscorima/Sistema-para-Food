@@ -6,7 +6,7 @@ import reflex as rx
 
 from app.states.food_state import FoodState, CuentaView, MovimientoView, AdminLocalState
 from app.pages.dono import _dono_shell
-from app.components.ayuda import ayuda_modal, ayuda_trigger
+from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_TEXT, DANGER_SOLID, SUCCESS_SOLID, SUCCESS_DARK, WARNING_SOLID,
@@ -338,9 +338,12 @@ def _cuentas_content() -> rx.Component:
                         rx.foreach(FoodState.cuentas_con_deuda, _cuenta_row),
                         spacing="1", width="100%",
                     ),
-                    rx.center(
-                        rx.text("Sin deudas pendientes.", font_size="13px", color=TEXT_MUTED),
-                        padding_y="20px", width="100%",
+                    empty_state(
+                        icono="wallet",
+                        titulo="Sin deudas pendientes",
+                        texto="Las cuentas se crean solas cuando cobras un pedido como «fiado» en Caja.",
+                        cta_label="Ir a Caja",
+                        cta_href="/caja",
                     ),
                 ),
                 spacing="3", width="100%",

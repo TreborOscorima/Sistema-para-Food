@@ -13,7 +13,7 @@ from app.states.food_state import (
 )
 from app.states.food_state import AdminLocalState
 from app.pages.dono import _dono_shell
-from app.components.ayuda import ayuda_modal, ayuda_trigger
+from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
@@ -614,10 +614,12 @@ def _insumos_section() -> rx.Component:
                 spacing="1",
                 width="100%",
             ),
-            rx.center(
-                rx.text("Sin insumos registrados. Agrega el primero.", font_size="13px", color=TEXT_MUTED),
-                padding_y="16px",
-                width="100%",
+            empty_state(
+                icono="package",
+                titulo="Sin insumos registrados",
+                texto="Da de alta tus insumos para controlar stock, mermas y alertas de reposición.",
+                cta_label="Nuevo insumo",
+                cta_on_click=FoodState.abrir_nuevo_insumo,
             ),
         ),
         rx.button(

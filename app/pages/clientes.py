@@ -6,7 +6,7 @@ import reflex as rx
 
 from app.states.food_state import FoodState, ClienteView, AdminLocalState
 from app.pages.dono import _dono_shell
-from app.components.ayuda import ayuda_modal, ayuda_trigger
+from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
     ACCENT, ACCENT_HOVER, DARK_700, DARK_800, DANGER_SOLID,
     INFO_SOLID, INFO_TEXT, PAGE_BACKGROUND, SUCCESS_DARK,
@@ -433,9 +433,12 @@ def _clientes_content() -> rx.Component:
                 columns=rx.breakpoints(initial="1", sm="2", lg="3"),
                 gap="14px", width="100%",
             ),
-            rx.center(
-                rx.text("Sin clientes registrados.", font_size="13px", color=TEXT_MUTED),
-                padding_y="40px", width="100%",
+            empty_state(
+                icono="users",
+                titulo="Sin clientes aún",
+                texto="Se registran aquí para habilitar el fiado (cuenta corriente), avisos de cumpleaños y su historial.",
+                cta_label="Nuevo cliente",
+                cta_on_click=FoodState.abrir_nuevo_cliente,
             ),
         ),
         spacing="4", width="100%",

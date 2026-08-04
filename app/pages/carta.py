@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import reflex as rx
 
+from app.components.ayuda import empty_state
 from app.components.shared import (
     app_shell,
     ACCENT, ACCENT_HOVER,
@@ -1331,11 +1332,12 @@ def _carta_content() -> rx.Component:
                 ),
                 rx.cond(
                     FoodState.categorias.length() == 0,
-                    rx.box(
-                        rx.text("Sin categorías. Toca «Nueva Categoría» para empezar.",
-                                font_size="13px", color=TEXT_MUTED, text_align="center"),
-                        padding="32px 16px",
-                        width="100%",
+                    empty_state(
+                        icono="folder_plus",
+                        titulo="Sin categorías",
+                        texto="Agrupa tus productos en categorías (Bebidas, Platos, Postres) para ordenar la carta.",
+                        cta_label="Nueva Categoría",
+                        cta_on_click=FoodState.abrir_cat_modal,
                     ),
                     rx.vstack(
                         rx.foreach(FoodState.categorias, _categoria_row),
@@ -1403,20 +1405,23 @@ def _carta_content() -> rx.Component:
                 # lista paginada
                 rx.cond(
                     FoodState.carta_productos_filtrados_count == 0,
-                    rx.box(
-                        rx.cond(
-                            FoodState.carta_busqueda_productos != "",
+                    rx.cond(
+                        FoodState.carta_busqueda_productos != "",
+                        rx.box(
                             rx.text(
                                 "Sin resultados para esa búsqueda.",
                                 font_size="13px", color=TEXT_MUTED, text_align="center",
                             ),
-                            rx.text(
-                                "Sin productos. Toca «Nuevo Producto» para empezar.",
-                                font_size="13px", color=TEXT_MUTED, text_align="center",
-                            ),
+                            padding="32px 16px",
+                            width="100%",
                         ),
-                        padding="32px 16px",
-                        width="100%",
+                        empty_state(
+                            icono="utensils_crossed",
+                            titulo="Sin productos todavía",
+                            texto="Crea tu primer producto para que aparezca en la carta de mozos, caja y el QR.",
+                            cta_label="Nuevo Producto",
+                            cta_on_click=FoodState.abrir_prod_modal,
+                        ),
                     ),
                     rx.vstack(
                         rx.foreach(FoodState.carta_productos_paginados, _producto_row),
