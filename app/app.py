@@ -20,8 +20,41 @@ def index() -> rx.Component:
     return rx.fragment()
 
 
+def _debug_backend_exception_handler(exception: Exception):
+    """TEMPORAL / DIAGNÓSTICO — REVERTIR una vez identificado el bug.
+
+    En producción, Reflex oculta el error real y solo muestra "Contact the
+    website administrator". Como el deploy es en AWS por GitHub Actions y no hay
+    acceso directo a los logs del contenedor, este handler expone el tipo, el
+    mensaje y las últimas líneas del traceback en el propio toast, para poder
+    diagnosticar desde el navegador. Una vez encontrado el fallo se vuelve al
+    handler por defecto.
+    """
+    import traceback
+
+    tb = traceback.format_exception(type(exception), exception, exception.__traceback__)
+    print("[Reflex Backend Exception]\n" + "".join(tb), flush=True)
+    detalle = "".join(tb[-6:])[-1000:]
+    return rx.toast.error(
+        f"{type(exception).__name__}: {exception}",
+        description=detalle,
+        position="top-center",
+        duration=120000,
+        close_button=True,
+        style={
+            "width": "620px",
+            "white-space": "pre-wrap",
+            "font-size": "11px",
+            "font-family": "monospace",
+        },
+    )
+
+
 app = rx.App(
     api_transformer=health_app,
+    # TEMPORAL: handler de diagnóstico que muestra el traceback en pantalla.
+    # Revertir (quitar este kwarg) cuando se identifique el bug de /usuarios.
+    backend_exception_handler=_debug_backend_exception_handler,
     # La app es 100% en español: declaramos el idioma y marcamos el <html> como
     # no traducible. Junto al <meta name="google" content="notranslate">, esto
     # evita que Chrome auto-traduzca y rompa el render (crash "removeChild").
