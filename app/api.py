@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from tuwayki_core.utils.timezone import utc_now_naive
 
+from sqlalchemy import func
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
@@ -38,7 +39,10 @@ from app.models.food import (
     ConfigImpresora,
     EstadoTrabajo,
     Impresora,
+    Mesa,
+    Sucursal,
     TrabajoImpresion,
+    UsuarioFood,
 )
 from app.services import print_queue
 from app.utils.db import get_session
@@ -252,17 +256,42 @@ def _require_admin_secret(request: Request) -> JSONResponse | None:
     return None
 
 
-def _company_admin_dict(company: Company, config: ConfigImpresora | None) -> dict:
+def _company_counts(session, company_id: int) -> dict:
+    """Conteos reales de recursos activos de una empresa (para el panel Owner)."""
+    def _count(model, active_attr) -> int:
+        return int(session.exec(
+            select(func.count()).select_from(model).where(
+                model.company_id == company_id, getattr(model, active_attr).is_(True)
+            )
+        ).one())
+    return {
+        "users": _count(UsuarioFood, "activo"),
+        "mesas": _count(Mesa, "activa"),
+        "sucursales": _count(Sucursal, "activa"),
+    }
+
+
+def _company_admin_dict(company: Company, config: ConfigImpresora | None, counts: dict | None = None) -> dict:
+    from app.services import modulos_empresa as _me
+
+    counts = counts or {}
+    plan = company.plan or "trial"
     return {
         "id": company.id,
         "name": company.name,
         "slug": company.slug,
         "admin_email": (config.admin_email if config else "") or "",
         "is_active": bool(company.is_active),
-        "plan": company.plan or "trial",
+        "plan": plan,
         "trial_ends_at": company.trial_ends_at.strftime("%Y-%m-%d") if company.trial_ends_at else None,
         "plan_expires_at": company.plan_expires_at.strftime("%Y-%m-%d") if company.plan_expires_at else None,
         "created_at": company.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if company.created_at else None,
+        "current_users": counts.get("users", 0),
+        "current_mesas": counts.get("mesas", 0),
+        "current_sucursales": counts.get("sucursales", 0),
+        "max_usuarios": _me.limite_efectivo(company, "max_usuarios", plan) or 0,
+        "max_mesas": _me.limite_efectivo(company, "max_mesas", plan) or 0,
+        "max_sucursales": _me.limite_efectivo(company, "max_sucursales", plan) or 0,
     }
 
 
@@ -293,7 +322,10 @@ async def _admin_list_companies(request: Request) -> JSONResponse:
                     )
                 ).all()
             }
-            items = [_company_admin_dict(c, configs.get(c.id)) for c in page_items]
+            items = [
+                _company_admin_dict(c, configs.get(c.id), _company_counts(session, c.id))
+                for c in page_items
+            ]
 
     return JSONResponse({"items": items, "total": total}, status_code=200)
 
@@ -315,8 +347,9 @@ async def _admin_company_detail(request: Request) -> JSONResponse:
             config = session.exec(
                 select(ConfigImpresora).where(ConfigImpresora.company_id == company_id)
             ).first()
+            counts = _company_counts(session, company_id)
 
-    return JSONResponse(_company_admin_dict(company, config), status_code=200)
+    return JSONResponse(_company_admin_dict(company, config, counts), status_code=200)
 
 
 async def _admin_activate(request: Request) -> JSONResponse:
@@ -507,8 +540,19 @@ def _modules_payload(session, company) -> dict:
         }
         for m in _me.MODULOS_TOGGLEABLES
     ]
+    counts = _company_counts(session, company.id)
+    _usados_por_limite = {
+        "max_usuarios": counts.get("users", 0),
+        "max_mesas": counts.get("mesas", 0),
+        "max_sucursales": counts.get("sucursales", 0),
+    }
     limites = [
-        {"key": l["key"], "label": l["label"], "valor": _me.limite_efectivo(company, l["key"], plan)}
+        {
+            "key": l["key"],
+            "label": l["label"],
+            "valor": _me.limite_efectivo(company, l["key"], plan),
+            "usados": _usados_por_limite.get(l["key"], 0),
+        }
         for l in _me.LIMITES
     ]
     return {"plan": plan, "catalogo": catalogo, "limites": limites}
