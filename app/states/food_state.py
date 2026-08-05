@@ -3282,11 +3282,34 @@ class FoodState(
             ).first()
             if cfg is None:
                 cfg = ConfigImpresora(company_id=self._company_id())
+            email_anterior = cfg.admin_email or ""
+            email_cambio = email != email_anterior
             cfg.admin_email = email
             if nueva:
                 cfg.admin_password_hash = _bcrypt.hashpw(nueva.encode(), _bcrypt.gensalt()).decode()
             session.add(cfg)
             session.commit()
+            # Auditoría de credenciales del dueño: registra quién y cuándo cambió
+            # email y/o contraseña. Nunca se guarda el valor de la contraseña.
+            if nueva or email_cambio:
+                cambios = []
+                if nueva:
+                    cambios.append("contraseña")
+                if email_cambio:
+                    cambios.append("email")
+                registrar_auditoria(
+                    session, self._company_id(), "cambio_credenciales_admin",
+                    usuario_id=(self.usuario_actual.id or None) if self.usuario_actual else None,
+                    usuario_nombre=(self.usuario_actual.nombre if self.usuario_actual else ""),
+                    entidad="config_impresora", entidad_id=cfg.company_id,
+                    detalle={
+                        "cambios": cambios,
+                        "email_anterior": email_anterior if email_cambio else None,
+                        "email_nuevo": email if email_cambio else None,
+                        "password_cambiada": bool(nueva),
+                    },
+                )
+                session.commit()
         self.config_admin_email = email
         self.config_admin_password_nueva = ""
         self.config_admin_password_confirm = ""
