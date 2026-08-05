@@ -436,6 +436,61 @@ async def _admin_set_plan(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=200)
 
 
+async def _admin_renew_subscription(request: Request) -> JSONResponse:
+    """Renueva la suscripción de un plan pago extendiendo su vencimiento.
+
+    Mantiene el plan actual y suma `months` meses (x30 días). Si la suscripción
+    sigue vigente, se apila sobre el vencimiento; si venció, cuenta desde hoy.
+    Trial no se renueva por acá (usar Cambiar Plan o Extender Prueba).
+    """
+    err = _require_admin_secret(request)
+    if err is not None:
+        return err
+    try:
+        company_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+    try:
+        body = await request.json()
+        months = int(body.get("months"))
+    except Exception:
+        return JSONResponse({"error": "months inválido."}, status_code=400)
+    if months < 1 or months > 120:
+        return JSONResponse({"error": "months debe estar entre 1 y 120."}, status_code=400)
+
+    from app.services.plan_service import PLAN_TRIAL, plan_label
+
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+            if company is None:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            if (company.plan or PLAN_TRIAL) == PLAN_TRIAL:
+                return JSONResponse(
+                    {"error": "La empresa está en prueba. Usá Cambiar Plan o Extender Prueba."},
+                    status_code=409,
+                )
+            now = utc_now_naive()
+            base = (
+                company.plan_expires_at
+                if company.plan_expires_at and company.plan_expires_at > now
+                else now
+            )
+            company.plan_expires_at = base + timedelta(days=months * 30)
+            company.is_active = True
+            company.updated_at = now
+            session.add(company)
+            session.commit()
+            result = {
+                "id": company.id,
+                "plan": company.plan,
+                "plan_label": plan_label(company.plan),
+                "plan_expires_at": company.plan_expires_at.strftime("%Y-%m-%d"),
+            }
+
+    return JSONResponse(result, status_code=200)
+
+
 async def _admin_list_users(request: Request) -> JSONResponse:
     """Cuentas cuya contraseña puede resetear el Owner Admin.
 
@@ -692,6 +747,7 @@ health_app = Starlette(
         Route("/api/admin/companies/{id}/suspend", _admin_suspend, methods=["POST"]),
         Route("/api/admin/companies/{id}/extend-trial", _admin_extend_trial, methods=["POST"]),
         Route("/api/admin/companies/{id}/set-plan", _admin_set_plan, methods=["POST"]),
+        Route("/api/admin/companies/{id}/renew", _admin_renew_subscription, methods=["POST"]),
         Route("/api/admin/companies/{id}/users", _admin_list_users, methods=["GET"]),
         Route("/api/admin/companies/{id}/reset-password", _admin_reset_password, methods=["POST"]),
         Route("/api/agente/config", _agente_config, methods=["GET"]),
