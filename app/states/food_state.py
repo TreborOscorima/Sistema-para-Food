@@ -2932,7 +2932,7 @@ class FoodState(
             self.agentes_config = [
                 AgenteView(
                     id=a.id or 0, nombre=a.nombre, activo=a.activo,
-                    last_seen_texto=(format_local_datetime(a.last_seen_at) if a.last_seen_at else "Nunca"),
+                    last_seen_texto=(format_local_datetime(a.last_seen_at, "%d/%m %H:%M", "PE") if a.last_seen_at else "Nunca"),
                 )
                 for a in rows
             ]
