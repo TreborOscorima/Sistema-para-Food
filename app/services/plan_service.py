@@ -87,21 +87,25 @@ def plan_label(plan: str) -> str:
     return PLAN_LABELS.get(plan, plan.capitalize())
 
 
-def check_limite_usuarios(plan: str, usuarios_actuales: int) -> str:
-    maximo = plan_limite(plan, "max_usuarios")
-    if usuarios_actuales >= maximo:
+def check_limite_usuarios(plan: str, usuarios_actuales: int, maximo: int | None = None) -> str:
+    # `maximo` permite pasar el límite efectivo por empresa (override del owner);
+    # si es None se usa el default del plan. 0 = ilimitado.
+    if maximo is None:
+        maximo = plan_limite(plan, "max_usuarios")
+    if maximo and usuarios_actuales >= maximo:
         return (
-            f"Plan {plan_label(plan)}: máximo {maximo} usuarios. "
-            f"Actualice al plan Profesional para agregar más."
+            f"Límite alcanzado: máximo {maximo} usuarios. "
+            f"Contacte a TUWAYKI para ampliar su plan."
         )
     return ""
 
 
-def check_limite_mesas(plan: str, mesas_actuales: int) -> str:
-    maximo = plan_limite(plan, "max_mesas")
-    if mesas_actuales >= maximo:
+def check_limite_mesas(plan: str, mesas_actuales: int, maximo: int | None = None) -> str:
+    if maximo is None:
+        maximo = plan_limite(plan, "max_mesas")
+    if maximo and mesas_actuales >= maximo:
         return (
-            f"Plan {plan_label(plan)}: máximo {maximo} mesas. "
-            f"Actualice al plan Profesional para agregar más."
+            f"Límite alcanzado: máximo {maximo} mesas. "
+            f"Contacte a TUWAYKI para ampliar su plan."
         )
     return ""

@@ -291,7 +291,7 @@ class UsuariosAdminState(rx.State):
                         UsuarioFood.activo.is_(True),
                     )
                 ).all())
-            msg_limite = check_limite_usuarios(food.empresa_plan, total_usuarios)
+            msg_limite = check_limite_usuarios(food.empresa_plan, total_usuarios, food.empresa_max_usuarios)
             if msg_limite:
                 return rx.toast.error(msg_limite, duration=5000)
 

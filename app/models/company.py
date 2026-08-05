@@ -24,3 +24,7 @@ class Company(TimestampedModel, table=True):
     trial_ends_at: datetime | None = Field(default=None)
     plan_expires_at: datetime | None = Field(default=None)
     logo_url: str | None = Field(default=None, max_length=500)
+    # Límites por empresa (override del owner). NULL = usar el default del plan.
+    max_usuarios: int | None = Field(default=None)
+    max_mesas: int | None = Field(default=None)
+    max_sucursales: int | None = Field(default=None)

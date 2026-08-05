@@ -106,6 +106,7 @@ from app.services.plan_service import (
     plan_label,
     check_limite_mesas,
 )
+from app.services import modulos_empresa as _modulos_empresa
 from tuwayki_core.utils.rate_limit import (
     clear_login_attempts as _clear_login_attempts,
     is_rate_limited as _is_rate_limited,
@@ -1445,6 +1446,12 @@ class FoodState(
     usuario_actual: UsuarioSesion | None = None
     ultima_actividad: str = ""
     empresa_plan: str = "trial"
+    # Override por empresa de módulos habilitados (Fase 3 Owner Panel).
+    # {modulo: habilitado}; vacío = usar el default del plan.
+    empresa_modulos_override: dict[str, bool] = {}
+    # Límites efectivos de la empresa (0 = ilimitado). Fase 3 Owner Panel.
+    empresa_max_usuarios: int = 0
+    empresa_max_mesas: int = 0
     session_token: str = rx.Cookie("", name="twk_session", max_age=28800)
     login_pin_input: str = ""
     login_rol_seleccionado: str = RolUsuario.MOZO.value
@@ -2187,12 +2194,23 @@ class FoodState(
                 rx.window_alert(bloqueo),
                 rx.redirect("/login", replace=True),
             ]
-        feat_requerido = PAGINAS_PREMIUM.get(route_key)
-        if feat_requerido and not plan_permite(self.empresa_plan, feat_requerido):
-            return [
-                rx.toast.error(MSG_UPGRADE, duration=5000),
-                rx.redirect(self.usuario_home_route, replace=True),
-            ]
+        # Gate de módulo: honra el override del owner (Fase 3) y, si no hay
+        # override, el default del plan. Cae de vuelta a PAGINAS_PREMIUM para
+        # rutas premium sin módulo toggleable propio.
+        modulo_ruta = _modulos_empresa.PAGINAS_MODULO.get(route_key)
+        if modulo_ruta is not None:
+            if not self._modulo_on(modulo_ruta):
+                return [
+                    rx.toast.error(MSG_UPGRADE, duration=5000),
+                    rx.redirect(self.usuario_home_route, replace=True),
+                ]
+        else:
+            feat_requerido = PAGINAS_PREMIUM.get(route_key)
+            if feat_requerido and not plan_permite(self.empresa_plan, feat_requerido):
+                return [
+                    rx.toast.error(MSG_UPGRADE, duration=5000),
+                    rx.redirect(self.usuario_home_route, replace=True),
+                ]
         self._touch_actividad()
         self.cargar_datos_iniciales()
         return None
@@ -2330,7 +2348,7 @@ class FoodState(
 
     @rx.var
     def reportes_avanzados_habilitados(self) -> bool:
-        return plan_permite(self.empresa_plan, "reportes_avanzados")
+        return self._modulo_on("reportes_avanzados")
 
     def on_load_configuracion(self):
         result = self._route_access_result("configuracion")
@@ -2534,6 +2552,24 @@ class FoodState(
                 company = session.get(Company, self._company_id())
                 if company:
                     self.empresa_plan = getattr(company, "plan", "trial") or "trial"
+                    # Límites efectivos (override de la empresa o default del plan).
+                    # 0 = ilimitado (None).
+                    self.empresa_max_usuarios = (
+                        _modulos_empresa.limite_efectivo(company, "max_usuarios", self.empresa_plan) or 0
+                    )
+                    self.empresa_max_mesas = (
+                        _modulos_empresa.limite_efectivo(company, "max_mesas", self.empresa_plan) or 0
+                    )
+                self.empresa_modulos_override = _modulos_empresa.cargar_overrides(
+                    session, self._company_id()
+                )
+
+    def _modulo_on(self, modulo: str) -> bool:
+        """Módulo habilitado para esta empresa: override del owner si existe,
+        si no el default del plan."""
+        return _modulos_empresa.modulo_habilitado(
+            self.empresa_modulos_override, self.empresa_plan, modulo
+        )
 
     def _cargar_sucursales_empresa(self, company_id: int) -> list[SucursalView]:
         with tenant_bypass():
@@ -2818,23 +2854,24 @@ class FoodState(
 
     @rx.var
     def plan_permite_inventario(self) -> bool:
-        return plan_permite(self.empresa_plan, "inventario")
+        return self._modulo_on("inventario")
 
     @rx.var
     def plan_permite_clientes(self) -> bool:
-        return plan_permite(self.empresa_plan, "clientes")
+        return self._modulo_on("clientes")
 
     @rx.var
     def plan_permite_cuentas(self) -> bool:
-        return plan_permite(self.empresa_plan, "cuentas_corrientes")
+        return self._modulo_on("cuentas")
 
     @rx.var
     def plan_permite_promociones(self) -> bool:
-        return plan_permite(self.empresa_plan, "promociones")
+        return self._modulo_on("promociones")
 
     @rx.var
     def plan_permite_cupones(self) -> bool:
-        return plan_permite(self.empresa_plan, "cupones")
+        # Cupones vive bajo el módulo Promociones.
+        return self._modulo_on("promociones")
 
     def login(self, pin: str):
         return self._authenticate_with_pin(pin)
@@ -3410,7 +3447,7 @@ class FoodState(
                         Mesa.activa.is_(True),
                     )
                 ).all())
-                msg_limite = check_limite_mesas(self.empresa_plan, total_mesas)
+                msg_limite = check_limite_mesas(self.empresa_plan, total_mesas, self.empresa_max_mesas)
                 if msg_limite:
                     return rx.toast.error(msg_limite, duration=5000)
                 conflicto = session.exec(

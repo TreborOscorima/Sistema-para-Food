@@ -117,6 +117,26 @@ class Sucursal(TimestampedModel, table=True):
     es_principal: bool = Field(default=False, nullable=False)
 
 
+class CompanyModulo(TimestampedModel, table=True):
+    """Override por empresa de qué módulos están habilitados (Fase 3 Owner Panel).
+
+    Solo se guardan las filas que el owner togglea explícitamente: si no hay fila
+    para un módulo, se usa el default del plan (`plan_service`). El override MANDA
+    sobre el plan. Los módulos válidos son los `toggleables` de
+    `services.modulos_empresa`.
+    """
+
+    __tablename__ = "food_company_modulos"
+    __table_args__ = (
+        UniqueConstraint("company_id", "modulo", name="uq_food_company_modulos"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    modulo: str = Field(max_length=40, nullable=False)
+    habilitado: bool = Field(default=True, nullable=False)
+
+
 class UsuarioFood(TimestampedModel, table=True):
     """Usuario operativo del restaurante, autenticado por PIN + company_id."""
 

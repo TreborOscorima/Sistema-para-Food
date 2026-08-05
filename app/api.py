@@ -491,6 +491,91 @@ async def _admin_renew_subscription(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=200)
 
 
+def _modules_payload(session, company) -> dict:
+    """Arma el estado de módulos + límites de una empresa para el panel."""
+    from app.services import modulos_empresa as _me
+
+    plan = company.plan or "trial"
+    overrides = _me.cargar_overrides(session, company.id)
+    estado = _me.estado_modulos(overrides, plan)
+    catalogo = [
+        {
+            "key": m["key"],
+            "label": m["label"],
+            "coming_soon": m["coming_soon"],
+            "habilitado": estado.get(m["key"], False),
+        }
+        for m in _me.MODULOS_TOGGLEABLES
+    ]
+    limites = [
+        {"key": l["key"], "label": l["label"], "valor": _me.limite_efectivo(company, l["key"], plan)}
+        for l in _me.LIMITES
+    ]
+    return {"plan": plan, "catalogo": catalogo, "limites": limites}
+
+
+async def _admin_list_modules(request: Request) -> JSONResponse:
+    """Catálogo de módulos toggleables + límites, con su estado por empresa."""
+    err = _require_admin_secret(request)
+    if err is not None:
+        return err
+    try:
+        company_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+            if company is None:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            payload = _modules_payload(session, company)
+
+    return JSONResponse(payload, status_code=200)
+
+
+async def _admin_set_modules(request: Request) -> JSONResponse:
+    """Guarda el override de módulos + los límites por empresa (owner)."""
+    err = _require_admin_secret(request)
+    if err is not None:
+        return err
+    try:
+        company_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    modulos = body.get("modulos") or {}
+    limites = body.get("limites") or {}
+    actor = (body.get("actor") or body.get("actor_email") or "owner-admin").strip() or "owner-admin"
+
+    from app.services import modulos_empresa as _me
+    from app.services.auditoria_service import registrar_auditoria
+
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+            if company is None:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            _me.guardar_modulos(session, company_id, modulos)
+            _me.guardar_limites(session, company, limites)
+            company.updated_at = utc_now_naive()
+            session.add(company)
+            registrar_auditoria(
+                session, company_id, "ajuste_modulos_owner",
+                usuario_nombre=actor,
+                entidad="company", entidad_id=company_id,
+                detalle={"origen": "owner_admin", "actor": actor,
+                         "modulos": modulos, "limites": limites},
+            )
+            session.commit()
+            payload = _modules_payload(session, company)
+
+    return JSONResponse(payload, status_code=200)
+
+
 async def _admin_list_users(request: Request) -> JSONResponse:
     """Cuentas cuya contraseña puede resetear el Owner Admin.
 
@@ -748,6 +833,8 @@ health_app = Starlette(
         Route("/api/admin/companies/{id}/extend-trial", _admin_extend_trial, methods=["POST"]),
         Route("/api/admin/companies/{id}/set-plan", _admin_set_plan, methods=["POST"]),
         Route("/api/admin/companies/{id}/renew", _admin_renew_subscription, methods=["POST"]),
+        Route("/api/admin/companies/{id}/modules", _admin_list_modules, methods=["GET"]),
+        Route("/api/admin/companies/{id}/modules", _admin_set_modules, methods=["POST"]),
         Route("/api/admin/companies/{id}/users", _admin_list_users, methods=["GET"]),
         Route("/api/admin/companies/{id}/reset-password", _admin_reset_password, methods=["POST"]),
         Route("/api/agente/config", _agente_config, methods=["GET"]),
