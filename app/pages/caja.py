@@ -21,7 +21,7 @@ from app.states.caja_turno_mixin import (
     TurnoHistorialView,
 )
 from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
-from app.states.food_state import FoodState, MesaView, CajaItemView, MostradorPendienteView, PagoStagedView, UltimoCobroView
+from app.states.food_state import FoodState, MesaView, CajaItemView, MostradorPendienteView, PagoStagedView, UltimoCobroView, ProductoView
 from app.states.reportes_state import ReportesState
 
 
@@ -117,10 +117,20 @@ def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
             rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
                     color=rx.cond(asignado & FoodState.caja_split_por_items, "#94A3B8", "#F1F5F9"),
                     text_align="right"),
+            # Quitar ítem (solo cobro de mesa, fuera del modo dividido).
+            rx.cond(
+                (FoodState.caja_cobro_mesa_id > 0) & ~FoodState.caja_split_por_items,
+                rx.icon(
+                    tag="x", size=15, color=TEXT_MUTED, cursor="pointer",
+                    on_click=FoodState.caja_solicitar_quitar(item.detalle_id).stop_propagation,
+                    _hover={"color": "#EF4444"},
+                ),
+                rx.fragment(),
+            ),
             columns=rx.cond(
                 FoodState.caja_split_por_items,
                 "32px 1fr 50px 80px",
-                "1fr 50px 80px",
+                "1fr 50px 80px 28px",
             ),
             gap="8px", align_items="center", width="100%",
         ),
@@ -330,6 +340,24 @@ def _cobro_panel() -> rx.Component:
                             rx.text("Sin items registrados.", font_size="13px", color=TEXT_MUTED),
                             padding_y="20px", width="100%",
                         ),
+                    ),
+                    # Agregar productos a la cuenta (solo cobro de mesa).
+                    rx.cond(
+                        FoodState.caja_cobro_mesa_id > 0,
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="plus", size=14),
+                                rx.text("Agregar productos"),
+                                spacing="2", align="center",
+                            ),
+                            on_click=FoodState.caja_abrir_add,
+                            background="transparent", color=ACCENT,
+                            border=f"1px dashed {ACCENT}", border_radius="8px",
+                            font_size="12px", font_weight="700", width="100%",
+                            cursor="pointer", margin="8px 14px", padding_y="8px",
+                            _hover={"background": "rgba(234,88,12,0.08)"},
+                        ),
+                        rx.fragment(),
                     ),
                     rx.cond(
                         FoodState.caja_promo_aplicada_nombre != "",
@@ -1545,6 +1573,132 @@ def _reversion_modal() -> rx.Component:
     )
 
 
+def _caja_add_producto_row(p: ProductoView) -> rx.Component:
+    return rx.hstack(
+        rx.text(p.emoji, font_size="18px"),
+        rx.vstack(
+            rx.text(p.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY,
+                    no_of_lines=1),
+            rx.text(p.categoria_nombre, font_size="11px", color=TEXT_MUTED),
+            spacing="0", align="start", flex="1", min_width="0",
+        ),
+        rx.text(p.precio_texto, font_size="13px", font_weight="700", color="#CBD5E1"),
+        rx.icon(tag="circle_plus", size=18, color=ACCENT),
+        on_click=FoodState.caja_agregar_producto(p.id),
+        width="100%", align="center", gap="10px",
+        padding="10px 12px", border_bottom=f"1px solid {DARK_700}",
+        cursor="pointer", _hover={"background": DARK_800},
+    )
+
+
+def _caja_add_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.dialog.title("Agregar a la cuenta", font_size="17px", font_weight="800",
+                            color=TEXT_PRIMARY, margin="0"),
+                    rx.spacer(),
+                    rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.set_caja_add_modal(False)),
+                    width="100%", align="center",
+                ),
+                rx.text(
+                    "Se suman a esta misma cuenta. Lo que necesita cocina dispara su "
+                    "comanda; lo que no (bebidas, porciones) va directo.",
+                    font_size="12px", color=TEXT_MUTED,
+                ),
+                rx.input(
+                    placeholder="Buscar producto...",
+                    value=FoodState.caja_add_busqueda,
+                    on_change=FoodState.set_caja_add_busqueda,
+                    width="100%", background=DARK_800, border=f"1px solid {DARK_700}",
+                    color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
+                    _focus={"border_color": ACCENT},
+                ),
+                rx.box(
+                    rx.cond(
+                        FoodState.caja_add_productos_filtrados.length() > 0,
+                        rx.foreach(FoodState.caja_add_productos_filtrados, _caja_add_producto_row),
+                        rx.center(
+                            rx.text("Sin resultados.", font_size="13px", color=TEXT_MUTED),
+                            padding_y="24px", width="100%",
+                        ),
+                    ),
+                    width="100%", max_height="46vh", overflow_y="auto",
+                    border=f"1px solid {DARK_700}", border_radius="10px",
+                    background=DARK_800,
+                ),
+                rx.button(
+                    "Listo", on_click=FoodState.set_caja_add_modal(False),
+                    background=ACCENT, color=TEXT_WHITE, border_radius="10px",
+                    font_size="14px", font_weight="800", cursor="pointer",
+                    width="100%", _hover={"background": ACCENT_HOVER},
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="460px", width="92vw", max_height="90vh", overflow_y="auto",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.caja_add_modal,
+        on_open_change=FoodState.set_caja_add_modal,
+    )
+
+
+def _caja_quitar_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="triangle_alert", size=18, color=DANGER_SOLID),
+                    rx.dialog.title("Quitar — " + FoodState.caja_quitar_item_nombre,
+                            font_size="17px", font_weight="800", color=TEXT_PRIMARY, margin="0"),
+                    spacing="2", align="center",
+                ),
+                rx.text(
+                    "Este ítem ya fue enviado a cocina. Al quitarlo se repone el stock y "
+                    "la operación queda registrada en auditoría.",
+                    font_size="13px", color=TEXT_MUTED,
+                ),
+                rx.input(
+                    placeholder="Motivo (obligatorio)",
+                    value=FoodState.caja_quitar_motivo,
+                    on_change=FoodState.set_caja_quitar_motivo,
+                    width="100%", background=DARK_800, border=f"1px solid {DARK_700}",
+                    color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
+                    _focus={"border_color": "#DC2626"},
+                ),
+                rx.cond(
+                    FoodState.caja_quitar_error != "",
+                    rx.text(FoodState.caja_quitar_error, font_size="12px",
+                            color="#EF4444", font_weight="600"),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Volver", on_click=FoodState.cancelar_caja_quitar,
+                        background=DARK_800, color=TEXT_MUTED, border=f"1px solid {DARK_700}",
+                        border_radius="10px", font_size="14px", font_weight="600",
+                        cursor="pointer", _hover={"background": "#334155", "color": "#F1F5F9"}, flex="1",
+                    ),
+                    rx.button(
+                        "Quitar ítem", on_click=FoodState.caja_confirmar_quitar,
+                        background="#DC2626", color=TEXT_WHITE, border_radius="10px",
+                        font_size="14px", font_weight="800", cursor="pointer",
+                        _hover={"background": "#B91C1C"}, flex="2",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="440px", width="92vw", max_height="90vh", overflow_y="auto",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.caja_quitar_modal,
+        on_open_change=FoodState.set_caja_quitar_modal,
+    )
+
+
 def _caja_content() -> rx.Component:
     return rx.vstack(
         cumpleanos_banner(),
@@ -1586,6 +1740,8 @@ def _caja_content() -> rx.Component:
         _historial_modal(),
         _ultimos_cobros_modal(),
         _reversion_modal(),
+        _caja_add_modal(),
+        _caja_quitar_modal(),
         anulacion_modal(),
         _caja_ayuda(),
         spacing="4", width="100%",

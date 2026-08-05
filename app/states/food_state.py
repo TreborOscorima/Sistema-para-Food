@@ -20,6 +20,7 @@ from decimal import Decimal, InvalidOperation
 import bcrypt as _bcrypt
 
 import reflex as rx
+from reflex.components.sonner.toast import ToastAction
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, update as sa_update
 from sqlmodel import select
@@ -684,6 +685,9 @@ class CajaItemView(BaseModel):
     notas: str = ""
     seleccionado: bool = False
     asignado_pago: int = 0
+    # ¿Ya se envió a cocina? Determina si quitarlo es una acción simple
+    # (aún no enviado) o una anulación con permiso + motivo (ya enviado).
+    enviado: bool = False
 
 
 class MesaAdminView(BaseModel):
@@ -1572,6 +1576,14 @@ class FoodState(
     caja_cobro_pedido_id: int = 0
     caja_cobro_pedido_label: str = ""
     caja_cobro_total_override: float = 0.0
+    # Agregar / quitar productos de la cuenta desde caja
+    caja_add_modal: bool = False
+    caja_add_busqueda: str = ""
+    caja_quitar_modal: bool = False
+    caja_quitar_detalle_id: int = 0
+    caja_quitar_item_nombre: str = ""
+    caja_quitar_motivo: str = ""
+    caja_quitar_error: str = ""
 
     # Caja — cobro dividido / pago mixto
     caja_cobro_dividido: bool = False
@@ -2263,6 +2275,8 @@ class FoodState(
             return result
         self.cargar_turno_caja()
         self.cargar_pedidos_mostrador_pendientes()
+        # Necesario para el selector "Agregar productos" del panel de cobro.
+        self.cargar_menu()
         self.pagina_cargada = True
         return None
 
@@ -5050,6 +5064,7 @@ class FoodState(
                         subtotal_texto=_money_text(_to_decimal(d.subtotal)),
                         subtotal_float=float(_to_decimal(d.subtotal)),
                         notas=d.notas or "",
+                        enviado=d.impreso_cocina,
                     ))
                 # Aplicación automática de la mejor promo vigente
                 items_promo = [
@@ -5081,6 +5096,201 @@ class FoodState(
             self.caja_promo_aplicada_texto = f"-{_money_text(descuento)}"
         else:
             self.caja_cobro_descuento = ""
+
+    # ─── Caja: agregar / quitar productos de la cuenta ───────────────────────
+
+    @rx.var
+    def caja_add_productos_filtrados(self) -> list[ProductoView]:
+        """Productos disponibles para agregar a la cuenta desde caja."""
+        disponibles = [p for p in self.productos if p.disponible]
+        q = self.caja_add_busqueda.strip().lower()
+        if q:
+            disponibles = [p for p in disponibles if q in p.nombre.lower()]
+        return disponibles
+
+    def _caja_cobro_pedido(self, session):
+        """Pedido abierto que está cobrando la caja (mesa o pedido de mostrador)."""
+        if self.caja_cobro_mesa_id > 0:
+            return _get_open_order(session, self.caja_cobro_mesa_id, self._company_id())
+        if self.caja_cobro_pedido_id > 0:
+            p = session.get(Pedido, self.caja_cobro_pedido_id)
+            if p is not None and p.company_id == self._company_id() and not p.pagado:
+                return p
+        return None
+
+    def _caja_recargar_items(self) -> None:
+        """Recarga solo la lista de ítems de la cuenta (sin tocar los campos de
+        pago ya ingresados). Se usa tras agregar/quitar productos."""
+        items_ui: list[CajaItemView] = []
+        with self._tenant_session() as session:
+            pedido = self._caja_cobro_pedido(session)
+            if pedido is None:
+                self.caja_cobro_items = []
+                return
+            detalles = session.exec(
+                select(DetallePedido).where(
+                    DetallePedido.pedido_id == pedido.id
+                ).order_by(DetallePedido.id)
+            ).all()
+            productos = {
+                p.id: p for p in session.exec(
+                    select(Producto).where(Producto.company_id == self._company_id())
+                ).all()
+            }
+            for d in detalles:
+                prod = productos.get(d.producto_id)
+                items_ui.append(CajaItemView(
+                    detalle_id=d.id or 0,
+                    producto_nombre=prod.nombre if prod else f"Producto {d.producto_id}",
+                    cantidad=d.cantidad,
+                    precio_unitario_texto=_money_text(_to_decimal(d.precio_unitario)),
+                    subtotal_texto=_money_text(_to_decimal(d.subtotal)),
+                    subtotal_float=float(_to_decimal(d.subtotal)),
+                    notas=d.notas or "",
+                    enviado=d.impreso_cocina,
+                ))
+        self.caja_cobro_items = items_ui
+
+    def caja_abrir_add(self):
+        if not self.caja_cobro_activo:
+            return rx.toast.error("Abre una cuenta antes de agregar productos.")
+        self.caja_add_busqueda = ""
+        self.caja_add_modal = True
+
+    def set_caja_add_modal(self, v: bool) -> None:
+        self.caja_add_modal = v
+
+    def set_caja_add_busqueda(self, v: str) -> None:
+        self.caja_add_busqueda = v
+
+    def caja_agregar_producto(self, producto_id: int):
+        with self._tenant_session() as session:
+            producto = session.get(Producto, producto_id)
+            if producto is None or producto.company_id != self._company_id() or not producto.disponible:
+                return rx.toast.error("Producto no disponible.")
+            pedido = self._caja_cobro_pedido(session)
+            if pedido is None:
+                return rx.toast.error("No hay una cuenta abierta para agregar.")
+            errores = _validar_stock_para_items(session, [(producto_id, 1)], self._company_id())
+            if errores:
+                return rx.toast.error("Stock insuficiente — " + "; ".join(errores))
+            now = _utcnow()
+            req = _requiere_prep(session, producto)
+            precio = _to_decimal(producto.precio)
+            # Se agrega como línea NUEVA ya enviada: si requiere preparación, dispara
+            # su comanda (ticket_impreso_at queda NULL); si no, va directo a la cuenta.
+            detalle = DetallePedido(
+                company_id=self._company_id(),
+                pedido_id=pedido.id or 0,
+                producto_id=producto.id or 0,
+                cantidad=1,
+                precio_unitario=precio,
+                subtotal=precio,
+                estado_produccion=(
+                    EstadoProduccion.PENDIENTE.value if req
+                    else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
+                ),
+                impreso_cocina=True,
+                impreso_caja=False,
+                enviado_cocina_at=now,
+                requiere_preparacion=req,
+            )
+            session.add(detalle)
+            _recalculate_order_total(session, pedido)
+            _sync_order_status(session, pedido)
+            mesa = session.get(Mesa, pedido.mesa_id) if pedido.mesa_id else None
+            if mesa is not None and mesa.estado == EstadoMesa.LIBRE.value:
+                mesa.estado = EstadoMesa.OCUPADA.value
+                mesa.updated_at = now
+                session.add(mesa)
+            _descontar_stock_diario(session, [(producto_id, 1)], self._company_id())
+            session.commit()
+            nombre = producto.nombre
+        self._caja_recargar_items()
+        self.cargar_mesas()
+        self.cargar_cocina()
+        destino = " — enviado a cocina" if req else ""
+        return rx.toast.success(f"{nombre} agregado a la cuenta{destino}.")
+
+    def caja_solicitar_quitar(self, detalle_id: int):
+        with self._tenant_session() as session:
+            d = session.get(DetallePedido, detalle_id)
+            if d is None or d.company_id != self._company_id():
+                return rx.toast.error("Ese ítem ya no existe.")
+            enviado = d.impreso_cocina
+            prod = session.get(Producto, d.producto_id)
+            nombre = prod.nombre if prod else f"Producto {d.producto_id}"
+        # Ítem aún no enviado a cocina (error reciente): se quita sin fricción.
+        if not enviado:
+            return self._caja_quitar_ejecutar(detalle_id, motivo="")
+        # Ítem ya enviado/preparado: es una anulación de línea → requiere permiso.
+        if self.usuario_actual is not None and not (
+            self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_anular
+        ):
+            return rx.toast.error("No tienes permiso para quitar ítems ya enviados a cocina.")
+        self.caja_quitar_detalle_id = detalle_id
+        self.caja_quitar_item_nombre = nombre
+        self.caja_quitar_motivo = ""
+        self.caja_quitar_error = ""
+        self.caja_quitar_modal = True
+
+    def set_caja_quitar_modal(self, v: bool) -> None:
+        self.caja_quitar_modal = v
+
+    def set_caja_quitar_motivo(self, v: str) -> None:
+        self.caja_quitar_motivo = v
+
+    def cancelar_caja_quitar(self) -> None:
+        self.caja_quitar_modal = False
+        self.caja_quitar_detalle_id = 0
+        self.caja_quitar_motivo = ""
+        self.caja_quitar_error = ""
+
+    def caja_confirmar_quitar(self):
+        if len(self.caja_quitar_motivo.strip()) < 3:
+            self.caja_quitar_error = "Escribe el motivo (mínimo 3 caracteres)."
+            return
+        return self._caja_quitar_ejecutar(self.caja_quitar_detalle_id, motivo=self.caja_quitar_motivo.strip())
+
+    def _caja_quitar_ejecutar(self, detalle_id: int, motivo: str):
+        with self._tenant_session() as session:
+            d = session.get(DetallePedido, detalle_id)
+            if d is None or d.company_id != self._company_id():
+                return rx.toast.error("Ese ítem ya no existe.")
+            pedido = session.get(Pedido, d.pedido_id)
+            if pedido is None or pedido.pagado or pedido.estado == EstadoPedido.COBRADO.value:
+                return rx.toast.error("La cuenta ya fue cobrada; no se puede editar.")
+            prod = session.get(Producto, d.producto_id)
+            nombre = prod.nombre if prod else f"Producto {d.producto_id}"
+            cant = d.cantidad
+            era_enviado = d.impreso_cocina
+            # Si estaba enviado, al enviarse se descontó stock_diario: lo reponemos.
+            if era_enviado and prod is not None and prod.stock_diario is not None:
+                prod.stock_diario = (prod.stock_diario or 0) + cant
+                if not prod.disponible and prod.stock_diario > 0:
+                    prod.disponible = True
+                prod.updated_at = _utcnow()
+                session.add(prod)
+            # Auditoría solo cuando fue una anulación con motivo (ítem enviado).
+            if motivo:
+                registrar_auditoria(
+                    session, self._company_id(), "quitar_item_caja",
+                    usuario_id=(self.usuario_actual.id or None) if self.usuario_actual else None,
+                    usuario_nombre=(self.usuario_actual.nombre if self.usuario_actual else ""),
+                    entidad="detalle_pedido", entidad_id=detalle_id,
+                    detalle={"producto": nombre, "cantidad": cant, "motivo": motivo, "pedido_id": pedido.id},
+                )
+            session.delete(d)
+            _recalculate_order_total(session, pedido)
+            _sync_order_status(session, pedido)
+            session.commit()
+        self.caja_quitar_modal = False
+        self.caja_quitar_detalle_id = 0
+        self.caja_quitar_motivo = ""
+        self._caja_recargar_items()
+        self.cargar_mesas()
+        self.cargar_cocina()
+        return rx.toast.success(f"{nombre} quitado de la cuenta.")
 
     def cancelar_cobro(self) -> None:
         self.caja_cobrando = False
@@ -5938,10 +6148,25 @@ class FoodState(
         html_ticket = render_ticket_html(
             "Comprobante de Pago", comprobante_lines, self._ticket_paper_width_mm()
         )
-        eventos = [rx.toast.success(f"{mesa_label} cobrado — {_money_text(total_final)}")]
         # Comprobante "a demanda": si está desactivada la impresión automática, no
-        # se imprime al cobrar (queda el botón Imprimir comprobante para hacerlo
-        # cuando el cliente lo pide). Ahorra papel.
+        # se imprime al cobrar. El aviso de cobrado trae a mano un botón "Imprimir
+        # comprobante" por si el cliente lo pide: la primera impresión es libre
+        # (reimprimir después pide permiso). Un toque, sin frenar la cola ni gastar
+        # papel de más.
+        if self.config_comprobante_auto:
+            cobro_toast = rx.toast.success(
+                f"{mesa_label} cobrado — {_money_text(total_final)}"
+            )
+        else:
+            cobro_toast = rx.toast.success(
+                f"{mesa_label} cobrado — {_money_text(total_final)}",
+                duration=10000,
+                action=ToastAction(
+                    label="Imprimir comprobante",
+                    on_click=FoodState.reimprimir_comprobante(pedido_id),
+                ),
+            )
+        eventos = [cobro_toast]
         if self.config_comprobante_auto:
             print_evt = self._imprimir_o_encolar(
                 rol="caja",
