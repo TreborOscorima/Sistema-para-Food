@@ -436,6 +436,107 @@ async def _admin_set_plan(request: Request) -> JSONResponse:
     return JSONResponse(result, status_code=200)
 
 
+async def _admin_list_users(request: Request) -> JSONResponse:
+    """Cuentas cuya contraseña puede resetear el Owner Admin.
+
+    En Food la cuenta administrable es la del **dueño** (Panel Administrativo:
+    email + contraseña, guardada en ConfigImpresora). El personal operativo entra
+    con PIN, que no se gestiona por acá.
+    """
+    err = _require_admin_secret(request)
+    if err is not None:
+        return err
+    try:
+        company_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+            if company is None:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            config = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == company_id)
+            ).first()
+            items = []
+            if config is not None and config.admin_email:
+                items.append({
+                    "id": company_id,
+                    "username": config.admin_email,
+                    "full_name": company.name,
+                    "role": "Dueño",
+                })
+
+    return JSONResponse({"items": items}, status_code=200)
+
+
+def _generar_password_temporal() -> str:
+    """Contraseña temporal legible para entregar al dueño una sola vez."""
+    import secrets
+    return "Food-" + secrets.token_urlsafe(6)
+
+
+async def _admin_reset_password(request: Request) -> JSONResponse:
+    """Resetea la contraseña del dueño de una empresa Food.
+
+    Genera una temporal, la guarda hasheada (bcrypt) y la devuelve UNA vez para
+    que el Owner Admin se la pase al dueño. Queda auditado (sin el valor).
+    """
+    err = _require_admin_secret(request)
+    if err is not None:
+        return err
+    try:
+        company_id = int(request.path_params["id"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "id inválido."}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    actor = (body.get("actor") or body.get("actor_email") or "owner-admin").strip() or "owner-admin"
+
+    import bcrypt as _bcrypt_api
+    from app.services.auditoria_service import registrar_auditoria
+
+    temp_password = _generar_password_temporal()
+    with tenant_bypass():
+        with get_session() as session:
+            company = session.get(Company, company_id)
+            if company is None:
+                return JSONResponse({"error": "No encontrado."}, status_code=404)
+            config = session.exec(
+                select(ConfigImpresora).where(ConfigImpresora.company_id == company_id)
+            ).first()
+            if config is None or not config.admin_email:
+                return JSONResponse(
+                    {"error": "La empresa no tiene cuenta de dueño configurada."},
+                    status_code=409,
+                )
+            config.admin_password_hash = _bcrypt_api.hashpw(
+                temp_password.encode(), _bcrypt_api.gensalt()
+            ).decode()
+            config.updated_at = utc_now_naive()
+            session.add(config)
+            registrar_auditoria(
+                session, company_id, "reset_password_owner",
+                usuario_nombre=actor,
+                entidad="config_impresora", entidad_id=company_id,
+                detalle={
+                    "origen": "owner_admin",
+                    "actor": actor,
+                    "email": config.admin_email,
+                    "password_reseteada": True,
+                },
+            )
+            session.commit()
+            username = config.admin_email
+
+    return JSONResponse(
+        {"temp_password": temp_password, "username": username}, status_code=200
+    )
+
+
 # ─── API del agente de impresión local ────────────────────────────────────────
 # El agente se autentica con `X-Agent-Token: "<id>.<secreto>"`. Todas las rutas
 # filtran explícitamente por company_id del agente bajo tenant_bypass().
@@ -591,6 +692,8 @@ health_app = Starlette(
         Route("/api/admin/companies/{id}/suspend", _admin_suspend, methods=["POST"]),
         Route("/api/admin/companies/{id}/extend-trial", _admin_extend_trial, methods=["POST"]),
         Route("/api/admin/companies/{id}/set-plan", _admin_set_plan, methods=["POST"]),
+        Route("/api/admin/companies/{id}/users", _admin_list_users, methods=["GET"]),
+        Route("/api/admin/companies/{id}/reset-password", _admin_reset_password, methods=["POST"]),
         Route("/api/agente/config", _agente_config, methods=["GET"]),
         Route("/api/agente/trabajos", _agente_trabajos, methods=["GET"]),
         Route("/api/agente/trabajos/{id}/ack", _agente_ack, methods=["POST"]),
