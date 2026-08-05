@@ -43,7 +43,8 @@ _METODOS_FILTRO = [
 
 # ─── KPI Card ────────────────────────────────────────────────────────────────
 
-def _kpi_card(label: str, value, icon: str, accent: str, bg: str, border: str) -> rx.Component:
+def _kpi_card(label: str, value, icon: str, accent: str, bg: str, border: str,
+              hint: str = "") -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
@@ -60,6 +61,16 @@ def _kpi_card(label: str, value, icon: str, accent: str, bg: str, border: str) -
                     flex_shrink="0",
                 ),
                 rx.spacer(),
+                # Ícono de ayuda con la definición exacta del KPI (M-08b). Solo
+                # se muestra si se pasó un hint.
+                rx.cond(
+                    hint != "",
+                    rx.tooltip(
+                        rx.icon(tag="info", size=14, color=TEXT_MUTED,
+                                cursor="help", flex_shrink="0"),
+                        content=hint,
+                    ),
+                ),
             ),
             rx.text(value, font_size="22px", font_weight="800", color=TEXT_PRIMARY, line_height="1"),
             rx.text(label, font_size="11px", font_weight="600", color=TEXT_MUTED,
@@ -1412,21 +1423,25 @@ def _reportes_content() -> rx.Component:
                 "Ventas hoy",
                 ReportesState.dashboard_ventas_hoy_texto,
                 "trending_up", "#22C55E", "rgba(34,197,94,0.12)", "rgba(34,197,94,0.25)",
+                hint="Total cobrado en el período, sin contar propinas.",
             ),
             _kpi_card(
                 "Pedidos cobrados",
                 ReportesState.dashboard_pedidos_hoy.to_string(),
                 "receipt_text", "#60A5FA", "rgba(59,130,246,0.12)", "rgba(59,130,246,0.25)",
+                hint="Cantidad de cobros cerrados en el período (no incluye anulados).",
             ),
             _kpi_card(
                 "Ticket promedio",
                 ReportesState.dashboard_ticket_promedio_texto,
                 "calculator", "#7C3AED", "rgba(124,58,237,0.12)", "rgba(124,58,237,0.25)",
+                hint="Ventas cobradas ÷ número de cobros del período.",
             ),
             _kpi_card(
                 "Propinas hoy",
                 ReportesState.dashboard_propina_hoy_texto,
                 "heart", "#EA580C", "rgba(234,88,12,0.12)", "rgba(234,88,12,0.25)",
+                hint="Suma de propinas registradas en los cobros del período.",
             ),
             columns=rx.breakpoints(initial="2", md="4"),
             gap=rx.breakpoints(initial="10px", md="14px"),

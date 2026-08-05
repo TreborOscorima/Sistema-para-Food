@@ -1522,6 +1522,10 @@ class FoodState(
     caja_polling_enabled: bool = False
     mostrador_polling_enabled: bool = False
     cocina_filtro_estacion: str = ""
+    # True si la carta tiene al menos un producto que sale por "barra". Si es
+    # False, los filtros de estación (Todo/Cocina/Barra) no aportan y se ocultan
+    # en el KDS (M-03c). Se recalcula en cada cargar_cocina().
+    cocina_hay_barra: bool = False
 
     # Estación de impresión dedicada (corre en la PC de la caja con la térmica)
     estacion_impresion_polling_enabled: bool = False
@@ -4678,6 +4682,22 @@ class FoodState(
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == self._company_id())).all()}
             productos = {p.id: p for p in session.exec(select(Producto).where(Producto.company_id == self._company_id())).all()}
             categorias = {c.id: c for c in session.exec(select(Categoria).where(Categoria.company_id == self._company_id())).all()}
+            # ¿La carta usa la estación "barra"? (M-03c) Resuelve la estación
+            # efectiva de cada producto (producto.estacion → categoría → cocina).
+            # Si nadie sale por barra, ocultamos los filtros de estación del KDS.
+            barra_val = EstacionCocina.BARRA.value
+            hay_barra = False
+            for p in productos.values():
+                cat_p = categorias.get(p.categoria_id)
+                est_p = (p.estacion if p.estacion else None) or (cat_p.estacion if cat_p else EstacionCocina.COCINA.value)
+                if est_p == barra_val:
+                    hay_barra = True
+                    break
+            self.cocina_hay_barra = hay_barra
+            # Si ya no hay barra pero quedó un filtro de estación seleccionado,
+            # volvemos a "Todo" para no mostrar el KDS vacío con los filtros ocultos.
+            if not hay_barra and self.cocina_filtro_estacion:
+                self.cocina_filtro_estacion = ""
             filtro_est = self.cocina_filtro_estacion
             grupos: dict = {}
             for d in detalles:

@@ -177,7 +177,7 @@ class SelfOrderState(rx.State):
                 )
             ).first()
             if not mesa:
-                self.pedido_error = "Mesa no válida. Escanee el QR nuevamente."
+                self.pedido_error = "Mesa no válida. Escanea el QR nuevamente."
                 return
             pedido = Pedido(
                 company_id=cfg.company_id,

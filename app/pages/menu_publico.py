@@ -486,13 +486,17 @@ def _menu_content() -> rx.Component:
                     MenuPublicoState.no_encontrado,
                     rx.center(
                         rx.vstack(
-                            rx.icon(tag="search_x", size=48, color="#CBD5E1"),
-                            rx.text("Carta no encontrada", font_size="17px", font_weight="700", color=TEXT_MUTED),
+                            rx.icon(tag="utensils_crossed", size=48, color="#CBD5E1"),
+                            rx.text("No encontramos esta carta", font_size="17px", font_weight="700", color=TEXT_PRIMARY),
                             rx.text(
-                                "El restaurante no tiene carta digital activa.",
+                                "El enlace puede estar mal escrito o el restaurante "
+                                "todavía no activó su carta digital. Revisa el código "
+                                "QR e inténtalo de nuevo.",
                                 font_size="13px",
                                 color=TEXT_MUTED,
                                 text_align="center",
+                                max_width="300px",
+                                line_height="1.5",
                             ),
                             spacing="3",
                             align="center",
@@ -519,7 +523,7 @@ def _menu_content() -> rx.Component:
                                 rx.vstack(
                                     rx.icon(tag="search_x", size=40, color="#CBD5E1"),
                                     rx.text("Sin resultados", font_size="15px", font_weight="600", color=TEXT_MUTED),
-                                    rx.text("Pruebe con otro término", font_size="13px", color=TEXT_MUTED),
+                                    rx.text("Prueba con otro término", font_size="13px", color=TEXT_MUTED),
                                     spacing="2", align="center",
                                 ),
                                 padding_y="60px", width="100%",
@@ -542,7 +546,7 @@ def _menu_content() -> rx.Component:
             # Footer
             rx.center(
                 rx.text(
-                    "Powered by TUWAYKIFOOD · Escanee el QR de la mesa",
+                    "Powered by TUWAYKIFOOD · Escanea el QR de la mesa",
                     font_size="12px", color="#CBD5E1",
                 ),
                 padding="24px 16px",

@@ -1028,6 +1028,41 @@ def _inventario_ayuda() -> rx.Component:
     )
 
 
+def _inventario_tabs() -> rx.Component:
+    """Insumos / Recetas / Producción como pestañas (M-10c): dejan claro que son
+    tres herramientas distintas en vez de una página larga apilada. El estado de
+    la pestaña activa lo maneja el propio componente (client-side), sin tocar
+    FoodState."""
+    _trigger_style = {
+        "font_size": "13px",
+        "font_weight": "700",
+        "color": TEXT_MUTED,
+        "padding": "10px 16px",
+        "cursor": "pointer",
+        "white_space": "nowrap",
+        "&[data-state='active']": {
+            "color": TEXT_PRIMARY,
+            "box_shadow": f"inset 0 -2px 0 {ACCENT}",
+        },
+    }
+    return rx.tabs.root(
+        rx.box(
+            rx.tabs.list(
+                rx.tabs.trigger("Insumos", value="insumos", style=_trigger_style),
+                rx.tabs.trigger("Recetas", value="recetas", style=_trigger_style),
+                rx.tabs.trigger("Producción", value="produccion", style=_trigger_style),
+            ),
+            overflow_x="auto",
+            width="100%",
+        ),
+        rx.tabs.content(_insumos_section(), value="insumos", padding_top="16px"),
+        rx.tabs.content(_recetas_section(), value="recetas", padding_top="16px"),
+        rx.tabs.content(_produccion_section(), value="produccion", padding_top="16px"),
+        default_value="insumos",
+        width="100%",
+    )
+
+
 def _inventario_content() -> rx.Component:
     return rx.vstack(
         rx.cond(
@@ -1068,9 +1103,7 @@ def _inventario_content() -> rx.Component:
         _inventario_ayuda(),
         _alerta_bajo_stock(),
         _alerta_vencimientos(),
-        _insumos_section(),
-        _recetas_section(),
-        _produccion_section(),
+        _inventario_tabs(),
         _mov_insumo_modal(),
         _kardex_modal(),
         spacing="4",

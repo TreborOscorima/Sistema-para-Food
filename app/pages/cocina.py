@@ -26,7 +26,7 @@ def _cocina_ayuda() -> rx.Component:
             "pasos": [
                 "Cada tarjeta es una comanda enviada por los mozos o el mostrador.",
                 "Tócala para avanzarla: Pendiente → En preparación → Listo.",
-                "Usa los filtros (Todo / Cocina / Barra) para ver solo tu estación.",
+                "Si tu carta usa estaciones (Cocina / Barra), filtra arriba para ver solo la tuya.",
                 "Una tarjeta en rojo está demorada: atiéndela primero.",
             ],
         }],
@@ -280,38 +280,44 @@ def _cocina_content() -> rx.Component:
             ),
             rx.spacer(),
             ayuda_trigger(),
-            rx.hstack(
-                rx.button(
-                    "Todo",
-                    on_click=FoodState.set_cocina_filtro_estacion(""),
-                    background=rx.cond(FoodState.cocina_filtro_estacion == "", ACCENT, DARK_800),
-                    color=rx.cond(FoodState.cocina_filtro_estacion == "", TEXT_WHITE, TEXT_MUTED),
-                    border=rx.cond(FoodState.cocina_filtro_estacion == "", f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
-                    border_radius="6px", font_size="12px", font_weight="600",
-                    padding_x="10px", padding_y="5px", cursor="pointer",
-                    _hover={"border_color": ACCENT},
+            # Filtros de estación: solo tienen sentido si la carta manda algo a
+            # "barra". Si todo va a cocina, se ocultan para no ocupar espacio ni
+            # confundir (M-03c).
+            rx.cond(
+                FoodState.cocina_hay_barra,
+                rx.hstack(
+                    rx.button(
+                        "Todo",
+                        on_click=FoodState.set_cocina_filtro_estacion(""),
+                        background=rx.cond(FoodState.cocina_filtro_estacion == "", ACCENT, DARK_800),
+                        color=rx.cond(FoodState.cocina_filtro_estacion == "", TEXT_WHITE, TEXT_MUTED),
+                        border=rx.cond(FoodState.cocina_filtro_estacion == "", f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
+                        border_radius="6px", font_size="12px", font_weight="600",
+                        padding_x="10px", padding_y="5px", cursor="pointer",
+                        _hover={"border_color": ACCENT},
+                    ),
+                    rx.button(
+                        "Cocina",
+                        on_click=FoodState.set_cocina_filtro_estacion("cocina"),
+                        background=rx.cond(FoodState.cocina_filtro_estacion == "cocina", ACCENT, DARK_800),
+                        color=rx.cond(FoodState.cocina_filtro_estacion == "cocina", TEXT_WHITE, TEXT_MUTED),
+                        border=rx.cond(FoodState.cocina_filtro_estacion == "cocina", f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
+                        border_radius="6px", font_size="12px", font_weight="600",
+                        padding_x="10px", padding_y="5px", cursor="pointer",
+                        _hover={"border_color": ACCENT},
+                    ),
+                    rx.button(
+                        "Barra",
+                        on_click=FoodState.set_cocina_filtro_estacion("barra"),
+                        background=rx.cond(FoodState.cocina_filtro_estacion == "barra", ACCENT, DARK_800),
+                        color=rx.cond(FoodState.cocina_filtro_estacion == "barra", TEXT_WHITE, TEXT_MUTED),
+                        border=rx.cond(FoodState.cocina_filtro_estacion == "barra", f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
+                        border_radius="6px", font_size="12px", font_weight="600",
+                        padding_x="10px", padding_y="5px", cursor="pointer",
+                        _hover={"border_color": ACCENT},
+                    ),
+                    spacing="1", align="center",
                 ),
-                rx.button(
-                    "Cocina",
-                    on_click=FoodState.set_cocina_filtro_estacion("cocina"),
-                    background=rx.cond(FoodState.cocina_filtro_estacion == "cocina", ACCENT, DARK_800),
-                    color=rx.cond(FoodState.cocina_filtro_estacion == "cocina", TEXT_WHITE, TEXT_MUTED),
-                    border=rx.cond(FoodState.cocina_filtro_estacion == "cocina", f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
-                    border_radius="6px", font_size="12px", font_weight="600",
-                    padding_x="10px", padding_y="5px", cursor="pointer",
-                    _hover={"border_color": ACCENT},
-                ),
-                rx.button(
-                    "Barra",
-                    on_click=FoodState.set_cocina_filtro_estacion("barra"),
-                    background=rx.cond(FoodState.cocina_filtro_estacion == "barra", ACCENT, DARK_800),
-                    color=rx.cond(FoodState.cocina_filtro_estacion == "barra", TEXT_WHITE, TEXT_MUTED),
-                    border=rx.cond(FoodState.cocina_filtro_estacion == "barra", f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
-                    border_radius="6px", font_size="12px", font_weight="600",
-                    padding_x="10px", padding_y="5px", cursor="pointer",
-                    _hover={"border_color": ACCENT},
-                ),
-                spacing="1", align="center",
             ),
             rx.hstack(
                 rx.hstack(
