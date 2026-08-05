@@ -1477,6 +1477,26 @@ def _modal_agregar_productos() -> rx.Component:
                             _hover={"background": ACCENT_HOVER},
                             is_disabled=FoodState.cantidad_items_carrito == 0,
                         ),
+                        # Enviar sin pasar por cocina: no imprime comanda ni va al
+                        # KDS. Para pedidos que no requieren preparación (ahorra papel).
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="receipt", size=13),
+                                rx.text("Enviar directo a caja"),
+                                spacing="2", align="center",
+                            ),
+                            on_click=[FoodState.enviar_pedido_directo_caja, FoodState.cerrar_modal_agregar],
+                            background="transparent",
+                            color=TEXT_MUTED,
+                            border=f"1px solid {DARK_700}",
+                            border_radius="8px",
+                            font_size="12px",
+                            font_weight="600",
+                            width="100%",
+                            cursor="pointer",
+                            _hover={"background": DARK_800, "color": TEXT_PRIMARY},
+                            is_disabled=FoodState.cantidad_items_carrito == 0,
+                        ),
                         # Botón Transferir mesa (solo si mesa ocupada)
                         rx.cond(
                             FoodState.mesa_seleccionada_ocupada,

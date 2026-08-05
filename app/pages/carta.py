@@ -345,16 +345,22 @@ def _cat_modal() -> rx.Component:
                 ),
                 rx.hstack(
                     rx.text("Estación:", font_size="13px", color=TEXT_MUTED, white_space="nowrap"),
-                    rx.select(
-                        ["cocina", "barra"],
+                    rx.select.root(
+                        rx.select.trigger(
+                            background=DARK_800,
+                            border=f"1px solid {DARK_700}",
+                            color=TEXT_PRIMARY,
+                            border_radius="8px",
+                            font_size="13px",
+                            width="200px",
+                        ),
+                        rx.select.content(
+                            rx.select.item("Cocina", value="cocina"),
+                            rx.select.item("Barra", value="barra"),
+                            rx.select.item("Sin preparación (directo a caja)", value="ninguna"),
+                        ),
                         value=FoodState.categoria_form_estacion,
                         on_change=FoodState.set_categoria_form_estacion,
-                        background=DARK_800,
-                        border=f"1px solid {DARK_700}",
-                        color=TEXT_PRIMARY,
-                        border_radius="8px",
-                        font_size="13px",
-                        width="140px",
                     ),
                     spacing="2", align="center",
                 ),
@@ -471,6 +477,33 @@ def _prod_modal() -> rx.Component:
                     padding_y="8px",
                     font_size="13px",
                     width="100%",
+                ),
+                # Estación del producto (override opcional de la categoría). Si es
+                # "Sin preparación", el producto no genera comanda ni va al KDS.
+                rx.vstack(
+                    rx.text("Estación (dónde se prepara)", font_size="12px",
+                            font_weight="600", color=TEXT_MUTED),
+                    rx.select.root(
+                        rx.select.trigger(
+                            placeholder="Heredar de la categoría",
+                            background=DARK_800,
+                            border=f"1px solid {DARK_700}",
+                            color=TEXT_PRIMARY,
+                            border_radius="8px",
+                            font_size="13px",
+                            width="100%",
+                        ),
+                        rx.select.content(
+                            rx.select.item("Heredar de la categoría", value="heredar"),
+                            rx.select.item("Cocina", value="cocina"),
+                            rx.select.item("Barra", value="barra"),
+                            rx.select.item("Sin preparación (directo a caja)", value="ninguna"),
+                        ),
+                        value=FoodState.producto_form_estacion,
+                        on_change=FoodState.set_producto_form_estacion,
+                        width="100%",
+                    ),
+                    spacing="1", width="100%", align="start",
                 ),
                 rx.text_area(
                     placeholder="Descripción del producto (se muestra en la carta QR)",

@@ -19,6 +19,7 @@ from app.models.food import (
 )
 from app.utils.db import get_session
 from app.utils.tenant import tenant_bypass
+from app.services.estaciones import requiere_preparacion as _requiere_prep
 from tuwayki_core.utils.timezone import utc_now_naive
 
 
@@ -204,6 +205,7 @@ class SelfOrderState(rx.State):
                     precio_unitario=producto.precio,
                     subtotal=producto.precio * item.cantidad,
                     impreso_cocina=False,
+                    requiere_preparacion=_requiere_prep(session, producto),
                 )
                 session.add(detalle)
             _recalculate_order_total_selforder(session, pedido)

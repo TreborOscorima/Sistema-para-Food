@@ -68,6 +68,7 @@ from app.services.receipt_service import (
     ticket_text,
 )
 from app.services.print_queue import crear_agente, encolar_trabajo
+from app.services.estaciones import requiere_preparacion as _requiere_prep
 from tuwayki_core.utils.timezone import format_local_datetime, utc_now_naive
 
 from app.models.food import MovimientoInsumo, PagoPedido, TipoMovimientoInsumo
@@ -880,6 +881,9 @@ class UltimoCobroView(BaseModel):
     detalle: str = ""
     total_texto: str = ""
     metodo_pago: str = ""
+    # ¿Ya se emitió el comprobante? Si no, el botón es "Imprimir" (libre);
+    # si ya, es "Reimprimir" (requiere permiso).
+    comprobante_impreso: bool = True
 
 
 class UsuarioSesion(BaseModel):
@@ -1604,6 +1608,9 @@ class FoodState(
     config_ticket_paper_width_mm: str = "80"
     # "navegador" (kiosk-printing) | "agente" (agente local jala los trabajos)
     config_modo_impresion: str = "navegador"
+    # ¿Imprimir el comprobante de pago automáticamente al cobrar? Si es False,
+    # queda "a demanda" (solo con el botón Imprimir comprobante).
+    config_comprobante_auto: bool = True
     config_slug: str = "mi-restaurante"
     config_menu_qr_base64: str = ""
     config_menu_url: str = ""
@@ -2849,6 +2856,7 @@ class FoodState(
                 self.config_porcentaje_iva = str(cfg.porcentaje_iva)
                 self.config_kds_minutos_alerta = str(cfg.kds_minutos_alerta)
                 self.config_modo_impresion = cfg.modo_impresion or "navegador"
+                self.config_comprobante_auto = cfg.comprobante_auto
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
@@ -2888,6 +2896,7 @@ class FoodState(
             cfg.modo_impresion = (
                 "agente" if self.config_modo_impresion == "agente" else "navegador"
             )
+            cfg.comprobante_auto = self.config_comprobante_auto
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
             cfg.updated_at = _utcnow()
@@ -3217,6 +3226,9 @@ class FoodState(
 
     def toggle_config_mostrar_iva(self) -> None:
         self.config_mostrar_iva = not self.config_mostrar_iva
+
+    def set_config_comprobante_auto(self, v: bool) -> None:
+        self.config_comprobante_auto = v
 
     def set_config_nombre_impuesto(self, v: str) -> None:
         self.config_nombre_impuesto = v
@@ -3553,6 +3565,8 @@ class FoodState(
                     DetallePedido.company_id == self._company_id(),
                     DetallePedido.impreso_cocina.is_(True),
                     DetallePedido.ticket_impreso_at.is_(None),
+                    # Los ítems "sin preparación" van directo a caja: no imprimen comanda.
+                    DetallePedido.requiere_preparacion.is_(True),
                 )
                 .order_by(DetallePedido.id)
             ).all()
@@ -4413,6 +4427,7 @@ class FoodState(
                     estado_produccion=EstadoProduccion.PENDIENTE.value,
                     impreso_cocina=False,
                     impreso_caja=False,
+                    requiere_preparacion=_requiere_prep(session, producto),
                 )
             else:
                 detalle.cantidad += 1
@@ -4599,7 +4614,16 @@ class FoodState(
         self.cargar_mesas()
         return rx.toast.success(f"{self.mesa_seleccionada_label} marcada para cobrar.")
 
-    def enviar_pedido(self) -> None:
+    def enviar_pedido(self):
+        """Envía los ítems pendientes a cocina (comportamiento normal)."""
+        return self._enviar_pedido(sin_cocina=False)
+
+    def enviar_pedido_directo_caja(self):
+        """Override manual "Enviar directo a caja": este envío no pasa por cocina
+        (ningún ítem genera comanda ni aparece en el KDS)."""
+        return self._enviar_pedido(sin_cocina=True)
+
+    def _enviar_pedido(self, sin_cocina: bool = False) -> None:
         if self.mesa_seleccionada_id == 0:
             return rx.toast.error("Selecciona una mesa antes de enviar el pedido.")
         pedido_id = 0
@@ -4624,9 +4648,17 @@ class FoodState(
                 return rx.toast.error("Stock insuficiente — " + "; ".join(errores_stock))
             now = _utcnow()
             for d in detalles_pendientes:
+                if sin_cocina:
+                    d.requiere_preparacion = False
                 d.impreso_cocina = True
                 d.enviado_cocina_at = now
-                d.estado_produccion = EstadoProduccion.PENDIENTE.value
+                # Los ítems sin preparación no pasan por cocina: quedan como
+                # "entregado" para no dejar el pedido colgado esperando al KDS.
+                d.estado_produccion = (
+                    EstadoProduccion.PENDIENTE.value
+                    if d.requiere_preparacion
+                    else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
+                )
                 session.add(d)
             _recalculate_order_total(session, pedido)
             _sync_order_status(session, pedido)
@@ -4646,8 +4678,9 @@ class FoodState(
         self.cargar_cocina()
         if alertas_stock:
             self.cargar_menu()
+        destino = "directo a caja" if sin_cocina else "a cocina"
         toasts: list = [
-            rx.toast.success(f"Pedido #{pedido_id} enviado a cocina"),
+            rx.toast.success(f"Pedido #{pedido_id} enviado {destino}"),
             rx.call_script(_VIBRATE_JS),
         ]
         for a in alertas_stock:
@@ -4673,6 +4706,8 @@ class FoodState(
                 select(DetallePedido).where(
                     DetallePedido.company_id == self._company_id(),
                     DetallePedido.impreso_cocina.is_(True),
+                    # Los ítems "sin preparación" no se muestran en el KDS.
+                    DetallePedido.requiere_preparacion.is_(True),
                     DetallePedido.estado_produccion.in_(KITCHEN_VISIBLE_STATES),
                 ).order_by(DetallePedido.enviado_cocina_at, DetallePedido.id)
             ).all()
@@ -5169,18 +5204,28 @@ class FoodState(
                     detalle=f"{metodo} – {items_txt}",
                     total_texto=_money_text(total_final),
                     metodo_pago=metodo,
+                    comprobante_impreso=p.comprobante_impreso_at is not None,
                 ))
             self.ultimos_cobros = result
 
     def reimprimir_comprobante(self, pedido_id: int):
-        if self.usuario_actual is not None and not (
-            self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_reimprimir
-        ):
-            return rx.toast.error("No tiene permiso para reimprimir comprobantes.")
         with self._tenant_session() as session:
             pedido = session.get(Pedido, pedido_id)
             if pedido is None:
                 return rx.toast.error("El pedido no existe.")
+            # La PRIMERA impresión del comprobante es una acción normal de caja
+            # (no requiere permiso). Una vez emitido, volver a imprimirlo es una
+            # REIMPRESIÓN y sí requiere el permiso perm_reimprimir.
+            ya_impreso = pedido.comprobante_impreso_at is not None
+            if ya_impreso and self.usuario_actual is not None and not (
+                self.usuario_actual.rol == RolUsuario.ADMIN.value
+                or self.usuario_actual.perm_reimprimir
+            ):
+                return rx.toast.error("No tienes permiso para reimprimir comprobantes.")
+            if not ya_impreso:
+                pedido.comprobante_impreso_at = _utcnow()
+                session.add(pedido)
+                session.commit()
             detalles = session.exec(
                 select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)
             ).all()
@@ -5781,6 +5826,10 @@ class FoodState(
             pedido.recargo_concepto = recargo_concepto if recargo > 0 else None
             if self.caja_cobro_cliente_id > 0:
                 pedido.cliente_id = self.caja_cobro_cliente_id
+            # En modo automático el comprobante se imprime al cobrar (más abajo):
+            # marcamos la emisión para que futuras impresiones sean reimpresos.
+            if self.config_comprobante_auto:
+                pedido.comprobante_impreso_at = now
             session.add(pedido)
             if mesa is not None:
                 mesa.estado = EstadoMesa.LIBRE.value
@@ -5890,15 +5939,19 @@ class FoodState(
             "Comprobante de Pago", comprobante_lines, self._ticket_paper_width_mm()
         )
         eventos = [rx.toast.success(f"{mesa_label} cobrado — {_money_text(total_final)}")]
-        print_evt = self._imprimir_o_encolar(
-            rol="caja",
-            tipo_doc="comprobante",
-            texto=ticket_text(comprobante_lines),
-            html=html_ticket,
-            pedido_id=pedido_id,
-        )
-        if print_evt is not None:
-            eventos.append(print_evt)
+        # Comprobante "a demanda": si está desactivada la impresión automática, no
+        # se imprime al cobrar (queda el botón Imprimir comprobante para hacerlo
+        # cuando el cliente lo pide). Ahorra papel.
+        if self.config_comprobante_auto:
+            print_evt = self._imprimir_o_encolar(
+                rol="caja",
+                tipo_doc="comprobante",
+                texto=ticket_text(comprobante_lines),
+                html=html_ticket,
+                pedido_id=pedido_id,
+            )
+            if print_evt is not None:
+                eventos.append(print_evt)
         eventos += [
             ReportesState.cargar_historial_ventas,
             ReportesState.cargar_dashboard,
@@ -6268,6 +6321,7 @@ class FoodState(
                         impreso_caja=True,
                         enviado_cocina_at=now,
                         combo_items_json=item.combo_items_json or None,
+                        requiere_preparacion=True,
                     )
                     session.add(detalle)
                     ticket_lines.append(TicketLine(
@@ -6281,6 +6335,7 @@ class FoodState(
                     producto = productos[item.producto_id]
                     precio = _to_decimal(item.precio_unitario) if item.modificadores_json else _to_decimal(producto.precio)
                     subtotal = precio * item.cantidad
+                    _req_prep = _requiere_prep(session, producto)
                     detalle = DetallePedido(
                         company_id=self._company_id(),
                         pedido_id=pedido.id or 0,
@@ -6289,11 +6344,17 @@ class FoodState(
                         precio_unitario=precio,
                         subtotal=subtotal,
                         notas=item.nota or None,
-                        estado_produccion=EstadoProduccion.PENDIENTE.value,
+                        # Sin preparación → no pasa por cocina: queda "entregado".
+                        estado_produccion=(
+                            EstadoProduccion.PENDIENTE.value
+                            if _req_prep
+                            else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
+                        ),
                         impreso_cocina=True,
                         impreso_caja=True,
                         enviado_cocina_at=now,
                         modificadores_json=item.modificadores_json or None,
+                        requiere_preparacion=_req_prep,
                     )
                     session.add(detalle)
                     mod_note = f" ({item.modificadores_texto})" if item.modificadores_texto else ""

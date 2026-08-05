@@ -1408,7 +1408,7 @@ def _ultimo_cobro_row(cobro: UltimoCobroView) -> rx.Component:
             rx.icon(tag="printer", size=16, color=ACCENT, cursor="pointer",
                     on_click=FoodState.reimprimir_comprobante(cobro.pedido_id),
                     _hover={"opacity": "0.7"}),
-            content="Reimprimir",
+            content=rx.cond(cobro.comprobante_impreso, "Reimprimir comprobante", "Imprimir comprobante"),
         ),
         rx.tooltip(
             rx.icon(tag="trash_2", size=16, color="#EF4444", cursor="pointer",

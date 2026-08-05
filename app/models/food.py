@@ -55,6 +55,10 @@ class RolUsuario(str, Enum):
 class EstacionCocina(str, Enum):
     COCINA = "cocina"
     BARRA = "barra"
+    # "Sin preparación": el producto no pasa por cocina/barra. No genera comanda
+    # ni aparece en la pantalla de cocina (KDS); va directo a la cuenta/caja.
+    # Útil para bebidas embotelladas, snacks empaquetados, etc. (ahorra papel).
+    NINGUNA = "ninguna"
 
 
 class TipoPromocion(str, Enum):
@@ -340,6 +344,11 @@ class Pedido(TimestampedModel, table=True):
     metodo_pago: str | None = Field(default=None, max_length=24)
     abierto_en: datetime = Field(default_factory=utc_now_naive, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
+    # Marca de "comprobante ya impreso/emitido". La setea la primera impresión
+    # (automática al cobrar, o a demanda). Mientras sea NULL, imprimir el
+    # comprobante es una acción libre de caja; una vez seteada, volver a
+    # imprimirlo es una REIMPRESIÓN y requiere el permiso perm_reimprimir.
+    comprobante_impreso_at: datetime | None = Field(default=None)
 
     cliente_id: int | None = Field(default=None, foreign_key="food_clientes.id", index=True)
     turno_caja_id: int | None = Field(default=None, foreign_key="food_turnos_caja.id", index=True)
@@ -492,6 +501,10 @@ class ConfigImpresora(TimestampedModel, table=True):
     # Quién imprime: "navegador" (kiosk-printing actual) o "agente" (agente local
     # que jala los trabajos desde la nube). Ver Impresora/TrabajoImpresion/AgenteImpresion.
     modo_impresion: str = Field(default="navegador", max_length=20, nullable=False)
+    # ¿El comprobante de pago se imprime automáticamente al cobrar? Si es False
+    # ("a demanda"), no se imprime solo: queda el botón "Imprimir comprobante"
+    # para hacerlo cuando el cliente lo pide (ahorra papel).
+    comprobante_auto: bool = Field(default=True, nullable=False)
 
 
 # ─── Impresión con agente local ──────────────────────────────────────────────
@@ -821,6 +834,12 @@ class DetallePedido(TimestampedModel, table=True):
     )
     impreso_cocina: bool = Field(default=False, nullable=False)
     impreso_caja: bool = Field(default=False, nullable=False)
+    # Snapshot al agregar el ítem: ¿este producto se prepara (cocina/barra) o va
+    # directo a caja? Los que NO requieren preparación no generan comanda ni
+    # aparecen en la pantalla de cocina. Se resuelve de la estación efectiva del
+    # producto (producto.estacion → categoría → COCINA) al momento de agregarlo,
+    # o se fuerza a False con el override manual "Enviar directo a caja".
+    requiere_preparacion: bool = Field(default=True, nullable=False)
     # Marca de "comanda ya impresa en papel". La pone la primera pantalla que
     # la imprime (Caja o /estacion-impresion), de forma atómica, para que cada
     # comanda salga UNA sola vez sin importar cuántas pantallas estén abiertas.

@@ -161,6 +161,8 @@ def reclamar_comandas_pendientes(
         DetallePedido.company_id == company_id,
         DetallePedido.impreso_cocina.is_(True),
         DetallePedido.ticket_impreso_at.is_(None),
+        # Los ítems "sin preparación" van directo a caja: no imprimen comanda.
+        DetallePedido.requiere_preparacion.is_(True),
     )
     if sucursal_id is not None:
         stmt = stmt.join(Pedido, Pedido.id == DetallePedido.pedido_id).where(

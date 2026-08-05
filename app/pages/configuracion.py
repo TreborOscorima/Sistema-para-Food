@@ -958,6 +958,28 @@ def _content_local() -> rx.Component:
                         ),
                         spacing="3", width="100%",
                     ),
+                    # Imprimir comprobante automáticamente al cobrar (o a demanda)
+                    rx.hstack(
+                        rx.vstack(
+                            rx.text("Imprimir comprobante al cobrar", font_size="13px",
+                                    font_weight="600", color="#CBD5E1"),
+                            rx.text(
+                                "Si lo desactivas, el comprobante no sale solo: lo "
+                                "imprimes a demanda con el botón Imprimir comprobante "
+                                "en Caja. Ahorra papel cuando el cliente no lo pide.",
+                                font_size="11px", color=TEXT_MUTED,
+                            ),
+                            spacing="0", align="start",
+                        ),
+                        rx.spacer(),
+                        _toggle_btn(
+                            FoodState.config_comprobante_auto,
+                            FoodState.set_config_comprobante_auto(
+                                ~FoodState.config_comprobante_auto
+                            ),
+                        ),
+                        width="100%", align="center",
+                    ),
                     # Preview del ticket
                     rx.box(
                         rx.hstack(

@@ -43,6 +43,7 @@ from app.models.food import (
     ProductoGrupoModificador,
 )
 from app.services.auditoria_service import registrar_auditoria
+from app.services.estaciones import requiere_preparacion as _requiere_prep
 from app.states.food_state import (
     CarritoItem,
     CategoriaView,
@@ -88,6 +89,9 @@ class CartaMixin(rx.State, mixin=True):
     producto_form_tags: list[str] = []
     producto_form_stock_diario: str = ""
     producto_form_stock_diario_alerta: str = "5"
+    # Estación del producto: "" = heredar de la categoría; si no, override
+    # ("cocina" | "barra" | "ninguna"). "ninguna" = sin preparación (directo a caja).
+    producto_form_estacion: str = ""
 
     # Modificadores (admin)
     grupos_modificadores: list[GrupoModificadorAdminView] = []
@@ -243,7 +247,7 @@ class CartaMixin(rx.State, mixin=True):
         self.categoria_form_descripcion = str(v)[:240]
 
     def set_categoria_form_estacion(self, v: str) -> None:
-        self.categoria_form_estacion = v if v in ("cocina", "barra") else "cocina"
+        self.categoria_form_estacion = v if v in ("cocina", "barra", "ninguna") else "cocina"
 
     def set_categoria_form_orden(self, v: str) -> None:
         self.categoria_form_orden = v
@@ -819,6 +823,7 @@ class CartaMixin(rx.State, mixin=True):
                 impreso_cocina=False,
                 impreso_caja=False,
                 combo_items_json=_json.dumps(combo_snapshot, ensure_ascii=False),
+                requiere_preparacion=True,
             )
             session.add(detalle)
             _recalculate_order_total(session, pedido)
@@ -1009,6 +1014,7 @@ class CartaMixin(rx.State, mixin=True):
                 impreso_cocina=False,
                 impreso_caja=False,
                 modificadores_json=mods_json if mods_json else None,
+                requiere_preparacion=_requiere_prep(session, producto),
             )
             session.add(detalle)
             _recalculate_order_total(session, pedido)
@@ -1037,6 +1043,9 @@ class CartaMixin(rx.State, mixin=True):
 
     def set_producto_form_disponible(self, v: bool) -> None:
         self.producto_form_disponible = v
+
+    def set_producto_form_estacion(self, v: str) -> None:
+        self.producto_form_estacion = v if v in ("cocina", "barra", "ninguna") else ""
 
     def set_producto_form_emoji(self, v: str) -> None:
         self.producto_form_emoji = str(v)[:8]
@@ -1079,6 +1088,7 @@ class CartaMixin(rx.State, mixin=True):
                 prod.precio = precio
                 prod.categoria_id = cat.id or 0
                 prod.disponible = self.producto_form_disponible
+                prod.estacion = self.producto_form_estacion or None
                 prod.imagen_url = self.producto_form_imagen_url or None
                 prod.emoji = self.producto_form_emoji.strip() or None
                 prod.tags = self.producto_form_tags or None
@@ -1106,6 +1116,7 @@ class CartaMixin(rx.State, mixin=True):
                     descripcion=self.producto_form_descripcion.strip() or None,
                     precio=precio,
                     disponible=self.producto_form_disponible,
+                    estacion=self.producto_form_estacion or None,
                     imagen_url=self.producto_form_imagen_url or None,
                     emoji=self.producto_form_emoji.strip() or None,
                     tags=self.producto_form_tags or None,
@@ -1136,6 +1147,7 @@ class CartaMixin(rx.State, mixin=True):
             self.producto_form_tags = list(prod_db.tags) if prod_db and prod_db.tags else []
             self.producto_form_stock_diario = str(prod_db.stock_diario) if prod_db and prod_db.stock_diario is not None else ""
             self.producto_form_stock_diario_alerta = str(prod_db.stock_diario_alerta) if prod_db else "5"
+            self.producto_form_estacion = (prod_db.estacion or "") if prod_db else ""
         self.carta_prod_modal = True
 
     def duplicar_producto(self, producto_id: int) -> None:
@@ -1155,6 +1167,7 @@ class CartaMixin(rx.State, mixin=True):
             self.producto_form_tags = list(prod_db.tags) if prod_db and prod_db.tags else []
             self.producto_form_stock_diario = str(prod_db.stock_diario) if prod_db and prod_db.stock_diario is not None else ""
             self.producto_form_stock_diario_alerta = str(prod_db.stock_diario_alerta) if prod_db else "5"
+            self.producto_form_estacion = (prod_db.estacion or "") if prod_db else ""
         self.carta_prod_modal = True
 
     def toggle_producto_disponible(self, producto_id: int):
@@ -1184,6 +1197,7 @@ class CartaMixin(rx.State, mixin=True):
         self.producto_form_tags = []
         self.producto_form_stock_diario = ""
         self.producto_form_stock_diario_alerta = "5"
+        self.producto_form_estacion = ""
         if self.categorias:
             self.producto_form_categoria_nombre = self.categorias[0].nombre
 
