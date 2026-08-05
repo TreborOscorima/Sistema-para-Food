@@ -11,10 +11,14 @@ python -m pip install -r requirements.txt || goto :error
 
 echo.
 echo Empaquetando con PyInstaller...
+REM  --collect-all escpos: python-escpos carga "capabilities.json" en tiempo de
+REM  ejecucion via importlib_resources. Sin esto, el .exe arranca y falla con
+REM  "[Errno 2] No such file or directory: ...\escpos\capabilities.json".
 pyinstaller --noconfirm --onefile --windowed ^
   --name "TuwaykifoodAgente" ^
   --icon "assets\tuwayki.ico" ^
   --add-data "assets;assets" ^
+  --collect-all escpos ^
   main.py || goto :error
 
 echo.
