@@ -24,6 +24,12 @@ app = rx.App(
     api_transformer=health_app,
     stylesheets=["/twk.css"],
     head_components=[
+        # viewport-fit=cover: permite usar env(safe-area-inset-*) para respetar
+        # el notch / isla de los iPhone cuando la PWA corre en standalone.
+        rx.el.meta(
+            name="viewport",
+            content="width=device-width, initial-scale=1, viewport-fit=cover",
+        ),
         rx.el.link(rel="icon", type="image/png", href="/TUWAYKIFOODFAVICON.png"),
         rx.el.link(rel="shortcut icon", href="/TUWAYKIFOODFAVICON.png"),
         # ── PWA: instalable como app nativa (ventana propia, sin barra de URL) ──

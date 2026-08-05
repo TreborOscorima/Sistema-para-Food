@@ -13,6 +13,29 @@
   "background_color": "#503beb",
   "theme_color": "#503beb",
   "categories": ["business", "food", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Salón (Mozos)",
+      "short_name": "Salón",
+      "description": "Mesas y toma de pedidos",
+      "url": "/mozos",
+      "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Caja",
+      "short_name": "Caja",
+      "description": "Cobros y turno",
+      "url": "/caja",
+      "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Cocina",
+      "short_name": "Cocina",
+      "description": "Pantalla de preparación",
+      "url": "/cocina",
+      "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
   "icons": [
     {
       "src": "/pwa/icon-192.png",

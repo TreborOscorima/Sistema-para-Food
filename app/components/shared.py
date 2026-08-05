@@ -707,6 +707,7 @@ def _mobile_topbar(active: str) -> rx.Component:
         ),
         display=rx.breakpoints(initial="flex", lg="none"),
         padding="10px 14px",
+        class_name="twk-safe-top",  # respeta el notch/isla en PWA iOS (D-07)
         border_bottom=f"1px solid {BORDER_COLOR}",
         background=SURFACE_ELEVATED,
         width="100%",
