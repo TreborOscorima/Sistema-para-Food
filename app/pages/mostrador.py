@@ -314,7 +314,10 @@ def _carrito_panel_inner(items_max_height: str) -> rx.Component:
                     width="100%", spacing="0",
                 ),
             ),
-            overflow_y="auto", max_height=items_max_height, width="100%", flex="1",
+            # Sin flex: la lista es adaptativa al contenido (cap items_max_height)
+            # para que el sheet móvil crezca según los ítems y no quede estirado
+            # con espacio vacío — mismo comportamiento que el sheet de Mozos.
+            overflow_y="auto", max_height=items_max_height, width="100%",
         ),
         rx.hstack(
             rx.button(
@@ -377,68 +380,94 @@ def _cobrados_panel() -> rx.Component:
     )
 
 
-def _mobile_cart_bar() -> rx.Component:
-    """Barra fija abajo (solo móvil) que muestra ítems + total y abre el carrito
-    en un panel deslizable. Se muestra únicamente cuando hay ítems en el carrito."""
+def _mostrador_cart_sheet() -> rx.Component:
+    """Bottom-sheet del carrito de Mostrador (solo móvil), SIN portal — mismo
+    patrón adaptativo que el sheet de Mozos: fixed al viewport, altura según el
+    contenido con tope 85vh, sube con translateY. Vaul (rx.drawer) renderizaba
+    el sheet a altura completa aunque el contenido fuera corto (espacio vacío);
+    este enfoque respeta el contenido y queda idéntico a Mozos."""
+    abierto = FoodState.mostrador_cart_sheet_abierto
     return rx.box(
-        rx.drawer.root(
-            rx.drawer.trigger(
-                rx.box(
-                    rx.hstack(
-                        rx.box(
-                            rx.icon(tag="shopping_cart", size=20, color=TEXT_WHITE),
-                            rx.box(
-                                rx.text(FoodState.mostrador_carrito.length().to_string(),
-                                        font_size="10px", font_weight="800", color=ACCENT),
-                                background=TEXT_WHITE, border_radius="50%",
-                                min_width="18px", height="18px", display="flex",
-                                align_items="center", justify_content="center",
-                                position="absolute", top="-6px", right="-8px",
-                            ),
-                            position="relative", flex_shrink="0", display="flex",
-                        ),
-                        rx.vstack(
-                            rx.text("Ver pedido", font_size="14px", font_weight="800",
-                                    color=TEXT_WHITE, line_height="1.15"),
-                            rx.text(FoodState.mostrador_carrito.length().to_string() + " producto(s)",
-                                    font_size="10px", color="rgba(255,255,255,0.85)", line_height="1.15"),
-                            spacing="0", align="start",
-                        ),
-                        rx.spacer(),
-                        rx.text(FoodState.total_mostrador_neto_texto, font_size="17px",
-                                font_weight="800", color=TEXT_WHITE),
-                        rx.icon(tag="chevron_up", size=20, color=TEXT_WHITE),
-                        spacing="3", align="center", width="100%",
-                    ),
-                    background=ACCENT, border_radius="12px", padding="12px 16px",
-                    box_shadow="0 6px 20px rgba(234,88,12,0.5)", cursor="pointer",
-                    width="100%",
-                )
-            ),
-            rx.drawer.portal(
-                rx.drawer.overlay(background="rgba(15,23,42,0.6)", z_index="1000"),
-                rx.drawer.content(
-                    rx.vstack(
-                        rx.drawer.close(
-                            rx.box(width="44px", height="5px", background=DARK_600,
-                                   border_radius="3px", margin="2px auto 4px", cursor="pointer"),
-                        ),
-                        _carrito_panel_inner("50vh"),
-                        spacing="3", width="100%",
-                    ),
-                    background=DARK_800, border_top=f"1px solid {DARK_700}",
-                    border_radius="16px 16px 0 0", padding="10px 16px 24px",
-                    max_height="85vh", z_index="1001",
-                ),
-            ),
-            open=FoodState.mostrador_cart_sheet_abierto,
-            on_open_change=FoodState.set_mostrador_cart_sheet_abierto,
-            direction="bottom",
+        # Backdrop
+        rx.box(
+            position="fixed", top="0", left="0", right="0", bottom="0",
+            background="rgba(0,0,0,0.55)",
+            on_click=FoodState.set_mostrador_cart_sheet_abierto(False),
+            opacity=rx.cond(abierto, "1", "0"),
+            transition="opacity 0.25s ease",
         ),
-        position="fixed", bottom="0", left="0", right="0", z_index="900",
-        padding="10px 12px calc(12px + env(safe-area-inset-bottom))",
-        background="linear-gradient(to top, rgba(15,23,42,0.98) 55%, rgba(15,23,42,0))",
+        # Panel deslizable
+        rx.vstack(
+            rx.box(width="44px", height="5px", background=DARK_600,
+                   border_radius="3px", margin="2px auto 6px", cursor="pointer",
+                   on_click=FoodState.set_mostrador_cart_sheet_abierto(False)),
+            # Lista más alta que en Mozos (66 vs 50vh): Mostrador tiene menos
+            # "cromo" (1 línea de header + 2 botones vs 2 líneas + 3-4 botones),
+            # así el alto TOTAL del sheet queda parejo con el de Mozos.
+            _carrito_panel_inner("66vh"),
+            spacing="2", width="100%",
+            position="fixed", left="0", right="0", bottom="0",
+            # Altura ADAPTATIVA al contenido, con tope 85vh — igual que Mozos.
+            max_height="85vh", overflow_y="auto",
+            background=DARK_800, border_top=f"1px solid {DARK_700}",
+            border_radius="16px 16px 0 0",
+            padding="10px 16px calc(24px + env(safe-area-inset-bottom))",
+            box_shadow="0 -8px 30px rgba(0,0,0,0.5)",
+            transform=rx.cond(abierto, "translateY(0)", "translateY(105%)"),
+            transition="transform 0.28s cubic-bezier(0.32,0.72,0,1)",
+            z_index="1001",
+        ),
+        position="fixed", top="0", left="0", right="0", bottom="0",
+        z_index="1000",
+        pointer_events=rx.cond(abierto, "auto", "none"),
         display=rx.breakpoints(initial="block", lg="none"),
+        overflow="hidden",
+    )
+
+
+def _mobile_cart_bar() -> rx.Component:
+    """Barra fija abajo (solo móvil) con ítems + total que abre el carrito en un
+    bottom-sheet adaptativo (mismo patrón sin portal que Mozos)."""
+    return rx.fragment(
+        rx.box(
+            rx.box(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="shopping_cart", size=20, color=TEXT_WHITE),
+                        rx.box(
+                            rx.text(FoodState.mostrador_carrito.length().to_string(),
+                                    font_size="10px", font_weight="800", color=ACCENT),
+                            background=TEXT_WHITE, border_radius="50%",
+                            min_width="18px", height="18px", display="flex",
+                            align_items="center", justify_content="center",
+                            position="absolute", top="-6px", right="-8px",
+                        ),
+                        position="relative", flex_shrink="0", display="flex",
+                    ),
+                    rx.vstack(
+                        rx.text("Ver pedido", font_size="14px", font_weight="800",
+                                color=TEXT_WHITE, line_height="1.15"),
+                        rx.text(FoodState.mostrador_carrito.length().to_string() + " producto(s)",
+                                font_size="10px", color="rgba(255,255,255,0.85)", line_height="1.15"),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.text(FoodState.total_mostrador_neto_texto, font_size="17px",
+                            font_weight="800", color=TEXT_WHITE),
+                    rx.icon(tag="chevron_up", size=20, color=TEXT_WHITE),
+                    spacing="3", align="center", width="100%",
+                ),
+                on_click=FoodState.set_mostrador_cart_sheet_abierto(True),
+                background=ACCENT, border_radius="12px", padding="12px 16px",
+                box_shadow="0 6px 20px rgba(234,88,12,0.5)", cursor="pointer",
+                width="100%",
+            ),
+            position="fixed", bottom="0", left="0", right="0", z_index="900",
+            padding="10px 12px calc(12px + env(safe-area-inset-bottom))",
+            background="linear-gradient(to top, rgba(15,23,42,0.98) 55%, rgba(15,23,42,0))",
+            display=rx.breakpoints(initial="block", lg="none"),
+        ),
+        _mostrador_cart_sheet(),
     )
 
 

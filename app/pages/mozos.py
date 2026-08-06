@@ -1378,12 +1378,14 @@ def _pedido_sheet_panel() -> rx.Component:
                         on_click=FoodState.set_mozos_pedido_sheet_abierto(False)),
                 width="100%", align="center", flex_shrink="0",
             ),
-            _pedido_panel_inner("52vh"),
+            _pedido_panel_inner("50vh"),
             spacing="2", width="100%",
             position="absolute", left="0", right="0", bottom="0",
-            # Altura alta y consistente (como el sheet de Mostrador), no según
-            # el contenido: abre completo aunque haya pocos ítems.
-            height="88%", overflow_y="auto",
+            # Altura ADAPTATIVA al contenido, con tope 85vh — idéntico al sheet de
+            # Mostrador: con pocos ítems queda corto y prolijo; con muchos crece
+            # hasta 85vh y la lista interna (50vh) scrollea. Botones siempre
+            # visibles abajo, sin espacio vacío.
+            max_height="85vh", overflow_y="auto",
             background=DARK_800, border_top=f"1px solid {DARK_700}",
             border_radius="16px 16px 0 0", padding="10px 16px 20px",
             box_shadow="0 -8px 30px rgba(0,0,0,0.5)",
