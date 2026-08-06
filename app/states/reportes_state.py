@@ -284,36 +284,32 @@ class ReportesState(rx.State):
         fin_hoy = inicio_hoy + timedelta(days=1)
         inicio_ayer = inicio_hoy - timedelta(days=1)
         with food._tenant_session() as session:
-            q_hoy = select(Pedido).where(
-                Pedido.company_id == food._company_id(),
-                or_(
-                    Pedido.pagado.is_(True),
-                    Pedido.estado == EstadoPedido.COBRADO.value,
-                ),
-                Pedido.cerrado_en >= inicio_hoy,
-                Pedido.cerrado_en < fin_hoy,
+            # PERF-04: agregación en SQL (func.count/sum) en vez de cargar todos
+            # los pedidos del período como objetos y sumar en Python.
+            cobrado = or_(
+                Pedido.pagado.is_(True),
+                Pedido.estado == EstadoPedido.COBRADO.value,
             )
-            q_ayer = select(Pedido).where(
-                Pedido.company_id == food._company_id(),
-                or_(
-                    Pedido.pagado.is_(True),
-                    Pedido.estado == EstadoPedido.COBRADO.value,
-                ),
-                Pedido.cerrado_en >= inicio_ayer,
-                Pedido.cerrado_en < inicio_hoy,
-            )
-            pedidos_hoy = session.exec(self._sucursal_q(Pedido, q_hoy)).all()
-            pedidos_ayer = session.exec(self._sucursal_q(Pedido, q_ayer)).all()
-            ventas = sum(
-                _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
-                for p in pedidos_hoy
-            )
-            propina_total = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_hoy)
-            ventas_ayer = sum(
-                _to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0))
-                for p in pedidos_ayer
-            )
-            propina_ayer = sum(_to_decimal(getattr(p, "propina", 0)) for p in pedidos_ayer)
+
+            def _agg_ventas(inicio, fin):
+                q = select(
+                    func.count(Pedido.id),
+                    func.coalesce(func.sum(Pedido.total), 0),
+                    func.coalesce(func.sum(Pedido.propina), 0),
+                ).where(
+                    Pedido.company_id == food._company_id(),
+                    cobrado,
+                    Pedido.cerrado_en >= inicio,
+                    Pedido.cerrado_en < fin,
+                )
+                cnt, tot, prop = session.exec(self._sucursal_q(Pedido, q)).one()
+                return int(cnt or 0), _to_decimal(tot or 0), _to_decimal(prop or 0)
+
+            pedidos_count_hoy, sum_total_hoy, propina_total = _agg_ventas(inicio_hoy, fin_hoy)
+            pedidos_count_ayer, sum_total_ayer, propina_ayer = _agg_ventas(inicio_ayer, inicio_hoy)
+            # ventas = Σ(total + propina) = Σtotal + Σpropina
+            ventas = sum_total_hoy + propina_total
+            ventas_ayer = sum_total_ayer + propina_ayer
             q_mesas = select(Mesa).where(
                 Mesa.company_id == food._company_id(),
                 Mesa.estado != EstadoMesa.LIBRE.value,
@@ -336,36 +332,49 @@ class ReportesState(rx.State):
                 Reserva.estado.in_(["pendiente", "confirmada"]),
             )
             reservas_hoy_count = session.exec(self._sucursal_q(Reserva, q_reservas)).one()
-            pedido_ids_hoy = {p.id for p in pedidos_hoy}
-            top_data: dict[int, dict] = {}
-            if pedido_ids_hoy:
-                detalles = session.exec(
-                    select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids_hoy))
-                ).all()
-                productos = {
-                    p.id: p
-                    for p in session.exec(select(Producto).where(Producto.company_id == food._company_id())).all()
+            # Top 5 platos del día — agregado en SQL con JOIN (PERF-04): evita
+            # cargar todos los detalles y todos los productos del tenant.
+            top_q = (
+                select(
+                    DetallePedido.producto_id,
+                    func.sum(DetallePedido.cantidad).label("cantidad"),
+                    func.sum(DetallePedido.subtotal).label("total"),
+                )
+                .join(Pedido, DetallePedido.pedido_id == Pedido.id)
+                .where(
+                    Pedido.company_id == food._company_id(),
+                    cobrado,
+                    Pedido.cerrado_en >= inicio_hoy,
+                    Pedido.cerrado_en < fin_hoy,
+                )
+                .group_by(DetallePedido.producto_id)
+                .order_by(func.sum(DetallePedido.cantidad).desc())
+                .limit(5)
+            )
+            top_rows = session.exec(self._sucursal_q(Pedido, top_q)).all()
+            top_pids = [r[0] for r in top_rows]
+            nombres_top: dict[int, str] = {}
+            if top_pids:
+                nombres_top = {
+                    p.id: p.nombre
+                    for p in session.exec(
+                        select(Producto).where(Producto.id.in_(top_pids))
+                    ).all()
                 }
-                for d in detalles:
-                    pid = d.producto_id
-                    if pid not in top_data:
-                        prod = productos.get(pid)
-                        top_data[pid] = {
-                            "nombre": prod.nombre if prod else f"Producto {pid}",
-                            "cantidad": 0,
-                            "total": Decimal("0.00"),
-                        }
-                    top_data[pid]["cantidad"] += d.cantidad
-                    top_data[pid]["total"] += _to_decimal(d.subtotal)
-            top_sorted = sorted(top_data.values(), key=lambda x: x["cantidad"], reverse=True)[:5]
+            top_sorted = [
+                {
+                    "nombre": nombres_top.get(pid, f"Producto {pid}"),
+                    "cantidad": int(cant or 0),
+                    "total": _to_decimal(tot or 0),
+                }
+                for pid, cant, tot in top_rows
+            ]
 
         def _pct_change(hoy_val: Decimal, ayer_val: Decimal) -> int:
             if ayer_val <= 0:
                 return 100 if hoy_val > 0 else 0
             return int(round((hoy_val - ayer_val) / ayer_val * 100))
 
-        pedidos_count_hoy = len(pedidos_hoy)
-        pedidos_count_ayer = len(pedidos_ayer)
         ticket_promedio = ventas / pedidos_count_hoy if pedidos_count_hoy else Decimal("0.00")
         ticket_promedio_ayer = (
             ventas_ayer / pedidos_count_ayer if pedidos_count_ayer else Decimal("0.00")
@@ -441,9 +450,13 @@ class ReportesState(rx.State):
                         ),
                     )
                 )
+            # PERF-04: contar en SQL en vez de materializar todo el período; solo
+            # la página visible se carga como objetos.
+            total_count = session.exec(
+                select(func.count()).select_from(query.subquery())
+            ).one()
+            self.historial_total = int(total_count or 0)
             query = query.order_by(Pedido.cerrado_en.desc(), Pedido.id.desc())
-            total_count = len(session.exec(query).all())
-            self.historial_total = total_count
             offset = self.historial_pagina * self._HISTORIAL_PAGE_SIZE
             pedidos = session.exec(query.offset(offset).limit(self._HISTORIAL_PAGE_SIZE)).all()
             mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == food._company_id())).all()}
@@ -690,27 +703,25 @@ class ReportesState(rx.State):
             Pedido.estado == EstadoPedido.COBRADO.value,
         )
         with food._tenant_session() as session:
-            pedidos_act = session.exec(
-                select(Pedido).where(
+            # PERF-04: agregación en SQL en vez de cargar los pedidos de ambos
+            # períodos como objetos.
+            def _agg_comp(d0, d1):
+                q = select(
+                    func.count(Pedido.id),
+                    func.coalesce(func.sum(Pedido.total), 0),
+                    func.coalesce(func.sum(Pedido.propina), 0),
+                ).where(
                     Pedido.company_id == food._company_id(),
                     cobrado_filter,
-                    Pedido.cerrado_en >= desde,
-                    Pedido.cerrado_en <= hasta,
+                    Pedido.cerrado_en >= d0,
+                    Pedido.cerrado_en <= d1,
                 )
-            ).all()
-            pedidos_ant = session.exec(
-                select(Pedido).where(
-                    Pedido.company_id == food._company_id(),
-                    cobrado_filter,
-                    Pedido.cerrado_en >= anterior_desde,
-                    Pedido.cerrado_en <= anterior_hasta,
-                )
-            ).all()
+                cnt, tot, prop = session.exec(q).one()
+                return int(cnt or 0), _to_decimal(tot or 0) + _to_decimal(prop or 0)
 
-        ventas_act = sum(_to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0)) for p in pedidos_act)
-        ventas_ant = sum(_to_decimal(p.total) + _to_decimal(getattr(p, "propina", 0)) for p in pedidos_ant)
-        count_act = len(pedidos_act)
-        count_ant = len(pedidos_ant)
+            count_act, ventas_act = _agg_comp(desde, hasta)
+            count_ant, ventas_ant = _agg_comp(anterior_desde, anterior_hasta)
+
         ticket_act = ventas_act / count_act if count_act else Decimal("0.00")
         ticket_ant = ventas_ant / count_ant if count_ant else Decimal("0.00")
 
