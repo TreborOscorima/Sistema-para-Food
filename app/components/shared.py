@@ -376,9 +376,44 @@ def _mobile_nav_item(label: str, href: str, icon_tag: str,
     )
 
 
+def _nav_group_label(text: str, mobile: bool = False) -> rx.Component:
+    """Encabezado de grupo del sidebar operativo. En desktop colapsado se
+    reduce a una línea divisoria (sin texto) para no romper el layout angosto."""
+    if mobile:
+        return rx.text(
+            text, font_size="10px", font_weight="700", color=TEXT_MUTED,
+            text_transform="uppercase", letter_spacing="0.08em",
+            padding_x="4px", padding_top="12px", padding_bottom="2px",
+        )
+    return rx.cond(
+        FoodState.sidebar_collapsed,
+        rx.box(height="1px", width="70%", margin="10px auto 4px",
+               background="rgba(255,255,255,0.10)"),
+        rx.text(
+            text, font_size="10px", font_weight="700", color="rgba(255,255,255,0.40)",
+            text_transform="uppercase", letter_spacing="0.08em",
+            padding_x="6px", padding_top="12px", padding_bottom="2px",
+        ),
+    )
+
+
 def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
     nav_item = _mobile_nav_item if mobile else _desktop_nav_item
+    # Grupos coherentes: Servicio (operación en tiempo real), Catálogo y Gestión.
+    # Cada encabezado solo aparece si el rol ve al menos un ítem del grupo, para
+    # no dejar títulos huérfanos.
+    grupo_servicio = (
+        FoodState.puede_ver_mozos | FoodState.puede_ver_caja
+        | FoodState.puede_ver_mostrador | FoodState.puede_ver_cocina
+        | FoodState.puede_ver_estacion_impresion
+    )
+    grupo_gestion = (
+        FoodState.puede_ver_reportes | FoodState.puede_ver_usuarios
+        | FoodState.puede_ver_configuracion
+    )
     return rx.vstack(
+        # ── Servicio ──
+        rx.cond(grupo_servicio, _nav_group_label("Servicio", mobile), rx.fragment()),
         rx.cond(FoodState.puede_ver_mozos,
                 nav_item(_M["mozos"].label, "/mozos", _M["mozos"].icon, active == "mozos"),
                 rx.fragment()),
@@ -395,9 +430,13 @@ def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
                 nav_item(_M["impresion"].label, "/estacion-impresion", _M["impresion"].icon,
                          active == "estacion_impresion"),
                 rx.fragment()),
+        # ── Catálogo ──
+        rx.cond(FoodState.puede_ver_carta, _nav_group_label("Catálogo", mobile), rx.fragment()),
         rx.cond(FoodState.puede_ver_carta,
                 nav_item(_M["carta"].label, "/carta", _M["carta"].icon, active == "carta"),
                 rx.fragment()),
+        # ── Gestión ──
+        rx.cond(grupo_gestion, _nav_group_label("Gestión", mobile), rx.fragment()),
         rx.cond(FoodState.puede_ver_reportes,
                 nav_item(_M["reportes"].label, "/reportes", _M["reportes"].icon, active == "reportes"),
                 rx.fragment()),
