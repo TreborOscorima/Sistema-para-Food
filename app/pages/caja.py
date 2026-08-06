@@ -1375,6 +1375,12 @@ def _turno_historial_row(t: TurnoHistorialView) -> rx.Component:
             title="Reimprimir cierre",
             on_click=FoodState.reimprimir_cierre_turno(t.id),
         ),
+        rx.icon_button(
+            rx.icon(tag="file_text", size=14),
+            variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
+            title="Descargar PDF del cierre",
+            on_click=FoodState.descargar_pdf_cierre_turno(t.id),
+        ),
         width="100%", align="center", gap="10px",
         padding="10px 12px", border_bottom=f"1px solid {DARK_800}",
     )

@@ -747,7 +747,10 @@ class CajaTurnoMixin(rx.State, mixin=True):
         self.turno_cierre_visible = False
         self.turno_cierre_conteo = {}
         self.cargar_turno_caja()
-        eventos = [rx.toast.success("Turno de caja cerrado. Arqueo registrado.")]
+        eventos = [rx.toast.success(
+            "Turno de caja cerrado. Puedes reimprimirlo o descargarlo desde Historial.",
+            duration=6000,
+        )]
         _evt = self._imprimir_o_encolar(
             rol="caja",
             tipo_doc="comprobante",
@@ -877,7 +880,17 @@ class CajaTurnoMixin(rx.State, mixin=True):
         }
 
     def descargar_pdf_cierre(self):
+        """Descarga el PDF del cierre del turno activo (botón del modal de cierre)."""
         if self.turno_activo_id == 0:
+            return rx.toast.error("No hay turno para generar el PDF.")
+        return self._generar_pdf_cierre(self.turno_activo_id)
+
+    def descargar_pdf_cierre_turno(self, turno_id: int):
+        """Descarga el PDF del cierre de un turno ya cerrado (desde el historial)."""
+        return self._generar_pdf_cierre(turno_id)
+
+    def _generar_pdf_cierre(self, turno_id: int):
+        if not turno_id:
             return rx.toast.error("No hay turno para generar el PDF.")
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
@@ -888,7 +901,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
         with self._tenant_session() as session:
-            turno = session.get(TurnoCaja, self.turno_activo_id)
+            turno = session.get(TurnoCaja, turno_id)
             if turno is None:
                 return rx.toast.error("El turno ya no existe.")
             data = self._build_cierre_data(session, turno)
