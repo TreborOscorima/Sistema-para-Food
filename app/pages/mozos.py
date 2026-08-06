@@ -1028,6 +1028,376 @@ def _combo_card_mozos(combo: dict) -> rx.Component:
     )
 
 
+def _pedido_panel_inner(items_max_height: str) -> rx.Component:
+    """Contenido del pedido de la mesa: lo enviado a cocina + el carrito nuevo +
+    las acciones (enviar, directo a caja, transferir, liberar). Se reutiliza en
+    la columna derecha (desktop) y en el bottom-sheet deslizable (móvil)."""
+    return rx.vstack(
+        # Sección: Pedidos enviados a cocina
+        rx.cond(
+            FoodState.historial_pedido.length() > 0,
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="chef_hat", size=14, color="#38BDF8"),
+                    rx.text(
+                        rx.cond(
+                            FoodState.precuenta_parcial_modo,
+                            "Selecciona ítems para precuenta",
+                            "Enviado a cocina",
+                        ),
+                        font_size="12px", font_weight="700",
+                        color=rx.cond(FoodState.precuenta_parcial_modo, SUCCESS_SOLID, "#38BDF8"),
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        FoodState.precuenta_parcial_modo,
+                        rx.hstack(
+                            rx.button(
+                                "Todos",
+                                on_click=FoodState.seleccionar_todos_precuenta,
+                                background="transparent",
+                                color=TEXT_MUTED,
+                                border=f"1px solid {DARK_700}",
+                                border_radius="6px",
+                                font_size="10px",
+                                padding="2px 8px",
+                                cursor="pointer",
+                                height="auto",
+                                _hover={"color": TEXT_WHITE, "border_color": TEXT_MUTED},
+                            ),
+                            rx.button(
+                                rx.icon(tag="x", size=12),
+                                on_click=FoodState.cancelar_precuenta_parcial,
+                                background="transparent",
+                                color="#EF4444",
+                                border="none",
+                                padding="2px",
+                                cursor="pointer",
+                                _hover={"opacity": "0.8"},
+                            ),
+                            spacing="1", align="center",
+                        ),
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="receipt", size=11),
+                                rx.text("Precuenta", font_size="10px", font_weight="600"),
+                                spacing="1", align="center",
+                            ),
+                            on_click=FoodState.activar_precuenta_parcial,
+                            background="transparent",
+                            color=TEXT_MUTED,
+                            border=f"1px solid {DARK_700}",
+                            border_radius="6px",
+                            padding="2px 8px",
+                            cursor="pointer",
+                            height="auto",
+                            _hover={"color": SUCCESS_SOLID, "border_color": SUCCESS_SOLID},
+                        ),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.box(
+                    rx.vstack(
+                        rx.foreach(FoodState.historial_pedido, lambda item, idx: _modal_historial_item(item, idx)),
+                        width="100%", spacing="0",
+                    ),
+                    overflow_y="auto",
+                    max_height=rx.breakpoints(initial="12vh", md="20vh"),
+                    width="100%",
+                ),
+                # Botón "Entregar todo" si hay items listos
+                rx.cond(
+                    ~FoodState.precuenta_parcial_modo & FoodState.hay_items_para_entregar,
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="hand", size=14),
+                            rx.text("Entregar todo", font_size="11px", font_weight="700"),
+                            spacing="1", align="center",
+                        ),
+                        on_click=FoodState.entregar_todos_items_listos,
+                        background=SUCCESS_SOLID,
+                        color=TEXT_WHITE,
+                        border_radius="6px",
+                        padding="6px 12px",
+                        cursor="pointer",
+                        width="100%",
+                        _hover={"background": "#16A34A"},
+                    ),
+                    rx.fragment(),
+                ),
+                # Barra de precuenta parcial
+                rx.cond(
+                    FoodState.precuenta_parcial_modo & FoodState.precuenta_parcial_hay_seleccion,
+                    rx.hstack(
+                        rx.text(
+                            "Subtotal: " + FoodState.precuenta_parcial_subtotal_texto,
+                            font_size="12px", font_weight="700", color=SUCCESS_SOLID,
+                        ),
+                        rx.spacer(),
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(tag="printer", size=12),
+                                rx.text("Imprimir", font_size="11px", font_weight="700"),
+                                spacing="1", align="center",
+                            ),
+                            on_click=FoodState.imprimir_precuenta_parcial,
+                            background=SUCCESS_SOLID,
+                            color=TEXT_WHITE,
+                            border_radius="6px",
+                            padding="4px 12px",
+                            cursor="pointer",
+                            height="auto",
+                            _hover={"background": "#16A34A"},
+                        ),
+                        width="100%", align="center",
+                        padding_top="6px",
+                        border_top="1px solid #1E3A5F",
+                    ),
+                    rx.fragment(),
+                ),
+                spacing="2", width="100%",
+                background=PAGE_BACKGROUND,
+                border=rx.cond(
+                    FoodState.precuenta_parcial_modo,
+                    f"1px solid {SUCCESS_SOLID}",
+                    "1px solid #1E3A5F",
+                ),
+                border_radius="8px",
+                padding="8px 10px",
+            ),
+            rx.fragment(),
+        ),
+        # Sección: Nuevo pedido (carrito)
+        rx.hstack(
+            rx.icon(tag="shopping_cart", size=14, color=ACCENT),
+            rx.text(
+                rx.cond(
+                    FoodState.historial_pedido.length() > 0,
+                    "Nuevo pedido",
+                    "Pedido",
+                ),
+                font_size="13px", font_weight="700", color=ACCENT,
+            ),
+            rx.spacer(),
+            rx.text(
+                FoodState.total_carrito_texto,
+                font_size="13px", font_weight="700", color=TEXT_WHITE,
+            ),
+            width="100%", align="center",
+        ),
+        rx.box(
+            rx.cond(
+                FoodState.carrito.length() == 0,
+                rx.center(
+                    rx.vstack(
+                        rx.icon(tag="clipboard_list", size=24, color=TEXT_MUTED),
+                        rx.text("Agrega productos", font_size="11px", color=TEXT_MUTED),
+                        spacing="1", align="center",
+                    ),
+                    padding_y="20px",
+                ),
+                rx.vstack(
+                    rx.foreach(FoodState.carrito, _modal_carrito_item),
+                    width="100%",
+                    spacing="0",
+                ),
+            ),
+            overflow_y="auto",
+            width="100%",
+            max_height=items_max_height,
+        ),
+        # Botón Enviar a Cocina
+        rx.button(
+            rx.hstack(
+                rx.icon(tag="send", size=13),
+                rx.text(rx.cond(
+                    FoodState.historial_pedido.length() > 0,
+                    "Enviar nueva ronda",
+                    "Enviar pedido",
+                )),
+                spacing="2", align="center",
+            ),
+            on_click=[FoodState.enviar_pedido, FoodState.cerrar_modal_agregar],
+            background=ACCENT,
+            color=TEXT_WHITE,
+            border_radius="8px",
+            font_size="13px",
+            font_weight="700",
+            width="100%",
+            cursor="pointer",
+            _hover={"background": ACCENT_HOVER},
+            is_disabled=FoodState.cantidad_items_carrito == 0,
+        ),
+        # Enviar y cobrar: dispara el pedido (los ítems de preparación igual van a
+        # cocina, el ruteo es automático) y deja la mesa lista para cobrar en caja.
+        rx.button(
+            rx.hstack(
+                rx.icon(tag="receipt", size=13),
+                rx.text("Enviar y cobrar"),
+                spacing="2", align="center",
+            ),
+            on_click=[FoodState.enviar_pedido_directo_caja, FoodState.cerrar_modal_agregar],
+            background="transparent",
+            color=TEXT_MUTED,
+            border=f"1px solid {DARK_700}",
+            border_radius="8px",
+            font_size="12px",
+            font_weight="600",
+            width="100%",
+            cursor="pointer",
+            _hover={"background": DARK_800, "color": TEXT_PRIMARY},
+            is_disabled=FoodState.cantidad_items_carrito == 0,
+        ),
+        # Botón Transferir mesa (solo si mesa ocupada)
+        rx.cond(
+            FoodState.mesa_seleccionada_ocupada,
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="move_right", size=13),
+                    rx.text("Transferir mesa"),
+                    spacing="2", align="center",
+                ),
+                on_click=FoodState.abrir_transfer_modal,
+                background="transparent",
+                color=WARNING_SOLID,
+                border="1px solid #92400E",
+                border_radius="8px",
+                font_size="12px",
+                font_weight="600",
+                width="100%",
+                cursor="pointer",
+                _hover={"background": "#1C1917", "border": "1px solid #F59E0B"},
+            ),
+            rx.fragment(),
+        ),
+        # Botón Liberar mesa (solo si tiene pedido enviado y carrito vacío)
+        rx.cond(
+            (FoodState.historial_pedido.length() > 0) & (FoodState.cantidad_items_carrito == 0),
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="log_out", size=13),
+                    rx.text("Liberar mesa"),
+                    spacing="2", align="center",
+                ),
+                on_click=FoodState.liberar_mesa_sin_cobro,
+                background="transparent",
+                color="#EF4444",
+                border="1px solid #7F1D1D",
+                border_radius="8px",
+                font_size="12px",
+                font_weight="600",
+                width="100%",
+                cursor="pointer",
+                _hover={"background": "#1C1917", "border": "1px solid #EF4444"},
+            ),
+            rx.fragment(),
+        ),
+        spacing="2", width="100%",
+    )
+
+
+def _pedido_sheet_bar() -> rx.Component:
+    """Barra 'Ver pedido' (solo móvil) que abre el pedido en un bottom-sheet
+    deslizable, al estilo Mostrador. Aparece si hay ítems nuevos o ya enviados."""
+    return rx.cond(
+        (FoodState.cantidad_items_carrito > 0) | (FoodState.historial_pedido.length() > 0),
+        rx.box(
+            rx.hstack(
+                rx.box(
+                    rx.icon(tag="shopping_cart", size=19, color=TEXT_WHITE),
+                    rx.cond(
+                        FoodState.cantidad_items_carrito > 0,
+                        rx.box(
+                            rx.text(FoodState.cantidad_items_carrito.to_string(),
+                                    font_size="10px", font_weight="800", color=ACCENT),
+                            background=TEXT_WHITE, border_radius="50%",
+                            min_width="16px", height="16px", display="flex",
+                            align_items="center", justify_content="center",
+                            position="absolute", top="-7px", right="-8px",
+                        ),
+                        rx.fragment(),
+                    ),
+                    position="relative", flex_shrink="0", display="flex",
+                ),
+                rx.vstack(
+                    rx.text("Ver pedido", font_size="13px", font_weight="800",
+                            color=TEXT_WHITE, line_height="1.15"),
+                    rx.text(
+                        rx.cond(
+                            FoodState.cantidad_items_carrito > 0,
+                            FoodState.cantidad_items_carrito.to_string() + " ítem(s) nuevos",
+                            "Pedido en curso",
+                        ),
+                        font_size="10px", color="rgba(255,255,255,0.85)", line_height="1.15"),
+                    spacing="0", align="start",
+                ),
+                rx.spacer(),
+                rx.cond(
+                    FoodState.cantidad_items_carrito > 0,
+                    rx.text(FoodState.total_carrito_texto, font_size="16px",
+                            font_weight="800", color=TEXT_WHITE),
+                    rx.fragment(),
+                ),
+                rx.icon(tag="chevron_up", size=19, color=TEXT_WHITE),
+                spacing="3", align="center", width="100%",
+            ),
+            on_click=FoodState.set_mozos_pedido_sheet_abierto(True),
+            background=ACCENT, border_radius="12px", padding="12px 16px",
+            box_shadow="0 6px 20px rgba(234,88,12,0.5)", cursor="pointer",
+            width="100%", flex_shrink="0",
+            display=rx.breakpoints(initial="block", md="none"),
+        ),
+        rx.fragment(),
+    )
+
+
+def _pedido_sheet_panel() -> rx.Component:
+    """Bottom-sheet del pedido (solo móvil), SIN portal: backdrop + panel
+    posicionados en absoluto dentro del dialog, que suben con translateY. Evita
+    el conflicto de portales (Radix Dialog + Vaul) que rompía la hidratación."""
+    abierto = FoodState.mozos_pedido_sheet_abierto
+    return rx.box(
+        # Backdrop
+        rx.box(
+            position="absolute", top="0", left="0", right="0", bottom="0",
+            background="rgba(0,0,0,0.55)",
+            on_click=FoodState.set_mozos_pedido_sheet_abierto(False),
+            opacity=rx.cond(abierto, "1", "0"),
+            transition="opacity 0.25s ease",
+        ),
+        # Panel deslizable
+        rx.vstack(
+            rx.box(width="44px", height="5px", background=DARK_600,
+                   border_radius="3px", margin="2px auto 6px", cursor="pointer",
+                   on_click=FoodState.set_mozos_pedido_sheet_abierto(False)),
+            rx.hstack(
+                rx.text(FoodState.mesa_seleccionada_label, font_size="14px",
+                        font_weight="800", color=TEXT_WHITE),
+                rx.spacer(),
+                rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
+                        on_click=FoodState.set_mozos_pedido_sheet_abierto(False)),
+                width="100%", align="center", flex_shrink="0",
+            ),
+            _pedido_panel_inner("52vh"),
+            spacing="2", width="100%",
+            position="absolute", left="0", right="0", bottom="0",
+            # Altura alta y consistente (como el sheet de Mostrador), no según
+            # el contenido: abre completo aunque haya pocos ítems.
+            height="88%", overflow_y="auto",
+            background=DARK_800, border_top=f"1px solid {DARK_700}",
+            border_radius="16px 16px 0 0", padding="10px 16px 20px",
+            box_shadow="0 -8px 30px rgba(0,0,0,0.5)",
+            transform=rx.cond(abierto, "translateY(0)", "translateY(105%)"),
+            transition="transform 0.28s cubic-bezier(0.32,0.72,0,1)",
+        ),
+        position="absolute", top="0", left="0", right="0", bottom="0",
+        z_index="50",
+        pointer_events=rx.cond(abierto, "auto", "none"),
+        display=rx.breakpoints(initial="block", md="none"),
+        overflow="hidden",
+    )
+
+
 def _modal_agregar_productos() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
@@ -1091,43 +1461,10 @@ def _modal_agregar_productos() -> rx.Component:
                         spacing="2", align="center", width="100%",
                     ),
                 ),
-                # Toggle Carta / Pedido — SOLO MÓVIL (en escritorio se ven las 2 columnas)
-                rx.hstack(
-                    rx.button(
-                        "Carta",
-                        on_click=FoodState.set_mozos_modal_vista("carta"),
-                        background=rx.cond(FoodState.mozos_modal_vista == "carta", ACCENT, "transparent"),
-                        color=rx.cond(FoodState.mozos_modal_vista == "carta", TEXT_WHITE, TEXT_MUTED),
-                        border=f"1px solid {DARK_700}", border_radius="8px",
-                        font_size="12px", font_weight="700", cursor="pointer",
-                        flex="1", height="38px", _hover={"opacity": "0.85"},
-                    ),
-                    rx.button(
-                        rx.hstack(
-                            rx.text("Pedido"),
-                            rx.cond(
-                                FoodState.cantidad_items_carrito > 0,
-                                rx.badge(
-                                    FoodState.cantidad_items_carrito.to_string(),
-                                    background=rx.cond(FoodState.mozos_modal_vista == "pedido", TEXT_WHITE, ACCENT),
-                                    color=rx.cond(FoodState.mozos_modal_vista == "pedido", ACCENT, TEXT_WHITE),
-                                    border_radius="8px", font_size="10px", padding_x="6px",
-                                ),
-                                rx.fragment(),
-                            ),
-                            spacing="2", align="center",
-                        ),
-                        on_click=FoodState.set_mozos_modal_vista("pedido"),
-                        background=rx.cond(FoodState.mozos_modal_vista == "pedido", ACCENT, "transparent"),
-                        color=rx.cond(FoodState.mozos_modal_vista == "pedido", TEXT_WHITE, TEXT_MUTED),
-                        border=f"1px solid {DARK_700}", border_radius="8px",
-                        font_size="12px", font_weight="700", cursor="pointer",
-                        flex="1", height="38px", _hover={"opacity": "0.85"},
-                    ),
-                    spacing="2", width="100%", flex_shrink="0",
-                    display=rx.breakpoints(initial="flex", md="none"),
-                ),
-                # Contenido: 2 columnas en desktop, una vista por vez en mobile
+                # Nota: en móvil ya no hay tabs Carta/Pedido. La carta se ve siempre
+                # y el pedido se abre en un bottom-sheet deslizable (_pedido_sheet_bar,
+                # patrón Mostrador). En desktop se ven las 2 columnas.
+                # Contenido: 2 columnas en desktop; en móvil solo la carta
                 rx.flex(
                     # ─── Columna izquierda: productos ───
                     rx.vstack(
@@ -1262,286 +1599,12 @@ def _modal_agregar_productos() -> rx.Component:
                         min_width="0",
                         overflow_y="auto",
                         overflow_x="hidden",
-                        display=rx.cond(
-                            FoodState.mozos_modal_vista == "carta",
-                            rx.breakpoints(initial="flex", md="flex"),
-                            rx.breakpoints(initial="none", md="flex"),
-                        ),
+                        # La carta se ve siempre (el pedido vive en el sheet en móvil).
+                        display="flex",
                     ),
-                    # ─── Columna derecha: historial + carrito ───
-                    rx.vstack(
-                        # Volver a la carta — SOLO MÓVIL
-                        rx.hstack(
-                            rx.icon(tag="arrow_left", size=15, color=ACCENT),
-                            rx.text("Volver a la carta", font_size="12px",
-                                    font_weight="600", color=ACCENT),
-                            on_click=FoodState.set_mozos_modal_vista("carta"),
-                            spacing="2", align="center", cursor="pointer",
-                            width="100%", flex_shrink="0",
-                            display=rx.breakpoints(initial="flex", md="none"),
-                            _hover={"opacity": "0.8"},
-                        ),
-                        # Sección: Pedidos enviados a cocina
-                        rx.cond(
-                            FoodState.historial_pedido.length() > 0,
-                            rx.vstack(
-                                rx.hstack(
-                                    rx.icon(tag="chef_hat", size=14, color="#38BDF8"),
-                                    rx.text(
-                                        rx.cond(
-                                            FoodState.precuenta_parcial_modo,
-                                            "Selecciona ítems para precuenta",
-                                            "Enviado a cocina",
-                                        ),
-                                        font_size="12px", font_weight="700",
-                                        color=rx.cond(FoodState.precuenta_parcial_modo, SUCCESS_SOLID, "#38BDF8"),
-                                    ),
-                                    rx.spacer(),
-                                    rx.cond(
-                                        FoodState.precuenta_parcial_modo,
-                                        rx.hstack(
-                                            rx.button(
-                                                "Todos",
-                                                on_click=FoodState.seleccionar_todos_precuenta,
-                                                background="transparent",
-                                                color=TEXT_MUTED,
-                                                border=f"1px solid {DARK_700}",
-                                                border_radius="6px",
-                                                font_size="10px",
-                                                padding="2px 8px",
-                                                cursor="pointer",
-                                                height="auto",
-                                                _hover={"color": TEXT_WHITE, "border_color": TEXT_MUTED},
-                                            ),
-                                            rx.button(
-                                                rx.icon(tag="x", size=12),
-                                                on_click=FoodState.cancelar_precuenta_parcial,
-                                                background="transparent",
-                                                color="#EF4444",
-                                                border="none",
-                                                padding="2px",
-                                                cursor="pointer",
-                                                _hover={"opacity": "0.8"},
-                                            ),
-                                            spacing="1", align="center",
-                                        ),
-                                        rx.button(
-                                            rx.hstack(
-                                                rx.icon(tag="receipt", size=11),
-                                                rx.text("Precuenta", font_size="10px", font_weight="600"),
-                                                spacing="1", align="center",
-                                            ),
-                                            on_click=FoodState.activar_precuenta_parcial,
-                                            background="transparent",
-                                            color=TEXT_MUTED,
-                                            border=f"1px solid {DARK_700}",
-                                            border_radius="6px",
-                                            padding="2px 8px",
-                                            cursor="pointer",
-                                            height="auto",
-                                            _hover={"color": SUCCESS_SOLID, "border_color": SUCCESS_SOLID},
-                                        ),
-                                    ),
-                                    width="100%", align="center",
-                                ),
-                                rx.box(
-                                    rx.vstack(
-                                        rx.foreach(FoodState.historial_pedido, lambda item, idx: _modal_historial_item(item, idx)),
-                                        width="100%", spacing="0",
-                                    ),
-                                    overflow_y="auto",
-                                    max_height=rx.breakpoints(initial="12vh", md="20vh"),
-                                    width="100%",
-                                ),
-                                # Botón "Entregar todo" si hay items listos
-                                rx.cond(
-                                    ~FoodState.precuenta_parcial_modo & FoodState.hay_items_para_entregar,
-                                    rx.button(
-                                        rx.hstack(
-                                            rx.icon(tag="hand", size=14),
-                                            rx.text("Entregar todo", font_size="11px", font_weight="700"),
-                                            spacing="1", align="center",
-                                        ),
-                                        on_click=FoodState.entregar_todos_items_listos,
-                                        background=SUCCESS_SOLID,
-                                        color=TEXT_WHITE,
-                                        border_radius="6px",
-                                        padding="6px 12px",
-                                        cursor="pointer",
-                                        width="100%",
-                                        _hover={"background": "#16A34A"},
-                                    ),
-                                    rx.fragment(),
-                                ),
-                                # Barra de precuenta parcial
-                                rx.cond(
-                                    FoodState.precuenta_parcial_modo & FoodState.precuenta_parcial_hay_seleccion,
-                                    rx.hstack(
-                                        rx.text(
-                                            "Subtotal: " + FoodState.precuenta_parcial_subtotal_texto,
-                                            font_size="12px", font_weight="700", color=SUCCESS_SOLID,
-                                        ),
-                                        rx.spacer(),
-                                        rx.button(
-                                            rx.hstack(
-                                                rx.icon(tag="printer", size=12),
-                                                rx.text("Imprimir", font_size="11px", font_weight="700"),
-                                                spacing="1", align="center",
-                                            ),
-                                            on_click=FoodState.imprimir_precuenta_parcial,
-                                            background=SUCCESS_SOLID,
-                                            color=TEXT_WHITE,
-                                            border_radius="6px",
-                                            padding="4px 12px",
-                                            cursor="pointer",
-                                            height="auto",
-                                            _hover={"background": "#16A34A"},
-                                        ),
-                                        width="100%", align="center",
-                                        padding_top="6px",
-                                        border_top="1px solid #1E3A5F",
-                                    ),
-                                    rx.fragment(),
-                                ),
-                                spacing="2", width="100%",
-                                background=PAGE_BACKGROUND,
-                                border=rx.cond(
-                                    FoodState.precuenta_parcial_modo,
-                                    f"1px solid {SUCCESS_SOLID}",
-                                    "1px solid #1E3A5F",
-                                ),
-                                border_radius="8px",
-                                padding="8px 10px",
-                            ),
-                            rx.fragment(),
-                        ),
-                        # Sección: Nuevo pedido (carrito)
-                        rx.hstack(
-                            rx.icon(tag="shopping_cart", size=14, color=ACCENT),
-                            rx.text(
-                                rx.cond(
-                                    FoodState.historial_pedido.length() > 0,
-                                    "Nuevo pedido",
-                                    "Pedido",
-                                ),
-                                font_size="13px", font_weight="700", color=ACCENT,
-                            ),
-                            rx.spacer(),
-                            rx.text(
-                                FoodState.total_carrito_texto,
-                                font_size="13px", font_weight="700", color=TEXT_WHITE,
-                            ),
-                            width="100%", align="center",
-                        ),
-                        rx.box(
-                            rx.cond(
-                                FoodState.carrito.length() == 0,
-                                rx.center(
-                                    rx.vstack(
-                                        rx.icon(tag="clipboard_list", size=24, color=TEXT_MUTED),
-                                        rx.text("Agrega productos", font_size="11px", color=TEXT_MUTED),
-                                        spacing="1", align="center",
-                                    ),
-                                    padding_y="20px",
-                                ),
-                                rx.vstack(
-                                    rx.foreach(FoodState.carrito, _modal_carrito_item),
-                                    width="100%",
-                                    spacing="0",
-                                ),
-                            ),
-                            overflow_y="auto",
-                            width="100%",
-                            flex="1",
-                            min_height="0",
-                        ),
-                        # Botón Enviar a Cocina
-                        rx.button(
-                            rx.hstack(
-                                rx.icon(tag="send", size=13),
-                                rx.text(rx.cond(
-                                    FoodState.historial_pedido.length() > 0,
-                                    "Enviar nueva ronda",
-                                    "Enviar a Cocina",
-                                )),
-                                spacing="2", align="center",
-                            ),
-                            on_click=[FoodState.enviar_pedido, FoodState.cerrar_modal_agregar],
-                            background=ACCENT,
-                            color=TEXT_WHITE,
-                            border_radius="8px",
-                            font_size="13px",
-                            font_weight="700",
-                            width="100%",
-                            cursor="pointer",
-                            _hover={"background": ACCENT_HOVER},
-                            is_disabled=FoodState.cantidad_items_carrito == 0,
-                        ),
-                        # Enviar sin pasar por cocina: no imprime comanda ni va al
-                        # KDS. Para pedidos que no requieren preparación (ahorra papel).
-                        rx.button(
-                            rx.hstack(
-                                rx.icon(tag="receipt", size=13),
-                                rx.text("Enviar directo a caja"),
-                                spacing="2", align="center",
-                            ),
-                            on_click=[FoodState.enviar_pedido_directo_caja, FoodState.cerrar_modal_agregar],
-                            background="transparent",
-                            color=TEXT_MUTED,
-                            border=f"1px solid {DARK_700}",
-                            border_radius="8px",
-                            font_size="12px",
-                            font_weight="600",
-                            width="100%",
-                            cursor="pointer",
-                            _hover={"background": DARK_800, "color": TEXT_PRIMARY},
-                            is_disabled=FoodState.cantidad_items_carrito == 0,
-                        ),
-                        # Botón Transferir mesa (solo si mesa ocupada)
-                        rx.cond(
-                            FoodState.mesa_seleccionada_ocupada,
-                            rx.button(
-                                rx.hstack(
-                                    rx.icon(tag="move_right", size=13),
-                                    rx.text("Transferir mesa"),
-                                    spacing="2", align="center",
-                                ),
-                                on_click=FoodState.abrir_transfer_modal,
-                                background="transparent",
-                                color=WARNING_SOLID,
-                                border="1px solid #92400E",
-                                border_radius="8px",
-                                font_size="12px",
-                                font_weight="600",
-                                width="100%",
-                                cursor="pointer",
-                                _hover={"background": "#1C1917", "border": "1px solid #F59E0B"},
-                            ),
-                            rx.fragment(),
-                        ),
-                        # Botón Liberar mesa (solo si tiene pedido enviado y carrito vacío)
-                        rx.cond(
-                            (FoodState.historial_pedido.length() > 0) & (FoodState.cantidad_items_carrito == 0),
-                            rx.button(
-                                rx.hstack(
-                                    rx.icon(tag="log_out", size=13),
-                                    rx.text("Liberar mesa"),
-                                    spacing="2", align="center",
-                                ),
-                                on_click=FoodState.liberar_mesa_sin_cobro,
-                                background="transparent",
-                                color="#EF4444",
-                                border="1px solid #7F1D1D",
-                                border_radius="8px",
-                                font_size="12px",
-                                font_weight="600",
-                                width="100%",
-                                cursor="pointer",
-                                _hover={"background": "#1C1917", "border": "1px solid #EF4444"},
-                            ),
-                            rx.fragment(),
-                        ),
-                        spacing="2",
+                    # ─── Columna derecha: pedido (solo desktop; en móvil va al sheet) ───
+                    rx.box(
+                        _pedido_panel_inner("40vh"),
                         flex=rx.breakpoints(initial="1", md="2"),
                         min_width="0",
                         min_height="0",
@@ -1550,11 +1613,9 @@ def _modal_agregar_productos() -> rx.Component:
                         border=f"1px solid {DARK_700}",
                         border_radius="10px",
                         padding="12px",
-                        display=rx.cond(
-                            FoodState.mozos_modal_vista == "pedido",
-                            rx.breakpoints(initial="flex", md="flex"),
-                            rx.breakpoints(initial="none", md="flex"),
-                        ),
+                        # En móvil el pedido vive en el bottom-sheet (_pedido_sheet_bar),
+                        # no en columna: aquí solo se muestra en desktop.
+                        display=rx.breakpoints(initial="none", md="flex"),
                     ),
                     direction=rx.breakpoints(initial="column", md="row"),
                     gap="12px",
@@ -1563,56 +1624,25 @@ def _modal_agregar_productos() -> rx.Component:
                     min_height="0",
                     overflow="hidden",
                 ),
-                # Barra del carrito — SOLO MÓVIL, en vista "carta" y con ítems
-                rx.cond(
-                    (FoodState.mozos_modal_vista == "carta") & (FoodState.cantidad_items_carrito > 0),
-                    rx.box(
-                        rx.hstack(
-                            rx.box(
-                                rx.icon(tag="shopping_cart", size=19, color=TEXT_WHITE),
-                                rx.box(
-                                    rx.text(FoodState.cantidad_items_carrito.to_string(),
-                                            font_size="10px", font_weight="800", color=ACCENT),
-                                    background=TEXT_WHITE, border_radius="50%",
-                                    min_width="16px", height="16px", display="flex",
-                                    align_items="center", justify_content="center",
-                                    position="absolute", top="-7px", right="-8px",
-                                ),
-                                position="relative", flex_shrink="0", display="flex",
-                            ),
-                            rx.vstack(
-                                rx.text("Ver pedido", font_size="13px", font_weight="800",
-                                        color=TEXT_WHITE, line_height="1.15"),
-                                rx.text(FoodState.cantidad_items_carrito.to_string() + " ítem(s)",
-                                        font_size="10px", color="rgba(255,255,255,0.85)", line_height="1.15"),
-                                spacing="0", align="start",
-                            ),
-                            rx.spacer(),
-                            rx.text(FoodState.total_carrito_texto, font_size="16px",
-                                    font_weight="800", color=TEXT_WHITE),
-                            rx.icon(tag="chevron_up", size=19, color=TEXT_WHITE),
-                            spacing="3", align="center", width="100%",
-                        ),
-                        on_click=FoodState.set_mozos_modal_vista("pedido"),
-                        background=ACCENT, border_radius="12px", padding="10px 14px",
-                        box_shadow="0 4px 14px rgba(234,88,12,0.45)", cursor="pointer",
-                        width="100%", flex_shrink="0",
-                        display=rx.breakpoints(initial="block", md="none"),
-                    ),
-                    rx.fragment(),
-                ),
+                # Barra "Ver pedido" → bottom-sheet — SOLO MÓVIL (patrón Mostrador)
+                _pedido_sheet_bar(),
+                # Bottom-sheet del pedido: overlay absoluto dentro del dialog (móvil).
+                _pedido_sheet_panel(),
                 spacing="3",
                 width="100%",
                 height=rx.breakpoints(initial="88vh", md="75vh"),
                 max_height=rx.breakpoints(initial="88vh", md="75vh"),
                 overflow="hidden",
+                position="relative",
+                padding="20px",
             ),
             background=PAGE_BACKGROUND,
             border=f"1px solid {DARK_700}",
             border_radius="16px",
-            padding="20px",
+            padding="0",
             max_width="900px",
             width="95vw",
+            overflow="hidden",
         ),
         open=FoodState.modal_agregar_abierto,
         on_open_change=FoodState.set_modal_agregar_abierto,

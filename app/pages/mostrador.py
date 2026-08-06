@@ -326,7 +326,7 @@ def _carrito_panel_inner(items_max_height: str) -> rx.Component:
                 _hover={"border_color": DANGER_SOLID, "color": "#FCA5A5"},
             ),
             rx.button(
-                rx.hstack(rx.icon(tag="send", size=15), rx.text("Enviar a Cocina"),
+                rx.hstack(rx.icon(tag="send", size=15), rx.text("Enviar pedido"),
                           spacing="2", align="center"),
                 on_click=FoodState.enviar_pedido_mostrador,
                 is_loading=FoodState.mostrador_enviando,

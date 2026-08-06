@@ -1423,6 +1423,9 @@ class FoodState(
     # Vista activa del modal de comanda de Mozos en móvil: "carta" o "pedido".
     # En escritorio se ven las dos columnas y esta var no aplica.
     mozos_modal_vista: str = "carta"
+    # Bottom-sheet del pedido en móvil (patrón Mostrador). En desktop no se usa:
+    # el panel de pedido se ve siempre en la columna derecha.
+    mozos_pedido_sheet_abierto: bool = False
     historial_pedido: list[HistorialItem] = []
     tickets_cocina: list[CocinaTicketView] = []
     pedidos_mostrador_pendientes: list[MostradorPendienteView] = []
@@ -4173,6 +4176,7 @@ class FoodState(
         self.busqueda_producto_modal = ""
         self.categoria_activa_id = 0
         self.mozos_modal_vista = "carta"
+        self.mozos_pedido_sheet_abierto = False
         self.modal_agregar_abierto = True
         return rx.toast.success(_toast_msg)
 
@@ -4619,11 +4623,15 @@ class FoodState(
     def set_mozos_modal_vista(self, vista: str) -> None:
         self.mozos_modal_vista = vista
 
+    def set_mozos_pedido_sheet_abierto(self, v: bool) -> None:
+        self.mozos_pedido_sheet_abierto = bool(v)
+
     def cerrar_modal_agregar(self) -> None:
         self.modal_agregar_abierto = False
         self.busqueda_producto_modal = ""
         self.precuenta_parcial_modo = False
         self.mozos_modal_vista = "carta"
+        self.mozos_pedido_sheet_abierto = False
 
     def set_busqueda_producto_modal(self, value: str) -> None:
         self.busqueda_producto_modal = value
@@ -4708,15 +4716,17 @@ class FoodState(
         return rx.toast.success(f"{self.mesa_seleccionada_label} marcada para cobrar.")
 
     def enviar_pedido(self):
-        """Envía los ítems pendientes a cocina (comportamiento normal)."""
-        return self._enviar_pedido(sin_cocina=False)
+        """Envía los ítems pendientes; la mesa queda ocupada y se cobra después."""
+        return self._enviar_pedido(directo_caja=False)
 
     def enviar_pedido_directo_caja(self):
-        """Override manual "Enviar directo a caja": este envío no pasa por cocina
-        (ningún ítem genera comanda ni aparece en el KDS)."""
-        return self._enviar_pedido(sin_cocina=True)
+        """Enviar y cobrar: dispara el pedido y deja la mesa lista para cobrar en
+        caja de inmediato. El ruteo a cocina es automático por producto — los
+        ítems que requieren preparación IGUAL van al KDS (hay que hacerlos);
+        solo los "sin preparación" saltan la cocina."""
+        return self._enviar_pedido(directo_caja=True)
 
-    def _enviar_pedido(self, sin_cocina: bool = False) -> None:
+    def _enviar_pedido(self, directo_caja: bool = False) -> None:
         if self.mesa_seleccionada_id == 0:
             return rx.toast.error("Selecciona una mesa antes de enviar el pedido.")
         pedido_id = 0
@@ -4741,12 +4751,12 @@ class FoodState(
                 return rx.toast.error("Stock insuficiente — " + "; ".join(errores_stock))
             now = _utcnow()
             for d in detalles_pendientes:
-                if sin_cocina:
-                    d.requiere_preparacion = False
                 d.impreso_cocina = True
                 d.enviado_cocina_at = now
-                # Los ítems sin preparación no pasan por cocina: quedan como
-                # "entregado" para no dejar el pedido colgado esperando al KDS.
+                # El ruteo a cocina es por producto (snapshot requiere_preparacion):
+                # los que requieren preparación van al KDS; los "sin preparación"
+                # quedan "entregado" para no colgar el pedido esperando al KDS.
+                # "Enviar y cobrar" NO altera esto: una hamburguesa igual se cocina.
                 d.estado_produccion = (
                     EstadoProduccion.PENDIENTE.value
                     if d.requiere_preparacion
@@ -4755,7 +4765,13 @@ class FoodState(
                 session.add(d)
             _recalculate_order_total(session, pedido)
             _sync_order_status(session, pedido)
-            mesa.estado = EstadoMesa.OCUPADA.value
+            # "Enviar y cobrar" deja la mesa lista para cobrar en caja de una;
+            # el envío normal la deja ocupada (se cobra después).
+            mesa.estado = (
+                EstadoMesa.ESPERANDO_CUENTA.value
+                if directo_caja
+                else EstadoMesa.OCUPADA.value
+            )
             mesa.updated_at = now
             session.add(pedido)
             session.add(mesa)
@@ -4771,7 +4787,7 @@ class FoodState(
         self.cargar_cocina()
         if alertas_stock:
             self.cargar_menu()
-        destino = "directo a caja" if sin_cocina else "a cocina"
+        destino = "y marcado para cobrar" if directo_caja else "a cocina"
         toasts: list = [
             rx.toast.success(f"Pedido #{pedido_id} enviado {destino}"),
             rx.call_script(_VIBRATE_JS),

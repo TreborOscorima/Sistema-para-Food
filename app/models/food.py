@@ -871,8 +871,9 @@ class DetallePedido(TimestampedModel, table=True):
     # Snapshot al agregar el ítem: ¿este producto se prepara (cocina/barra) o va
     # directo a caja? Los que NO requieren preparación no generan comanda ni
     # aparecen en la pantalla de cocina. Se resuelve de la estación efectiva del
-    # producto (producto.estacion → categoría → COCINA) al momento de agregarlo,
-    # o se fuerza a False con el override manual "Enviar directo a caja".
+    # producto (producto.estacion → categoría → COCINA) al momento de agregarlo.
+    # El ruteo es 100% automático por producto: ni "Enviar y cobrar" ni ningún
+    # override manual saca de cocina un ítem que sí requiere preparación.
     requiere_preparacion: bool = Field(default=True, nullable=False)
     # Marca de "comanda ya impresa en papel". La pone la primera pantalla que
     # la imprime (Caja o /estacion-impresion), de forma atómica, para que cada
