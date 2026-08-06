@@ -157,6 +157,13 @@ def reclamar_comandas_pendientes(
     encola como trabajos de rol 'cocina'. Cada comanda se reclama una sola vez
     (UPDATE ... WHERE ticket_impreso_at IS NULL, rowcount == 1), así no se
     duplica entre agentes/pantallas. Devuelve los trabajos creados."""
+    # Auto-impresión de comanda desactivada: la cocina trabaja solo con el KDS.
+    # No reclamamos ni encolamos (dejamos ticket_impreso_at en NULL).
+    cfg = session.exec(
+        select(ConfigImpresora).where(ConfigImpresora.company_id == company_id)
+    ).first()
+    if cfg is not None and not cfg.comanda_auto:
+        return []
     stmt = select(DetallePedido).where(
         DetallePedido.company_id == company_id,
         DetallePedido.impreso_cocina.is_(True),

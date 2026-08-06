@@ -120,7 +120,19 @@ def _cliente_card(c: ClienteView) -> rx.Component:
                          padding_x="8px", padding_y="2px"),
                 rx.fragment(),
             ),
-            spacing="2", align="center", margin_top="12px",
+            spacing="2", align="center", margin_top="12px", flex_wrap="wrap",
+        ),
+        # M-11b: acceso directo a la cuenta corriente (fiado) del cliente.
+        rx.link(
+            rx.hstack(
+                rx.icon(tag="wallet", size=13),
+                rx.text("Ver cuenta corriente", font_size="12px", font_weight="600"),
+                rx.icon(tag="arrow_right", size=13),
+                spacing="1", align="center",
+            ),
+            on_click=FoodState.ver_cuenta_de_cliente(c.id),
+            color=ACCENT, cursor="pointer", margin_top="10px",
+            _hover={"text_decoration": "none", "color": ACCENT_HOVER},
         ),
         background=rx.cond(c.cumple_hoy, "rgba(245,158,11,0.10)", DARK_800),
         border=rx.cond(c.cumple_hoy, "1px solid rgba(245,158,11,0.25)", f"1px solid {DARK_700}"),

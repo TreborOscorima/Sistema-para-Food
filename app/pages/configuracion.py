@@ -958,28 +958,9 @@ def _content_local() -> rx.Component:
                         ),
                         spacing="3", width="100%",
                     ),
-                    # Imprimir comprobante automáticamente al cobrar (o a demanda)
-                    rx.hstack(
-                        rx.vstack(
-                            rx.text("Imprimir comprobante al cobrar", font_size="13px",
-                                    font_weight="600", color="#CBD5E1"),
-                            rx.text(
-                                "Si lo desactivas, el comprobante no sale solo: lo "
-                                "imprimes a demanda con el botón Imprimir comprobante "
-                                "en Caja. Ahorra papel cuando el cliente no lo pide.",
-                                font_size="11px", color=TEXT_MUTED,
-                            ),
-                            spacing="0", align="start",
-                        ),
-                        rx.spacer(),
-                        _toggle_btn(
-                            FoodState.config_comprobante_auto,
-                            FoodState.set_config_comprobante_auto(
-                                ~FoodState.config_comprobante_auto
-                            ),
-                        ),
-                        width="100%", align="center",
-                    ),
+                    # Nota: los interruptores de "qué se imprime solo" (comprobante
+                    # y comanda de cocina) viven ahora en la pestaña Impresoras,
+                    # junto al resto de la configuración de impresión.
                     # Preview del ticket
                     rx.box(
                         rx.hstack(
@@ -1497,6 +1478,76 @@ def _content_impresoras() -> rx.Component:
                         cursor="pointer", _hover={"background": ACCENT_HOVER},
                     ),
                     spacing="3", width="100%", align="center",
+                ),
+                spacing="3", width="100%",
+            ),
+            background=DARK_800, border=f"1px solid {DARK_700}",
+            border_radius="12px", padding="20px", width="100%",
+            box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+        ),
+        # ── Qué se imprime automáticamente ──
+        rx.box(
+            rx.vstack(
+                _section_header("Qué se imprime automáticamente", "receipt"),
+                rx.text(
+                    "Controla qué documentos salen solos. Apagar uno ahorra papel; "
+                    "igual puedes imprimir a demanda cuando haga falta.",
+                    font_size="12px", color=TEXT_MUTED,
+                ),
+                # Comanda de cocina
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Imprimir comanda de cocina", font_size="13px",
+                                font_weight="600", color="#CBD5E1"),
+                        rx.text(
+                            "Al enviar un pedido a cocina. Si lo desactivas, la cocina "
+                            "trabaja solo con la pantalla del KDS (sin papel).",
+                            font_size="11px", color=TEXT_MUTED,
+                        ),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    _toggle_btn(
+                        FoodState.config_comanda_auto,
+                        FoodState.set_config_comanda_auto(
+                            ~FoodState.config_comanda_auto
+                        ),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.divider(border_color=DARK_700),
+                # Comprobante de pago
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Imprimir comprobante al cobrar", font_size="13px",
+                                font_weight="600", color="#CBD5E1"),
+                        rx.text(
+                            "Al cobrar un pedido. Si lo desactivas, no sale solo: lo "
+                            "imprimes a demanda con el botón Imprimir comprobante en Caja.",
+                            font_size="11px", color=TEXT_MUTED,
+                        ),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    _toggle_btn(
+                        FoodState.config_comprobante_auto,
+                        FoodState.set_config_comprobante_auto(
+                            ~FoodState.config_comprobante_auto
+                        ),
+                    ),
+                    width="100%", align="center",
+                ),
+                rx.hstack(
+                    rx.spacer(),
+                    rx.button(
+                        rx.hstack(rx.icon(tag="save", size=14, color=TEXT_WHITE),
+                                  rx.text("Guardar", font_size="13px", font_weight="700", color=TEXT_WHITE),
+                                  spacing="2", align="center"),
+                        on_click=FoodState.guardar_config_impresora,
+                        background=ACCENT, border_radius="8px", padding_x="16px", padding_y="9px",
+                        cursor="pointer", _hover={"background": ACCENT_HOVER},
+                    ),
+                    width="100%",
                 ),
                 spacing="3", width="100%",
             ),

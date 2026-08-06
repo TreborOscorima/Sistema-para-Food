@@ -434,6 +434,14 @@ class ClientesCuentasMixin(rx.State, mixin=True):
         if cli:
             self._ver_o_crear_cuenta(cli.id)
 
+    def ver_cuenta_de_cliente(self, cliente_id: int):
+        """M-11b: desde la ficha de un cliente, abrir su cuenta corriente en la
+        sección Cuentas (la preselecciona y navega). Conecta Clientes ↔ Cuentas."""
+        cli = next((c for c in self.clientes_lista if c.id == cliente_id), None)
+        self.cc_cliente_sel_nombre = cli.nombre if cli else ""
+        self._ver_o_crear_cuenta(cliente_id)
+        return rx.redirect("/cuentas")
+
     def _ver_o_crear_cuenta(self, cliente_id: int) -> None:
         with self._tenant_session() as session:
             cc = session.exec(

@@ -756,10 +756,20 @@ def _recetas_section() -> rx.Component:
                         width="100%",
                     ),
                     rx.center(
-                        rx.text(
-                            "Sin ingredientes en la receta. Agrega uno abajo.",
-                            font_size="12px",
-                            color=TEXT_MUTED,
+                        rx.vstack(
+                            rx.text(
+                                "Sin ingredientes en la receta. Agrega uno abajo.",
+                                font_size="12px",
+                                color=TEXT_MUTED,
+                            ),
+                            rx.text(
+                                "Sin receta el producto se vende igual, pero no descuenta stock.",
+                                font_size="11px",
+                                color=TEXT_MUTED,
+                                font_style="italic",
+                            ),
+                            spacing="1",
+                            align="center",
                         ),
                         padding_y="10px",
                         width="100%",

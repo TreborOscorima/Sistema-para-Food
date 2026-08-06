@@ -166,6 +166,30 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
+                # M-07d: aviso "sin receta → no descuenta stock" con link a Inventario.
+                rx.cond(
+                    ~prod.tiene_receta,
+                    rx.tooltip(
+                        rx.link(
+                            rx.badge(
+                                rx.hstack(
+                                    rx.icon(tag="info", size=10),
+                                    rx.text("Sin receta"),
+                                    spacing="1", align="center",
+                                ),
+                                background="rgba(148,163,184,0.12)",
+                                color=TEXT_MUTED,
+                                border=f"1px solid {DARK_700}",
+                                border_radius="5px", font_size="10px", font_weight="600",
+                                padding="1px 6px",
+                            ),
+                            href="/inventario",
+                            _hover={"text_decoration": "none", "opacity": "0.8"},
+                        ),
+                        content="No descuenta stock al venderse. Cárgale una receta en Inventario.",
+                    ),
+                    rx.fragment(),
+                ),
                 spacing="2",
                 align="center",
                 flex_wrap="wrap",

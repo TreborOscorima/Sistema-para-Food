@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Column, Date, JSON, Numeric, Text, UniqueConstraint, event
+from sqlalchemy import Column, Date, Index, JSON, Numeric, Text, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
 from tuwayki_core.utils.timezone import utc_now_naive
 
@@ -322,6 +322,12 @@ class Pedido(TimestampedModel, table=True):
     """Pedido de mesa o mostrador, scoped por empresa."""
 
     __tablename__ = "food_pedidos"
+    # PERF-03: índice compuesto (company_id, estado) para el filtrado caliente del
+    # polling de mesas/pedidos. El índice (company_id, cerrado_en) ya existía
+    # (ix_food_pedidos_company_cerrado_en), por eso no se redeclara acá.
+    __table_args__ = (
+        Index("ix_food_pedidos_company_estado", "company_id", "estado"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)
@@ -525,6 +531,11 @@ class ConfigImpresora(TimestampedModel, table=True):
     # ("a demanda"), no se imprime solo: queda el botón "Imprimir comprobante"
     # para hacerlo cuando el cliente lo pide (ahorra papel).
     comprobante_auto: bool = Field(default=True, nullable=False)
+    # ¿La comanda de cocina se imprime automáticamente al enviar a cocina? Si es
+    # False, no sale papel: la cocina trabaja solo con la pantalla del KDS
+    # (útil para locales sin impresora en cocina). Ver _check_cocina_auto_print
+    # (modo navegador) y reclamar_comandas_pendientes (modo agente).
+    comanda_auto: bool = Field(default=True, nullable=False)
 
 
 # ─── Impresión con agente local ──────────────────────────────────────────────
@@ -825,6 +836,9 @@ class DetallePedido(TimestampedModel, table=True):
     """Línea individual de producto dentro de un pedido."""
 
     __tablename__ = "food_detalle_pedidos"
+    # PERF-03: los índices compuestos del KDS (company_id, estado_produccion) y
+    # (pedido_id, estado_produccion) ya existían en la BD desde migraciones
+    # previas (ix_food_detalle_pedidos_company_estado_prod / _pedido_estado_prod).
 
     id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(index=True, nullable=False)

@@ -36,6 +36,22 @@
       "icons": [{ "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
+  "screenshots": [
+    {
+      "src": "/pwa/screenshot-mozos-mobile.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Salón de mozos: mapa de mesas y comandas en curso"
+    },
+    {
+      "src": "/pwa/screenshot-reportes-desktop.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Reportes: ventas del día, propinas y estado de resultados"
+    }
+  ],
   "icons": [
     {
       "src": "/pwa/icon-192.png",

@@ -1001,6 +1001,7 @@ class ProductoView(BaseModel):
     imagen_url: str
     emoji: str = "🍽️"
     tiene_modificadores: bool = False
+    tiene_receta: bool = False
     margen_pct: float = -1.0
     stock_diario: int = -1
     stock_diario_alerta: int = 5
@@ -1630,6 +1631,9 @@ class FoodState(
     # ¿Imprimir el comprobante de pago automáticamente al cobrar? Si es False,
     # queda "a demanda" (solo con el botón Imprimir comprobante).
     config_comprobante_auto: bool = True
+    # ¿Imprimir la comanda de cocina automáticamente al enviar a cocina? Si es
+    # False, la cocina trabaja solo con el KDS en pantalla (sin papel).
+    config_comanda_auto: bool = True
     config_slug: str = "mi-restaurante"
     config_menu_qr_base64: str = ""
     config_menu_url: str = ""
@@ -2908,6 +2912,7 @@ class FoodState(
                 self.config_kds_minutos_alerta = str(cfg.kds_minutos_alerta)
                 self.config_modo_impresion = cfg.modo_impresion or "navegador"
                 self.config_comprobante_auto = cfg.comprobante_auto
+                self.config_comanda_auto = cfg.comanda_auto
                 url = f"{_FOOD_BASE_URL}/menu/{self.config_slug}"
                 self.config_menu_url = url
                 self.config_menu_qr_base64 = _generar_qr_base64(url)
@@ -2948,6 +2953,7 @@ class FoodState(
                 "agente" if self.config_modo_impresion == "agente" else "navegador"
             )
             cfg.comprobante_auto = self.config_comprobante_auto
+            cfg.comanda_auto = self.config_comanda_auto
             slug = _slugify(self.config_slug) if self.config_slug.strip() else _slugify(cfg.nombre_local)
             cfg.slug = slug
             cfg.updated_at = _utcnow()
@@ -3280,6 +3286,9 @@ class FoodState(
 
     def set_config_comprobante_auto(self, v: bool) -> None:
         self.config_comprobante_auto = v
+
+    def set_config_comanda_auto(self, v: bool) -> None:
+        self.config_comanda_auto = v
 
     def set_config_nombre_impuesto(self, v: str) -> None:
         self.config_nombre_impuesto = v
@@ -3626,12 +3635,19 @@ class FoodState(
             # En modo "agente" la impresión la hace el agente local (reclama las
             # comandas por la API); el navegador NO imprime ni reclama, para no
             # duplicar. Ver ConfigImpresora.modo_impresion.
-            modo = session.exec(
-                select(ConfigImpresora.modo_impresion).where(
+            cfg = session.exec(
+                select(ConfigImpresora).where(
                     ConfigImpresora.company_id == self._company_id()
                 )
             ).first()
+            modo = cfg.modo_impresion if cfg else "navegador"
             if modo == "agente":
+                return ""
+            # Auto-impresión de comanda desactivada: la cocina trabaja solo con el
+            # KDS en pantalla, no se imprime papel. No reclamamos (dejamos
+            # ticket_impreso_at en NULL) para no marcar como impresas comandas que
+            # nunca salieron.
+            if cfg is not None and not cfg.comanda_auto:
                 return ""
             candidates = session.exec(
                 select(DetallePedido)
@@ -4085,6 +4101,7 @@ class FoodState(
                 ).all():
                     productos_con_mods.add(pg.producto_id)
             margen_map: dict[int, float] = {}
+            productos_con_receta: set[int] = set()
             if pids:
                 recetas = session.exec(
                     select(RecetaItem).where(RecetaItem.company_id == self._company_id())
@@ -4097,6 +4114,7 @@ class FoodState(
                 receta_por_prod: dict[int, list] = {}
                 for r in recetas:
                     receta_por_prod.setdefault(r.producto_id, []).append(r)
+                productos_con_receta = set(receta_por_prod.keys())
                 for prod in productos_db:
                     items_r = receta_por_prod.get(prod.id or 0)
                     if not items_r:
@@ -4122,6 +4140,7 @@ class FoodState(
                     imagen_url=p.imagen_url or "",
                     emoji=p.emoji or _emoji_para_producto(p.nombre),
                     tiene_modificadores=(p.id or 0) in productos_con_mods,
+                    tiene_receta=(p.id or 0) in productos_con_receta,
                     margen_pct=margen_map.get(p.id or 0, -1.0),
                     stock_diario=p.stock_diario if p.stock_diario is not None else -1,
                     stock_diario_alerta=p.stock_diario_alerta,
