@@ -5957,10 +5957,24 @@ class FoodState(
         fiado_txt = f" Fiado revertido: {_money_text(fiado_revertido)}." if fiado_revertido > 0 else ""
         return rx.toast.success(f"Venta #{pedido_id} anulada. Queda registrada en reportes.{fiado_txt}")
 
-    def confirmar_cobro(self) -> None:
+    def confirmar_cobro(self):
+        """Candado anti-doble-cobro con liberación garantizada.
+
+        Envuelve la lógica en try/finally para que ``caja_cobrando`` SIEMPRE
+        vuelva a False, incluso si una validación corta con ``return`` o salta
+        una excepción. Antes, un error de validación en pago dividido/mixto
+        (p. ej. "los pagos no cubren el total") dejaba el candado en True y
+        bloqueaba TODOS los cobros siguientes hasta recargar la página.
+        """
         if self.caja_cobrando:
             return
         self.caja_cobrando = True
+        try:
+            return self._confirmar_cobro_impl()
+        finally:
+            self.caja_cobrando = False
+
+    def _confirmar_cobro_impl(self):
         self.caja_cobro_error = ""
         es_mostrador = self.caja_cobro_pedido_id > 0
         objetivo_mesa = self.caja_cobro_mesa_id
