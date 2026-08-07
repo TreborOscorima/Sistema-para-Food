@@ -6264,12 +6264,14 @@ class FoodState(
         # papel de más.
         if self.config_comprobante_auto:
             cobro_toast = rx.toast.success(
-                f"{mesa_label} cobrado — {_money_text(total_final)}"
+                f"{mesa_label} cobrado — {_money_text(total_final)}",
+                position="top-center",
             )
         else:
             cobro_toast = rx.toast.success(
                 f"{mesa_label} cobrado — {_money_text(total_final)}",
                 duration=10000,
+                position="top-center",
                 action=ToastAction(
                     label="Imprimir comprobante",
                     on_click=FoodState.reimprimir_comprobante(pedido_id),
@@ -7162,6 +7164,14 @@ class AdminLocalState(rx.State):
                 acceso_cocina=True,
                 acceso_mostrador=True,
             )
+        food_state.ultima_actividad = _utcnow().isoformat()
+        # Persistir la sesión en la cookie firmada (twk_session), igual que el
+        # login por PIN. Sin esto, al recargar o abrir una página operativa
+        # (Mozos/Caja/Mostrador/Cocina) usuario_actual está vacío y, sin cookie,
+        # _try_restore_session() falla y el dueño rebota al selector de empresa.
+        # Requiere un UsuarioFood Admin real (id != 0) para poder reconstruirla.
+        if food_state.usuario_actual.id:
+            food_state._set_session_cookie_from_current()
         food_state.cargar_config_impresora()
         food_state._cargar_plan_empresa()
         return rx.redirect("/admin")
