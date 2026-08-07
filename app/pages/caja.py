@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import (
-    anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder,
+    anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder, styled_switch,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_700, DARK_800,
@@ -185,10 +185,10 @@ def _pagos_divididos_panel() -> rx.Component:
                     text_transform="uppercase", letter_spacing="0.05em"),
             rx.spacer(),
             rx.hstack(
-                rx.switch(
-                    checked=FoodState.caja_split_por_items,
-                    on_change=FoodState.set_caja_split_por_items,
-                    color_scheme="blue", size="1",
+                styled_switch(
+                    FoodState.caja_split_por_items,
+                    FoodState.set_caja_split_por_items,
+                    size="sm",
                 ),
                 rx.text("Por ítems", font_size="10px", color=TEXT_MUTED, font_weight="600"),
                 spacing="1", align="center",
@@ -301,22 +301,39 @@ def _pagos_divididos_panel() -> rx.Component:
 
 def _cobro_panel() -> rx.Component:
     return rx.vstack(
-        # Header
-        rx.hstack(
-            rx.vstack(
-                rx.text(FoodState.caja_cobro_mesa_nombre, font_size="18px", font_weight="800", color=TEXT_PRIMARY),
-                rx.text("Consumo pendiente de cobro", font_size="12px", color=TEXT_MUTED),
-                spacing="0",
+        # Header: espeja el ancho de las 2 columnas de abajo (recibo | terminal),
+        # con cada título centrado sobre su card.
+        rx.flex(
+            # Centrado sobre la card central (recibo / lista de productos).
+            rx.box(
+                rx.vstack(
+                    rx.text(FoodState.caja_cobro_mesa_nombre, font_size="18px", font_weight="800",
+                            color=TEXT_PRIMARY, text_align="center"),
+                    rx.text("Consumo pendiente de cobro", font_size="12px", color=TEXT_MUTED,
+                            text_align="center"),
+                    spacing="0", align="center",
+                ),
+                flex="1", min_width="0",
+                display="flex", align_items="center", justify_content="center",
             ),
-            rx.spacer(),
-            rx.badge(
-                "Cuenta pedida", background="rgba(239,68,68,0.12)", color=DANGER_SOLID,
-                border_radius="20px", font_size="11px", font_weight="700",
-                padding_x="12px", padding_y="5px",
+            # Centrado sobre el terminal (encima de TOTAL A COBRAR).
+            rx.box(
+                rx.badge(
+                    "Cuenta pedida", background="rgba(239,68,68,0.12)", color=DANGER_SOLID,
+                    border_radius="20px", font_size="11px", font_weight="700",
+                    padding_x="12px", padding_y="5px",
+                ),
+                width=rx.breakpoints(initial="100%", lg="340px"),
+                min_width=rx.breakpoints(initial="100%", lg="340px"),
+                flex_shrink="0",
+                display="flex", align_items="center", justify_content="center",
             ),
-            width="100%", align="center",
+            gap="16px", width="100%", align="center",
+            direction=rx.breakpoints(initial="column", lg="row"),
         ),
-        # 2 columnas: recibo (items) | terminal de pago (todo lo operativo)
+        # 2 columnas: recibo (items) | terminal de pago. El terminal define la
+        # altura visible; el recibo se acota con max_height y scrollea por dentro
+        # hasta llegar al nivel de "DIVIDIR / PAGO MIXTO".
         rx.flex(
             # ── Columna izquierda: recibo (solo items + promos + subtotal) ──
             rx.vstack(
@@ -334,7 +351,7 @@ def _cobro_panel() -> rx.Component:
                         FoodState.caja_cobro_items.length() > 0,
                         rx.box(
                             rx.foreach(FoodState.caja_cobro_items, _caja_item_row),
-                            width="100%", overflow_y="auto", flex="1",
+                            width="100%", overflow_y="auto", flex="1", min_height="0",
                         ),
                         rx.center(
                             rx.text("Sin items registrados.", font_size="13px", color=TEXT_MUTED),
@@ -413,9 +430,21 @@ def _cobro_panel() -> rx.Component:
                     spacing="0",
                     border=f"1px solid {DARK_700}", border_radius="12px",
                     background=DARK_800, overflow="hidden",
-                    flex="1", min_width="0", width="100%",
+                    # En desktop la card se posiciona ABSOLUTA dentro de su columna
+                    # (que se estira a la altura del terminal). Al ser absoluta no
+                    # aporta alto, así el recibo NUNCA estira la fila: la lista
+                    # scrollea por dentro y el subtotal queda fijo abajo, al nivel
+                    # exacto de "DIVIDIR / PAGO MIXTO" — sin números mágicos.
+                    min_width="0", width="100%", min_height="0",
+                    display="flex", flex_direction="column",
+                    position=rx.breakpoints(initial="static", lg="absolute"),
+                    top="0", left="0", right="0", bottom="0",
                 ),
-                flex="1", min_width="0", width="100%",
+                # Columna del recibo: contenedor relativo que se estira (align
+                # stretch de la fila) a la altura del terminal.
+                flex="1", min_width="0", width="100%", min_height="0",
+                position=rx.breakpoints(initial="static", lg="relative"),
+                overflow=rx.breakpoints(initial="visible", lg="hidden"),
             ),
             # ── Columna derecha: terminal completo de cobro ─────────────
             rx.vstack(
@@ -423,11 +452,13 @@ def _cobro_panel() -> rx.Component:
                 rx.vstack(
                     rx.text("TOTAL A COBRAR", font_size="9px", color=TEXT_MUTED,
                             text_transform="uppercase", letter_spacing="0.1em"),
-                    rx.text(FoodState.caja_cobro_total_final_texto, font_size="24px",
+                    rx.text(FoodState.caja_cobro_total_final_texto, font_size="26px",
                             font_weight="800", color="#FB923C", letter_spacing="-0.5px"),
                     spacing="0", align="center",
-                    background=PAGE_BACKGROUND, border_radius="10px",
-                    padding="10px 18px", width="100%",
+                    background="rgba(234,88,12,0.06)", border_radius="12px",
+                    border="1.5px solid rgba(234,88,12,0.55)",
+                    box_shadow="0 0 0 3px rgba(234,88,12,0.10)",
+                    padding="12px 18px", width="100%",
                 ),
                 # Ajustes: Descuento + Propina (grid 2 columnas)
                 rx.grid(
@@ -701,12 +732,12 @@ def _cobro_panel() -> rx.Component:
                 ),
                 # Toggle dividir
                 rx.hstack(
-                    rx.switch(
-                        checked=FoodState.caja_cobro_dividido,
-                        on_change=FoodState.set_caja_cobro_dividido,
-                        color_scheme="orange",
+                    styled_switch(
+                        FoodState.caja_cobro_dividido,
+                        FoodState.set_caja_cobro_dividido,
                     ),
-                    rx.text("Dividir / pago mixto", font_size="11px", color=TEXT_MUTED),
+                    rx.text("DIVIDIR / PAGO MIXTO", font_size="11px", font_weight="700",
+                            color=TEXT_MUTED, letter_spacing="0.05em"),
                     spacing="2", align="center",
                 ),
                 spacing="3",
@@ -714,6 +745,8 @@ def _cobro_panel() -> rx.Component:
                 min_width=rx.breakpoints(initial="100%", lg="340px"),
                 flex_shrink="0",
             ),
+            # align stretch: la columna del recibo se estira a la altura del
+            # terminal (que define el alto por su contenido fijo).
             gap="16px", width="100%", align="stretch",
             direction=rx.breakpoints(initial="column", lg="row"),
         ),
@@ -820,52 +853,80 @@ def _mesa_sidebar_row(mesa: MesaView) -> rx.Component:
 
 def _mesas_sidebar() -> rx.Component:
     mesas_cobrables = FoodState.mesas_por_cobrar
+    # Cada sección ocupa la mitad de la card (flex 1) y scrollea por dentro, de
+    # modo que ni "Mesas por cobrar" ni "Para llevar" se pisen entre sí cuando
+    # crecen los pedidos: se scrollea dentro de cada mitad para elegir cuál cobrar.
     return rx.box(
-        # Mesas por cobrar
+        # ── Mitad superior: Mesas por cobrar ──
         rx.box(
-            rx.text("Mesas por cobrar", font_size="11px", font_weight="700", color=TEXT_MUTED,
-                    text_transform="uppercase", letter_spacing="0.05em"),
-            padding="16px", border_bottom="1px solid #F1F5F9",
-        ),
-        rx.cond(
-            mesas_cobrables.length() > 0,
-            rx.vstack(
-                rx.foreach(mesas_cobrables, _mesa_sidebar_row),
-                spacing="0", width="100%",
-            ),
-            rx.center(
-                rx.text("No hay mesas abiertas.", font_size="13px", color=TEXT_MUTED),
-                padding_y="20px", width="100%",
-            ),
-        ),
-        # Para llevar — pedidos de Mostrador pendientes de cobro
-        rx.box(
-            rx.hstack(
-                rx.icon(tag="package", size=12, color=ACCENT),
-                rx.text("Para llevar", font_size="11px", font_weight="700", color=ACCENT,
+            rx.box(
+                rx.text("Mesas por cobrar", font_size="11px", font_weight="700", color=TEXT_MUTED,
                         text_transform="uppercase", letter_spacing="0.05em"),
-                spacing="1", align="center",
+                padding="14px 16px", border_bottom=f"1px solid {DARK_700}", flex_shrink="0",
             ),
-            padding="12px 16px", border_top="1px solid #F1F5F9", border_bottom="1px solid #F1F5F9",
+            rx.box(
+                rx.cond(
+                    mesas_cobrables.length() > 0,
+                    rx.vstack(
+                        rx.foreach(mesas_cobrables, _mesa_sidebar_row),
+                        spacing="0", width="100%",
+                    ),
+                    rx.center(
+                        rx.text("No hay mesas abiertas.", font_size="13px", color=TEXT_MUTED),
+                        padding_y="20px", width="100%",
+                    ),
+                ),
+                flex="1", width="100%",
+                overflow_y=rx.breakpoints(initial="visible", lg="auto"),
+                min_height=rx.breakpoints(initial="auto", lg="0"),
+            ),
+            display="flex", flex_direction="column", width="100%", overflow="hidden",
+            flex=rx.breakpoints(initial="0 0 auto", lg="1"),
+            min_height=rx.breakpoints(initial="auto", lg="0"),
         ),
-        rx.cond(
-            FoodState.pedidos_mostrador_pendientes.length() > 0,
-            rx.vstack(
-                rx.foreach(FoodState.pedidos_mostrador_pendientes, _para_llevar_card),
-                spacing="0", width="100%",
+        # ── Mitad inferior: Para llevar (pedidos de Mostrador pendientes) ──
+        rx.box(
+            rx.box(
+                rx.hstack(
+                    rx.icon(tag="package", size=12, color=ACCENT),
+                    rx.text("Para llevar", font_size="11px", font_weight="700", color=ACCENT,
+                            text_transform="uppercase", letter_spacing="0.05em"),
+                    spacing="1", align="center",
+                ),
+                padding="12px 16px",
+                border_top=f"1px solid {DARK_700}", border_bottom=f"1px solid {DARK_700}",
+                flex_shrink="0",
             ),
-            rx.center(
-                rx.text("Sin pedidos para llevar.", font_size="13px", color=TEXT_MUTED),
-                padding_y="20px", width="100%",
+            rx.box(
+                rx.cond(
+                    FoodState.pedidos_mostrador_pendientes.length() > 0,
+                    rx.vstack(
+                        rx.foreach(FoodState.pedidos_mostrador_pendientes, _para_llevar_card),
+                        spacing="0", width="100%",
+                    ),
+                    rx.center(
+                        rx.text("Sin pedidos para llevar.", font_size="13px", color=TEXT_MUTED),
+                        padding_y="20px", width="100%",
+                    ),
+                ),
+                flex="1", width="100%",
+                overflow_y=rx.breakpoints(initial="visible", lg="auto"),
+                min_height=rx.breakpoints(initial="auto", lg="0"),
             ),
+            display="flex", flex_direction="column", width="100%", overflow="hidden",
+            flex=rx.breakpoints(initial="0 0 auto", lg="1"),
+            min_height=rx.breakpoints(initial="auto", lg="0"),
         ),
         background=DARK_800,
         border=f"1px solid {DARK_700}",
         border_radius="14px",
         width=rx.breakpoints(initial="100%", lg="260px"),
         min_width=rx.breakpoints(initial="100%", lg="260px"),
-        max_height=rx.breakpoints(initial="none", lg="calc(100vh - 180px)"),
-        overflow_y="auto",
+        # En desktop la card se estira (align stretch de la fila) a la altura del
+        # panel central, con las dos mitades (Mesas por cobrar / Para llevar) al
+        # 50/50 y su fondo al nivel de "DIVIDIR"; en móvil crece con el contenido.
+        min_height="0", overflow="hidden",
+        display="flex", flex_direction="column",
         flex_shrink="0",
     )
 
@@ -937,11 +998,19 @@ def _panel_central() -> rx.Component:
         rx.cond(
             FoodState.caja_cobro_activo,
             _cobro_panel(),
-            empty_state(
-                icono="credit_card",
-                titulo="Selecciona una mesa para cobrar",
-                texto="Elige una mesa de la lista de la izquierda para ver su consumo y cobrar. "
-                      "Los pedidos para llevar aparecen más abajo.",
+            # Sin mesa seleccionada no hay terminal que fije la altura; le damos un
+            # alto de referencia para que la card de mesas no se encoja. No afecta
+            # la vista de cobro (esta rama solo se ve sin mesa elegida).
+            rx.box(
+                empty_state(
+                    icono="credit_card",
+                    titulo="Selecciona una mesa para cobrar",
+                    texto="Elige una mesa de la lista de la izquierda para ver su consumo y cobrar. "
+                          "Los pedidos para llevar aparecen más abajo.",
+                ),
+                width="100%",
+                min_height=rx.breakpoints(initial="auto", lg="calc(100vh - 230px)"),
+                display="flex", align_items="center", justify_content="center",
             ),
         ),
         flex="1", min_width="0", width="100%",
@@ -1369,17 +1438,21 @@ def _turno_historial_row(t: TurnoHistorialView) -> rx.Component:
                     color=t.descuadre_color, text_align="right"),
             spacing="0", align="end",
         ),
-        rx.icon_button(
-            rx.icon(tag="printer", size=14),
-            variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
-            title="Reimprimir cierre",
-            on_click=FoodState.reimprimir_cierre_turno(t.id),
+        rx.tooltip(
+            rx.icon_button(
+                rx.icon(tag="printer", size=14),
+                variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
+                on_click=FoodState.reimprimir_cierre_turno(t.id),
+            ),
+            content="Reimprimir cierre",
         ),
-        rx.icon_button(
-            rx.icon(tag="file_text", size=14),
-            variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
-            title="Descargar PDF del cierre",
-            on_click=FoodState.descargar_pdf_cierre_turno(t.id),
+        rx.tooltip(
+            rx.icon_button(
+                rx.icon(tag="file_text", size=14),
+                variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
+                on_click=FoodState.descargar_pdf_cierre_turno(t.id),
+            ),
+            content="Descargar PDF del cierre",
         ),
         width="100%", align="center", gap="10px",
         padding="10px 12px", border_bottom=f"1px solid {DARK_800}",
@@ -1735,11 +1808,14 @@ def _caja_content() -> rx.Component:
             width="100%", align="center", flex_wrap="wrap", gap="8px",
         ),
         _turno_banner(),
+        # align stretch: la card de mesas se estira a la misma altura que el panel
+        # central (cuyo alto lo fija el terminal), quedando su fondo al nivel de
+        # "DIVIDIR / PAGO MIXTO".
         rx.flex(
             _mesas_sidebar(),
             _panel_central(),
             direction=rx.breakpoints(initial="column", lg="row"),
-            gap="16px", width="100%", align="start",
+            gap="16px", width="100%", align="stretch",
         ),
         _mov_modal(),
         _cierre_modal(),
