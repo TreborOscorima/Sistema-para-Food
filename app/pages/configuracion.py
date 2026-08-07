@@ -8,11 +8,12 @@ from app.components.shared import (
     app_shell,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
-    DARK_700, DARK_800,
+    DARK_600, DARK_700, DARK_800,
     PAGE_BACKGROUND,
     SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
+    switch_toggle,
 )
 from app.states.food_state import (
     FoodState,
@@ -55,31 +56,26 @@ _SECCIONES = [
 # ─── COMPONENTES INTERNOS (también exportados para dono.py) ───────────────────
 
 def _toggle_btn(activo: bool, on_click) -> rx.Component:
-    return rx.button(
-        rx.hstack(
-            rx.box(
-                width="16px",
-                height="16px",
-                border_radius="full",
-                background=rx.cond(activo, "#FFFFFF", "#475569"),
-                transition="all 0.15s",
-            ),
-            rx.text(
-                rx.cond(activo, "Activada", "Desactivada"),
-                font_size="13px",
-                font_weight="600",
-                color=rx.cond(activo, "#FFFFFF", "#94A3B8"),
-            ),
-            spacing="2",
-            align="center",
+    """Switch estilo iOS (mismo look que ``styled_switch``).
+
+    Mantiene la firma ``(activo, on_click)`` para no tocar los llamadores:
+    el ``on_click`` ya viene armado (toggle o setter con valor).
+    """
+    return rx.box(
+        rx.box(
+            position="absolute", top="2px", left="2px",
+            width="20px", height="20px", border_radius="9999px",
+            background="#FFFFFF", box_shadow="0 1px 3px rgba(0,0,0,0.45)",
+            transform=rx.cond(activo, "translateX(18px)", "translateX(0)"),
+            transition="transform 0.22s cubic-bezier(0.4,0,0.2,1)",
         ),
         on_click=on_click,
-        background=rx.cond(activo, "#22C55E", "#1E293B"),
-        border=rx.cond(activo, "1px solid #15803D", f"1px solid {DARK_700}"),
-        border_radius="8px",
-        padding="6px 14px",
-        cursor="pointer",
-        _hover={"opacity": "0.85"},
+        position="relative", width="42px", height="24px", border_radius="9999px",
+        background=rx.cond(activo, ACCENT, DARK_600),
+        border=rx.cond(activo, f"1px solid {ACCENT}", f"1px solid {DARK_700}"),
+        cursor="pointer", flex_shrink="0",
+        transition="background 0.22s ease, border-color 0.22s ease",
+        _hover={"opacity": "0.88"},
     )
 
 
@@ -316,26 +312,30 @@ def _mesa_row(mesa: MesaAdminView) -> rx.Component:
             rx.badge("Inactiva", background="rgba(239,68,68,0.12)", color="#F87171",
                      border_radius="5px", font_size="10px"),
         ),
-        rx.button("Editar", on_click=FoodState.editar_mesa_config(mesa.id),
-                  background="rgba(234,88,12,0.08)", color=ACCENT, border="1px solid rgba(234,88,12,0.40)",
-                  border_radius="6px", font_size="10px", cursor="pointer",
-                  padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"}),
-        rx.button(
-            rx.cond(mesa.activa, "Desactivar", "Activar"),
-            on_click=FoodState.toggle_mesa_activa_config(mesa.id),
-            background=rx.cond(mesa.activa, "rgba(239,68,68,0.08)", "rgba(34,197,94,0.08)"),
-            color=rx.cond(mesa.activa, "#F87171", "#22C55E"),
-            border=rx.cond(mesa.activa, "1px solid #FECACA", "1px solid #BBF7D0"),
-            border_radius="6px", font_size="10px", cursor="pointer",
-            padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="pencil", size=13),
+                on_click=FoodState.editar_mesa_config(mesa.id),
+                background="rgba(234,88,12,0.08)", color=ACCENT, border="1px solid rgba(234,88,12,0.40)",
+                border_radius="6px", cursor="pointer",
+                padding="5px", min_width="0", height="auto", _hover={"opacity": "0.85"},
+            ),
+            content="Editar mesa",
+        ),
+        rx.tooltip(
+            switch_toggle(mesa.activa, FoodState.toggle_mesa_activa_config(mesa.id)),
+            content=rx.cond(mesa.activa, "Desactivar mesa", "Activar mesa"),
         ),
         rx.alert_dialog.root(
             rx.alert_dialog.trigger(
-                rx.button(
-                    rx.icon(tag="trash_2", size=12, color="#F87171"),
-                    background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
-                    border_radius="6px", cursor="pointer",
-                    padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+                rx.tooltip(
+                    rx.button(
+                        rx.icon(tag="trash_2", size=12, color="#F87171"),
+                        background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
+                        border_radius="6px", cursor="pointer",
+                        padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+                    ),
+                    content="Eliminar mesa",
                 ),
             ),
             rx.alert_dialog.content(
@@ -549,18 +549,21 @@ def _admin_cuenta_section() -> rx.Component:
                         padding_x="12px", padding_y="8px", font_size="13px",
                         padding_right="40px", width="100%",
                     ),
-                    rx.icon_button(
-                        rx.icon(
-                            tag=rx.cond(FoodState.config_admin_show_password, "eye_off", "eye"),
-                            size=15,
+                    rx.tooltip(
+                        rx.icon_button(
+                            rx.icon(
+                                tag=rx.cond(FoodState.config_admin_show_password, "eye_off", "eye"),
+                                size=15,
+                            ),
+                            on_click=FoodState.toggle_config_admin_show_password,
+                            type="button",
+                            background="transparent", color=TEXT_MUTED, border="none",
+                            width="26px", height="26px",
+                            _hover={"background": DARK_700},
+                            position="absolute", right="6px", top="50%",
+                            transform="translateY(-50%)", cursor="pointer",
                         ),
-                        on_click=FoodState.toggle_config_admin_show_password,
-                        type="button",
-                        background="transparent", color=TEXT_MUTED, border="none",
-                        width="26px", height="26px",
-                        _hover={"background": DARK_700},
-                        position="absolute", right="6px", top="50%",
-                        transform="translateY(-50%)", cursor="pointer",
+                        content="Mostrar u ocultar contraseña",
                     ),
                     position="relative", flex="1",
                 ),
@@ -581,18 +584,21 @@ def _admin_cuenta_section() -> rx.Component:
                         padding_x="12px", padding_y="8px", font_size="13px",
                         padding_right="40px", width="100%",
                     ),
-                    rx.icon_button(
-                        rx.icon(
-                            tag=rx.cond(FoodState.config_admin_show_password, "eye_off", "eye"),
-                            size=15,
+                    rx.tooltip(
+                        rx.icon_button(
+                            rx.icon(
+                                tag=rx.cond(FoodState.config_admin_show_password, "eye_off", "eye"),
+                                size=15,
+                            ),
+                            on_click=FoodState.toggle_config_admin_show_password,
+                            type="button",
+                            background="transparent", color=TEXT_MUTED, border="none",
+                            width="26px", height="26px",
+                            _hover={"background": DARK_700},
+                            position="absolute", right="6px", top="50%",
+                            transform="translateY(-50%)", cursor="pointer",
                         ),
-                        on_click=FoodState.toggle_config_admin_show_password,
-                        type="button",
-                        background="transparent", color=TEXT_MUTED, border="none",
-                        width="26px", height="26px",
-                        _hover={"background": DARK_700},
-                        position="absolute", right="6px", top="50%",
-                        transform="translateY(-50%)", cursor="pointer",
+                        content="Mostrar u ocultar contraseña",
                     ),
                     position="relative", flex="1",
                 ),
@@ -1110,30 +1116,40 @@ def _impresora_row(imp: ImpresoraView) -> rx.Component:
             ),
             spacing="1", align="start", flex="1", min_width="0",
         ),
-        rx.button("Probar", on_click=FoodState.imprimir_prueba_impresora(imp.rol),
-                  background="rgba(59,130,246,0.08)", color="#60A5FA",
-                  border="1px solid #BFDBFE", border_radius="6px", font_size="10px",
-                  cursor="pointer", padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"}),
-        rx.button("Editar", on_click=FoodState.editar_impresora_config(imp.id),
-                  background="rgba(234,88,12,0.08)", color=ACCENT, border="1px solid rgba(234,88,12,0.40)",
-                  border_radius="6px", font_size="10px", cursor="pointer",
-                  padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"}),
-        rx.button(
-            rx.cond(imp.activa, "Desactivar", "Activar"),
-            on_click=FoodState.toggle_impresora_activa(imp.id),
-            background=rx.cond(imp.activa, "rgba(239,68,68,0.08)", "rgba(34,197,94,0.08)"),
-            color=rx.cond(imp.activa, "#F87171", "#22C55E"),
-            border=rx.cond(imp.activa, "1px solid #FECACA", "1px solid #BBF7D0"),
-            border_radius="6px", font_size="10px", cursor="pointer",
-            padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="printer", size=13),
+                on_click=FoodState.imprimir_prueba_impresora(imp.rol),
+                background="rgba(59,130,246,0.08)", color="#60A5FA",
+                border="1px solid #BFDBFE", border_radius="6px",
+                cursor="pointer", padding="5px", min_width="0", height="auto",
+                _hover={"opacity": "0.85"},
+            ),
+            content="Imprimir prueba",
+        ),
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="pencil", size=13),
+                on_click=FoodState.editar_impresora_config(imp.id),
+                background="rgba(234,88,12,0.08)", color=ACCENT, border="1px solid rgba(234,88,12,0.40)",
+                border_radius="6px", cursor="pointer",
+                padding="5px", min_width="0", height="auto", _hover={"opacity": "0.85"}),
+            content="Editar impresora",
+        ),
+        rx.tooltip(
+            switch_toggle(imp.activa, FoodState.toggle_impresora_activa(imp.id)),
+            content=rx.cond(imp.activa, "Desactivar impresora", "Activar impresora"),
         ),
         rx.alert_dialog.root(
             rx.alert_dialog.trigger(
-                rx.button(
-                    rx.icon(tag="trash_2", size=12, color="#F87171"),
-                    background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
-                    border_radius="6px", cursor="pointer",
-                    padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+                rx.tooltip(
+                    rx.button(
+                        rx.icon(tag="trash_2", size=12, color="#F87171"),
+                        background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
+                        border_radius="6px", cursor="pointer",
+                        padding_x="7px", padding_y="3px", _hover={"opacity": "0.85"},
+                    ),
+                    content="Eliminar impresora",
                 ),
             ),
             rx.alert_dialog.content(
@@ -1599,10 +1615,13 @@ def _sucursal_row(suc: SucursalView) -> rx.Component:
             spacing="1", align="start",
         ),
         rx.spacer(),
-        rx.button(
-            rx.icon(tag="pencil", size=14),
-            on_click=FoodState.abrir_form_sucursal(suc.id),
-            variant="ghost", size="1", cursor="pointer",
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="pencil", size=14),
+                on_click=FoodState.abrir_form_sucursal(suc.id),
+                variant="ghost", size="1", cursor="pointer",
+            ),
+            content="Editar sucursal",
         ),
         width="100%", align="center",
         padding="10px 12px",

@@ -34,6 +34,7 @@ from app.components.shared import (
     app_shell,
     section_card,
     surface_card,
+    switch_toggle,
 )
 from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.states.food_state import UsuarioAdminView
@@ -121,29 +122,24 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
                      padding="3px 10px", width="fit-content"),
         ),
         rx.hstack(
-            rx.link(
-                "✏️ Editar",
-                on_click=UsuariosAdminState.editar_usuario(u.id),
-                font_size="12px", font_weight="600", color=ACCENT,
-                cursor="pointer", _hover={"color": ACCENT_HOVER},
+            rx.tooltip(
+                rx.link(
+                    rx.icon(tag="pencil", size=15),
+                    on_click=UsuariosAdminState.editar_usuario(u.id),
+                    color=ACCENT, cursor="pointer", _hover={"color": ACCENT_HOVER},
+                    display="flex", align_items="center",
+                ),
+                content="Editar",
             ),
             rx.cond(
                 u.es_yo,
                 rx.fragment(),
-                rx.button(
-                    rx.cond(
-                        u.activo,
-                        rx.icon(tag="toggle_right", size=14),
-                        rx.icon(tag="toggle_left", size=14),
-                    ),
-                    on_click=UsuariosAdminState.toggle_usuario_activo(u.id),
-                    background="transparent",
-                    color=rx.cond(u.activo, SUCCESS_TEXT, TEXT_MUTED),
-                    border="none", padding="0", cursor="pointer",
-                    _hover={"opacity": "0.7"},
+                rx.tooltip(
+                    switch_toggle(u.activo, UsuariosAdminState.toggle_usuario_activo(u.id)),
+                    content=rx.cond(u.activo, "Desactivar", "Activar"),
                 ),
             ),
-            spacing="2", align="center",
+            spacing="3", align="center",
         ),
         columns=rx.breakpoints(initial="1fr", md=_USR_GRID_COLS),
         gap="8px", width="100%", align_items="center",
@@ -169,26 +165,21 @@ def _perm_toggle(
             align="start",
             flex="1",
         ),
-        rx.button(
-            rx.hstack(
-                rx.icon(tag=rx.cond(value, "check", "x"), size=11),
-                rx.text(rx.cond(value, "Sí", "No"), font_size="11px", font_weight="700"),
-                spacing="1",
-                align="center",
+        rx.box(
+            rx.box(
+                position="absolute", top="2px", left="2px",
+                width="20px", height="20px", border_radius="9999px",
+                background="#FFFFFF", box_shadow="0 1px 3px rgba(0,0,0,0.45)",
+                transform=rx.cond(value, "translateX(18px)", "translateX(0)"),
+                transition="transform 0.22s cubic-bezier(0.4,0,0.2,1)",
             ),
             on_click=on_click,
-            background=rx.cond(value, SUCCESS_BG, SURFACE_MUTED),
-            color=rx.cond(value, SUCCESS_TEXT, TEXT_MUTED),
-            border=rx.cond(
-                value,
-                f"1px solid {SUCCESS_BORDER}",
-                f"1px solid {BORDER_COLOR}",
-            ),
-            border_radius="20px",
-            padding="4px 12px",
-            cursor="pointer",
-            flex_shrink="0",
-            _hover={"opacity": "0.8"},
+            position="relative", width="42px", height="24px", border_radius="9999px",
+            background=rx.cond(value, ACCENT, SURFACE_MUTED),
+            border=rx.cond(value, f"1px solid {ACCENT}", f"1px solid {BORDER_COLOR}"),
+            cursor="pointer", flex_shrink="0",
+            transition="background 0.22s ease, border-color 0.22s ease",
+            _hover={"opacity": "0.88"},
         ),
         width="100%",
         align="center",

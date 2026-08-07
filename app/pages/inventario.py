@@ -22,6 +22,7 @@ from app.components.shared import (
     SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
+    switch_toggle,
 )
 
 
@@ -89,7 +90,7 @@ def _alerta_bajo_stock() -> rx.Component:
 
 # ── Tabla de insumos ─────────────────────────────────────────────────────────
 
-_INV_GRID_COLS = "2fr 1fr 1fr 1fr 90px"
+_INV_GRID_COLS = "2fr 1fr 1fr 1fr 150px"
 
 
 def _alerta_vencimientos() -> rx.Component:
@@ -283,7 +284,7 @@ def _insumos_table_header() -> rx.Component:
         rx.text("Stock mínimo", font_size="11px", font_weight="600", color=TEXT_MUTED,
                 text_transform="uppercase", letter_spacing="0.05em"),
         rx.text("Acción", font_size="11px", font_weight="600", color=TEXT_MUTED,
-                text_transform="uppercase", letter_spacing="0.05em"),
+                text_transform="uppercase", letter_spacing="0.05em", text_align="right"),
         columns=_INV_GRID_COLS,
         gap="8px", width="100%",
         padding="0 10px 8px", border_bottom=f"1px solid {DARK_800}",
@@ -333,43 +334,51 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
         rx.text(ins.stock_minimo_texto, font_size="13px", color=TEXT_MUTED,
                 display=rx.breakpoints(initial="none", md="block")),
         rx.hstack(
-            rx.button(
-                rx.icon(tag="circle_plus", size=15),
-                on_click=FoodState.abrir_mov_insumo(ins.id, "entrada"),
-                background="transparent", color="#16A34A",
-                border="none", padding="2px", cursor="pointer",
-                _hover={"opacity": "0.7"}, title="Registrar entrada / compra",
+            rx.tooltip(
+                rx.button(
+                    rx.icon(tag="circle_plus", size=15),
+                    on_click=FoodState.abrir_mov_insumo(ins.id, "entrada"),
+                    background="transparent", color="#16A34A",
+                    border="none", padding="2px", cursor="pointer",
+                    _hover={"opacity": "0.7"},
+                ),
+                content="Registrar entrada / compra",
             ),
-            rx.button(
-                rx.icon(tag="circle_minus", size=15),
-                on_click=FoodState.abrir_mov_insumo(ins.id, "merma"),
-                background="transparent", color=DANGER_SOLID,
-                border="none", padding="2px", cursor="pointer",
-                _hover={"opacity": "0.7"}, title="Registrar merma",
+            rx.tooltip(
+                rx.button(
+                    rx.icon(tag="circle_minus", size=15),
+                    on_click=FoodState.abrir_mov_insumo(ins.id, "merma"),
+                    background="transparent", color=DANGER_SOLID,
+                    border="none", padding="2px", cursor="pointer",
+                    _hover={"opacity": "0.7"},
+                ),
+                content="Registrar merma",
             ),
-            rx.button(
-                rx.icon(tag="scroll_text", size=15),
-                on_click=FoodState.abrir_kardex_insumo(ins.id),
-                background="transparent", color=TEXT_MUTED,
-                border="none", padding="2px", cursor="pointer",
-                _hover={"color": "#EA580C"}, title="Ver kardex",
+            rx.tooltip(
+                rx.button(
+                    rx.icon(tag="scroll_text", size=15),
+                    on_click=FoodState.abrir_kardex_insumo(ins.id),
+                    background="transparent", color=TEXT_MUTED,
+                    border="none", padding="2px", cursor="pointer",
+                    _hover={"color": "#EA580C"},
+                ),
+                content="Ver kardex",
             ),
-            rx.link(
-                "Editar",
-                on_click=FoodState.editar_insumo(ins.id),
-                font_size="12px", font_weight="600", color=TEXT_MUTED,
-                cursor="pointer", _hover={"color": "#EA580C"},
+            rx.tooltip(
+                rx.button(
+                    rx.icon(tag="pencil", size=15),
+                    on_click=FoodState.editar_insumo(ins.id),
+                    background="transparent", color=TEXT_MUTED,
+                    border="none", padding="2px", cursor="pointer",
+                    _hover={"color": "#EA580C"},
+                ),
+                content="Editar",
             ),
-            rx.button(
-                rx.cond(ins.activo, rx.icon(tag="toggle_right", size=13),
-                        rx.icon(tag="toggle_left", size=13)),
-                on_click=FoodState.toggle_insumo_activo(ins.id),
-                background="transparent",
-                color=rx.cond(ins.activo, "#22C55E", "#94A3B8"),
-                border="none", padding="0", cursor="pointer",
-                _hover={"opacity": "0.7"},
+            rx.tooltip(
+                switch_toggle(ins.activo, FoodState.toggle_insumo_activo(ins.id)),
+                content=rx.cond(ins.activo, "Desactivar insumo", "Activar insumo"),
             ),
-            spacing="2", align="center",
+            spacing="1", align="center", justify="end", flex_wrap="nowrap", width="100%",
         ),
         columns=rx.breakpoints(initial="1fr auto auto", md=_INV_GRID_COLS),
         gap="8px", width="100%", align_items="center",
@@ -654,16 +663,19 @@ def _receta_item_row(item: RecetaItemView) -> rx.Component:
             font_size="11px",
             padding="2px 7px",
         ),
-        rx.button(
-            rx.icon(tag="trash_2", size=12),
-            on_click=FoodState.eliminar_receta_item(item.id),
-            background="rgba(239,68,68,0.08)",
-            color="#F87171",
-            border="1px solid #FECACA",
-            border_radius="6px",
-            padding="4px 7px",
-            cursor="pointer",
-            _hover={"opacity": "0.8"},
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="trash_2", size=12),
+                on_click=FoodState.eliminar_receta_item(item.id),
+                background="rgba(239,68,68,0.08)",
+                color="#F87171",
+                border="1px solid #FECACA",
+                border_radius="6px",
+                padding="4px 7px",
+                cursor="pointer",
+                _hover={"opacity": "0.8"},
+            ),
+            content="Quitar ingrediente",
         ),
         width="100%",
         align="center",
@@ -811,13 +823,16 @@ def _plan_item_row(item: ProduccionPlanItem) -> rx.Component:
             background="rgba(59,130,246,0.08)", color="#60A5FA",
             border_radius="5px", padding="2px 10px",
         ),
-        rx.button(
-            rx.icon(tag="x", size=12),
-            on_click=FoodState.prod_quitar_item(item.producto_id),
-            background="rgba(239,68,68,0.08)", color="#F87171",
-            border="1px solid #FECACA", border_radius="6px",
-            padding="4px 7px", cursor="pointer",
-            _hover={"opacity": "0.8"},
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="x", size=12),
+                on_click=FoodState.prod_quitar_item(item.producto_id),
+                background="rgba(239,68,68,0.08)", color="#F87171",
+                border="1px solid #FECACA", border_radius="6px",
+                padding="4px 7px", cursor="pointer",
+                _hover={"opacity": "0.8"},
+            ),
+            content="Quitar producto",
         ),
         width="100%", align="center",
         padding="6px 8px", background=DARK_800,

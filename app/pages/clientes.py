@@ -11,6 +11,7 @@ from app.components.shared import (
     ACCENT, ACCENT_HOVER, DARK_700, DARK_800, DANGER_SOLID,
     INFO_SOLID, INFO_TEXT, PAGE_BACKGROUND, SUCCESS_DARK,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE, WARNING_SOLID,
+    switch_toggle,
 )
 
 _AVATAR_COLORS = [ACCENT, INFO_SOLID, "#8B5CF6", "#0D9488"]
@@ -73,22 +74,19 @@ def _cliente_card(c: ClienteView) -> rx.Component:
                 spacing="3", align="center", min_width="0", flex="1",
             ),
             rx.hstack(
-                rx.button(
-                    rx.icon(tag="pencil", size=13),
-                    on_click=FoodState.editar_cliente(c.id),
-                    background="transparent", border="none",
-                    color=TEXT_MUTED, padding="2px", cursor="pointer",
-                    _hover={"color": TEXT_MUTED},
-                ),
-                rx.button(
-                    rx.icon(
-                        tag=rx.cond(c.activo, "toggle_right", "toggle_left"),
-                        size=15,
+                rx.tooltip(
+                    rx.button(
+                        rx.icon(tag="pencil", size=13),
+                        on_click=FoodState.editar_cliente(c.id),
+                        background="transparent", border="none",
+                        color=TEXT_MUTED, padding="2px", cursor="pointer",
+                        _hover={"color": TEXT_MUTED},
                     ),
-                    on_click=FoodState.toggle_cliente_activo(c.id),
-                    background="transparent", border="none",
-                    color=rx.cond(c.activo, SUCCESS_DARK, TEXT_SECONDARY),
-                    padding="2px", cursor="pointer",
+                    content="Editar cliente",
+                ),
+                rx.tooltip(
+                    switch_toggle(c.activo, FoodState.toggle_cliente_activo(c.id)),
+                    content=rx.cond(c.activo, "Desactivar cliente", "Activar cliente"),
                 ),
                 spacing="2", align="center", flex_shrink="0",
             ),

@@ -36,6 +36,63 @@ from app.components.theme import (  # noqa: F401 — re-export
 
 # ─── UTILIDADES PÚBLICAS ──────────────────────────────────────────────────────────
 
+def styled_switch(checked, on_change, *, color: str = ACCENT, size: str = "md") -> rx.Component:
+    """Toggle estilo iOS, reutilizable — reemplazo estético de rx.switch.
+
+    ``checked`` es un Var bool y ``on_change`` el setter (misma firma que
+    rx.switch: recibe el nuevo valor). Al tocar dispara ``on_change(~checked)``.
+    ``size``: "sm" (compacto) o "md" (default).
+    """
+    w, h, thumb, travel = {
+        "sm": ("34px", "20px", "16px", "14px"),
+        "md": ("42px", "24px", "20px", "18px"),
+    }.get(size, ("42px", "24px", "20px", "18px"))
+    return rx.box(
+        rx.box(
+            position="absolute", top="2px", left="2px",
+            width=thumb, height=thumb, border_radius="9999px",
+            background="#FFFFFF", box_shadow="0 1px 3px rgba(0,0,0,0.45)",
+            transform=rx.cond(checked, f"translateX({travel})", "translateX(0)"),
+            transition="transform 0.22s cubic-bezier(0.4,0,0.2,1)",
+        ),
+        on_click=on_change(~checked),
+        position="relative", width=w, height=h, border_radius="9999px",
+        background=rx.cond(checked, color, DARK_600),
+        border=rx.cond(checked, f"1px solid {color}", f"1px solid {DARK_700}"),
+        cursor="pointer", flex_shrink="0",
+        transition="background 0.22s ease, border-color 0.22s ease",
+        _hover={"opacity": "0.88"},
+    )
+
+
+def switch_toggle(checked, on_click, *, color: str = ACCENT, size: str = "sm") -> rx.Component:
+    """Switch iOS igual que ``styled_switch`` pero recibe un ``on_click`` ya armado.
+
+    Útil en filas de tablas donde el evento es un handler tipo ``toggle_x(id)``
+    (no un setter que recibe el nuevo valor). Default ``size="sm"`` para filas.
+    """
+    w, h, thumb, travel = {
+        "sm": ("34px", "20px", "16px", "14px"),
+        "md": ("42px", "24px", "20px", "18px"),
+    }.get(size, ("34px", "20px", "16px", "14px"))
+    return rx.box(
+        rx.box(
+            position="absolute", top="2px", left="2px",
+            width=thumb, height=thumb, border_radius="9999px",
+            background="#FFFFFF", box_shadow="0 1px 3px rgba(0,0,0,0.45)",
+            transform=rx.cond(checked, f"translateX({travel})", "translateX(0)"),
+            transition="transform 0.22s cubic-bezier(0.4,0,0.2,1)",
+        ),
+        on_click=on_click,
+        position="relative", width=w, height=h, border_radius="9999px",
+        background=rx.cond(checked, color, DARK_600),
+        border=rx.cond(checked, f"1px solid {color}", f"1px solid {DARK_700}"),
+        cursor="pointer", flex_shrink="0",
+        transition="background 0.22s ease, border-color 0.22s ease",
+        _hover={"opacity": "0.88"},
+    )
+
+
 def surface_card(*children, **props) -> rx.Component:
     bg           = props.pop("background", SURFACE_BASE)
     border       = props.pop("border", f"1px solid {BORDER_COLOR}")

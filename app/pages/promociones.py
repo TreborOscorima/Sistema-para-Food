@@ -8,6 +8,7 @@ from app.states.food_state import FoodState, PromocionView, AdminLocalState
 from app.pages.dono import _dono_shell, AdminPanelState
 from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
+    styled_switch,
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_SOLID,
     DARK_600, DARK_700, DARK_800,
@@ -99,23 +100,34 @@ def _promo_card(p: PromocionView) -> rx.Component:
                          border_radius="6px", font_size="10px", font_weight="700"),
             ),
             rx.hstack(
-                rx.link(
-                    "Editar",
-                    on_click=FoodState.editar_promocion(p.id),
-                    font_size="12px", font_weight="600", color=TEXT_MUTED,
-                    cursor="pointer", padding="5px 10px",
-                    border=f"1px solid {DARK_700}", border_radius="6px",
-                    _hover={"border_color": TEXT_MUTED},
+                rx.tooltip(
+                    rx.link(
+                        rx.icon(tag="pencil", size=15),
+                        on_click=FoodState.editar_promocion(p.id),
+                        color=TEXT_MUTED,
+                        cursor="pointer", padding="6px",
+                        border=f"1px solid {DARK_700}", border_radius="6px",
+                        display="inline-flex", align_items="center",
+                        _hover={"border_color": TEXT_MUTED},
+                    ),
+                    content="Editar promoción",
                 ),
-                rx.link(
-                    rx.cond(p.activa, "Pausar", "Activar"),
-                    on_click=FoodState.toggle_promo_activa(p.id),
-                    font_size="12px", font_weight="600",
-                    color=rx.cond(p.activa, DANGER_SOLID, ACCENT),
-                    cursor="pointer", padding="5px 10px",
-                    border=rx.cond(p.activa, "1px solid rgba(239,68,68,0.40)", "1px solid rgba(234,88,12,0.40)"),
-                    border_radius="6px",
-                    _hover={"opacity": "0.8"},
+                rx.tooltip(
+                    rx.link(
+                        rx.cond(
+                            p.activa,
+                            rx.icon(tag="pause", size=15),
+                            rx.icon(tag="play", size=15),
+                        ),
+                        on_click=FoodState.toggle_promo_activa(p.id),
+                        color=rx.cond(p.activa, DANGER_SOLID, ACCENT),
+                        cursor="pointer", padding="6px",
+                        border=rx.cond(p.activa, "1px solid rgba(239,68,68,0.40)", "1px solid rgba(234,88,12,0.40)"),
+                        border_radius="6px",
+                        display="inline-flex", align_items="center",
+                        _hover={"opacity": "0.8"},
+                    ),
+                    content=rx.cond(p.activa, "Pausar promoción", "Activar promoción"),
                 ),
                 spacing="2", justify="end", width="100%", margin_top="6px",
             ),
@@ -296,10 +308,9 @@ def _promo_form() -> rx.Component:
             ),
             # Auto-aplicación
             rx.hstack(
-                rx.switch(
-                    checked=FoodState.promo_form_auto,
-                    on_change=FoodState.set_promo_form_auto,
-                    color_scheme="orange",
+                styled_switch(
+                    FoodState.promo_form_auto,
+                    FoodState.set_promo_form_auto,
                 ),
                 rx.text("Aplicar automáticamente en caja", font_size="12px",
                         font_weight="600", color=TEXT_SECONDARY),

@@ -241,24 +241,31 @@ def _self_order_card(order: SelfOrderPendienteView) -> rx.Component:
             spacing="1", align="start", flex="1", min_width="0",
         ),
         rx.hstack(
-            rx.button(
-                rx.icon(tag="check", size=14),
-                on_click=FoodState.aprobar_self_order(order.pedido_id),
-                background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
-                border="1px solid #BBF7D0", border_radius="7px",
-                padding="6px 10px", cursor="pointer", height="auto",
-                _hover={"background": "rgba(34,197,94,0.25)"},
+            rx.tooltip(
+                rx.button(
+                    rx.icon(tag="check", size=14),
+                    on_click=FoodState.aprobar_self_order(order.pedido_id),
+                    background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+                    border="1px solid #BBF7D0", border_radius="7px",
+                    padding="6px 10px", cursor="pointer", height="auto",
+                    _hover={"background": "rgba(34,197,94,0.25)"},
+                ),
+                content="Aprobar pedido del cliente",
             ),
-            rx.button(
-                rx.icon(tag="x", size=14),
-                on_click=FoodState.rechazar_self_order(order.pedido_id),
-                background="rgba(239,68,68,0.12)", color="#F87171",
-                border="1px solid #FECACA", border_radius="7px",
-                padding="6px 10px", cursor="pointer", height="auto",
-                _hover={"background": "rgba(239,68,68,0.25)"},
+            rx.tooltip(
+                rx.button(
+                    rx.icon(tag="x", size=14),
+                    on_click=FoodState.rechazar_self_order(order.pedido_id),
+                    background="rgba(239,68,68,0.12)", color="#F87171",
+                    border="1px solid #FECACA", border_radius="7px",
+                    padding="6px 10px", cursor="pointer", height="auto",
+                    _hover={"background": "rgba(239,68,68,0.25)"},
+                ),
+                content="Rechazar pedido del cliente",
             ),
             spacing="1", align="center", flex_shrink="0",
         ),
+
         width="100%", align="center",
         padding="10px 12px",
         background=DARK_800,
