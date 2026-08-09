@@ -1758,7 +1758,7 @@ class FoodState(
         """True si esta página (Cuentas/Promociones/Clientes/Inventario) se
         accede como ruta independiente — False si está embebida como pestaña
         dentro de /admin, donde el link "Panel Administrativo" es redundante."""
-        return self.router.page.path != "/admin"
+        return self.router._page.path != "/admin"
 
 
     @rx.var
@@ -2251,7 +2251,7 @@ class FoodState(
         # Si venimos de "Ingresar como Administrador" con el link "¿Sos
         # empleado?", el slug en la URL nos devuelve directo al paso del PIN
         # de esa misma empresa en vez de hacer elegir de nuevo.
-        slug = self.router.page.params.get("empresa", "")
+        slug = self.router._page.params.get("empresa", "")
         empresa = next((c for c in self.companies_activas if c.slug == slug), None) if slug else None
         if empresa is not None:
             self.login_selected_company_id = empresa.id
@@ -6894,7 +6894,7 @@ class MenuPublicoState(rx.State):
         return result
 
     def on_load(self) -> None:
-        slug = self.router.page.params.get("slug", "")
+        slug = self.router._page.params.get("slug", "")
         self.cargando = True
         self.no_encontrado = False
         self.nombre_local = ""
@@ -7039,7 +7039,7 @@ class AdminLocalState(rx.State):
         self.login_empresa_nombre = ""
         self.login_empresa_logo = ""
         self.login_empresa_slug = ""
-        slug = self.router.page.params.get("empresa", "")
+        slug = self.router._page.params.get("empresa", "")
         if slug:
             with tenant_bypass():
                 with get_session() as session:

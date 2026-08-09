@@ -88,12 +88,12 @@ class SelfOrderState(rx.State):
         self._init_from_token()
 
     def _init_from_token(self) -> None:
-        token = self.router.page.params.get("mesa", "")
+        token = self.router._page.params.get("mesa", "")
         if not token:
             self.mesa_token = ""
             self.mesa_nombre_qr = ""
             return
-        slug = self.router.page.params.get("slug", "")
+        slug = self.router._page.params.get("slug", "")
         if not slug:
             return
         with tenant_bypass(), get_session() as session:
@@ -162,7 +162,7 @@ class SelfOrderState(rx.State):
         if not self.mesa_token or not self.carrito:
             return
         self.pedido_error = ""
-        slug = self.router.page.params.get("slug", "")
+        slug = self.router._page.params.get("slug", "")
         with tenant_bypass(), get_session() as session:
             cfg = session.exec(
                 select(ConfigImpresora).where(ConfigImpresora.slug == slug)
