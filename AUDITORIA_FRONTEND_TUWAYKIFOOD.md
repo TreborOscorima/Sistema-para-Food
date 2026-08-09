@@ -10,7 +10,7 @@
 
 1. **Leé primero la sección 1 (contexto) y la sección 2 (reglas)**. Son obligatorias antes de tocar código.
 2. Trabajá por prioridad: **P0 → P1 → P2**. Cada ítem tiene un ID (`UI-xx`, `BE-xx`, `FEAT-xx`) para referenciarlo en commits y conversaciones.
-3. Antes de escribir código Reflex, usá el skill **`reflex-docs`** (instrucciones en `CLAUDE.md` del repo). No confíes en memoria de APIs de Reflex: el proyecto usa **Reflex 0.9.4**.
+3. Antes de escribir código Reflex, usá el skill **`reflex-docs`** (instrucciones en `CLAUDE.md` del repo). No confíes en memoria de APIs de Reflex: el proyecto usa **Reflex 0.9.8**.
 4. Después de cada cambio: compilar (`reflex run` o el flujo del skill `reflex-process-management`), correr el **smoke test** (sección 9) y verificar visualmente la página tocada.
 5. **Todo se prueba local antes de commitear. Push solo a `origin/main`.** No inventar ramas ni remotos nuevos salvo pedido explícito del usuario.
 6. No romper el **aislamiento multi-tenant**: toda query pasa por `_tenant_session()` / `company_id`. Ver `app/utils/tenant.py`.
@@ -21,7 +21,7 @@
 
 ### 1.1 Qué es
 
-**TUWAYKIFOOD** es un POS SaaS multi-tenant para gastronomía (Perú — moneda S/, IGV) construido 100 % en Python con **Reflex 0.9.4** + **MySQL (food_db)** + SQLModel/Alembic. Corre en LAN del local (tablets para mozos, PC de caja, pantalla de cocina) y en Docker para producción. MVP + Fase 2 completos (inventario, clientes, cuenta corriente, promociones, cupones, turnos de caja con arqueo).
+**TUWAYKIFOOD** es un POS SaaS multi-tenant para gastronomía (Perú — moneda S/, IGV) construido 100 % en Python con **Reflex 0.9.8** + **MySQL (food_db)** + SQLModel/Alembic. Corre en LAN del local (tablets para mozos, PC de caja, pantalla de cocina) y en Docker para producción. MVP + Fase 2 completos (inventario, clientes, cuenta corriente, promociones, cupones, turnos de caja con arqueo).
 
 ### 1.2 Mapa de archivos relevantes
 
@@ -66,7 +66,7 @@
 
 ## 2. REGLAS INNEGOCIABLES PARA IMPLEMENTAR
 
-1. **Reflex 0.9.4** — verificar API con el skill `reflex-docs` antes de usar cualquier componente/prop.
+1. **Reflex 0.9.8** — verificar API con el skill `reflex-docs` antes de usar cualquier componente/prop.
 2. **Multi-tenant:** ninguna query sin scope de `company_id`. Los listeners se registran en `app/app.py` **antes** de cualquier query.
 3. **Mobile/tablet first:** el sistema se opera en tablets. Targets táctiles ≥ 40 px en vistas operativas (mozos, cocina, caja, mostrador).
 4. **No introducir JS/React custom** salvo imprescindible: resolver con Reflex (`rx.*`) y el CSS global `.twk-*`.

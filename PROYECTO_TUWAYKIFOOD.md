@@ -5,7 +5,8 @@
 > auditoría integral (2026-07-07) y roadmap priorizado. Leyendo solo este archivo se puede continuar
 > el desarrollo sin contexto previo.
 >
-> **Última actualización:** 2026-07-09 · **Estado:** MVP + Fase 2 (P1+P2) 100% completados. Solo Fase 3.
+> **Última actualización:** 2026-08-09 · **Estado:** MVP + Fase 2 (P1+P2) 100% completados. Solo Fase 3.
+> Reflex actualizado 0.9.4 → **0.9.8** (2026-08-09, verificado E2E). Ver `PLAN_ACTUALIZACION_REFLEX.md`.
 
 ---
 
@@ -34,7 +35,7 @@ empresas de ambos sistemas. **Los repos son 100% independientes: cambios en uno 
 
 | Capa | Tecnología |
 |---|---|
-| Framework full-stack | **Reflex 0.9.4** (Python → React/Vite, websockets para estado) |
+| Framework full-stack | **Reflex 0.9.8** (Python → React/Vite, websockets para estado) |
 | Base de datos | **MySQL 8.0** (`food_db`), SQLModel + SQLAlchemy 2.0, PyMySQL |
 | Migraciones | Alembic (45 migraciones, head = `f6a7b8c9d0e1`) |
 | Servidor | Granian, contenedor Docker único (frontend+backend, puerto interno 3000) |
@@ -151,7 +152,7 @@ imprime ticket. Anulación posterior repone stock y revierte fiado con motivo au
 4. **Decimal para dinero** (Numeric 10,2), **Numeric(12,3) para stock**. Nunca float en persistencia.
 5. **Servicios puros testeados**: lógica de negocio en `app/services/` sin dependencia de Reflex; los mixins/states solo orquestan.
 6. **ViewModels Pydantic** (`XxxView`) para todo lo que se renderiza — nunca pasar modelos SQLModel a componentes.
-7. **Reflex 0.9.4 gotchas**: `rx.State` mixins con `mixin=True`; computed vars con `@rx.var`; `rx.cond`/`rx.foreach` para render condicional; es-toolkit patch en `docker-entrypoint.sh` (shims ESM para Vite/Rolldown).
+7. **Reflex 0.9.8 gotchas**: `rx.State` mixins con `mixin=True`; computed vars con `@rx.var`; `rx.cond`/`rx.foreach` para render condicional (el método `ArrayVar.foreach` quedó deprecado en 0.9.7 → usar `.map`); es-toolkit patch en `docker-entrypoint.sh` (shims ESM para Vite/Rolldown).
 8. **Migraciones Alembic siempre** — jamás `ALTER TABLE` manual. Correr dentro del contenedor con `alembic upgrade head` (el entrypoint lo hace solo).
 9. **tuwayki-core pinneado por commit** en requirements.txt Y Dockerfile — actualizar ambos juntos.
 
@@ -263,7 +264,7 @@ cuánto de cada insumo se necesita. Ej.: 1 arroz con pollo = 150g arroz + 250g p
 
 ### 6.8 Gotchas y warnings conocidos
 
-- **"Page X is being redefined"** — warning cosmético de Reflex 0.9.4 al importar páginas en `dono.py` con import diferido. Inofensivo, no afecta runtime ni funcionalidad.
+- **"Page X is being redefined"** — warning cosmético de Reflex (persiste en 0.9.8) al importar páginas en `dono.py` con import diferido. Inofensivo, no afecta runtime ni funcionalidad.
 - **es-toolkit CJS/ESM** — fix en `docker-entrypoint.sh` con shims manuales + patch watcher background. Puede necesitar actualización si Reflex/Vite cambian su bundling.
 
 ### 6.9 Testing
