@@ -208,16 +208,18 @@ Orden de despliegue (de menor a mayor criticidad, o el que definas):
 **E2E adicional verificado (2026-08-09):**
 - [x] Ruta pública `/menu/[slug]` (autopedido) ejecuta `on_load` end-to-end (websocket → backend → DB → estado → render). Manejo correcto del caso "carta no encontrada" para empresa sin productos (pizzeria-don-luigi = 0 productos). ✅
 - [x] **App ↔ MySQL E2E (lectura)**: la página de login lista restaurantes reales desde `food_db.food_companies`; el menú consulta productos y decide render vs. not-found. DB round-trip vivo OK. ✅
-- [x] Suite de integración `pytest` (pago, confirmar_cobro, turno_caja, descontar_stock, kardex, tenant_isolation, anulacion, promo, produccion) = **64/65 verdes** (1 preexistente, Incidencia #1). Es el E2E de las rutas de dinero/stock contra DB. ✅
+- [x] Suite de integración `pytest` (pago, confirmar_cobro, turno_caja, descontar_stock, kardex, tenant_isolation, anulacion, promo, produccion) = **65/65 verdes** (el fallo preexistente quedó resuelto, Incidencia #1). Es el E2E de las rutas de dinero/stock contra DB. ✅
 - Nota: mostrar un menú digital poblado requeriría habilitar el módulo de carta digital en una empresa (mutación de datos) — no se hizo por ser fuera de alcance de un test.
 
-**Pendiente — requiere credenciales reales (lo completa Trebor, no adivino credenciales):**
-- [ ] Login dueño (por email) persiste sesión → entrar a áreas autenticadas.
-- [ ] Carta: alta/edición de producto, categorías, combos, modificadores, paginación.
-- [ ] Caja: cobro, mesas 50/50, pagos staged, cierre de turno, historial, últimos cobros.
-- [ ] Impresión/PDF (reportlab) genera bien.
-- [ ] Subida de imágenes (uploaded_files) OK.
-- [ ] Tema claro/oscuro sin flash (probar `default_color_mode` nuevo, opcional).
+**E2E logueado + transacción real (2026-08-09, empresa TUWAYKIFOOD `admin@tuwaykifood.com`):**
+- [x] **Login dueño (por email) OK** → redirect a `/admin`, panel Profesional con KPIs y datos reales. ✅
+- [x] **Barrido de las 18 rutas autenticadas** (`/admin`, `/carta` 92 productos, `/caja` turno abierto, `/cocina`, `/mostrador`, `/mozos`, `/inventario`, `/reportes`, `/clientes`, `/cuentas`, `/cupones`, `/promociones`, `/usuarios`, `/configuracion`, `/estacion-impresion`) — todas renderizan con datos reales, **0 errores de consola**. ✅
+- [x] **Transacción de escritura real contra MySQL vivo** (CRUD de producto): CREATE (id=199, S/9.99, cat Alitas) → READ en sesión nueva (92→93) → DELETE (→92). Ejercita SQLModel→SQLAlchemy→PyMySQL→MySQL 8 (Decimal, JSON, unique, utf8mb4). Base limpia, 0 residuo. ✅
+
+**Pendiente (opcional, no bloquea — lo hace Trebor si quiere):**
+- [ ] Cobro completo por UI (mesa→pedido→cocina→caja): flujo multi-rol; el alta por formulario no round-trip fiable en navegador headless oculto (limitación de entorno, no de la app — la escritura ya se probó a nivel datos).
+- [ ] Impresión/PDF (reportlab) y subida de imágenes (uploaded_files).
+- [ ] Tema claro/oscuro sin flash (`default_color_mode` nuevo, opcional).
 
 ### Life
 - [ ] Flujos core de clínica (agenda/pacientes) sin regresiones.
@@ -235,7 +237,7 @@ Orden de despliegue (de menor a mayor criticidad, o el que definas):
 | # | Fecha | Sistema | Problema | Estado / Solución |
 |---|---|---|---|---|
 | 1 | 2026-08-09 | Food | `pytest`: `test_bloqueo_empresa_suspendida_o_inexistente` falla. `evaluar_bloqueo(None,...)` devuelve `"Empresa no encontrada — contacte soporte."` pero el test espera `MSG_SUSPENDIDA`. **PREEXISTENTE, ajeno a Reflex** (archivo `suscripcion_service.py` no se tocó). | ✅ **RESUELTO** (2026-08-09): la conducta del código es la correcta (None = no encontrada ≠ suspendida). Se promovió el string a constante `MSG_NO_ENCONTRADA` y se alineó el test. Suite: **65 passed, 0 failed**. |
-| 2 | 2026-08-09 | Food (+Life/Ventas) | `DeprecationWarning: RouterData.page` (deprecado desde 0.8.1, remoción en 1.0). 7 usos en `food_state.py` y `self_order_state.py` (`.page.path`, `.page.params.get(...)`). **PREEXISTENTE, no lo introduce la actualización.** Migración NO es directa: en backend `router.url` da `.query` cruda, no el dict `.params` parseado. | Follow-up separado (no mezclar con el bump). Requiere parsear query params y testear rutas de auth (empresa/mesa/slug). |
+| 2 | 2026-08-09 | Food (+Life/Ventas) | `DeprecationWarning: RouterData.page` (deprecado desde 0.8.1, remoción en 1.0). 7 usos en `food_state.py` y `self_order_state.py`. **PREEXISTENTE, no lo introduce la actualización.** **Investigado a fondo (2026-08-09):** el reemplazo `.url` NO es 1:1 — `.url.query_parameters` = `parse_qsl(query)`, SOLO query params. Los `slug` en `/menu/[slug]` son **params de RUTA dinámica** (no query) → migrarlos a `.url.query_parameters` **rompería la resolución del menú QR del cliente**. Una migración parcial no sirve (con un solo `.page`, el warning persiste). | **EN ESPERA (decisión deliberada):** no migrar a ciegas. Reemplazos seguros: `.page.path`→`.url.path` y query params (`empresa`,`mesa`)→`.url.query_parameters`. Falta confirmar la API 0.9.8 de **params de ruta** contra el flujo QR en vivo antes de tocar. Deprecación con remoción en 1.0 (sin urgencia). |
 | 3 | 2026-08-09 | Food (deploy) | El servicio monta un volumen persistente `food_web:/app/.web` (docker-compose.yml:74). Tras un bump de versión, en el primer arranque el contenedor puede servir brevemente el frontend viejo cacheado a clientes ya conectados → warning `Frontend version X does not match backend`. Reflex **recompila solo** al detectar el cambio (verificado: `.web` quedó en 0.9.8), así se auto-cura; el warning solo afecta pestañas ya abiertas con caché vieja. | **Benigno.** Recomendación para deploy limpio: al desplegar 0.9.8 en prod, **recrear el volumen** (`docker volume rm <proj>_food_web` con el stack abajo, o `docker compose down` sin `-v` NO alcanza) para forzar build fresco. Clientes con pestaña abierta: hard-refresh (Ctrl+Shift+R). Añadir a checklist Fase 5. |
 | 4 | 2026-08-09 | Suite (higiene) | **Drift del pin de `tuwayki-core` entre sistemas:** Food fija `@64850c8` (requirements.txt + Dockerfile), Ventas/SHOP fija `@ef852f2` en CI. Commits distintos → los sistemas pueden correr contra versiones diferentes del core. **PREEXISTENTE, ajeno a Reflex.** | Fuera de alcance del upgrade de Reflex (regla de oro: el core no se toca en este rollout). Cleanup futuro coordinado: unificar el SHA del core en los 3 sistemas y re-testear. |
 
