@@ -12,6 +12,7 @@ from datetime import datetime
 from app.models.company import Company
 from app.services.plan_service import PLAN_TRIAL
 
+MSG_NO_ENCONTRADA = "Empresa no encontrada — contacte soporte."
 MSG_SUSPENDIDA = "Cuenta suspendida. Contacta a soporte de TUWAYKI para reactivarla."
 MSG_TRIAL_VENCIDO = (
     "Tu período de prueba finalizó. "
@@ -26,7 +27,7 @@ MSG_PLAN_VENCIDO = (
 def evaluar_bloqueo(company: Company | None, ahora: datetime) -> str:
     """'' si la empresa puede operar; mensaje de bloqueo si no."""
     if company is None:
-        return "Empresa no encontrada — contacte soporte."
+        return MSG_NO_ENCONTRADA
     if not company.is_active:
         return MSG_SUSPENDIDA
     if ahora.tzinfo is not None:

@@ -24,6 +24,7 @@ from app.services.analitica_service import (
     ventas_por_mozo,
 )
 from app.services.suscripcion_service import (
+    MSG_NO_ENCONTRADA,
     MSG_SUSPENDIDA,
     MSG_TRIAL_VENCIDO,
     evaluar_bloqueo,
@@ -56,7 +57,7 @@ def db_engine():
 # ─── P7: enforcement de suscripción ──────────────────────────────────────────
 
 def test_bloqueo_empresa_suspendida_o_inexistente():
-    assert evaluar_bloqueo(None, AHORA) == MSG_SUSPENDIDA
+    assert evaluar_bloqueo(None, AHORA) == MSG_NO_ENCONTRADA
     suspendida = Company(name="X", slug="x", is_active=False)
     assert evaluar_bloqueo(suspendida, AHORA) == MSG_SUSPENDIDA
 
