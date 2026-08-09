@@ -362,7 +362,7 @@ def _cuentas_content() -> rx.Component:
 @rx.page(
     route="/cuentas",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_cuentas],
-    title="TUWAYKIFOOD | Cuentas Corrientes",
+    title="TUWAYKIFOOD | Cuentas corrientes",
 )
 def cuentas_page() -> rx.Component:
     return _dono_shell(_cuentas_content())

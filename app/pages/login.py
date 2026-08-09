@@ -529,7 +529,7 @@ def _brand_logo_box() -> rx.Component:
 # ─── Página de login ──────────────────────────────────────────────────────────
 
 @rx.page(route="/login", on_load=FoodState.on_load_login,
-         title="TUWAYKIFOOD | Iniciar Sesión")
+         title="TUWAYKIFOOD | Iniciar sesión")
 def login_page() -> rx.Component:
     return rx.box(
         _connection_banner_es(),

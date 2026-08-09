@@ -1755,7 +1755,7 @@ def _brand_banner() -> rx.Component:
 
 @rx.page(route="/admin/login",
          on_load=AdminLocalState.on_load_dono_login,
-         title="TUWAYKIFOOD | Acceso Administrativo")
+         title="TUWAYKIFOOD | Acceso administrativo")
 def dono_login_page() -> rx.Component:
     return rx.box(
         _connection_banner_es(),
@@ -1909,7 +1909,7 @@ def dono_login_page() -> rx.Component:
 @rx.page(
     route="/admin",
     on_load=[AdminLocalState.on_load_dono, FoodState.on_load_dono_page, ReportesState.init_reportes_dono],
-    title="TUWAYKIFOOD | Panel Administrativo",
+    title="TUWAYKIFOOD | Panel administrativo",
 )
 def dono_page() -> rx.Component:
     return _dono_shell(_dono_dashboard(), with_sidebar=True)

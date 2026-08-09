@@ -564,7 +564,7 @@ def _menu_content() -> rx.Component:
     )
 
 
-@rx.page(route="/menu/[slug]", on_load=[MenuPublicoState.on_load, SelfOrderState.on_load], title="TUWAYKIFOOD | Carta Digital")
+@rx.page(route="/menu/[slug]", on_load=[MenuPublicoState.on_load, SelfOrderState.on_load], title="TUWAYKIFOOD | Carta digital")
 def menu_publico_page() -> rx.Component:
     return rx.box(
         rx.cond(
