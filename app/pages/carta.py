@@ -1059,7 +1059,7 @@ def _combo_row(combo: dict) -> rx.Component:
 def _combo_item_form_row(item: dict, idx: int) -> rx.Component:
     return rx.hstack(
         rx.select(
-            FoodState.productos.to(list).foreach(
+            FoodState.productos.to(list).map(
                 lambda p: p.nombre
             ),
             placeholder="Seleccionar producto...",
