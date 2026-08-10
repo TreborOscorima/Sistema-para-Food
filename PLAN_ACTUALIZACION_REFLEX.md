@@ -5,6 +5,12 @@
 > sistema completamente andando y verificado.
 >
 > **Fecha de inicio:** 2026-08-09 · **Responsable:** Trebor · **Versión objetivo:** Reflex 0.9.8
+>
+> **Estado de flota (act. 2026-08-10):**
+> - 🟢 **Food — CERRADO Y DESPLEGADO.** Reflex 0.9.8 en local y prod (`food.tuwayki.app`), deploy Actions OK, E2E + cobro real verificados, emojis corregidos (local + prod CATBLACK). Solo restan ítems menores opcionales (sección 7).
+> - 🟡 **Ventas** — 0.9.8 en rama `chore/reflex-0.9.8`; falta merge+deploy. *(otra sesión, va último)*
+> - 🟡 **Life** — sigue en 0.9.4. *(otra sesión)*
+> - ⏳ **Owner Panel** — cross-check de los 3 sistemas cuando Life y Ventas estén desplegados.
 
 ---
 
@@ -177,12 +183,14 @@ Estado observado (2026-08-09, verificado desde afuera):
 
 Orden de despliegue (de menor a mayor criticidad, o el que definas):
 
-- [ ] **Food**: `git push origin HEAD:main HEAD:docker-deploy-prod` → GitHub Actions → EC2 (backup MySQL + build + health).
-- [ ] ⚠️ **Recrear el volumen `food_web`** en EC2 antes/durante el deploy para forzar build fresco del frontend 0.9.8 (evita servir bundle 0.9.6 cacheado). Ver Incidencia #3.
-- [ ] Verificar `food.tuwayki.app` andando post-deploy (hard-refresh si aparece warning de versión en una pestaña vieja).
-- [ ] **Life**: mismo flujo → verificar post-deploy.
-- [ ] **Ventas**: mismo flujo → verificar POS + Owner Panel post-deploy.
-- [ ] Confirmar que el Owner Panel ve a los 3 sistemas correctamente tras el despliegue.
+- [x] **Food**: `git push origin HEAD:main HEAD:docker-deploy-prod` (2026-08-10, FF limpio, ambas ramas en `f9bb1be`). GitHub Actions `deploy-prod.yml` → EC2: run `31406304383` **success (2m56s)**. Backup MySQL OK (88K), pip instaló reflex 0.9.8 + set completo, `food_mysql` y `tuwayki_food` healthy, health público `{"status":"ok","app":"tuwaykifood","db":{"ok":true}}`. ✅
+- [x] ⚠️ Volumen `food_web`: el `deploy-prod.sh` NO lo recrea, PERO el entrypoint hace `rm -rf /app/.web` + `reflex init` en cada arranque → frontend recompila fresco igual. Resultado prod OK sin recrear el volumen a mano. (Para un deploy "de manual" se puede recrear igual; ver Incidencia #3.) ✅
+- [x] Verificar `food.tuwayki.app` post-deploy: `/api/health` + `/api/ping` OK en vivo; **login dueño CATBLACK (lo hizo Trebor) → /admin + /carta renderizan con datos reales (123 productos) y emojis correctos, 0 mojibake**. Confirma que la migración de emojis (Incidencia #5) corrió y corrigió el dato en prod. ✅
+- [ ] **Life**: mismo flujo → verificar post-deploy. *(otra sesión)*
+- [ ] **Ventas**: mismo flujo → verificar POS + Owner Panel post-deploy. *(otra sesión)*
+- [ ] Confirmar que el Owner Panel ve a los 3 sistemas correctamente tras el despliegue. *(cross-sistema, cuando Life y Ventas estén desplegados)*
+
+> **FOOD: CERRADO Y DESPLEGADO (2026-08-10).** Local y producción corriendo al 100% sobre Reflex 0.9.8. Solo restan ítems menores opcionales (sección 7) y la flota (Life/Ventas, sus sesiones).
 
 ---
 
@@ -216,10 +224,17 @@ Orden de despliegue (de menor a mayor criticidad, o el que definas):
 - [x] **Barrido de las 18 rutas autenticadas** (`/admin`, `/carta` 92 productos, `/caja` turno abierto, `/cocina`, `/mostrador`, `/mozos`, `/inventario`, `/reportes`, `/clientes`, `/cuentas`, `/cupones`, `/promociones`, `/usuarios`, `/configuracion`, `/estacion-impresion`) — todas renderizan con datos reales, **0 errores de consola**. ✅
 - [x] **Transacción de escritura real contra MySQL vivo** (CRUD de producto): CREATE (id=199, S/9.99, cat Alitas) → READ en sesión nueva (92→93) → DELETE (→92). Ejercita SQLModel→SQLAlchemy→PyMySQL→MySQL 8 (Decimal, JSON, unique, utf8mb4). Base limpia, 0 residuo. ✅
 
-**Pendiente (opcional, no bloquea — lo hace Trebor si quiere):**
-- [ ] Cobro completo por UI (mesa→pedido→cocina→caja): flujo multi-rol; el alta por formulario no round-trip fiable en navegador headless oculto (limitación de entorno, no de la app — la escritura ya se probó a nivel datos).
+**E2E completo + cobro real verificado (2026-08-10, empresa TUWAYKIFOOD `admin@tuwaykifood.com`):**
+- [x] **Barrido completo re-verificado como humano**: login dueño → 18 pantallas (Panel del Dueño: Resumen/Reportes/Inventario+subtabs/Promociones/Clientes/Cuentas/Reservas/Delivery/Usuarios/Configuración+subtabs; operativo: Carta/Mozos+toma de comanda/Cocina/Caja/Mostrador/Estación impresión/Cupones; público: carta QR con slug de ruta). 0 errores de consola. ✅
+- [x] **Alta de producto por UI real** (modal Carta → MySQL id=200 → borrado → 92). ✅
+- [x] **Cobro REAL de punta a punta contra MySQL vivo** vía los MISMOS servicios que `confirmar_cobro` (`pago_service.validar_pagos/registrar_pagos_pedido/metodo_pago_resumen` + `_descontar_stock_por_pedido`): pedido #86, 2× Burger S/24 + propina S/5, efectivo S/29 → turno 9, mesa liberada, pago registrado. Verificado desde sesión nueva y **revertido** (DB en baseline). Respalda los 7 escenarios de `test_confirmar_cobro.py` (65/65). ✅
+- [x] **Logout OK** (redirect a `/admin/login`). ✅
+- Nota entorno: el panel del navegador headless dropea el websocket a mitad de flujos multi-paso, por eso el cobro se cerró a nivel servicios (determinístico) en vez de clic-a-clic — misma lógica de negocio.
+
+**Pendiente (opcional, no bloquea — para después):**
 - [ ] Impresión/PDF (reportlab) y subida de imágenes (uploaded_files).
 - [ ] Tema claro/oscuro sin flash (`default_color_mode` nuevo, opcional).
+- [ ] Cobro completo clic-a-clic por UI (nice-to-have; la lógica ya está verificada a nivel servicios + tests).
 
 ### Life
 - [ ] Flujos core de clínica (agenda/pacientes) sin regresiones.
@@ -240,6 +255,8 @@ Orden de despliegue (de menor a mayor criticidad, o el que definas):
 | 2 | 2026-08-09 | Food | `DeprecationWarning: RouterData.page` (deprecado desde 0.8.1, remoción en 1.0). 7 usos en `food_state.py` y `self_order_state.py`. **PREEXISTENTE.** Trampa detectada: `.url.query_parameters` = solo query params (`parse_qsl`), NO los params de RUTA dinámica (`slug` en `/menu/[slug]`). | ✅ **RESUELTO** (2026-08-09): el reemplazo correcto es `self.router.page` → `self.router._page` (el campo que la property deprecada devuelve internamente, y que Reflex mismo usa para dynamic route args en `state.py:1379`). Conducta **1:1** (incluye params de ruta Y query), sin warning. 7 sitios migrados. **Verificado en vivo:** menú QR `/menu/tuwaykifoodsac2305?mesa=1` renderiza 92 productos + promo (slug de ruta ✅ + mesa query ✅); `/clientes` logueado usa el computed var `_page.path` ✅; compile OK; warning 0 en runtime; 65/65 tests. |
 | 3 | 2026-08-09 | Food (deploy) | El servicio monta un volumen persistente `food_web:/app/.web` (docker-compose.yml:74). Tras un bump de versión, en el primer arranque el contenedor puede servir brevemente el frontend viejo cacheado a clientes ya conectados → warning `Frontend version X does not match backend`. Reflex **recompila solo** al detectar el cambio (verificado: `.web` quedó en 0.9.8), así se auto-cura; el warning solo afecta pestañas ya abiertas con caché vieja. | **Benigno.** Recomendación para deploy limpio: al desplegar 0.9.8 en prod, **recrear el volumen** (`docker volume rm <proj>_food_web` con el stack abajo, o `docker compose down` sin `-v` NO alcanza) para forzar build fresco. Clientes con pestaña abierta: hard-refresh (Ctrl+Shift+R). Añadir a checklist Fase 5. |
 | 4 | 2026-08-09 | Suite (higiene) | **Drift del pin de `tuwayki-core` entre sistemas:** Food fija `@64850c8` (requirements.txt + Dockerfile), Ventas/SHOP fija `@ef852f2` en CI. Commits distintos → los sistemas pueden correr contra versiones diferentes del core. **PREEXISTENTE, ajeno a Reflex.** | Fuera de alcance del upgrade de Reflex (regla de oro: el core no se toca en este rollout). Cleanup futuro coordinado: unificar el SHA del core en los 3 sistemas y re-testear. |
+| 5 | 2026-08-10 | Food (datos) | **Emojis de producto doble-codificados (mojibake).** `food_productos.emoji` (y `food_combos.emoji`) tenían el emoji UTF-8 re-codificado como windows-1252 (ej: 🍔 `F0 9F 8D 94` guardado como `C3B0C5B8C28DE2809D`, se veía "ðŸ”" en Carta/Mozos/Mostrador/menú QR). **PREEXISTENTE, ajeno a Reflex**: origen import/restore histórico; el alta nueva por el modal guarda bien. `fix_encoding.sql` NO aplica (usa latin1; la corrupción es cp1252 con `Ÿ`/`”`). | ✅ **RESUELTO** (2026-08-10): migración Alembic `r8m9n0o1p2q3` que revierte en Python (windows-1252 WHATWG con fallback C1), **idempotente** y autocontenida, con guardarraíl `assert` contra el caso 🍔. Auto-aplica a prod vía `alembic upgrade head` del entrypoint. Verificado local (184/184 filas, 0 mojibake, re-run = 0 cambios, /carta y /menu OK) **y en PROD** (CATBLACK: 123 productos, 0 mojibake). Commiteada y desplegada. |
+| 6 | 2026-08-10 | Food (Tailwind) | **Clases CSS de componentes compartidos no se generaban.** Reflex 0.9.x compila páginas/componentes compartidos a `.web/app_components/**`, dir que NO entra en el content-glob por defecto de Tailwind v4 (`./app/**`, `./utils/**`); con `@config`, Tailwind v4 usa content explícito y NO auto-detecta. Riesgo: estilos faltantes en clases usadas solo en `app_components`. | ✅ **RESUELTO** por Trebor (commit `f9bb1be`): `TailwindV4Plugin(config={content:[app, app_components, components, utils], plugins:[typography]})` en `rxconfig.py`, coherente con SHOP. Incluido en el deploy 0.9.8; prod verificado (login + carta renderizan con estilos). |
 
 ---
 
