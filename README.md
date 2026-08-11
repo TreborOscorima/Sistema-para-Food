@@ -15,11 +15,12 @@ para producción (`food.tuwayki.app`).
 | Capa | Tecnología |
 |---|---|
 | Framework full-stack | **Reflex 0.9.8** (Python → React/Vite, estado por websockets) |
+| Estilos | **Tailwind CSS v4** (`TailwindV4Plugin`) + Radix Theme |
 | Base de datos | **MySQL 8.0** (`food_db`), SQLModel + SQLAlchemy 2.0, PyMySQL |
 | Migraciones | Alembic |
 | Servidor | Granian, contenedor Docker único (frontend + backend, puerto interno 3000) |
 | Auth | bcrypt (PIN operativo + email/contraseña del dueño) |
-| Compartido | `tuwayki-core` @ git (paquete privado, pinneado por commit) |
+| Compartido | `tuwayki-core` @ git+SHA (paquete **público**, pinneado por commit vía `requirements.txt`) |
 
 ## Módulos
 
@@ -34,8 +35,12 @@ para producción (`food.tuwayki.app`).
 
 ## Desarrollo local
 
-Requisitos: Python 3.13, un MySQL accesible y el paquete `tuwayki-core` (se instala desde git).
+Requisitos: Python 3.13, un MySQL accesible y acceso a GitHub para instalar `tuwayki-core`.
 La preparación del entorno sigue el skill `setup-python-env`; para correr/recargar, `reflex-process-management`.
+
+> **Núcleo compartido:** `tuwayki-core` es **público** en GitHub y se instala **pinneado por SHA vía
+> `requirements.txt`** (`tuwayki-core @ git+https://…@<SHA>`) — fuente de verdad única, sin `_vendor`. Para
+> bumpearlo: editar el SHA, re-test y redeploy. Compartido con SHOP y LIFE.
 
 ```bash
 # 1. Entorno virtual + dependencias
