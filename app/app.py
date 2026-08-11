@@ -56,14 +56,13 @@ app = rx.App(
             content="black-translucent",
         ),
         rx.el.link(rel="apple-touch-icon", href="/pwa/apple-touch-icon.png"),
-        # Registro del service worker (habilita "Instalar app"). Se difiere al
-        # load para no competir con el arranque del frontend.
-        rx.el.script(
-            "if('serviceWorker' in navigator){"
-            "window.addEventListener('load',function(){"
-            "navigator.serviceWorker.register('/sw.js').catch(function(e){"
-            "console.warn('SW registration failed:',e);});});}"
-        ),
+        # PWA: registra el Service Worker (habilita "Instalar app") y muestra el
+        # banner de instalación propio al dispararse `beforeinstallprompt`
+        # (Chrome ya casi no muestra el mini-infobar nativo). Ver
+        # assets/js/twk-pwa.js. Se usa rx.el.script (elemento <script> crudo)
+        # con src: rx.script(src=...) en head_components descarta el src y
+        # renderiza un <script> vacío. defer para no competir con el arranque.
+        rx.el.script(src="/js/twk-pwa.js", defer=True),
         rx.el.link(rel="preconnect", href="https://fonts.googleapis.com"),
         rx.el.link(
             rel="preconnect",
