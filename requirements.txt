@@ -34,4 +34,4 @@ watchfiles==1.2.0
 
 # Paquete privado compartido con Sistema-de-Ventas. Mismo commit que Dockerfile:
 # actualizar ambos juntos.
-tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@64850c8
+tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@ef852f2329fab5a77403101beb71710295d97187

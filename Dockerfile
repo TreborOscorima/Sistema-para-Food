@@ -23,7 +23,7 @@ COPY requirements.txt .
 # tuwayki-core se instala desde GitHub (paquete privado, pinneado a commit estable).
 # Para actualizar: cambiar el hash al nuevo commit de tuwayki-core.
 RUN pip install --no-cache-dir --prefix=/install \
-        "tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@64850c8" && \
+        "tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@ef852f2329fab5a77403101beb71710295d97187" && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
