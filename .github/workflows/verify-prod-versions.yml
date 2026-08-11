@@ -44,18 +44,7 @@ jobs:
             docker ps --filter "name=$CID" --format '{{.Names}}: {{.Status}} ({{.Image}})'
 
             echo "=== Reflex + tuwayki-core (SHA) en el contenedor corriendo ==="
-            docker exec "$CID" python - <<'PY'
-            import importlib.metadata as m, json
-            print("reflex:", m.version("reflex"))
-            try:
-                d = m.distribution("tuwayki-core")
-                raw = d.read_text("direct_url.json")
-                sha = json.loads(raw)["vcs_info"]["commit_id"] if raw else "n/a"
-            except Exception as e:
-                sha = f"error: {e}"
-            print("tuwayki-core version:", m.version("tuwayki-core"))
-            print("tuwayki-core SHA:", sha)
-            PY
+            docker exec "$CID" python -c 'import importlib.metadata as m, json; print("reflex:", m.version("reflex")); print("tuwayki-core version:", m.version("tuwayki-core")); raw=m.distribution("tuwayki-core").read_text("direct_url.json"); print("tuwayki-core SHA:", json.loads(raw)["vcs_info"]["commit_id"] if raw else "n/a")'
 
       - name: Health público
         run: |
