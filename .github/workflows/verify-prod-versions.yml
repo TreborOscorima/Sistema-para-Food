@@ -1,0 +1,65 @@
+# =============================================================================
+# Verificar versiones en producción TUWAYKIFOOD — SSH read-only
+#
+# Manual (workflow_dispatch). NO deploya: no hace git reset, ni build, ni
+# restart. Solo entra por SSH al EC2 y lee, del contenedor corriendo:
+#   - versión de Reflex instalada
+#   - SHA de tuwayki-core (desde direct_url.json del paquete instalado)
+#   - health público de food.tuwayki.app
+#
+# Reusa los mismos secrets que deploy-prod.yml (DEPLOY_SSH_*, DEPLOY_APP_DIR).
+# =============================================================================
+name: verify-prod-versions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Leer versiones en EC2 (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Leer versiones por SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+
+            # Detectar el contenedor de la app (por nombre, con fallback por imagen)
+            CID="$(docker ps --filter 'name=tuwayki_food' --format '{{.Names}}' | head -1 || true)"
+            if [ -z "$CID" ]; then
+              CID="$(docker ps --filter 'ancestor=tuwayki_food:latest' --format '{{.Names}}' | head -1 || true)"
+            fi
+            if [ -z "$CID" ]; then
+              echo "ERROR: no encuentro el contenedor de FOOD corriendo"; docker ps; exit 1
+            fi
+            echo "=== Contenedor: $CID ==="
+            docker ps --filter "name=$CID" --format '{{.Names}}: {{.Status}} ({{.Image}})'
+
+            echo "=== Reflex + tuwayki-core (SHA) en el contenedor corriendo ==="
+            docker exec "$CID" python - <<'PY'
+            import importlib.metadata as m, json
+            print("reflex:", m.version("reflex"))
+            try:
+                d = m.distribution("tuwayki-core")
+                raw = d.read_text("direct_url.json")
+                sha = json.loads(raw)["vcs_info"]["commit_id"] if raw else "n/a"
+            except Exception as e:
+                sha = f"error: {e}"
+            print("tuwayki-core version:", m.version("tuwayki-core"))
+            print("tuwayki-core SHA:", sha)
+            PY
+
+      - name: Health público
+        run: |
+          set -euo pipefail
+          URL="https://food.tuwayki.app/api/health"
+          echo "GET $URL"
+          curl -sf --max-time 30 "$URL"; echo
