@@ -24,7 +24,7 @@ from app.models.food import (
 )
 from app.utils.db import get_session
 from app.utils.tenant import set_tenant_context
-from tuwayki_core.utils.timezone import utc_now_naive
+from tuwayki_core.utils.timezone import format_local_datetime, utc_now_naive
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -375,7 +375,7 @@ class DonoOperacionesState(rx.State):
             repartidor_id=pedido.delivery_repartidor_id or 0,
             total_texto=_money_text(pedido.total),
             items_resumen=resumen,
-            hora_texto=hora.strftime("%H:%M") if hora else "",
+            hora_texto=format_local_datetime(hora, "%H:%M", "PE") if hora else "",
             notas=pedido.delivery_notas or "",
             badge_bg=bg,
             badge_text=txt,

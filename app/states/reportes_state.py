@@ -45,6 +45,7 @@ from app.services.finanzas_service import (
     resumen_igv_mensual,
 )
 from app.services.plan_service import plan_permite
+from tuwayki_core.utils.timezone import format_local_datetime
 from app.states.food_state import (
     AnulacionView,
     DescuentoRankView,
@@ -883,8 +884,8 @@ class ReportesState(rx.State):
             mozo = usuarios.get(p.mozo_id)
             cajero = usuarios.get(p.cajero_id)
             ws1.append([
-                fecha.strftime("%Y-%m-%d") if fecha else "",
-                fecha.strftime("%H:%M") if fecha else "",
+                format_local_datetime(fecha, "%Y-%m-%d", "PE") if fecha else "",
+                format_local_datetime(fecha, "%H:%M", "PE") if fecha else "",
                 p.id,
                 _pedido_sales_label(p, mesas),
                 getattr(p, "metodo_pago", None) or "",
@@ -1314,7 +1315,7 @@ class ReportesState(rx.State):
 
         food = await self._food()
         empresa_nombre = getattr(food, "empresa_nombre", "TUWAYKIFOOD")
-        fecha_str = _utcnow().strftime("%d/%m/%Y %H:%M")
+        fecha_str = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", "PE")
 
         buf = io.BytesIO()
         doc = SimpleDocTemplate(

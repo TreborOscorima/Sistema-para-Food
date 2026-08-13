@@ -1779,6 +1779,7 @@ def dono_login_page() -> rx.Component:
                     spacing="1", align="center",
                 ),
                 rx.box(
+                    rx.form(
                     rx.vstack(
                         rx.cond(
                             AdminLocalState.error_msg != "",
@@ -1806,9 +1807,9 @@ def dono_login_page() -> rx.Component:
                                     letter_spacing="0.06em"),
                             rx.input(
                                 placeholder="dueño@restaurante.com",
+                                name="email",
                                 value=AdminLocalState.email_input,
                                 on_change=AdminLocalState.set_email_input,
-                                on_key_down=AdminLocalState.login_on_enter,
                                 type="text",
                                 autocomplete="off",
                                 class_name="twk-login-input",
@@ -1823,15 +1824,15 @@ def dono_login_page() -> rx.Component:
                             rx.box(
                                 rx.input(
                                     placeholder="••••••••",
+                                    name="password",
                                     value=AdminLocalState.password_input,
                                     on_change=AdminLocalState.set_password_input,
-                                    on_key_down=AdminLocalState.login_on_enter,
                                     type=rx.cond(
                                         AdminLocalState.show_password,
                                         "text",
                                         "password",
                                     ),
-                                    autocomplete="new-password",
+                                    autocomplete="current-password",
                                     class_name="twk-login-input",
                                     padding_right="40px",
                                 ),
@@ -1869,7 +1870,7 @@ def dono_login_page() -> rx.Component:
                         ),
                         rx.button(
                             "Ingresar al Panel",
-                            on_click=AdminLocalState.login_admin_local,
+                            type="submit",
                             background=_ORANGE, color=_WHITE,
                             border_radius="10px", font_size="14px",
                             font_weight="700", width="100%",
@@ -1880,6 +1881,10 @@ def dono_login_page() -> rx.Component:
                             transition="all 0.15s",
                         ),
                         spacing="4", width="100%",
+                    ),
+                    on_submit=AdminLocalState.login_admin_local_submit,
+                    reset_on_submit=False,
+                    width="100%",
                     ),
                     background=_SLATE_800,
                     border=f"1px solid {_SLATE_700}",

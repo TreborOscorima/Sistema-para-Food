@@ -14,6 +14,8 @@ from __future__ import annotations
 import io
 import re
 from datetime import date, datetime, timezone
+
+from tuwayki_core.utils.timezone import format_local_datetime
 from decimal import Decimal, InvalidOperation
 
 import reflex as rx
@@ -465,7 +467,7 @@ class ClientesCuentasMixin(rx.State, mixin=True):
                         monto=float(Decimal(str(m.monto))),
                         monto_texto=_money_text(m.monto),
                         descripcion=m.descripcion or "",
-                        fecha_texto=m.created_at.strftime("%d/%m %H:%M"),
+                        fecha_texto=format_local_datetime(m.created_at, "%d/%m %H:%M", "PE"),
                     )
                     for m in movs
                 ]
@@ -602,8 +604,8 @@ class ClientesCuentasMixin(rx.State, mixin=True):
             cc = cuentas_por_id.get(m.cuenta_id)
             cli = clientes_map.get(cc.cliente_id) if cc else None
             ws2.append([
-                m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
-                m.created_at.strftime("%H:%M") if m.created_at else "",
+                format_local_datetime(m.created_at, "%Y-%m-%d", "PE") if m.created_at else "",
+                format_local_datetime(m.created_at, "%H:%M", "PE") if m.created_at else "",
                 cli.nombre if cli else "?",
                 "Cargo" if m.tipo == "cargo" else "Pago",
                 float(Decimal(str(m.monto))),

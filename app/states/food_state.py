@@ -2786,7 +2786,7 @@ class FoodState(
                     nombre_cliente=_actor_name(pedido.nombre_cliente) or "Cliente QR",
                     items_resumen=resumen,
                     total_texto=_money_text(pedido.total),
-                    hora_texto=hora.strftime("%H:%M") if hora else "",
+                    hora_texto=format_local_datetime(hora, "%H:%M", "PE") if hora else "",
                 ))
             if _list_fingerprint(result) != _list_fingerprint(self.self_orders_pendientes):
                 self.self_orders_pendientes = result
@@ -4478,7 +4478,7 @@ class FoodState(
                     subtotal_texto=_money_text(d.subtotal),
                     subtotal_float=float(_to_decimal(d.subtotal)),
                     nota=d.notas or "",
-                    enviado_en_texto=enviado_en.strftime("%H:%M"),
+                    enviado_en_texto=format_local_datetime(enviado_en, "%H:%M", "PE"),
                     estado_clave=estado_produccion,
                     estado_label=PRODUCTION_LABELS.get(estado_produccion, estado_produccion),
                     estado_bg=PRODUCTION_BADGE_BACKGROUNDS.get(estado_produccion, "#334155"),
@@ -4863,7 +4863,7 @@ class FoodState(
                     grupos[key] = {
                         "pedido_id": pedido.id or 0,
                         "mesa_label": _pedido_kitchen_label(pedido, mesas),
-                        "hora_texto": marca.strftime("%H:%M"),
+                        "hora_texto": format_local_datetime(marca, "%H:%M", "PE"),
                         "estado_produccion": estado_produccion,
                         "estado_label": PRODUCTION_LABELS.get(estado_produccion, estado_produccion),
                         "estado_bg": PRODUCTION_BADGE_BACKGROUNDS.get(estado_produccion, "#334155"),
@@ -5501,7 +5501,7 @@ class FoodState(
                     items_txt += f" +{len(detalles) - 3} más"
                 metodo = (p.metodo_pago or "efectivo").capitalize()
                 total_final = _to_decimal(p.total) - _to_decimal(p.descuento) + _to_decimal(p.propina) + _to_decimal(p.recargo)
-                hora = p.cerrado_en.strftime("%H:%M") if p.cerrado_en else ""
+                hora = format_local_datetime(p.cerrado_en, "%H:%M", "PE") if p.cerrado_en else ""
                 result.append(UltimoCobroView(
                     pedido_id=p.id or 0,
                     hora=hora,
@@ -6759,7 +6759,7 @@ class FoodState(
                 result.append(MostradorPendienteView(
                     pedido_id=pedido.id or 0,
                     cliente_nombre=_actor_name(pedido.nombre_cliente) or "Sin nombre",
-                    hora_texto=hora.strftime("%H:%M") if hora else "",
+                    hora_texto=format_local_datetime(hora, "%H:%M", "PE") if hora else "",
                     items_resumen=resumen,
                     total_texto=_money_text(pedido.total),
                     total=float(_to_decimal(pedido.total)),
@@ -6797,7 +6797,7 @@ class FoodState(
                     MostradorEntregadoView(
                         pedido_id=pedido.id or 0,
                         cliente_nombre=_actor_name(pedido.nombre_cliente) or "Sin nombre",
-                        hora_texto=cobrado_en.strftime("%H:%M") if cobrado_en else "",
+                        hora_texto=format_local_datetime(cobrado_en, "%H:%M", "PE") if cobrado_en else "",
                         items_resumen=resumen,
                         total_texto=_money_text(pedido.total),
                     ),
@@ -7071,6 +7071,19 @@ class AdminLocalState(rx.State):
     def login_on_enter(self, key: str):
         if key == "Enter":
             return type(self).login_admin_local
+
+    async def login_admin_local_submit(self, form_data: dict):
+        """Entrada del login por <form>. A diferencia de leer solo el estado
+        (email_input/password_input), form_data trae los valores REALES del DOM
+        al enviar — incluidos los que Chrome autocompleta sin disparar on_change,
+        que antes dejaban el estado vacío y producían "Ingresa email y
+        contraseña" pese a haber credenciales cargadas."""
+        data = form_data or {}
+        email = (data.get("email") or "").strip() or self.email_input
+        password = (data.get("password") or "") or self.password_input
+        self.email_input = email
+        self.password_input = password
+        return await self.login_admin_local()
 
     async def login_admin_local(self) -> None:
         import hashlib
