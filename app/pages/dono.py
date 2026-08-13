@@ -57,6 +57,13 @@ class AdminPanelState(rx.State):
                 dono_state.cargar_reservas()
             else:
                 dono_state.cargar_deliveries()
+        elif s == "usuarios":
+            # La lista de usuarios no tiene on_load propio dentro del SPA del
+            # panel: sin esto, la sección abría vacía ("No hay usuarios") hasta
+            # la primera escritura. Cargamos al navegar.
+            from app.states.usuarios_state import UsuariosAdminState
+            usuarios_state = await self.get_state(UsuariosAdminState)
+            await usuarios_state.cargar_usuarios_admin()
 
     def toggle_sidebar(self) -> None:
         self.sidebar_open = not self.sidebar_open

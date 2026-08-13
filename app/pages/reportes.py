@@ -1428,10 +1428,26 @@ def _reportes_content() -> rx.Component:
             wrap="wrap", gap="8px",
         ),
 
+        # ── Período activo de los KPIs ────────────────────────────────────────
+        # Los indicadores de abajo siguen el filtro Hoy/Semana/Mes; esta línea
+        # deja explícito el período para que no se lea "Ventas hoy" con datos
+        # del mes.
+        rx.hstack(
+            rx.icon(tag="calendar_range", size=13, color=TEXT_MUTED),
+            rx.text("Indicadores del período:", font_size="12px", color=TEXT_MUTED),
+            rx.badge(
+                ReportesState.dashboard_periodo_label,
+                background="rgba(234,88,12,0.08)", color=ACCENT,
+                border_radius="6px", font_size="11px", font_weight="700",
+                padding="2px 8px",
+            ),
+            spacing="2", align="center",
+        ),
+
         # ── KPI cards ────────────────────────────────────────────────────────
         rx.grid(
             _kpi_card(
-                "Ventas hoy",
+                "Ventas",
                 ReportesState.dashboard_ventas_hoy_texto,
                 "trending_up", "#22C55E", "rgba(34,197,94,0.12)", "rgba(34,197,94,0.25)",
                 hint="Total cobrado en el período, sin contar propinas.",
@@ -1449,7 +1465,7 @@ def _reportes_content() -> rx.Component:
                 hint="Ventas cobradas ÷ número de cobros del período.",
             ),
             _kpi_card(
-                "Propinas hoy",
+                "Propinas",
                 ReportesState.dashboard_propina_hoy_texto,
                 "heart", "#EA580C", "rgba(234,88,12,0.12)", "rgba(234,88,12,0.25)",
                 hint="Suma de propinas registradas en los cobros del período.",
@@ -1466,7 +1482,8 @@ def _reportes_content() -> rx.Component:
                 rx.vstack(
                     rx.hstack(
                         rx.icon(tag="star", size=14, color=ACCENT),
-                        rx.text("Top platos hoy", font_size="13px", font_weight="700", color="#CBD5E1"),
+                        rx.text("Top platos · " + ReportesState.dashboard_periodo_label,
+                                font_size="13px", font_weight="700", color="#CBD5E1"),
                         spacing="2", align="center",
                     ),
                     rx.foreach(ReportesState.dashboard_top_platos, lambda plato, i: _top_plato_row(plato, i)),

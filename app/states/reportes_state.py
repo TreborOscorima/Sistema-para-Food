@@ -87,6 +87,9 @@ class ReportesState(rx.State):
     dashboard_pedidos_trend: int = 0
     dashboard_ticket_trend_pct: int = 0
     dashboard_propina_trend_pct: int = 0
+    # Etiqueta del período activo de los KPIs (sigue al filtro Hoy/Semana/Mes de
+    # la página /reportes). El panel /admin lo ancla siempre a "Hoy".
+    dashboard_periodo_label: str = "Hoy"
 
     # ── Analítica ────────────────────────────────────────────────────────────
     reporte_mozos: list[MozoRankView] = []
@@ -251,6 +254,7 @@ class ReportesState(rx.State):
         if result is not None:
             return result
         self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
+        self.historial_filtro_rapido = "hoy"
         self._do_cargar_dashboard(food)
         self._do_cargar_historial(food)
         self._do_cargar_analitica(food)
@@ -269,6 +273,9 @@ class ReportesState(rx.State):
         self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
         self.historial_filtro_fecha_hasta = ""
         self.historial_filtro_metodo = ""
+        # El panel /admin siempre muestra el día de hoy; ancla el filtro para que
+        # los KPIs no arrastren un período (Semana/Mes) de una visita a /reportes.
+        self.historial_filtro_rapido = "hoy"
         self._do_cargar_dashboard(food)
         self._do_cargar_historial(food)
 
@@ -278,11 +285,44 @@ class ReportesState(rx.State):
         food = await self._food()
         self._do_cargar_dashboard(food)
 
+    def _rango_dashboard(self) -> tuple[datetime, datetime, datetime, datetime, str]:
+        """Rango de los KPIs del dashboard según el filtro rápido activo.
+
+        Devuelve (inicio, fin, inicio_prev, fin_prev, etiqueta) con 'fin'
+        exclusivo. El período anterior es una ventana de la MISMA duración
+        inmediatamente anterior (hoy→ayer, semana→semana previa, etc.), para que
+        los trends comparen manzanas con manzanas. Sin filtro (o "hoy") el rango
+        es el día de hoy — así el panel /admin sigue mostrando "hoy"."""
+        hoy = _utcnow().date()
+
+        def _parse(s: str):
+            try:
+                return datetime.strptime(s, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                return None
+
+        desde = _parse(self.historial_filtro_fecha_desde)
+        hasta = _parse(self.historial_filtro_fecha_hasta)
+        rapido = self.historial_filtro_rapido
+        if rapido in ("", "hoy") or desde is None:
+            inicio = datetime(hoy.year, hoy.month, hoy.day)
+            fin = inicio + timedelta(days=1)
+            etiqueta = "Hoy"
+        else:
+            if hasta is None or hasta < desde:
+                hasta = desde
+            inicio = datetime(desde.year, desde.month, desde.day)
+            fin = datetime(hasta.year, hasta.month, hasta.day) + timedelta(days=1)
+            etiqueta = {
+                "semana": "Esta semana",
+                "mes": "Este mes",
+            }.get(rapido, "Período personalizado")
+        dur = fin - inicio
+        return inicio, fin, inicio - dur, inicio, etiqueta
+
     def _do_cargar_dashboard(self, food) -> None:
         hoy = _utcnow().date()
-        inicio_hoy = datetime(hoy.year, hoy.month, hoy.day)
-        fin_hoy = inicio_hoy + timedelta(days=1)
-        inicio_ayer = inicio_hoy - timedelta(days=1)
+        inicio_hoy, fin_hoy, inicio_ayer, fin_ayer, periodo_label = self._rango_dashboard()
         with food._tenant_session() as session:
             # PERF-04: agregación en SQL (func.count/sum) en vez de cargar todos
             # los pedidos del período como objetos y sumar en Python.
@@ -321,9 +361,23 @@ class ReportesState(rx.State):
                 Mesa.activa.is_(True),
             )
             total_mesas_activas = session.exec(self._sucursal_q(Mesa, q_total)).one()
-            q_cocina = select(func.count(DetallePedido.id)).where(
-                DetallePedido.company_id == food._company_id(),
-                DetallePedido.estado_produccion.in_(["pendiente", "en_preparacion"]),
+            # "En cocina" = líneas realmente en producción, con el MISMO criterio
+            # que el KDS (cargar_cocina): enviadas a cocina, que requieren
+            # preparación y cuyo pedido no está cancelado ni cobrado. Sin el JOIN
+            # a Pedido, las líneas 'pendiente' de pedidos cancelados quedaban
+            # contadas para siempre (contador fantasma en el Resumen).
+            q_cocina = (
+                select(func.count(DetallePedido.id))
+                .join(Pedido, DetallePedido.pedido_id == Pedido.id)
+                .where(
+                    DetallePedido.company_id == food._company_id(),
+                    DetallePedido.impreso_cocina.is_(True),
+                    DetallePedido.requiere_preparacion.is_(True),
+                    DetallePedido.estado_produccion.in_(["pendiente", "en_preparacion"]),
+                    Pedido.estado.notin_(
+                        [EstadoPedido.CANCELADO.value, EstadoPedido.COBRADO.value]
+                    ),
+                )
             )
             items_en_cocina = session.exec(q_cocina).one()
             q_reservas = select(func.count(Reserva.id)).where(
@@ -379,6 +433,7 @@ class ReportesState(rx.State):
         ticket_promedio_ayer = (
             ventas_ayer / pedidos_count_ayer if pedidos_count_ayer else Decimal("0.00")
         )
+        self.dashboard_periodo_label = periodo_label
         self.dashboard_ventas_hoy_texto = _money_text(ventas)
         self.dashboard_pedidos_hoy = pedidos_count_hoy
         self.dashboard_mesas_ocupadas = len(mesas_no_libres)
@@ -504,6 +559,9 @@ class ReportesState(rx.State):
     async def aplicar_filtros_historial(self) -> None:
         food = await self._food()
         self.historial_pagina = 0
+        # Los KPIs superiores deben seguir al mismo período que los gráficos
+        # (antes quedaban fijos en "hoy" y contradecían al gráfico de abajo).
+        self._do_cargar_dashboard(food)
         self._do_cargar_historial(food)
         self._do_cargar_analitica(food)
         self._do_cargar_descuentos_anulaciones(food)
@@ -520,6 +578,7 @@ class ReportesState(rx.State):
         self.historial_filtro_metodo = ""
         self.historial_filtro_rapido = ""
         self.historial_pagina = 0
+        self._do_cargar_dashboard(food)
         self._do_cargar_historial(food)
         self._do_cargar_analitica(food)
 
