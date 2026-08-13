@@ -2429,6 +2429,7 @@ class FoodState(
         self.cargar_inventario()
         self.cargar_clientes()
         self.cargar_promociones()
+        self.cargar_cupones()
         self.cargar_cuentas()
         self.cargar_onboarding()
 

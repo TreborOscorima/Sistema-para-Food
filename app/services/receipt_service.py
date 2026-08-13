@@ -13,6 +13,8 @@ import json
 import textwrap
 from dataclasses import dataclass
 from datetime import datetime
+
+from tuwayki_core.utils.timezone import country_now
 from typing import Iterable
 
 TICKET_WIDTH = 32  # chars para papel 58mm
@@ -112,7 +114,7 @@ def build_kitchen_ticket_lines(
     lines: list[str] = [_center("COCINA", width), ""]
     lines.append(mesa_label)
     lines.append(f"Pedido: #{pedido_id}")
-    lines.append(f"Fecha: {datetime.now():%Y-%m-%d %H:%M}")
+    lines.append(f"Fecha: {country_now('PE'):%Y-%m-%d %H:%M}")
     lines.append(_line(width))
     for item in items:
         lines.append(f"{item.quantity} x {item.name}")
@@ -173,7 +175,7 @@ def build_cashier_ticket_lines(
     """Líneas de texto del comprobante de pago (reutilizable por HTML y agente)."""
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
-    now = datetime.now()
+    now = country_now("PE")
     lines: list[str] = [
         _center(company_name.upper(), width),
     ]
@@ -305,7 +307,7 @@ def build_precuenta_lines(
     """Pre-cuenta (proforma): sin métodos de pago, con aviso legal."""
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
-    now = datetime.now()
+    now = country_now("PE")
     lines: list[str] = [
         _center(company_name.upper(), width),
     ]

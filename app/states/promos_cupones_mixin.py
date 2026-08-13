@@ -150,6 +150,7 @@ class PromosCuponesMixin(rx.State, mixin=True):
             return result
         self.cargar_menu()
         self.cargar_promociones()
+        self.cargar_cupones()
 
     def cargar_promociones(self) -> None:
         # Vigencia evaluada en hora local del país (no UTC): un happy hour de
