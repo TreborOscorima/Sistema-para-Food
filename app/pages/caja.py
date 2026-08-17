@@ -1290,10 +1290,29 @@ def _denominacion_row(row: DenominacionRow) -> rx.Component:
 
 def _resumen_cierre_row(row: ResumenCierreRow) -> rx.Component:
     return rx.hstack(
-        rx.text(row.etiqueta, font_size="13px", color=TEXT_MUTED),
+        rx.text(
+            row.etiqueta, font_size="13px",
+            color=rx.cond(row.enfasis, TEXT_PRIMARY, TEXT_MUTED),
+            font_weight=rx.cond(row.enfasis, "800", "400"),
+        ),
         rx.spacer(),
-        rx.text(row.monto_texto, font_size="13px", font_weight="700", color="#CBD5E1"),
+        rx.text(
+            row.monto_texto,
+            font_size=rx.cond(row.enfasis, "14px", "13px"),
+            font_weight=rx.cond(row.enfasis, "900", "700"),
+            color=rx.cond(row.enfasis, ACCENT, "#CBD5E1"),
+        ),
         width="100%", align="center",
+    )
+
+
+def _cierre_seccion(titulo: str, filas) -> rx.Component:
+    """Bloque titulado del resumen de cierre (Ventas / Cobrado / Arqueo)."""
+    return rx.vstack(
+        rx.text(titulo, font_size="10px", font_weight="700", color=TEXT_MUTED,
+                text_transform="uppercase", letter_spacing="0.06em"),
+        rx.foreach(filas, _resumen_cierre_row),
+        spacing="1", width="100%", align="stretch",
     )
 
 
@@ -1551,31 +1570,42 @@ def _cierre_preview_modal() -> rx.Component:
                             on_click=FoodState.set_cierre_preview_visible(False)),
                     width="100%", align="center",
                 ),
-                # Resumen de caja
+                # Resumen de caja en 3 bloques claros
                 rx.box(
                     rx.vstack(
-                        rx.foreach(FoodState.cierre_preview_resumen, _resumen_cierre_row),
+                        _cierre_seccion("Ventas del turno", FoodState.cierre_preview_ventas),
                         rx.divider(),
-                        rx.foreach(FoodState.cierre_preview_metodos, _resumen_cierre_row),
+                        _cierre_seccion("Cobrado por método", FoodState.cierre_preview_cobros),
+                        rx.divider(),
+                        _cierre_seccion("Arqueo de caja · efectivo", FoodState.cierre_preview_arqueo),
                         rx.hstack(
-                            rx.text("Descuadre de caja", font_size="12px", color=TEXT_MUTED),
+                            rx.text("Descuadre", font_size="12px", color=TEXT_MUTED),
                             rx.spacer(),
                             rx.text(FoodState.cierre_preview_descuadre_texto, font_size="12px", font_weight="800", color="#CBD5E1"),
                             width="100%",
                         ),
-                        rx.hstack(
-                            rx.text("Reconciliación ventas", font_size="12px", color=TEXT_MUTED),
-                            rx.spacer(),
-                            rx.text(
-                                FoodState.cierre_preview_recon_texto,
-                                font_size="12px", font_weight="800",
-                                color=rx.cond(FoodState.cierre_preview_recon_cuadra, SUCCESS_SOLID, "#F59E0B"),
+                        rx.text(
+                            "Solo el efectivo entra al cajón. Yape, tarjeta y transferencias "
+                            "suman a ventas pero no al efectivo esperado.",
+                            font_size="11px", color=TEXT_MUTED, line_height="1.4",
+                        ),
+                        rx.cond(
+                            ~FoodState.cierre_preview_recon_cuadra,
+                            rx.hstack(
+                                rx.icon(tag="triangle_alert", size=13, color="#F59E0B"),
+                                rx.text("Reconciliación:", font_size="12px", color=TEXT_MUTED),
+                                rx.spacer(),
+                                rx.text(
+                                    FoodState.cierre_preview_recon_texto,
+                                    font_size="12px", font_weight="800", color="#F59E0B",
+                                ),
+                                width="100%", align="center", gap="6px",
                             ),
-                            width="100%",
+                            rx.fragment(),
                         ),
                         spacing="2", width="100%",
                     ),
-                    padding="10px 12px", width="100%",
+                    padding="12px 14px", width="100%",
                     border=f"1px solid {DARK_800}", border_radius="10px",
                 ),
                 # Detalle de pedidos
