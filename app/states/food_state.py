@@ -1598,7 +1598,7 @@ class FoodState(
     caja_cobro_descuento: str = ""
     caja_cobro_descuento_es_pct: bool = False
     caja_cobro_recargo: str = ""
-    caja_cobro_recargo_concepto: str = "delivery"
+    caja_cobro_recargo_concepto: str = "Delivery"
     caja_cobro_efectivo_recibido: str = ""
     caja_cobro_error: str = ""
     caja_cobro_items: list[CajaItemView] = []
@@ -2105,7 +2105,7 @@ class FoodState(
         self.caja_cobro_propina = ""
         self.caja_cobro_propina_pct = 0
         self.caja_cobro_recargo = ""
-        self.caja_cobro_recargo_concepto = "delivery"
+        self.caja_cobro_recargo_concepto = "Delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.ultimos_cobros_visible = False
         self.ultimos_cobros = []
@@ -5156,7 +5156,7 @@ class FoodState(
         self.caja_cobro_propina = ""
         self.caja_cobro_propina_pct = 0
         self.caja_cobro_recargo = ""
-        self.caja_cobro_recargo_concepto = "delivery"
+        self.caja_cobro_recargo_concepto = "Delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.caja_promo_aplicada_nombre = ""
@@ -5427,7 +5427,7 @@ class FoodState(
         self.caja_cobro_descuento = ""
         self.caja_cobro_descuento_es_pct = False
         self.caja_cobro_recargo = ""
-        self.caja_cobro_recargo_concepto = "delivery"
+        self.caja_cobro_recargo_concepto = "Delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_cliente_nombre = ""
         self.caja_cobro_cliente_id = 0
@@ -6231,6 +6231,7 @@ class FoodState(
                     pagos_lista,
                     resultado_pagos,
                     split_detalles=split_det,
+                    metodos_efectivo=_efectivos,
                 )
             metodo_final = pedido.metodo_pago or metodo
             registrar_auditoria(
@@ -6442,7 +6443,7 @@ class FoodState(
         self.caja_cobro_descuento = ""
         self.caja_cobro_descuento_es_pct = False
         self.caja_cobro_recargo = ""
-        self.caja_cobro_recargo_concepto = "delivery"
+        self.caja_cobro_recargo_concepto = "Delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
         self.caja_promo_aplicada_nombre = ""

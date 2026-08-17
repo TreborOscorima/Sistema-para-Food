@@ -401,6 +401,7 @@ def build_cash_close_ticket_lines(
     width: int = 0,
     detalle_pedidos: list[dict] | None = None,
     detalle_movimientos: list[dict] | None = None,
+    recon_ventas_texto: str = "",
 ) -> list[str]:
     """Ticket de cierre de turno de caja (arqueo) para impresora térmica."""
     if width == 0:
@@ -420,6 +421,8 @@ def build_cash_close_ticket_lines(
         lines.append(_row(etiqueta, monto, width))
     lines.append(_line(width))
     lines.append(_row("DESCUADRE", descuadre_texto, width))
+    if recon_ventas_texto:
+        lines.append(_row("Recon. ventas", recon_ventas_texto, width))
 
     if detalle_pedidos:
         lines.append("")
@@ -432,6 +435,16 @@ def build_cash_close_ticket_lines(
             if items:
                 for item_line in _wrap(f"  {items}", width):
                     lines.append(item_line)
+            # Conceptos que ajustan la cuenta: se listan para que el cierre
+            # detalle exactamente lo mismo que el reporte (envases, delivery,
+            # descuento y propina), y así todo cuadre sin ambigüedad.
+            if p.get("recargo_texto"):
+                etiqueta = p.get("recargo_concepto") or "Recargo"
+                lines.append(_row(f"  + {etiqueta}:", p.get("recargo_texto", ""), width))
+            if p.get("descuento_texto"):
+                lines.append(_row("  - Descuento:", p.get("descuento_texto", ""), width))
+            if p.get("propina_texto"):
+                lines.append(_row("  Propina:", p.get("propina_texto", ""), width))
             lines.append(_row("Total:", p.get("neto_texto", ""), width))
             lines.append(_line(width))
 

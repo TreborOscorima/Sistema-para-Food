@@ -44,7 +44,9 @@ from app.services.finanzas_service import (
     reporte_reversiones,
     resumen_igv_mensual,
 )
+from app.services.metodos_pago_service import mapa_tipos
 from app.services.plan_service import plan_permite
+from app.states.caja_turno_mixin import _bucket_tipo
 from tuwayki_core.utils.timezone import (
     country_today_date,
     format_local_datetime,
@@ -365,20 +367,25 @@ class ReportesState(rx.State):
                     func.count(Pedido.id),
                     func.coalesce(func.sum(Pedido.total), 0),
                     func.coalesce(func.sum(Pedido.propina), 0),
+                    func.coalesce(func.sum(Pedido.descuento), 0),
+                    func.coalesce(func.sum(Pedido.recargo), 0),
                 ).where(
                     Pedido.company_id == food._company_id(),
                     cobrado,
                     Pedido.cerrado_en >= inicio,
                     Pedido.cerrado_en < fin,
                 )
-                cnt, tot, prop = session.exec(self._sucursal_q(Pedido, q)).one()
-                return int(cnt or 0), _to_decimal(tot or 0), _to_decimal(prop or 0)
+                cnt, tot, prop, desc, rec = session.exec(self._sucursal_q(Pedido, q)).one()
+                # Venta neta = Σ(subtotal + recargo − descuento). La propina NO es
+                # venta (es del personal); se reporta aparte.
+                neta = _to_decimal(tot or 0) + _to_decimal(rec or 0) - _to_decimal(desc or 0)
+                return int(cnt or 0), neta, _to_decimal(prop or 0)
 
             pedidos_count_hoy, sum_total_hoy, propina_total = _agg_ventas(inicio_hoy, fin_hoy)
             pedidos_count_ayer, sum_total_ayer, propina_ayer = _agg_ventas(inicio_ayer, inicio_hoy)
-            # ventas = Σ(total + propina) = Σtotal + Σpropina
-            ventas = sum_total_hoy + propina_total
-            ventas_ayer = sum_total_ayer + propina_ayer
+            # "Ventas" = venta neta (sin propina). Ver _agg_ventas.
+            ventas = sum_total_hoy
+            ventas_ayer = sum_total_ayer
             q_mesas = select(Mesa).where(
                 Mesa.company_id == food._company_id(),
                 Mesa.estado != EstadoMesa.LIBRE.value,
@@ -540,7 +547,12 @@ class ReportesState(rx.State):
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == food._company_id())).all()}
             historial: list[VentaHistorialView] = []
             for p in pedidos:
-                total_base = _to_decimal(p.total)
+                # Venta neta = subtotal + recargo (envases/delivery) − descuento.
+                total_base = (
+                    _to_decimal(p.total)
+                    + _to_decimal(getattr(p, "recargo", Decimal("0.00")))
+                    - _to_decimal(getattr(p, "descuento", Decimal("0.00")))
+                )
                 propina = _to_decimal(getattr(p, "propina", Decimal("0.00")))
                 total_con_propina = total_base + propina
                 anulada = p.estado == EstadoPedido.CANCELADO.value
@@ -793,15 +805,18 @@ class ReportesState(rx.State):
                 q = select(
                     func.count(Pedido.id),
                     func.coalesce(func.sum(Pedido.total), 0),
-                    func.coalesce(func.sum(Pedido.propina), 0),
+                    func.coalesce(func.sum(Pedido.descuento), 0),
+                    func.coalesce(func.sum(Pedido.recargo), 0),
                 ).where(
                     Pedido.company_id == food._company_id(),
                     cobrado_filter,
                     Pedido.cerrado_en >= d0,
                     Pedido.cerrado_en <= d1,
                 )
-                cnt, tot, prop = session.exec(q).one()
-                return int(cnt or 0), _to_decimal(tot or 0) + _to_decimal(prop or 0)
+                cnt, tot, desc, rec = session.exec(q).one()
+                # Venta neta (sin propina), consistente con el KPI del dashboard.
+                neta = _to_decimal(tot or 0) + _to_decimal(rec or 0) - _to_decimal(desc or 0)
+                return int(cnt or 0), neta
 
             count_act, ventas_act = _agg_comp(desde, hasta)
             count_ant, ventas_ant = _agg_comp(anterior_desde, anterior_hasta)
@@ -872,6 +887,10 @@ class ReportesState(rx.State):
             pedido_ids = [p.id for p in pedidos if p.id is not None]
             detalles_por_pedido: dict[int, list] = {}
             productos_map: dict[int, Producto] = {}
+            # Pagos persistidos por pedido, para el desglose por método (montos
+            # netos de vuelto). Se clasifican por tipo configurado de la empresa.
+            tipos_metodo = mapa_tipos(session, food._company_id())
+            pagos_por_pedido: dict[int, list] = {}
             if pedido_ids:
                 detalles = session.exec(
                     select(DetallePedido).where(DetallePedido.pedido_id.in_(pedido_ids))
@@ -883,6 +902,10 @@ class ReportesState(rx.State):
                         select(Producto).where(Producto.company_id == food._company_id())
                     ).all()
                 }
+                for pg in session.exec(
+                    select(PagoPedido).where(PagoPedido.pedido_id.in_(pedido_ids))
+                ).all():
+                    pagos_por_pedido.setdefault(pg.pedido_id, []).append(pg)
 
         if not pedidos:
             return rx.toast.error("No hay ventas para exportar con estos filtros.")
@@ -890,26 +913,80 @@ class ReportesState(rx.State):
         wb = Workbook()
         ws1 = wb.active
         ws1.title = "Ventas"
+        # Cada pedido se descompone en TODOS sus conceptos para que el reporte
+        # cuadre con el cierre: subtotal de ítems + recargo (envases/delivery)
+        # − descuento = venta neta; + propina = total cobrado (≡ Σ pagos). El
+        # desglose por método usa los montos netos de vuelto realmente cobrados.
         ws1.append([
-            "Fecha", "Hora", "Pedido #", "Mesa", "Método de pago",
-            "Mozo", "Cajero", "Subtotal", "Propina", "Total",
+            "Fecha", "Hora", "Pedido #", "Tipo", "Mesa / Cliente",
+            "Subtotal ítems", "Recargo", "Concepto recargo", "Descuento",
+            "Venta neta", "Propina", "Total cobrado",
+            "Efectivo", "Tarjeta", "QR/Yape", "Fiado",
+            "Mozo", "Cajero",
         ])
+        tot = {k: Decimal("0.00") for k in (
+            "subtotal", "recargo", "descuento", "neta", "propina", "cobrado",
+            "efectivo", "tarjeta", "qr", "fiado",
+        )}
         for p in pedidos:
             fecha = p.cerrado_en
-            subtotal = float(_to_decimal(p.total))
-            propina = float(_to_decimal(getattr(p, "propina", 0)))
+            subtotal = _to_decimal(p.total)
+            recargo = _to_decimal(getattr(p, "recargo", 0))
+            descuento = _to_decimal(getattr(p, "descuento", 0))
+            propina = _to_decimal(getattr(p, "propina", 0))
+            venta_neta = subtotal + recargo - descuento
+            # Desglose por método a partir de los pagos persistidos (netos de
+            # vuelto). El "total cobrado" es lo realmente recibido: la suma de
+            # las columnas por método, que es lo que cuadra con el cierre.
+            buckets = {"efectivo": Decimal("0.00"), "tarjeta": Decimal("0.00"),
+                       "qr": Decimal("0.00"), "fiado": Decimal("0.00")}
+            pagos_ped = pagos_por_pedido.get(p.id or 0, [])
+            if pagos_ped:
+                for pg in pagos_ped:
+                    cod = (pg.metodo or "efectivo").lower()
+                    b = _bucket_tipo(tipos_metodo.get(cod, "digital"))
+                    buckets[b] += _to_decimal(pg.monto)
+                total_cobrado = sum(buckets.values(), Decimal("0.00"))
+            else:
+                # Pedido legacy sin filas de pago: el cobrado se asume la venta
+                # neta + propina, cargada al método declarado.
+                total_cobrado = venta_neta + propina
+                cod = (getattr(p, "metodo_pago", None) or "efectivo").lower()
+                buckets[_bucket_tipo(tipos_metodo.get(cod, "digital"))] += total_cobrado
             mozo = usuarios.get(p.mozo_id)
             cajero = usuarios.get(p.cajero_id)
             ws1.append([
                 format_local_datetime(fecha, "%Y-%m-%d", self.reportes_pais) if fecha else "",
                 format_local_datetime(fecha, "%H:%M", self.reportes_pais) if fecha else "",
                 p.id,
+                (getattr(p, "tipo_pedido", None) or "").capitalize(),
                 _pedido_sales_label(p, mesas),
-                getattr(p, "metodo_pago", None) or "",
+                float(subtotal), float(recargo),
+                getattr(p, "recargo_concepto", None) or "",
+                float(descuento), float(venta_neta), float(propina),
+                float(total_cobrado),
+                float(buckets["efectivo"]), float(buckets["tarjeta"]),
+                float(buckets["qr"]), float(buckets["fiado"]),
                 _actor_name(mozo.nombre) if mozo else "Sin asignar",
                 _actor_name(cajero.nombre) if cajero else "Sin asignar",
-                subtotal, propina, subtotal + propina,
             ])
+            tot["subtotal"] += subtotal
+            tot["recargo"] += recargo
+            tot["descuento"] += descuento
+            tot["neta"] += venta_neta
+            tot["propina"] += propina
+            tot["cobrado"] += total_cobrado
+            tot["efectivo"] += buckets["efectivo"]
+            tot["tarjeta"] += buckets["tarjeta"]
+            tot["qr"] += buckets["qr"]
+            tot["fiado"] += buckets["fiado"]
+        ws1.append([
+            "", "", "", "", "TOTALES",
+            float(tot["subtotal"]), float(tot["recargo"]), "",
+            float(tot["descuento"]), float(tot["neta"]), float(tot["propina"]),
+            float(tot["cobrado"]), float(tot["efectivo"]), float(tot["tarjeta"]),
+            float(tot["qr"]), float(tot["fiado"]), "", "",
+        ])
 
         ws2 = wb.create_sheet("Detalle de items")
         ws2.append(["Fecha", "Pedido #", "Mesa", "Producto", "Cantidad",

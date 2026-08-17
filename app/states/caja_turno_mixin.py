@@ -854,6 +854,9 @@ class CajaTurnoMixin(rx.State, mixin=True):
             ).all()
         }
         detalle_pedidos = []
+        # Reconciliación: Σ (total a cobrar por pedido) debe igualar lo cobrado.
+        ventas_esperadas = Decimal("0.00")
+        cobrado_por_pagos = Decimal("0.00")
         for ped in pedidos:
             items = session.exec(
                 select(DetallePedido).where(DetallePedido.pedido_id == ped.id)
@@ -868,7 +871,15 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 )
             else:
                 metodo = (ped.metodo_pago or "efectivo").capitalize()
-            neto = _dec(ped.total) - _dec(ped.descuento)
+            recargo = _dec(ped.recargo)
+            # Venta neta = subtotal ítems + recargo (envases/delivery) − descuento.
+            neto = _dec(ped.total) + recargo - _dec(ped.descuento)
+            # Total a cobrar = venta neta + propina; y lo realmente cobrado.
+            ventas_esperadas += neto + _dec(ped.propina)
+            if pags:
+                cobrado_por_pagos += sum((_dec(p.monto) for p in pags), Decimal("0.00"))
+            else:
+                cobrado_por_pagos += neto + _dec(ped.propina)
             detalle_pedidos.append({
                 "id": ped.id,
                 "hora": _hora_local(ped.cerrado_en or ped.updated_at),
@@ -876,6 +887,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 "mozo": usuarios.get(ped.mozo_id or 0, "—"),
                 "metodo": metodo,
                 "items": items_texto,
+                "recargo": recargo,
+                "recargo_concepto": ped.recargo_concepto or "",
                 "descuento": _dec(ped.descuento),
                 "propina": _dec(ped.propina),
                 "neto": neto,
@@ -901,6 +914,16 @@ class CajaTurnoMixin(rx.State, mixin=True):
             descuadre_texto = f"-{_money(abs(descuadre))} (falta)"
         else:
             descuadre_texto = f"{_money(0)} (cuadra)"
+        # Reconciliación de ventas: lo cobrado (Σ pagos) vs lo esperado por los
+        # pedidos (Σ total a cobrar). Si difiere, hay pagos que no coinciden con
+        # la cuenta (sobrepago/vuelto mal registrado o edición post-cobro).
+        recon_ventas = cobrado_por_pagos - ventas_esperadas
+        if recon_ventas == 0:
+            recon_ventas_texto = f"{_money(0)} (cuadra)"
+        elif recon_ventas > 0:
+            recon_ventas_texto = f"+{_money(recon_ventas)} (cobrado de más)"
+        else:
+            recon_ventas_texto = f"-{_money(abs(recon_ventas))} (cobrado de menos)"
         return {
             "empresa": self.config_nombre_local or "TUWAYKIFOOD",
             "turno_id": turno.id,
@@ -919,6 +942,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
             "esperado": _money(turno.esperado_efectivo),
             "contado": _money(turno.contado_efectivo),
             "descuadre_texto": descuadre_texto,
+            "recon_ventas_texto": recon_ventas_texto,
+            "recon_ventas_cuadra": recon_ventas == 0,
             "notas": turno.notas_cierre or "",
             "pedidos": detalle_pedidos,
             "movimientos": movs,
@@ -1025,6 +1050,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
         ]:
             met_data.append([label, val])
         met_data.append(["Total ventas", data["total_ventas_neto"]])
+        met_data.append(["Reconciliación (cobrado vs pedidos)", data["recon_ventas_texto"]])
         t2 = Table(met_data, colWidths=[10 * cm, 7 * cm])
         t2.setStyle(hdr_style)
         elems.append(t2)
@@ -1035,7 +1061,19 @@ class CajaTurnoMixin(rx.State, mixin=True):
             elems.append(Paragraph(f"Detalle de Ingresos ({len(data['pedidos'])} pedidos)", styles["Section"]))
             ped_data = [["Hora", "Mesa", "Método", "Detalle", "Monto"]]
             for p in data["pedidos"]:
-                items_p = Paragraph(p["items"][:80], styles["Normal"]) if len(p["items"]) > 40 else p["items"][:80]
+                # El detalle incluye los conceptos que ajustan la cuenta para
+                # que el PDF cuadre exactamente con el reporte.
+                extras = []
+                if p.get("recargo", 0) > 0:
+                    extras.append(f"+ {p.get('recargo_concepto') or 'Recargo'}: {_money(p['recargo'])}")
+                if p.get("descuento", 0) > 0:
+                    extras.append(f"- Descuento: {_money(p['descuento'])}")
+                if p.get("propina", 0) > 0:
+                    extras.append(f"Propina: {_money(p['propina'])}")
+                detalle_txt = p["items"][:120]
+                if extras:
+                    detalle_txt = (detalle_txt + " · " + " · ".join(extras)).strip(" ·")
+                items_p = Paragraph(detalle_txt, styles["Normal"])
                 ped_data.append([
                     p["hora"], p["mesa"], p["metodo"],
                     items_p, _money(p["neto"]),
@@ -1073,7 +1111,14 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 return rx.toast.error("El turno ya no existe.")
             data = self._build_cierre_data(session, turno)
             det_pedidos = [
-                {**p, "neto_texto": _money(p["neto"])} for p in data["pedidos"]
+                {
+                    **p,
+                    "neto_texto": _money(p["neto"]),
+                    "recargo_texto": _money(p["recargo"]) if p.get("recargo", 0) > 0 else "",
+                    "descuento_texto": _money(p["descuento"]) if p.get("descuento", 0) > 0 else "",
+                    "propina_texto": _money(p["propina"]) if p.get("propina", 0) > 0 else "",
+                }
+                for p in data["pedidos"]
             ]
             _cierre_lines = build_cash_close_ticket_lines(
                 company_name=data["empresa"],
@@ -1099,6 +1144,10 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 paper_width_mm=self._ticket_paper_width_mm(),
                 detalle_pedidos=det_pedidos,
                 detalle_movimientos=data["movimientos"],
+                recon_ventas_texto=(
+                    "" if data.get("recon_ventas_cuadra", True)
+                    else data.get("recon_ventas_texto", "")
+                ),
             )
             ticket_html = render_ticket_html(
                 "Cierre de Caja", _cierre_lines, self._ticket_paper_width_mm()

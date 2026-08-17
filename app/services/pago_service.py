@@ -106,25 +106,43 @@ def registrar_pagos_pedido(
     pagos: list[tuple[str, Decimal]],
     resultado: ResultadoPagos,
     split_detalles: list[str] | None = None,
+    metodos_efectivo: set[str] | None = None,
 ) -> list[PagoPedido]:
     """Persiste los pagos de un pedido.
 
     Sin ``split_detalles``: el efectivo se consolida en una sola fila neta de
     vuelto (lo que queda en el cajón); el resto va fila por fila.
 
-    Con ``split_detalles`` (split por ítems): cada pago se persiste 1:1 sin
-    consolidar, con su ``detalle_ids_json`` asociado.
+    Con ``split_detalles`` (split por ítems): cada pago se persiste 1:1 con su
+    ``detalle_ids_json`` asociado, pero el efectivo se netea del vuelto igual
+    que en el path simple: el excedente entregado por el cliente es VUELTO, no
+    venta, así que nunca se persiste como ``monto``. Sin esto, un sobrepago en
+    efectivo inflaba las ventas del cierre (ver identidad Σpedidos ≡ Σpagos).
+
+    ``metodos_efectivo``: códigos que cuentan como efectivo para netear el
+    vuelto (por defecto solo ``"efectivo"``).
     """
+    efectivos = set(metodos_efectivo) if metodos_efectivo else {"efectivo"}
     filas: list[PagoPedido] = []
     if split_detalles:
+        vuelto_rest = _dec(resultado.vuelto)
         for (metodo, monto), det_json in zip(pagos, split_detalles):
+            monto = _dec(monto)
+            # El vuelto solo sale del efectivo: se resta de las filas de efectivo
+            # para que lo persistido sea lo que realmente cubre la cuenta.
+            if vuelto_rest > 0 and metodo in efectivos:
+                quita = min(monto, vuelto_rest)
+                monto -= quita
+                vuelto_rest -= quita
+            if monto <= 0:
+                continue  # fila de efectivo que era puro vuelto
             filas.append(PagoPedido(
                 company_id=pedido.company_id,
                 pedido_id=pedido.id or 0,
                 turno_caja_id=turno_caja_id,
                 usuario_id=usuario_id,
                 metodo=metodo,
-                monto=_dec(monto),
+                monto=monto,
                 detalle_ids_json=det_json,
             ))
     else:
