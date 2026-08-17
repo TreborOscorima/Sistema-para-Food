@@ -86,6 +86,21 @@ class TipoMovimientoCaja(str, Enum):
     EGRESO = "egreso"
 
 
+class TipoMetodoPago(str, Enum):
+    """Naturaleza de un método de pago — decide en qué balde cae en el cierre.
+
+    Solo ``EFECTIVO`` mueve el cajón físico (suma al efectivo esperado del
+    arqueo). Los demás son cobros que no dejan efectivo en caja: ``DIGITAL``
+    agrupa Yape/Plin/transferencia/QR, ``FIADO`` carga a cuenta corriente.
+    """
+
+    EFECTIVO = "efectivo"
+    TARJETA = "tarjeta"
+    DIGITAL = "digital"
+    FIADO = "fiado"
+    OTRO = "otro"
+
+
 class EstadoReserva(str, Enum):
     PENDIENTE = "pendiente"
     CONFIRMADA = "confirmada"
@@ -830,6 +845,35 @@ class PagoPedido(TimestampedModel, table=True):
     detalle_ids_json: str | None = Field(
         default=None, sa_column=Column(Text, nullable=True),
     )
+
+
+class MetodoPagoConfig(TimestampedModel, table=True):
+    """Método de pago configurable por empresa (Efectivo, Yape, Plin, Tarjeta…).
+
+    El ``codigo`` es el identificador estable que se persiste en
+    ``PagoPedido.metodo`` y ``Pedido.metodo_pago``; ``tipo`` (ver
+    :class:`TipoMetodoPago`) define cómo se agrega en el cierre de caja. Réplica
+    adaptada de ``PaymentMethod`` de Sistema-de-Ventas.
+    """
+
+    __tablename__ = "food_metodos_pago"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "codigo", name="uq_food_metodos_pago_company_codigo"
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(index=True, nullable=False)
+    codigo: str = Field(max_length=24, nullable=False, index=True)
+    nombre: str = Field(max_length=40, nullable=False)
+    tipo: str = Field(
+        default=TipoMetodoPago.DIGITAL.value, max_length=16, nullable=False
+    )
+    icono: str | None = Field(default=None, max_length=8)
+    permite_vuelto: bool = Field(default=False, nullable=False)
+    activo: bool = Field(default=True, index=True, nullable=False)
+    orden: int = Field(default=0, nullable=False)
 
 
 class DetallePedido(TimestampedModel, table=True):

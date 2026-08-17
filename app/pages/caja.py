@@ -16,6 +16,7 @@ from app.components.shared import (
 )
 from app.states.caja_turno_mixin import (
     DenominacionRow,
+    MetodoPagoView,
     MovimientoCajaView,
     ResumenCierreRow,
     TurnoHistorialView,
@@ -49,21 +50,15 @@ def _caja_ayuda() -> rx.Component:
         ],
     )
 
-_METODOS = [
-    ("efectivo", "Efectivo", "💵"),
-    ("tarjeta", "Tarjeta", "💳"),
-    ("qr", "QR / Yape", "📱"),
-    ("fiado", "Fiado / CC", "📒"),
-]
-
-
-def _metodo_btn(value: str, label: str, icon: str) -> rx.Component:
-    activo = FoodState.caja_cobro_metodo == value
+def _metodo_btn_dyn(metodo: MetodoPagoView) -> rx.Component:
+    """Botón de método de pago renderizado desde la config (Efectivo, Yape…)."""
+    activo = FoodState.caja_cobro_metodo == metodo.codigo
     return rx.box(
-        rx.text(icon, font_size="18px", line_height="1"),
-        rx.text(label, font_size="12px", font_weight="700",
-                color=rx.cond(activo, "#FFFFFF", "#94A3B8")),
-        on_click=FoodState.set_caja_cobro_metodo(value),
+        rx.text(metodo.icono, font_size="18px", line_height="1"),
+        rx.text(metodo.nombre, font_size="12px", font_weight="700",
+                color=rx.cond(activo, "#FFFFFF", "#94A3B8"),
+                text_align="center", line_height="1.1"),
+        on_click=FoodState.set_caja_cobro_metodo(metodo.codigo),
         background=rx.cond(activo, ACCENT, DARK_800),
         border=rx.cond(activo, "2px solid #EA580C", "2px solid #334155"),
         border_radius="10px",
@@ -211,7 +206,7 @@ def _pagos_divididos_panel() -> rx.Component:
             ),
             rx.hstack(
                 rx.select(
-                    ["efectivo", "tarjeta", "qr", "fiado"],
+                    FoodState.metodos_pago_codigos,
                     value=FoodState.caja_pago_staged_metodo,
                     on_change=FoodState.set_caja_pago_staged_metodo,
                     width="130px",
@@ -605,8 +600,8 @@ def _cobro_panel() -> rx.Component:
                         rx.text("Forma de pago", font_size="9px", font_weight="600", color=TEXT_MUTED,
                                 text_transform="uppercase", letter_spacing="0.07em"),
                         rx.grid(
-                            *[_metodo_btn(v, l, i) for v, l, i in _METODOS],
-                            columns="4", gap="6px", width="100%",
+                            rx.foreach(FoodState.metodos_pago_activos, _metodo_btn_dyn),
+                            columns="3", gap="6px", width="100%",
                         ),
                         spacing="2", width="100%",
                     ),

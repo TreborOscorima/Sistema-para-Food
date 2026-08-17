@@ -18,7 +18,10 @@ from decimal import Decimal
 
 from app.models.food import PagoPedido, Pedido
 
-METODOS_PAGO_VALIDOS = ("efectivo", "tarjeta", "qr", "fiado")
+# Métodos base siempre aceptados aunque falte la configuración (compatibilidad
+# con datos previos a los métodos configurables). La lista real de métodos
+# ofrecidos la define MetodoPagoConfig por empresa; ver metodos_pago_service.
+METODOS_PAGO_BASE = ("efectivo", "tarjeta", "qr", "fiado")
 
 
 def _dec(value) -> Decimal:
@@ -43,12 +46,21 @@ class ResultadoPagos:
 def validar_pagos(
     total_a_pagar: Decimal,
     pagos: list[tuple[str, Decimal]],
+    metodos_validos: set[str] | None = None,
+    metodos_efectivo: set[str] | None = None,
 ) -> ResultadoPagos:
     """Valida una lista de pagos (metodo, monto) contra el total a pagar.
+
+    ``metodos_validos``: códigos aceptados (los configurados por la empresa). Si
+    es ``None`` se usa :data:`METODOS_PAGO_BASE`. ``metodos_efectivo``: códigos
+    que cuentan como efectivo para el cálculo de vuelto (por defecto solo
+    ``"efectivo"``); los demás son electrónicos/fiado y no generan vuelto.
 
     Lanza ValueError con mensaje para la UI si la combinación es inválida.
     """
     total_a_pagar = _dec(total_a_pagar)
+    validos = set(metodos_validos) if metodos_validos else set(METODOS_PAGO_BASE)
+    efectivos = set(metodos_efectivo) if metodos_efectivo else {"efectivo"}
     if not pagos:
         raise ValueError("Agrega al menos un pago.")
     total_pagado = Decimal("0.00")
@@ -56,13 +68,13 @@ def validar_pagos(
     total_no_efectivo = Decimal("0.00")
     total_fiado = Decimal("0.00")
     for metodo, monto in pagos:
-        if metodo not in METODOS_PAGO_VALIDOS:
+        if metodo not in validos:
             raise ValueError(f"Método de pago inválido: {metodo}.")
         monto = _dec(monto)
         if monto <= 0:
             raise ValueError("Cada pago debe ser mayor a cero.")
         total_pagado += monto
-        if metodo == "efectivo":
+        if metodo in efectivos:
             total_efectivo += monto
         else:
             total_no_efectivo += monto

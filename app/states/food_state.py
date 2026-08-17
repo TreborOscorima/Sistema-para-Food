@@ -93,6 +93,10 @@ from app.services.kardex_service import (
     registrar_entrada,
     registrar_merma,
 )
+from app.services.metodos_pago_service import (
+    obtener_metodos as _obtener_metodos_pago,
+    validos_y_efectivos as _validos_y_efectivos_pago,
+)
 from app.services.pago_service import (
     metodo_pago_resumen,
     registrar_pagos_pedido,
@@ -1394,6 +1398,7 @@ def _descontar_stock_por_pedido(session, pedido_id: int, company_id: int) -> Non
 from app.states.carta_mixin import CartaMixin
 from app.states.clientes_cuentas_mixin import ClientesCuentasMixin
 from app.states.inventario_mixin import InventarioMixin
+from app.states.metodos_pago_mixin import MetodosPagoMixin
 from app.states.produccion_mixin import ProduccionMixin
 from app.states.promos_cupones_mixin import PromosCuponesMixin
 from app.states.reportes_state import ReportesState  # noqa: F401
@@ -1405,6 +1410,7 @@ class FoodState(
     CajaTurnoMixin,
     CartaMixin,
     InventarioMixin,
+    MetodosPagoMixin,
     ProduccionMixin,
     ClientesCuentasMixin,
     PromosCuponesMixin,
@@ -2366,6 +2372,7 @@ class FoodState(
         self.cargar_sucursales_admin()
         self.cargar_impresoras_config()
         self.cargar_agentes_config()
+        self.cargar_metodos_pago_admin()
         return None
 
     # ─── T-04 · Onboarding "Primeros pasos" (checklist de puesta en marcha) ───
@@ -6114,8 +6121,16 @@ class FoodState(
                 pagos_lista = [(metodo, total_final)] if total_final > 0 else []
             resultado_pagos = None
             if pagos_lista:
+                _validos, _efectivos = _validos_y_efectivos_pago(
+                    session, self._company_id()
+                )
                 try:
-                    resultado_pagos = validar_pagos(total_final, pagos_lista)
+                    resultado_pagos = validar_pagos(
+                        total_final,
+                        pagos_lista,
+                        metodos_validos=_validos,
+                        metodos_efectivo=_efectivos,
+                    )
                 except ValueError as exc:
                     self.caja_cobro_error = str(exc)
                     return

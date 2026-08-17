@@ -31,15 +31,32 @@ from app.models.food import (
     PagoPedido,
     Pedido,
     Producto,
+    TipoMetodoPago,
     TipoMovimientoCaja,
     TurnoCaja,
     UsuarioFood,
+)
+from app.services.metodos_pago_service import (
+    mapa_nombres,
+    mapa_tipos,
+    obtener_metodos,
 )
 from app.services.receipt_service import (
     build_cash_close_ticket_lines,
     render_ticket_html,
     ticket_text,
 )
+
+
+def _bucket_tipo(tipo: str) -> str:
+    """Mapea un TipoMetodoPago al balde histórico del turno (efectivo/tarjeta/qr/fiado)."""
+    if tipo == TipoMetodoPago.EFECTIVO.value:
+        return "efectivo"
+    if tipo == TipoMetodoPago.TARJETA.value:
+        return "tarjeta"
+    if tipo == TipoMetodoPago.FIADO.value:
+        return "fiado"
+    return "qr"  # digital / otro: venta que no deja efectivo en caja
 
 CURRENCY_SYMBOL = "S/"
 _HORA_FMT = "%d/%m %H:%M"
@@ -170,6 +187,14 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         )
     ).all()
     pedidos_validos = {p.id for p in pedidos}
+    tipos = mapa_tipos(session, turno.company_id)
+
+    def _bucket(metodo: str) -> str:
+        tipo = tipos.get(
+            (metodo or "efectivo").lower(), TipoMetodoPago.DIGITAL.value
+        )
+        return _bucket_tipo(tipo)
+
     resumen: dict[str, Decimal] = {
         "efectivo": Decimal("0.00"),
         "tarjeta": Decimal("0.00"),
@@ -177,6 +202,8 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         "fiado": Decimal("0.00"),
         "propinas": Decimal("0.00"),
     }
+    # Desglose fino por código de método (Yape, Plin, …) para el detalle del cierre.
+    por_metodo: dict[str, Decimal] = {}
     pedidos_con_pagos: set[int] = set()
     for pago in pagos:
         if pago.pedido_id not in pedidos_validos:
@@ -184,14 +211,8 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         pedidos_con_pagos.add(pago.pedido_id)
         metodo = (pago.metodo or "efectivo").lower()
         monto = _dec(pago.monto)
-        if metodo == "fiado":
-            resumen["fiado"] += monto
-        elif metodo == "tarjeta":
-            resumen["tarjeta"] += monto
-        elif metodo == "qr":
-            resumen["qr"] += monto
-        else:
-            resumen["efectivo"] += monto
+        resumen[_bucket(metodo)] += monto
+        por_metodo[metodo] = por_metodo.get(metodo, Decimal("0.00")) + monto
     for pedido in pedidos:
         propina = _dec(pedido.propina)
         resumen["propinas"] += propina
@@ -199,14 +220,11 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
             continue
         neto = _dec(pedido.total) - _dec(pedido.descuento)
         metodo = (pedido.metodo_pago or "efectivo").lower()
-        if metodo == "fiado":
-            resumen["fiado"] += neto
-        elif metodo == "tarjeta":
-            resumen["tarjeta"] += neto + propina
-        elif metodo == "qr":
-            resumen["qr"] += neto + propina
-        else:
-            resumen["efectivo"] += neto + propina
+        bucket = _bucket(metodo)
+        # El fiado no mueve efectivo; los demás cobran también la propina.
+        monto = neto if bucket == "fiado" else neto + propina
+        resumen[bucket] += monto
+        por_metodo[metodo] = por_metodo.get(metodo, Decimal("0.00")) + monto
     movimientos = session.exec(
         select(MovimientoCaja).where(
             MovimientoCaja.company_id == turno.company_id,
@@ -226,6 +244,7 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
     resumen["esperado_efectivo"] = (
         _dec(turno.monto_inicial) + resumen["efectivo"] + ingresos - egresos
     )
+    resumen["por_metodo"] = por_metodo  # type: ignore[assignment]
     return resumen
 
 
@@ -299,10 +318,24 @@ class TurnoHistorialView(BaseModel):
     descuadre_color: str
 
 
+class MetodoPagoView(BaseModel):
+    """Método de pago activo para los botones de cobro."""
+
+    codigo: str
+    nombre: str
+    icono: str
+    es_efectivo: bool
+    es_fiado: bool
+
+
 # ─── Mixin de estado ─────────────────────────────────────────────────────────
 
 class CajaTurnoMixin(rx.State, mixin=True):
     """Estado del turno de caja activo, sus movimientos y el cierre con arqueo."""
+
+    # Métodos de pago configurados (activos), para los botones de cobro
+    metodos_pago_activos: list[MetodoPagoView] = []
+    metodos_pago_codigos: list[str] = []
 
     # Turno activo
     turno_activo_id: int = 0
@@ -429,7 +462,23 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 )
                 self.turno_abierto_por_nombre = usuario.nombre if usuario else "—"
                 self._cargar_movimientos_turno(session, turno)
+            self._cargar_metodos_pago(session)
             self._cargar_historial_turnos(session)
+
+    def _cargar_metodos_pago(self, session) -> None:
+        """Carga los métodos de pago activos para los botones de cobro."""
+        metodos = obtener_metodos(session, self._company_id(), solo_activos=True)
+        self.metodos_pago_activos = [
+            MetodoPagoView(
+                codigo=m.codigo,
+                nombre=m.nombre,
+                icono=m.icono or "💳",
+                es_efectivo=(m.tipo == TipoMetodoPago.EFECTIVO.value),
+                es_fiado=(m.tipo == TipoMetodoPago.FIADO.value),
+            )
+            for m in metodos
+        ]
+        self.metodos_pago_codigos = [m.codigo for m in metodos]
 
     def _cargar_movimientos_turno(self, session, turno: TurnoCaja) -> None:
         movimientos = session.exec(

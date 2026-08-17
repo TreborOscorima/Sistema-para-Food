@@ -22,6 +22,7 @@ from app.states.food_state import (
     ImpresoraView,
     AgenteView,
 )
+from app.states.metodos_pago_mixin import MetodoPagoAdminView, TIPOS_METODO
 
 
 # URL de descarga del agente (GitHub Release, repo público). "latest" apunta
@@ -48,6 +49,7 @@ _SECCIONES = [
     ("carta",       "Carta digital",  "qr_code",      "Slug URL y código QR"),
     ("mesas",       "Mesas",          "layout_grid",  "Salón y sectores"),
     ("sucursales",  "Sucursales",     "map_pin",      "Multi-local"),
+    ("metodos",     "Métodos de pago", "wallet",      "Efectivo, Yape, Plin…"),
     ("impresoras",  "Impresoras",     "printer",      "Cocina y caja"),
     ("cuenta",      "Cuenta Admin",   "key_round",    "Email y contraseña"),
 ]
@@ -706,6 +708,7 @@ def _config_left_sidebar() -> rx.Component:
             _seccion_item("local",      "Local",         "store",       "Nombre del restaurante"),
             _seccion_item("carta",      "Carta digital", "qr_code",     "Slug URL y código QR"),
             _seccion_item("mesas",      "Mesas",         "layout_grid", "Salón y sectores"),
+            _seccion_item("metodos",    "Métodos de pago", "wallet",    "Efectivo, Yape, Plin…"),
             _seccion_item("impresoras", "Impresoras",    "printer",     "Cocina y caja"),
             _seccion_item("cuenta",     "Cuenta Admin",  "key_round",   "Email y contraseña"),
             spacing="1",
@@ -758,6 +761,7 @@ def _config_nav_tabs() -> rx.Component:
             _tab_pill("local",      "Local",      "store"),
             _tab_pill("carta",      "Carta",      "qr_code"),
             _tab_pill("mesas",      "Mesas",      "layout_grid"),
+            _tab_pill("metodos",    "Métodos",    "wallet"),
             _tab_pill("impresoras", "Impresoras", "printer"),
             _tab_pill("cuenta",     "Cuenta",     "key_round"),
             spacing="1",
@@ -1052,6 +1056,186 @@ def _content_mesas() -> rx.Component:
     return rx.vstack(
         _mesas_section(),
         _mesas_qr_grid(),
+        width="100%",
+        spacing="4",
+    )
+
+
+# ─── Métodos de pago ─────────────────────────────────────────────────────────
+
+def _metodo_pago_row(metodo: MetodoPagoAdminView) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.text(metodo.icono, font_size="20px", line_height="1", width="26px"),
+            rx.vstack(
+                rx.hstack(
+                    rx.text(metodo.nombre, font_size="14px", font_weight="700",
+                            color=TEXT_PRIMARY),
+                    rx.badge(metodo.tipo_label, color_scheme="gray",
+                             variant="soft", font_size="10px"),
+                    rx.cond(
+                        metodo.es_sistema,
+                        rx.badge("Sistema", color_scheme="blue", variant="soft",
+                                 font_size="10px"),
+                        rx.fragment(),
+                    ),
+                    spacing="2", align="center",
+                ),
+                rx.text("código: " + metodo.codigo, font_size="11px", color=TEXT_MUTED),
+                spacing="0", align="start",
+            ),
+            rx.spacer(),
+            switch_toggle(metodo.activo, FoodState.toggle_metodo_activo(metodo.id)),
+            rx.button(
+                rx.icon(tag="pencil", size=14, color=TEXT_MUTED),
+                on_click=FoodState.editar_metodo(metodo.id),
+                background=DARK_800, border=f"1px solid {DARK_700}",
+                border_radius="8px", cursor="pointer", padding="7px",
+                _hover={"background": DARK_700},
+            ),
+            rx.cond(
+                metodo.es_sistema,
+                rx.fragment(),
+                rx.button(
+                    rx.icon(tag="trash_2", size=14, color=TEXT_MUTED),
+                    on_click=FoodState.eliminar_metodo(metodo.id),
+                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    border_radius="8px", cursor="pointer", padding="7px",
+                    _hover={"background": "rgba(239,68,68,0.15)"},
+                ),
+            ),
+            spacing="3", width="100%", align="center",
+        ),
+        padding="12px 14px",
+        border=f"1px solid {DARK_700}",
+        border_radius="10px",
+        background=rx.cond(metodo.activo, PAGE_BACKGROUND, "rgba(148,163,184,0.05)"),
+        opacity=rx.cond(metodo.activo, "1", "0.6"),
+        width="100%",
+    )
+
+
+def _tipo_metodo_option(value: str, label: str) -> rx.Component:
+    seleccionado = FoodState.metodo_form_tipo == value
+    return rx.box(
+        rx.text(label, font_size="12px", font_weight="600"),
+        on_click=FoodState.set_metodo_form_tipo(value),
+        background=rx.cond(seleccionado, ACCENT, DARK_800),
+        color=rx.cond(seleccionado, "#FFFFFF", "#CBD5E1"),
+        border=rx.cond(seleccionado, "1px solid #EA580C", f"1px solid {DARK_700}"),
+        border_radius="8px", padding="7px 12px", cursor="pointer",
+        white_space="nowrap",
+        opacity=rx.cond(FoodState.metodo_form_es_sistema, "0.5", "1"),
+        pointer_events=rx.cond(FoodState.metodo_form_es_sistema, "none", "auto"),
+    )
+
+
+def _metodos_section() -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            _section_header("Métodos de pago", "wallet", "💳"),
+            rx.text(
+                "Define cómo cobras: Efectivo, Yape, Plin, Tarjeta, Transferencia… "
+                "Cada cobro en Caja se registra con el método real que usó el cliente. "
+                "Solo el tipo «Efectivo» suma al arqueo del cajón.",
+                font_size="12px", color=TEXT_MUTED,
+            ),
+            # Formulario
+            rx.vstack(
+                rx.hstack(
+                    rx.input(
+                        placeholder="Nombre (ej: Yape, Plin, Transferencia)",
+                        value=FoodState.metodo_form_nombre,
+                        on_change=FoodState.set_metodo_form_nombre,
+                        flex="1", min_width="140px",
+                        background=DARK_800, border=f"1px solid {DARK_700}",
+                        color=TEXT_PRIMARY, border_radius="8px",
+                        padding_x="10px", padding_y="7px", font_size="13px",
+                        _focus={"border_color": ACCENT,
+                                "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
+                    ),
+                    rx.input(
+                        placeholder="Ícono 📱",
+                        value=FoodState.metodo_form_icono,
+                        on_change=FoodState.set_metodo_form_icono,
+                        width="90px",
+                        background=DARK_800, border=f"1px solid {DARK_700}",
+                        color=TEXT_PRIMARY, border_radius="8px",
+                        padding_x="10px", padding_y="7px", font_size="13px",
+                        _focus={"border_color": ACCENT,
+                                "box_shadow": "0 0 0 2px rgba(234,88,12,0.1)"},
+                    ),
+                    spacing="2", width="100%", align="center", flex_wrap="wrap",
+                ),
+                rx.hstack(
+                    rx.text("Tipo:", font_size="12px", font_weight="600",
+                            color=TEXT_MUTED),
+                    *[_tipo_metodo_option(v, l) for v, l in TIPOS_METODO],
+                    spacing="2", align="center", flex_wrap="wrap",
+                ),
+                rx.cond(
+                    FoodState.metodo_form_error != "",
+                    rx.text(FoodState.metodo_form_error, font_size="12px",
+                            color="#EF4444"),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="plus", size=14, color=TEXT_WHITE),
+                            rx.text(
+                                rx.cond(FoodState.metodo_form_es_edicion,
+                                        "Actualizar", "Agregar método"),
+                                font_size="12px", font_weight="700", color=TEXT_WHITE,
+                            ),
+                            spacing="1", align="center",
+                        ),
+                        on_click=FoodState.guardar_metodo,
+                        background=ACCENT, color=TEXT_WHITE,
+                        border_radius="8px", cursor="pointer",
+                        padding_x="14px", padding_y="8px",
+                        _hover={"background": ACCENT_HOVER},
+                        white_space="nowrap",
+                    ),
+                    rx.cond(
+                        FoodState.metodo_form_es_edicion,
+                        rx.button(
+                            rx.text("Cancelar", font_size="12px", color=TEXT_MUTED),
+                            on_click=FoodState.cancelar_metodo_form,
+                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            border_radius="8px", cursor="pointer",
+                            padding_x="14px", padding_y="8px",
+                            _hover={"background": DARK_700},
+                        ),
+                        rx.fragment(),
+                    ),
+                    spacing="2", align="center",
+                ),
+                spacing="3", width="100%",
+                padding="14px",
+                background=DARK_800,
+                border=f"1px solid {DARK_700}",
+                border_radius="10px",
+            ),
+            # Lista
+            rx.vstack(
+                rx.foreach(FoodState.metodos_admin, _metodo_pago_row),
+                spacing="2", width="100%",
+            ),
+            spacing="4", width="100%",
+        ),
+        background=DARK_800,
+        border=f"1px solid {DARK_700}",
+        border_radius="12px",
+        padding="20px",
+        width="100%",
+        box_shadow="0 1px 3px rgba(0,0,0,0.06)",
+    )
+
+
+def _content_metodos() -> rx.Component:
+    return rx.vstack(
+        _metodos_section(),
         width="100%",
         spacing="4",
     )
@@ -1734,9 +1918,13 @@ def _content_area() -> rx.Component:
                     ConfigSeccionState.seccion == "sucursales",
                     _content_sucursales(),
                     rx.cond(
-                        ConfigSeccionState.seccion == "impresoras",
-                        _content_impresoras(),
-                        _content_cuenta(),
+                        ConfigSeccionState.seccion == "metodos",
+                        _content_metodos(),
+                        rx.cond(
+                            ConfigSeccionState.seccion == "impresoras",
+                            _content_impresoras(),
+                            _content_cuenta(),
+                        ),
                     ),
                 ),
             ),
