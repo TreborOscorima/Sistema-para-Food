@@ -12,6 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy import func, case, literal_column
 from sqlmodel import select
 
+from tuwayki_core.utils.timezone import local_datetime_to_utc_naive
+
 import json
 
 from app.models.food import (
@@ -31,27 +33,35 @@ def _dec(value) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"))
 
 
-def _month_filters(company_id: int, anio: int, mes: int):
-    inicio = datetime(anio, mes, 1)
+def _month_filters(company_id: int, anio: int, mes: int, country_code: str = "PE"):
+    """Límites del mes como día LOCAL del país, convertidos a UTC-naive.
+
+    Los timestamps se guardan en UTC-naive; para que el mes coincida con el mes
+    local (no el UTC) convertimos los bordes con la zona horaria del país.
+    """
+    inicio_local = datetime(anio, mes, 1)
     if mes == 12:
-        fin = datetime(anio + 1, 1, 1)
+        fin_local = datetime(anio + 1, 1, 1)
     else:
-        fin = datetime(anio, mes + 1, 1)
-    return inicio, fin
+        fin_local = datetime(anio, mes + 1, 1)
+    return (
+        local_datetime_to_utc_naive(inicio_local, country_code),
+        local_datetime_to_utc_naive(fin_local, country_code),
+    )
 
 
 # ─── ADM-01: P&L mensual ────────────────────────────────────────────────────
 
 
 def pyl_mensual(
-    session, company_id: int, anio: int, mes: int
+    session, company_id: int, anio: int, mes: int, country_code: str = "PE"
 ) -> dict:
     """Estado de resultados operativo simple para un mes.
 
     Ventas netas (cobrado - descuentos) - costo insumos consumidos (kardex CONSUMO
     valorizado) - egresos de caja = utilidad bruta operativa.
     """
-    inicio, fin = _month_filters(company_id, anio, mes)
+    inicio, fin = _month_filters(company_id, anio, mes, country_code)
 
     # Ventas netas: sum(total) de pedidos cobrados en el mes
     row_ventas = session.exec(
@@ -136,9 +146,10 @@ def pyl_mensual(
 
 def resumen_igv_mensual(
     session, company_id: int, anio: int, mes: int, porcentaje_igv: float = 18.0,
+    country_code: str = "PE",
 ) -> dict:
     """Base imponible + IGV del mes. Precios incluyen IGV (estándar peruano)."""
-    inicio, fin = _month_filters(company_id, anio, mes)
+    inicio, fin = _month_filters(company_id, anio, mes, country_code)
     row = session.exec(
         select(
             func.coalesce(func.sum(Pedido.total - Pedido.descuento + Pedido.recargo), 0),

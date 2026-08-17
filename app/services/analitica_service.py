@@ -6,14 +6,31 @@ meses de historial sin saturar memoria ni bloquear el event loop.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import sqlalchemy as sa
 from sqlalchemy import func, case
 from sqlmodel import select
 
-from tuwayki_core.utils.timezone import to_local_datetime
+from tuwayki_core.utils.timezone import country_now, to_local_datetime
+
+
+def _country_offset(country_code: str) -> tuple[str, int]:
+    """Offset UTC del país como ('+HH:MM', horas_int) para CONVERT_TZ / strftime.
+
+    Usa el offset vigente del país (aprox. para rangos que cruzan DST; suficiente
+    para un histograma por hora). Cae a UTC-5 (Perú) si no se puede resolver.
+    """
+    try:
+        off = country_now(country_code).utcoffset() or timedelta(hours=-5)
+    except Exception:
+        off = timedelta(hours=-5)
+    total = int(off.total_seconds())
+    sign = "+" if total >= 0 else "-"
+    total = abs(total)
+    h, m = total // 3600, (total % 3600) // 60
+    return f"{sign}{h:02d}:{m:02d}", int(off.total_seconds() // 3600)
 
 from app.models.food import (
     DetallePedido,
@@ -85,25 +102,27 @@ def ventas_por_mozo(
 
 
 def ventas_por_hora(
-    session, company_id: int, desde: datetime | None = None, hasta: datetime | None = None
+    session, company_id: int, desde: datetime | None = None,
+    hasta: datetime | None = None, country_code: str = "PE",
 ) -> list[dict]:
-    """Ventas agrupadas por hora local — extracción de hora en SQL (MySQL HOUR).
+    """Ventas agrupadas por hora local del país — extracción de hora en SQL.
 
-    Usa CONVERT_TZ para hora peruana (America/Lima = UTC-5 fijo, sin DST).
-    Si la función TZ de MySQL no tiene las tablas cargadas, fallback a UTC-5.
+    Convierte cerrado_en (UTC) al offset del país antes de extraer la hora, para
+    que el histograma refleje la hora local real (Perú UTC-5, Argentina UTC-3…).
     """
     filters = _cobrado_filters(company_id, desde, hasta)
     filters.append(Pedido.cerrado_en.isnot(None))
 
+    offset_str, offset_h = _country_offset(country_code)
     dialect = session.bind.dialect.name if session.bind else "mysql"
     if dialect == "sqlite":
         # strftime returns text; cast to int for grouping consistency
         hora_local = func.cast(
-            func.strftime("%H", Pedido.cerrado_en, "-5 hours"), sa.Integer
+            func.strftime("%H", Pedido.cerrado_en, f"{offset_h} hours"), sa.Integer
         ).label("hora")
     else:
         hora_local = func.hour(
-            func.convert_tz(Pedido.cerrado_en, "+00:00", "-05:00")
+            func.convert_tz(Pedido.cerrado_en, "+00:00", offset_str)
         ).label("hora")
 
     rows = session.exec(

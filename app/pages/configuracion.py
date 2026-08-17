@@ -24,6 +24,22 @@ from app.states.food_state import (
 )
 from app.states.metodos_pago_mixin import MetodoPagoAdminView, TIPOS_METODO
 
+# País de operación (código ISO-2 → nombre). Define la zona horaria con la que
+# se agrupan los reportes por día local. Debe ser subconjunto de los países
+# soportados por tuwayki_core.
+_PAISES = [
+    ("PE", "🇵🇪 Perú"),
+    ("AR", "🇦🇷 Argentina"),
+    ("CL", "🇨🇱 Chile"),
+    ("CO", "🇨🇴 Colombia"),
+    ("EC", "🇪🇨 Ecuador"),
+    ("MX", "🇲🇽 México"),
+    ("BO", "🇧🇴 Bolivia"),
+    ("UY", "🇺🇾 Uruguay"),
+    ("PY", "🇵🇾 Paraguay"),
+    ("VE", "🇻🇪 Venezuela"),
+]
+
 
 # URL de descarga del agente (GitHub Release, repo público). "latest" apunta
 # siempre a la última versión publicada del agente.
@@ -825,6 +841,25 @@ def _content_local() -> rx.Component:
                                FoodState.set_config_direccion, "Av. Principal 123"),
                     _field_row("Teléfono", FoodState.config_telefono,
                                FoodState.set_config_telefono, "999-999-999"),
+                    rx.vstack(
+                        rx.text("País (zona horaria)", font_size="12px",
+                                font_weight="600", color=TEXT_MUTED),
+                        rx.text(
+                            "Define la hora local con la que se agrupan reportes y "
+                            "cierres de caja por día. Cámbialo según dónde opera el local.",
+                            font_size="11px", color=TEXT_MUTED,
+                        ),
+                        rx.select.root(
+                            rx.select.trigger(width="100%"),
+                            rx.select.content(
+                                *[rx.select.item(nombre, value=code)
+                                  for code, nombre in _PAISES]
+                            ),
+                            value=FoodState.config_pais,
+                            on_change=FoodState.set_config_pais,
+                        ),
+                        spacing="1", width="100%", align="start",
+                    ),
                     rx.vstack(
                         rx.text("Logo de la empresa", font_size="12px",
                                 font_weight="600", color=TEXT_MUTED),

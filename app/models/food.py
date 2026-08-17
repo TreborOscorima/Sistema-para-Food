@@ -538,6 +538,9 @@ class ConfigImpresora(TimestampedModel, table=True):
     mostrar_iva: bool = Field(default=False, nullable=False)
     nombre_impuesto: str = Field(default="IGV", max_length=20, nullable=False)
     porcentaje_iva: float = Field(default=18.0, nullable=False)
+    # País de operación (código ISO-2: PE, AR, CL, MX…). Define la zona horaria
+    # con la que se agrupan reportes/turnos por día local y el formato de fecha.
+    pais: str = Field(default="PE", max_length=4, nullable=False)
     kds_minutos_alerta: int = Field(default=15, nullable=False)
     # Quién imprime: "navegador" (kiosk-printing actual) o "agente" (agente local
     # que jala los trabajos desde la nube). Ver Impresora/TrabajoImpresion/AgenteImpresion.

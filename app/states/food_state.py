@@ -70,7 +70,11 @@ from app.services.receipt_service import (
 )
 from app.services.print_queue import crear_agente, encolar_trabajo
 from app.services.estaciones import requiere_preparacion as _requiere_prep
+from tuwayki_core.countries import SUPPORTED_COUNTRIES as _SUPPORTED_COUNTRIES
 from tuwayki_core.utils.timezone import format_local_datetime, utc_now_naive
+
+# Códigos de país soportados (ISO-2) para la config por empresa.
+PAISES_SOPORTADOS: frozenset[str] = frozenset(_SUPPORTED_COUNTRIES.keys())
 
 from app.models.food import MovimientoInsumo, PagoPedido, TipoMovimientoInsumo
 from app.services.analitica_service import (
@@ -1505,6 +1509,15 @@ class FoodState(
         set_tenant_context(company_id, None)
         return company_id
 
+    def _country_code(self) -> str:
+        """Código de país (ISO-2) de la empresa activa — define la zona horaria.
+
+        Fuente única para agrupar reportes/turnos por día local y formatear fechas.
+        Cae a 'PE' si no está configurado o es inválido.
+        """
+        cc = (self.config_pais or "PE").strip().upper()
+        return cc if cc in PAISES_SOPORTADOS else "PE"
+
     @contextmanager
     def _tenant_session(self):
         """Como get_session(), pero arma el contexto tenant y evita que el listener
@@ -1655,6 +1668,7 @@ class FoodState(
     config_mostrar_iva: bool = False
     config_nombre_impuesto: str = "IGV"
     config_porcentaje_iva: str = "18.0"
+    config_pais: str = "PE"
     config_kds_minutos_alerta: str = "15"
     config_admin_email: str = ""
     config_admin_password_nueva: str = ""
@@ -2920,6 +2934,7 @@ class FoodState(
                 self.config_mostrar_iva = cfg.mostrar_iva
                 self.config_nombre_impuesto = cfg.nombre_impuesto or "IGV"
                 self.config_porcentaje_iva = str(cfg.porcentaje_iva)
+                self.config_pais = getattr(cfg, "pais", None) or "PE"
                 self.config_kds_minutos_alerta = str(cfg.kds_minutos_alerta)
                 self.config_modo_impresion = cfg.modo_impresion or "navegador"
                 self.config_comprobante_auto = cfg.comprobante_auto
@@ -2950,6 +2965,8 @@ class FoodState(
             cfg.mensaje_ticket = self.config_mensaje_ticket.strip() or "¡Gracias por su preferencia!"
             cfg.mostrar_iva = self.config_mostrar_iva
             cfg.nombre_impuesto = self.config_nombre_impuesto.strip() or "IGV"
+            _pais = (self.config_pais or "PE").strip().upper()
+            cfg.pais = _pais if _pais in PAISES_SOPORTADOS else "PE"
             try:
                 pct = float(self.config_porcentaje_iva.strip())
                 cfg.porcentaje_iva = pct if 0 < pct <= 100 else 18.0
@@ -3306,6 +3323,9 @@ class FoodState(
 
     def set_config_porcentaje_iva(self, v: str) -> None:
         self.config_porcentaje_iva = v
+
+    def set_config_pais(self, v: str) -> None:
+        self.config_pais = v
 
     def set_config_kds_minutos_alerta(self, v: str) -> None:
         self.config_kds_minutos_alerta = v

@@ -45,7 +45,11 @@ from app.services.finanzas_service import (
     resumen_igv_mensual,
 )
 from app.services.plan_service import plan_permite
-from tuwayki_core.utils.timezone import format_local_datetime
+from tuwayki_core.utils.timezone import (
+    country_today_date,
+    format_local_datetime,
+    local_day_bounds_utc_naive,
+)
 from app.states.food_state import (
     AnulacionView,
     DescuentoRankView,
@@ -110,6 +114,10 @@ class ReportesState(rx.State):
     comp_ticket_actual: str = "S/ 0.00"
     comp_ticket_anterior: str = "S/ 0.00"
     comp_ticket_pct: int = 0
+
+    # País de la empresa (ISO-2) para agrupar por día local. Se refresca desde la
+    # config al cargar dashboard/historial.
+    reportes_pais: str = "PE"
 
     # ── Historial ────────────────────────────────────────────────────────────
     historial_ventas: list[VentaHistorialView] = []
@@ -229,16 +237,26 @@ class ReportesState(rx.State):
         self._do_cargar_historial(food)
 
     def _rango_filtros_historial(self) -> tuple[datetime | None, datetime | None]:
+        """Filtros de fecha (día LOCAL) convertidos a límites UTC-naive.
+
+        Los timestamps se guardan en UTC-naive; para que "un día" coincida con el
+        día local del país de la empresa (no el día UTC), convertimos los bordes
+        con la zona horaria del país. Así un turno de noche no se parte en dos.
+        """
+        cc = self.reportes_pais
         desde = hasta = None
         if self.historial_filtro_fecha_desde:
             try:
-                desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
+                desde, _ = local_day_bounds_utc_naive(
+                    self.historial_filtro_fecha_desde, cc
+                )
             except ValueError:
                 pass
         if self.historial_filtro_fecha_hasta:
             try:
-                hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
-                hasta = hasta.replace(hour=23, minute=59, second=59)
+                _, hasta = local_day_bounds_utc_naive(
+                    self.historial_filtro_fecha_hasta, cc
+                )
             except ValueError:
                 pass
         return desde, hasta
@@ -254,7 +272,10 @@ class ReportesState(rx.State):
         )
         if result is not None:
             return result
-        self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
+        self.reportes_pais = food._country_code()
+        self.historial_filtro_fecha_desde = country_today_date(
+            self.reportes_pais
+        ).strftime("%Y-%m-%d")
         self.historial_filtro_rapido = "hoy"
         self._do_cargar_dashboard(food)
         self._do_cargar_historial(food)
@@ -271,7 +292,10 @@ class ReportesState(rx.State):
     async def init_reportes_dono(self):
         """Inicializa reportes para el panel dueño."""
         food = await self._food()
-        self.historial_filtro_fecha_desde = _utcnow().strftime("%Y-%m-%d")
+        self.reportes_pais = food._country_code()
+        self.historial_filtro_fecha_desde = country_today_date(
+            self.reportes_pais
+        ).strftime("%Y-%m-%d")
         self.historial_filtro_fecha_hasta = ""
         self.historial_filtro_metodo = ""
         # El panel /admin siempre muestra el día de hoy; ancla el filtro para que
@@ -294,7 +318,8 @@ class ReportesState(rx.State):
         inmediatamente anterior (hoy→ayer, semana→semana previa, etc.), para que
         los trends comparen manzanas con manzanas. Sin filtro (o "hoy") el rango
         es el día de hoy — así el panel /admin sigue mostrando "hoy"."""
-        hoy = _utcnow().date()
+        cc = self.reportes_pais
+        hoy = country_today_date(cc)
 
         def _parse(s: str):
             try:
@@ -306,23 +331,26 @@ class ReportesState(rx.State):
         hasta = _parse(self.historial_filtro_fecha_hasta)
         rapido = self.historial_filtro_rapido
         if rapido in ("", "hoy") or desde is None:
-            inicio = datetime(hoy.year, hoy.month, hoy.day)
-            fin = inicio + timedelta(days=1)
+            dia_ini = dia_fin = hoy
             etiqueta = "Hoy"
         else:
             if hasta is None or hasta < desde:
                 hasta = desde
-            inicio = datetime(desde.year, desde.month, desde.day)
-            fin = datetime(hasta.year, hasta.month, hasta.day) + timedelta(days=1)
+            dia_ini, dia_fin = desde, hasta
             etiqueta = {
                 "semana": "Esta semana",
                 "mes": "Este mes",
             }.get(rapido, "Período personalizado")
+        # Bordes del día LOCAL convertidos a UTC-naive (inicio inclusivo, fin
+        # exclusivo = inicio del día siguiente al último día del rango).
+        inicio, _ = local_day_bounds_utc_naive(dia_ini, cc)
+        fin, _ = local_day_bounds_utc_naive(dia_fin + timedelta(days=1), cc)
         dur = fin - inicio
         return inicio, fin, inicio - dur, inicio, etiqueta
 
     def _do_cargar_dashboard(self, food) -> None:
-        hoy = _utcnow().date()
+        self.reportes_pais = food._country_code()
+        hoy = country_today_date(self.reportes_pais)
         inicio_hoy, fin_hoy, inicio_ayer, fin_ayer, periodo_label = self._rango_dashboard()
         with food._tenant_session() as session:
             # PERF-04: agregación en SQL (func.count/sum) en vez de cargar todos
@@ -464,6 +492,7 @@ class ReportesState(rx.State):
         self._do_cargar_historial(food)
 
     def _do_cargar_historial(self, food) -> None:
+        self.reportes_pais = food._country_code()
         with food._tenant_session() as session:
             query = (
                 select(Pedido)
@@ -480,19 +509,11 @@ class ReportesState(rx.State):
                 )
             )
             query = self._sucursal_q(Pedido, query)
-            if self.historial_filtro_fecha_desde:
-                try:
-                    desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
-                    query = query.where(Pedido.cerrado_en >= desde)
-                except ValueError:
-                    pass
-            if self.historial_filtro_fecha_hasta:
-                try:
-                    hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
-                    hasta = hasta.replace(hour=23, minute=59, second=59)
-                    query = query.where(Pedido.cerrado_en <= hasta)
-                except ValueError:
-                    pass
+            desde_utc, hasta_utc = self._rango_filtros_historial()
+            if desde_utc is not None:
+                query = query.where(Pedido.cerrado_en >= desde_utc)
+            if hasta_utc is not None:
+                query = query.where(Pedido.cerrado_en <= hasta_utc)
             if self.historial_filtro_metodo:
                 from app.models.food import PagoPedido as _PP
                 query = query.where(
@@ -668,11 +689,14 @@ class ReportesState(rx.State):
         self._do_cargar_analitica(food)
 
     def _do_cargar_analitica(self, food) -> None:
+        self.reportes_pais = food._country_code()
         desde, hasta = self._rango_filtros_historial()
         pagos_por_metodo: dict[str, dict[str, object]] = {}
         with food._tenant_session() as session:
             mozos = ventas_por_mozo(session, food._company_id(), desde, hasta)
-            horas = ventas_por_hora(session, food._company_id(), desde, hasta)
+            horas = ventas_por_hora(
+                session, food._company_id(), desde, hasta, self.reportes_pais
+            )
             margenes = margen_por_plato(session, food._company_id())
             q_pagos = select(PagoPedido).where(PagoPedido.company_id == food._company_id())
             if desde is not None:
@@ -807,6 +831,7 @@ class ReportesState(rx.State):
         from openpyxl.utils import get_column_letter
 
         food = await self._food()
+        self.reportes_pais = food._country_code()
         with food._tenant_session() as session:
             query = (
                 select(Pedido)
@@ -818,19 +843,11 @@ class ReportesState(rx.State):
                     ),
                 )
             )
-            if self.historial_filtro_fecha_desde:
-                try:
-                    desde = datetime.strptime(self.historial_filtro_fecha_desde, "%Y-%m-%d")
-                    query = query.where(Pedido.cerrado_en >= desde)
-                except ValueError:
-                    pass
-            if self.historial_filtro_fecha_hasta:
-                try:
-                    hasta = datetime.strptime(self.historial_filtro_fecha_hasta, "%Y-%m-%d")
-                    hasta = hasta.replace(hour=23, minute=59, second=59)
-                    query = query.where(Pedido.cerrado_en <= hasta)
-                except ValueError:
-                    pass
+            desde_utc, hasta_utc = self._rango_filtros_historial()
+            if desde_utc is not None:
+                query = query.where(Pedido.cerrado_en >= desde_utc)
+            if hasta_utc is not None:
+                query = query.where(Pedido.cerrado_en <= hasta_utc)
             if self.historial_filtro_metodo:
                 from app.models.food import PagoPedido as _PP
                 query = query.where(
@@ -884,8 +901,8 @@ class ReportesState(rx.State):
             mozo = usuarios.get(p.mozo_id)
             cajero = usuarios.get(p.cajero_id)
             ws1.append([
-                format_local_datetime(fecha, "%Y-%m-%d", "PE") if fecha else "",
-                format_local_datetime(fecha, "%H:%M", "PE") if fecha else "",
+                format_local_datetime(fecha, "%Y-%m-%d", self.reportes_pais) if fecha else "",
+                format_local_datetime(fecha, "%H:%M", self.reportes_pais) if fecha else "",
                 p.id,
                 _pedido_sales_label(p, mesas),
                 getattr(p, "metodo_pago", None) or "",
@@ -1076,7 +1093,7 @@ class ReportesState(rx.State):
         self.pyl_mes = mes
 
         with food._tenant_session() as session:
-            data = pyl_mensual(session, food._company_id(), anio, mes)
+            data = pyl_mensual(session, food._company_id(), anio, mes, food._country_code())
 
         meses_nombre = [
             "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -1148,7 +1165,9 @@ class ReportesState(rx.State):
         except (ValueError, AttributeError):
             pct = 18.0
         with food._tenant_session() as session:
-            data = resumen_igv_mensual(session, food._company_id(), anio, mes, pct)
+            data = resumen_igv_mensual(
+                session, food._company_id(), anio, mes, pct, food._country_code()
+            )
         self.igv_base_imponible_texto = _money_text(data["base_imponible"])
         self.igv_monto_texto = _money_text(data["igv"])
         self.igv_ventas_netas_texto = _money_text(data["ventas_netas"])
@@ -1177,6 +1196,7 @@ class ReportesState(rx.State):
         self._do_cargar_matriz(food)
 
     def _do_cargar_matriz(self, food) -> None:
+        self.reportes_pais = food._country_code()
         desde, hasta = self._rango_filtros_historial()
         if hasta is not None:
             hasta = hasta + timedelta(seconds=1)
@@ -1214,6 +1234,7 @@ class ReportesState(rx.State):
         self._do_cargar_descuentos_anulaciones(food)
 
     def _do_cargar_descuentos_anulaciones(self, food) -> None:
+        self.reportes_pais = food._country_code()
         desde, hasta = self._rango_filtros_historial()
         if hasta is not None:
             hasta = hasta + timedelta(seconds=1)
@@ -1243,7 +1264,7 @@ class ReportesState(rx.State):
                 total_texto=_money_text(a["total"]),
                 motivo=a["motivo"],
                 cancelado_por=a["cancelado_por"],
-                cancelado_en_texto=format_local_datetime(a["cancelado_en"], "%d/%m %H:%M", "PE") if a["cancelado_en"] else "",
+                cancelado_en_texto=format_local_datetime(a["cancelado_en"], "%d/%m %H:%M", self.reportes_pais) if a["cancelado_en"] else "",
                 cajero_original=a["cajero_original"],
             )
             for a in anul_data
@@ -1257,7 +1278,7 @@ class ReportesState(rx.State):
                 total_texto=_money_text(r["total"]),
                 motivo=r["motivo"],
                 revertido_por=r["revertido_por"],
-                revertido_en_texto=format_local_datetime(r["revertido_en"], "%d/%m %H:%M", "PE") if r["revertido_en"] else "",
+                revertido_en_texto=format_local_datetime(r["revertido_en"], "%d/%m %H:%M", self.reportes_pais) if r["revertido_en"] else "",
             )
             for r in rev_data
         ]
@@ -1271,6 +1292,7 @@ class ReportesState(rx.State):
         self._do_cargar_mermas(food)
 
     def _do_cargar_mermas(self, food) -> None:
+        self.reportes_pais = food._country_code()
         desde, hasta = self._rango_filtros_historial()
         if hasta is not None:
             hasta = hasta + timedelta(seconds=1)
@@ -1314,8 +1336,9 @@ class ReportesState(rx.State):
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
         food = await self._food()
+        self.reportes_pais = food._country_code()
         empresa_nombre = getattr(food, "empresa_nombre", "TUWAYKIFOOD")
-        fecha_str = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", "PE")
+        fecha_str = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", self.reportes_pais)
 
         buf = io.BytesIO()
         doc = SimpleDocTemplate(
