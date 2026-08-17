@@ -328,6 +328,24 @@ class MetodoPagoView(BaseModel):
     es_fiado: bool
 
 
+class CierrePreviewPedidoRow(BaseModel):
+    """Fila de la previsualización del cierre (un pedido con su detalle)."""
+
+    hora: str
+    mesa: str
+    metodo: str
+    items_texto: str     # 'items' choca con ObjectVar.items() en Reflex
+    extras: str          # recargo/descuento/propina resumidos, si aplican
+    neto_texto: str
+
+
+class CierrePreviewMovRow(BaseModel):
+    hora: str
+    tipo: str
+    detalle: str
+    monto_texto: str
+
+
 # ─── Mixin de estado ─────────────────────────────────────────────────────────
 
 class CajaTurnoMixin(rx.State, mixin=True):
@@ -370,6 +388,18 @@ class CajaTurnoMixin(rx.State, mixin=True):
     # Historial de turnos cerrados
     turno_historial: list[TurnoHistorialView] = []
     turno_historial_visible: bool = False
+
+    # Previsualización del cierre (ver el detalle antes de reimprimir)
+    cierre_preview_visible: bool = False
+    cierre_preview_turno_id: int = 0
+    cierre_preview_titulo: str = ""
+    cierre_preview_resumen: list[ResumenCierreRow] = []
+    cierre_preview_metodos: list[ResumenCierreRow] = []
+    cierre_preview_pedidos: list[CierrePreviewPedidoRow] = []
+    cierre_preview_movimientos: list[CierrePreviewMovRow] = []
+    cierre_preview_descuadre_texto: str = ""
+    cierre_preview_recon_texto: str = ""
+    cierre_preview_recon_cuadra: bool = True
 
     # ── Computed vars ────────────────────────────────────────────────────────
 
@@ -1157,6 +1187,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
             tipo_doc="comprobante",
             texto=ticket_text(_cierre_lines),
             html=ticket_html,
+            feedback=True,
         )
 
     def imprimir_resumen_cierre(self):
@@ -1168,3 +1199,71 @@ class CajaTurnoMixin(rx.State, mixin=True):
     def reimprimir_cierre_turno(self, turno_id: int):
         """Reimprime ticket de cierre desde el historial de turnos cerrados."""
         return self._print_cierre_ticket(turno_id)
+
+    def set_cierre_preview_visible(self, v: bool) -> None:
+        self.cierre_preview_visible = bool(v)
+
+    def previsualizar_cierre_turno(self, turno_id: int):
+        """Abre un modal con el detalle del cierre para verlo antes de reimprimir."""
+        with self._tenant_session() as session:
+            turno = session.get(TurnoCaja, turno_id)
+            if turno is None:
+                return rx.toast.error("El turno ya no existe.")
+            data = self._build_cierre_data(session, turno)
+        self.cierre_preview_turno_id = turno_id
+        self.cierre_preview_titulo = (
+            f"Turno #{data['turno_id']} · {data['abierto_en']} → {data['cerrado_en']}"
+        )
+        self.cierre_preview_resumen = [
+            ResumenCierreRow(etiqueta="Fondo inicial", monto_texto=data["fondo_inicial"]),
+            ResumenCierreRow(etiqueta="Ventas efectivo", monto_texto=data["total_efectivo"]),
+            ResumenCierreRow(etiqueta="Ventas tarjeta", monto_texto=data["total_tarjeta"]),
+            ResumenCierreRow(etiqueta="Ventas QR/Yape", monto_texto=data["total_qr"]),
+            ResumenCierreRow(etiqueta="Fiado", monto_texto=data["total_fiado"]),
+            ResumenCierreRow(etiqueta="Propinas", monto_texto=data["total_propinas"]),
+            ResumenCierreRow(etiqueta="Otros ingresos", monto_texto=data["total_ingresos"]),
+            ResumenCierreRow(etiqueta="Egresos", monto_texto=f"- {data['total_egresos']}"),
+            ResumenCierreRow(etiqueta="Esperado en caja", monto_texto=data["esperado"]),
+            ResumenCierreRow(etiqueta="Contado en caja", monto_texto=data["contado"]),
+        ]
+        self.cierre_preview_metodos = [
+            ResumenCierreRow(etiqueta="Total ventas", monto_texto=data["total_ventas_neto"]),
+        ]
+        pedidos_rows: list[CierrePreviewPedidoRow] = []
+        for p in data["pedidos"]:
+            extras = []
+            if p.get("recargo", 0) > 0:
+                extras.append(f"+ {p.get('recargo_concepto') or 'Recargo'}: {_money(p['recargo'])}")
+            if p.get("descuento", 0) > 0:
+                extras.append(f"- Descuento: {_money(p['descuento'])}")
+            if p.get("propina", 0) > 0:
+                extras.append(f"Propina: {_money(p['propina'])}")
+            pedidos_rows.append(CierrePreviewPedidoRow(
+                hora=p.get("hora", ""),
+                mesa=p.get("mesa", ""),
+                metodo=p.get("metodo", ""),
+                items_texto=p.get("items", ""),
+                extras=" · ".join(extras),
+                neto_texto=_money(p["neto"]),
+            ))
+        self.cierre_preview_pedidos = pedidos_rows
+        self.cierre_preview_movimientos = [
+            CierrePreviewMovRow(
+                hora=m.get("hora", ""),
+                tipo=m.get("tipo", ""),
+                detalle=f"{m.get('categoria', '')}: {m.get('motivo', '')}",
+                monto_texto=m.get("monto", ""),
+            )
+            for m in data["movimientos"]
+        ]
+        self.cierre_preview_descuadre_texto = data["descuadre_texto"]
+        self.cierre_preview_recon_texto = data["recon_ventas_texto"]
+        self.cierre_preview_recon_cuadra = data["recon_ventas_cuadra"]
+        self.cierre_preview_visible = True
+
+    def reimprimir_cierre_desde_preview(self):
+        """Reimprime el cierre que se está previsualizando y cierra el modal."""
+        turno_id = self.cierre_preview_turno_id
+        self.cierre_preview_visible = False
+        if turno_id:
+            return self._print_cierre_ticket(turno_id)

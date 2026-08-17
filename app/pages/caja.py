@@ -15,6 +15,8 @@ from app.components.shared import (
     WARNING_SOLID,
 )
 from app.states.caja_turno_mixin import (
+    CierrePreviewMovRow,
+    CierrePreviewPedidoRow,
     DenominacionRow,
     MetodoPagoView,
     MovimientoCajaView,
@@ -1435,6 +1437,14 @@ def _turno_historial_row(t: TurnoHistorialView) -> rx.Component:
         ),
         rx.tooltip(
             rx.icon_button(
+                rx.icon(tag="eye", size=14),
+                variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
+                on_click=FoodState.previsualizar_cierre_turno(t.id),
+            ),
+            content="Ver detalle del cierre",
+        ),
+        rx.tooltip(
+            rx.icon_button(
                 rx.icon(tag="printer", size=14),
                 variant="ghost", size="1", color=TEXT_MUTED, cursor="pointer",
                 on_click=FoodState.reimprimir_cierre_turno(t.id),
@@ -1491,6 +1501,140 @@ def _historial_modal() -> rx.Component:
         ),
         open=FoodState.turno_historial_visible,
         on_open_change=FoodState.set_turno_historial_visible,
+    )
+
+
+def _cierre_preview_pedido_row(p: CierrePreviewPedidoRow) -> rx.Component:
+    return rx.vstack(
+        rx.hstack(
+            rx.text(p.hora, font_size="11px", color=TEXT_MUTED, font_weight="600"),
+            rx.text(p.mesa, font_size="12px", color=TEXT_PRIMARY, font_weight="700"),
+            rx.spacer(),
+            rx.text(p.neto_texto, font_size="12px", font_weight="800", color="#CBD5E1"),
+            width="100%", align="center", gap="8px",
+        ),
+        rx.text("Método: " + p.metodo, font_size="11px", color=TEXT_MUTED),
+        rx.cond(p.items_texto != "", rx.text(p.items_texto, font_size="11px", color=TEXT_MUTED, no_of_lines=2), rx.fragment()),
+        rx.cond(
+            p.extras != "",
+            rx.text(p.extras, font_size="11px", color=ACCENT, font_weight="600"),
+            rx.fragment(),
+        ),
+        spacing="0", width="100%", align="start",
+        padding="8px 10px", border_bottom=f"1px solid {DARK_800}",
+    )
+
+
+def _cierre_preview_mov_row(m: CierrePreviewMovRow) -> rx.Component:
+    return rx.hstack(
+        rx.text(m.hora, font_size="11px", color=TEXT_MUTED, min_width="70px"),
+        rx.text(m.tipo, font_size="11px", color=TEXT_PRIMARY, font_weight="700", min_width="60px"),
+        rx.text(m.detalle, font_size="11px", color=TEXT_MUTED, no_of_lines=1, flex="1"),
+        rx.text(m.monto_texto, font_size="11px", font_weight="700", color="#CBD5E1"),
+        width="100%", align="center", gap="8px",
+        padding="6px 10px", border_bottom=f"1px solid {DARK_800}",
+    )
+
+
+def _cierre_preview_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.vstack(
+                        rx.dialog.title("Detalle del cierre", font_size="17px", font_weight="800", color=TEXT_PRIMARY, margin="0"),
+                        rx.text(FoodState.cierre_preview_titulo, font_size="12px", color=TEXT_MUTED),
+                        spacing="0", align="start",
+                    ),
+                    rx.spacer(),
+                    rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.set_cierre_preview_visible(False)),
+                    width="100%", align="center",
+                ),
+                # Resumen de caja
+                rx.box(
+                    rx.vstack(
+                        rx.foreach(FoodState.cierre_preview_resumen, _resumen_cierre_row),
+                        rx.divider(),
+                        rx.foreach(FoodState.cierre_preview_metodos, _resumen_cierre_row),
+                        rx.hstack(
+                            rx.text("Descuadre de caja", font_size="12px", color=TEXT_MUTED),
+                            rx.spacer(),
+                            rx.text(FoodState.cierre_preview_descuadre_texto, font_size="12px", font_weight="800", color="#CBD5E1"),
+                            width="100%",
+                        ),
+                        rx.hstack(
+                            rx.text("Reconciliación ventas", font_size="12px", color=TEXT_MUTED),
+                            rx.spacer(),
+                            rx.text(
+                                FoodState.cierre_preview_recon_texto,
+                                font_size="12px", font_weight="800",
+                                color=rx.cond(FoodState.cierre_preview_recon_cuadra, SUCCESS_SOLID, "#F59E0B"),
+                            ),
+                            width="100%",
+                        ),
+                        spacing="2", width="100%",
+                    ),
+                    padding="10px 12px", width="100%",
+                    border=f"1px solid {DARK_800}", border_radius="10px",
+                ),
+                # Detalle de pedidos
+                rx.text("Detalle de ventas", font_size="12px", font_weight="800", color=TEXT_PRIMARY),
+                rx.box(
+                    rx.cond(
+                        FoodState.cierre_preview_pedidos.length() > 0,
+                        rx.vstack(
+                            rx.foreach(FoodState.cierre_preview_pedidos, _cierre_preview_pedido_row),
+                            spacing="0", width="100%",
+                        ),
+                        rx.center(rx.text("Sin ventas en el turno.", font_size="12px", color=TEXT_MUTED), padding_y="14px", width="100%"),
+                    ),
+                    max_height="240px", overflow_y="auto", width="100%",
+                    border=f"1px solid {DARK_800}", border_radius="10px",
+                ),
+                # Movimientos (si hay)
+                rx.cond(
+                    FoodState.cierre_preview_movimientos.length() > 0,
+                    rx.vstack(
+                        rx.text("Movimientos de caja", font_size="12px", font_weight="800", color=TEXT_PRIMARY),
+                        rx.box(
+                            rx.vstack(
+                                rx.foreach(FoodState.cierre_preview_movimientos, _cierre_preview_mov_row),
+                                spacing="0", width="100%",
+                            ),
+                            max_height="140px", overflow_y="auto", width="100%",
+                            border=f"1px solid {DARK_800}", border_radius="10px",
+                        ),
+                        spacing="1", width="100%", align="start",
+                    ),
+                    rx.fragment(),
+                ),
+                # Acciones
+                rx.hstack(
+                    rx.button(
+                        rx.icon(tag="file_text", size=15), "Descargar PDF",
+                        on_click=FoodState.descargar_pdf_cierre_turno(FoodState.cierre_preview_turno_id),
+                        variant="soft", size="2", cursor="pointer", flex="1",
+                    ),
+                    rx.button(
+                        rx.icon(tag="printer", size=15), "Reimprimir",
+                        on_click=FoodState.reimprimir_cierre_desde_preview,
+                        background=ACCENT, color="white", size="2",
+                        cursor="pointer", _hover={"opacity": "0.9"}, flex="1",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="620px",
+            width="92vw",
+            max_height="90vh",
+            overflow_y="auto",
+            background=PAGE_BACKGROUND,
+            border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.cierre_preview_visible,
+        on_open_change=FoodState.set_cierre_preview_visible,
     )
 
 
@@ -1815,6 +1959,7 @@ def _caja_content() -> rx.Component:
         _mov_modal(),
         _cierre_modal(),
         _historial_modal(),
+        _cierre_preview_modal(),
         _ultimos_cobros_modal(),
         _reversion_modal(),
         _caja_add_modal(),

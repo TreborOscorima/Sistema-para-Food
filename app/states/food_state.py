@@ -3615,13 +3615,16 @@ class FoodState(
         texto: str,
         html: str,
         pedido_id: int | None = None,
+        feedback: bool = False,
     ):
         """Emite un documento según el modo de impresión de la empresa.
 
         - modo "navegador": devuelve el evento de impresión por iframe (kiosk),
           para incluirlo en la lista de eventos del handler.
-        - modo "agente": encola el `texto` para que el agente local lo imprima y
-          devuelve None (el caller lo omite de la lista).
+        - modo "agente": encola el `texto` para que el agente local lo imprima.
+          Con ``feedback=True`` devuelve un toast de confirmación (para acciones
+          manuales como reimprimir, que si no quedaban mudas); en la impresión
+          automática se deja en None para no ensuciar con avisos cada cobro.
         """
         with self._tenant_session() as session:
             cfg = session.exec(
@@ -3642,6 +3645,10 @@ class FoodState(
                     sucursal_id=self._sucursal_id() or None,
                     pedido_id=pedido_id,
                 )
+                if feedback:
+                    return rx.toast.success(
+                        "Enviado a la impresora (agente local).", position="top-center"
+                    )
                 return None
         return rx.call_script(build_print_script(html))
 
