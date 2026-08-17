@@ -201,6 +201,9 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         "qr": Decimal("0.00"),
         "fiado": Decimal("0.00"),
         "propinas": Decimal("0.00"),
+        # Venta neta = ingreso real del local (subtotal + recargo − descuento),
+        # SIN propina. La propina no es venta: pasa por caja pero es del mozo.
+        "ventas_netas": Decimal("0.00"),
     }
     # Desglose fino por código de método (Yape, Plin, …) para el detalle del cierre.
     por_metodo: dict[str, Decimal] = {}
@@ -216,6 +219,9 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
     for pedido in pedidos:
         propina = _dec(pedido.propina)
         resumen["propinas"] += propina
+        resumen["ventas_netas"] += (
+            _dec(pedido.total) + _dec(pedido.recargo) - _dec(pedido.descuento)
+        )
         if (pedido.id or 0) in pedidos_con_pagos:
             continue
         neto = _dec(pedido.total) - _dec(pedido.descuento)
@@ -717,11 +723,12 @@ class CajaTurnoMixin(rx.State, mixin=True):
             resumen = calcular_resumen_turno(session, turno)
             self.turno_cierre_resumen = [
                 ResumenCierreRow(etiqueta="Fondo inicial", monto_texto=_money(turno.monto_inicial)),
-                ResumenCierreRow(etiqueta="Ventas en efectivo", monto_texto=_money(resumen["efectivo"])),
-                ResumenCierreRow(etiqueta="Ventas con tarjeta", monto_texto=_money(resumen["tarjeta"])),
-                ResumenCierreRow(etiqueta="Ventas por QR / Yape", monto_texto=_money(resumen["qr"])),
-                ResumenCierreRow(etiqueta="Fiado (no entra a caja)", monto_texto=_money(resumen["fiado"])),
+                ResumenCierreRow(etiqueta="Ventas (netas)", monto_texto=_money(resumen["ventas_netas"])),
                 ResumenCierreRow(etiqueta="Propinas del turno", monto_texto=_money(resumen["propinas"])),
+                ResumenCierreRow(etiqueta="Cobrado en efectivo", monto_texto=_money(resumen["efectivo"])),
+                ResumenCierreRow(etiqueta="Cobrado con tarjeta", monto_texto=_money(resumen["tarjeta"])),
+                ResumenCierreRow(etiqueta="Cobrado en QR / Yape", monto_texto=_money(resumen["qr"])),
+                ResumenCierreRow(etiqueta="Fiado (no entra a caja)", monto_texto=_money(resumen["fiado"])),
                 ResumenCierreRow(etiqueta="Otros ingresos", monto_texto=_money(resumen["ingresos"])),
                 ResumenCierreRow(etiqueta="Egresos / gastos", monto_texto="- " + _money(resumen["egresos"])),
             ]
@@ -887,6 +894,9 @@ class CajaTurnoMixin(rx.State, mixin=True):
         # Reconciliación: Σ (total a cobrar por pedido) debe igualar lo cobrado.
         ventas_esperadas = Decimal("0.00")
         cobrado_por_pagos = Decimal("0.00")
+        # Venta neta = ingreso del local (sin propina). Es el "Ventas" que debe
+        # coincidir con el reporte; la propina va como línea aparte.
+        ventas_netas = Decimal("0.00")
         for ped in pedidos:
             items = session.exec(
                 select(DetallePedido).where(DetallePedido.pedido_id == ped.id)
@@ -906,6 +916,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
             neto = _dec(ped.total) + recargo - _dec(ped.descuento)
             # Total a cobrar = venta neta + propina; y lo realmente cobrado.
             ventas_esperadas += neto + _dec(ped.propina)
+            ventas_netas += neto
             if pags:
                 cobrado_por_pagos += sum((_dec(p.monto) for p in pags), Decimal("0.00"))
             else:
@@ -977,10 +988,14 @@ class CajaTurnoMixin(rx.State, mixin=True):
             "notas": turno.notas_cierre or "",
             "pedidos": detalle_pedidos,
             "movimientos": movs,
-            "total_ventas_neto": _money(
-                _dec(turno.total_efectivo) + _dec(turno.total_tarjeta)
-                + _dec(turno.total_qr) + _dec(turno.total_fiado)
-            ),
+            # Ventas (netas) = ingreso real del local, SIN propina. Coincide con
+            # el "Ventas" del reporte del día.
+            "ventas_netas": _money(ventas_netas),
+            # Total cobrado = dinero que efectivamente entró (Σ pagos, incluye
+            # propina). Es lo que usa el arqueo de caja.
+            "total_cobrado": _money(cobrado_por_pagos),
+            # Compat: el "Total ventas" del cierre ahora es la venta neta.
+            "total_ventas_neto": _money(ventas_netas),
         }
 
     def descargar_pdf_cierre(self):
@@ -1053,11 +1068,12 @@ class CajaTurnoMixin(rx.State, mixin=True):
         res_data = [
             ["Concepto", "Monto"],
             ["Fondo inicial", data["fondo_inicial"]],
-            ["Ventas efectivo", data["total_efectivo"]],
-            ["Ventas tarjeta", data["total_tarjeta"]],
-            ["Ventas QR / Yape", data["total_qr"]],
-            ["Fiado", data["total_fiado"]],
+            ["Ventas (netas)", data["ventas_netas"]],
             ["Propinas", data["total_propinas"]],
+            ["Cobrado en efectivo", data["total_efectivo"]],
+            ["Cobrado con tarjeta", data["total_tarjeta"]],
+            ["Cobrado en QR / Yape", data["total_qr"]],
+            ["Fiado", data["total_fiado"]],
             ["Otros ingresos", data["total_ingresos"]],
             ["Egresos / gastos", f"- {data['total_egresos']}"],
             ["Esperado en caja", data["esperado"]],
@@ -1069,8 +1085,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
         elems.append(t)
         elems.append(Spacer(1, 4 * mm))
 
-        # Ingresos por método
-        elems.append(Paragraph("Ingresos por Método", styles["Section"]))
+        # Cobrado por método (dinero que entró — incluye propina; base del arqueo)
+        elems.append(Paragraph("Cobrado por Método", styles["Section"]))
         met_data = [["Método", "Monto"]]
         for label, val in [
             ("Efectivo", data["total_efectivo"]),
@@ -1079,7 +1095,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
             ("Fiado", data["total_fiado"]),
         ]:
             met_data.append([label, val])
-        met_data.append(["Total ventas", data["total_ventas_neto"]])
+        met_data.append(["Total cobrado", data["total_cobrado"]])
+        met_data.append(["Ventas netas (sin propina)", data["ventas_netas"]])
         met_data.append(["Reconciliación (cobrado vs pedidos)", data["recon_ventas_texto"]])
         t2 = Table(met_data, colWidths=[10 * cm, 7 * cm])
         t2.setStyle(hdr_style)
@@ -1159,11 +1176,12 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 cerrado_en_texto=data["cerrado_en"],
                 resumen_rows=[
                     ("Fondo inicial", data["fondo_inicial"]),
-                    ("Ventas efectivo", data["total_efectivo"]),
-                    ("Ventas tarjeta", data["total_tarjeta"]),
-                    ("Ventas QR/Yape", data["total_qr"]),
-                    ("Fiado", data["total_fiado"]),
+                    ("Ventas (netas)", data["ventas_netas"]),
                     ("Propinas", data["total_propinas"]),
+                    ("Cobrado efectivo", data["total_efectivo"]),
+                    ("Cobrado tarjeta", data["total_tarjeta"]),
+                    ("Cobrado QR/Yape", data["total_qr"]),
+                    ("Fiado", data["total_fiado"]),
                     ("Otros ingresos", data["total_ingresos"]),
                     ("Egresos", f"- {data['total_egresos']}"),
                     ("Esperado en caja", data["esperado"]),
@@ -1216,18 +1234,20 @@ class CajaTurnoMixin(rx.State, mixin=True):
         )
         self.cierre_preview_resumen = [
             ResumenCierreRow(etiqueta="Fondo inicial", monto_texto=data["fondo_inicial"]),
-            ResumenCierreRow(etiqueta="Ventas efectivo", monto_texto=data["total_efectivo"]),
-            ResumenCierreRow(etiqueta="Ventas tarjeta", monto_texto=data["total_tarjeta"]),
-            ResumenCierreRow(etiqueta="Ventas QR/Yape", monto_texto=data["total_qr"]),
-            ResumenCierreRow(etiqueta="Fiado", monto_texto=data["total_fiado"]),
+            ResumenCierreRow(etiqueta="Ventas (netas)", monto_texto=data["ventas_netas"]),
             ResumenCierreRow(etiqueta="Propinas", monto_texto=data["total_propinas"]),
+            ResumenCierreRow(etiqueta="Cobrado en efectivo", monto_texto=data["total_efectivo"]),
+            ResumenCierreRow(etiqueta="Cobrado con tarjeta", monto_texto=data["total_tarjeta"]),
+            ResumenCierreRow(etiqueta="Cobrado en QR/Yape", monto_texto=data["total_qr"]),
+            ResumenCierreRow(etiqueta="Fiado", monto_texto=data["total_fiado"]),
             ResumenCierreRow(etiqueta="Otros ingresos", monto_texto=data["total_ingresos"]),
             ResumenCierreRow(etiqueta="Egresos", monto_texto=f"- {data['total_egresos']}"),
             ResumenCierreRow(etiqueta="Esperado en caja", monto_texto=data["esperado"]),
             ResumenCierreRow(etiqueta="Contado en caja", monto_texto=data["contado"]),
         ]
         self.cierre_preview_metodos = [
-            ResumenCierreRow(etiqueta="Total ventas", monto_texto=data["total_ventas_neto"]),
+            ResumenCierreRow(etiqueta="Ventas (netas)", monto_texto=data["ventas_netas"]),
+            ResumenCierreRow(etiqueta="Total cobrado", monto_texto=data["total_cobrado"]),
         ]
         pedidos_rows: list[CierrePreviewPedidoRow] = []
         for p in data["pedidos"]:
