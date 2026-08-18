@@ -11,6 +11,7 @@ resuelve el nombre/tipo de los pagos históricos guardados como "qr".
 
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from app.models.food import MetodoPagoConfig, TipoMetodoPago
@@ -36,6 +37,14 @@ def sembrar_defaults(session, company_id: int) -> list[MetodoPagoConfig]:
 
     Idempotente: solo inserta los ``codigo`` que falten, nunca pisa lo existente
     (así respeta ediciones del usuario). Devuelve las filas creadas.
+
+    **Persiste con commit** (no solo flush): antes se sembraba con ``flush()`` y,
+    como el ``get_session()`` que envuelve las lecturas cierra sin commit, los
+    defaults se hacían rollback y NUNCA quedaban en la tabla. Efecto: la Caja los
+    mostraba (se re-sembraban en memoria cada carga) pero Configuración salía
+    vacía y editar/activar/eliminar no hacía nada (el id no existía en la DB). El
+    commit solo dispara cuando la empresa tenía 0 métodos (primera carga), así que
+    no interfiere con transacciones de cobro/cierre (ahí ya existen métodos).
     """
     existentes = {
         m.codigo
@@ -62,7 +71,14 @@ def sembrar_defaults(session, company_id: int) -> list[MetodoPagoConfig]:
         session.add(fila)
         creados.append(fila)
     if creados:
-        session.flush()
+        try:
+            session.commit()
+        except IntegrityError:
+            # Carrera: otro request sembró primero (viola el único
+            # (company_id, codigo)). Descartamos; el caller re-consulta y ve
+            # los métodos ya persistidos por el otro request.
+            session.rollback()
+            return []
     return creados
 
 
