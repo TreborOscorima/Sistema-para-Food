@@ -2447,6 +2447,15 @@ class FoodState(
         self._cargar_plan_empresa()
         self.cargar_config_impresora()
         self.cargar_mesas_config()
+        # El panel embebe _configuracion_content() (misma Configuración que la
+        # ruta /configuracion), así que necesita los mismos loaders de esa
+        # pantalla; sin esto la sección Métodos de pago (y las de sucursales,
+        # impresoras y agentes) salían VACÍAS en el panel aunque los datos
+        # existieran, porque metodos_admin nunca se poblaba.
+        self.cargar_sucursales_admin()
+        self.cargar_impresoras_config()
+        self.cargar_agentes_config()
+        self.cargar_metodos_pago_admin()
         self.cargar_inventario()
         self.cargar_clientes()
         self.cargar_promociones()
