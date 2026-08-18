@@ -288,6 +288,31 @@ def cerrar_turno_caja(
     return turno
 
 
+def _cierre_ventas_rows(data: dict) -> list[tuple[str, str, bool]]:
+    """Filas del bloque "Ventas del turno" para el cierre (ticket, PDF y pantalla).
+
+    Si hubo recargos (envase/delivery/servicio) o descuentos, muestra el desglose
+    Subtotal productos + extras por concepto − descuentos = Ventas netas, para que
+    se vea de qué se compone el total. Si no hubo extras, una sola línea "Ventas
+    (netas)". Devuelve tuplas (etiqueta, monto, enfasis). Fuente única para las 3
+    superficies (que digan lo mismo).
+    """
+    rows: list[tuple[str, str, bool]] = []
+    if data["hay_extras"]:
+        rows.append(("Subtotal productos", data["subtotal_productos"], False))
+        for r in data["recargos"]:
+            rows.append((f"+ {r['concepto']}", r["monto_texto"], False))
+        if data["hay_descuentos"]:
+            rows.append(("- Descuentos", f"- {data['total_descuentos']}", False))
+        rows.append(("= Ventas (netas)", data["ventas_netas"], True))
+    else:
+        rows.append(("Ventas (netas)", data["ventas_netas"], False))
+    rows.append(("Propinas", data["total_propinas"], False))
+    if data["hay_fiado"]:
+        rows.append(("Fiado (pendiente de cobro)", data["total_fiado"], False))
+    return rows
+
+
 # ─── Views para la UI ────────────────────────────────────────────────────────
 
 class MovimientoCajaView(BaseModel):
@@ -919,6 +944,12 @@ class CajaTurnoMixin(rx.State, mixin=True):
         # Venta neta = ingreso del local (sin propina). Es el "Ventas" que debe
         # coincidir con el reporte; la propina va como línea aparte.
         ventas_netas = Decimal("0.00")
+        # Desglose de ventas: subtotal de productos + recargos por concepto
+        # (Envase/Delivery/Servicio…) − descuentos = venta neta. Para que la hoja
+        # muestre de qué se compone el total.
+        subtotal_productos = Decimal("0.00")
+        recargos_acc: dict[str, Decimal] = {}
+        total_descuentos = Decimal("0.00")
         for ped in pedidos:
             items = session.exec(
                 select(DetallePedido).where(DetallePedido.pedido_id == ped.id)
@@ -939,6 +970,13 @@ class CajaTurnoMixin(rx.State, mixin=True):
             # Total a cobrar = venta neta + propina; y lo realmente cobrado.
             ventas_esperadas += neto + _dec(ped.propina)
             ventas_netas += neto
+            subtotal_productos += _dec(ped.total)
+            if recargo > 0:
+                concepto = (ped.recargo_concepto or "Recargo").strip() or "Recargo"
+                recargos_acc[concepto] = (
+                    recargos_acc.get(concepto, Decimal("0.00")) + recargo
+                )
+            total_descuentos += _dec(ped.descuento)
             if pags:
                 cobrado_por_pagos += sum((_dec(p.monto) for p in pags), Decimal("0.00"))
                 for p in pags:
@@ -1053,6 +1091,15 @@ class CajaTurnoMixin(rx.State, mixin=True):
             "hay_fiado": _dec(turno.total_fiado) > 0,
             "hay_ingresos": _dec(turno.total_ingresos) > 0,
             "hay_egresos": _dec(turno.total_egresos) > 0,
+            # Desglose del bloque de ventas (subtotal + extras por concepto).
+            "subtotal_productos": _money(subtotal_productos),
+            "recargos": [
+                {"concepto": c, "monto_texto": _money(m)}
+                for c, m in recargos_acc.items()
+            ],
+            "total_descuentos": _money(total_descuentos),
+            "hay_descuentos": total_descuentos > 0,
+            "hay_extras": bool(recargos_acc) or total_descuentos > 0,
         }
 
     @staticmethod
@@ -1061,11 +1108,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
         método real y arqueo de efectivo. Compartido por el ticket de cierre y
         la reimpresión para que siempre digan lo mismo."""
         rows: list[tuple[str, str]] = [
-            ("Ventas (netas)", data["ventas_netas"]),
-            ("Propinas", data["total_propinas"]),
+            (etiqueta, monto) for etiqueta, monto, _enf in _cierre_ventas_rows(data)
         ]
-        if data["hay_fiado"]:
-            rows.append(("Fiado (pendiente)", data["total_fiado"]))
         rows.append(("-- Cobrado por metodo --", ""))
         for m in data["cobrado_por_metodo"]:
             rows.append((f"  {m['nombre']}", m["monto_texto"]))
@@ -1146,15 +1190,12 @@ class CajaTurnoMixin(rx.State, mixin=True):
             styles["PDFSub"],
         ))
 
-        # Bloque 1 — Ventas del turno (facturado por el local).
+        # Bloque 1 — Ventas del turno (facturado por el local), desglosado en
+        # subtotal de productos + extras por concepto − descuentos = venta neta.
         elems.append(Paragraph("Ventas del turno", styles["Section"]))
-        ventas_data = [
-            ["Concepto", "Monto"],
-            ["Ventas (netas)", data["ventas_netas"]],
-            ["Propinas", data["total_propinas"]],
-        ]
-        if data["hay_fiado"]:
-            ventas_data.append(["Fiado (pendiente de cobro)", data["total_fiado"]])
+        ventas_data = [["Concepto", "Monto"]]
+        for etiqueta, monto, _enf in _cierre_ventas_rows(data):
+            ventas_data.append([etiqueta, monto])
         t = Table(ventas_data, colWidths=[10 * cm, 7 * cm])
         t.setStyle(hdr_style)
         elems.append(t)
@@ -1311,14 +1352,11 @@ class CajaTurnoMixin(rx.State, mixin=True):
             f"Turno #{data['turno_id']} · {data['abierto_en']} → {data['cerrado_en']}"
         )
         # Bloque 1 — Ventas del turno (lo que facturó el local; sin efectivo aún).
-        ventas = [
-            ResumenCierreRow(etiqueta="Ventas (netas)", monto_texto=data["ventas_netas"]),
-            ResumenCierreRow(etiqueta="Propinas", monto_texto=data["total_propinas"]),
+        # Desglosado: subtotal productos + extras por concepto = venta neta.
+        self.cierre_preview_ventas = [
+            ResumenCierreRow(etiqueta=et, monto_texto=mo, enfasis=en)
+            for et, mo, en in _cierre_ventas_rows(data)
         ]
-        if data["hay_fiado"]:
-            ventas.append(ResumenCierreRow(
-                etiqueta="Fiado (pendiente de cobro)", monto_texto=data["total_fiado"]))
-        self.cierre_preview_ventas = ventas
         # Bloque 2 — Cobrado por método real (Efectivo, Yape, Plin, …) + total.
         cobros = [
             ResumenCierreRow(etiqueta=m["nombre"], monto_texto=m["monto_texto"])
