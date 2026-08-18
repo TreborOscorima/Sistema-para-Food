@@ -823,9 +823,9 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 session.commit()
                 session.refresh(turno)
                 data = self._build_cierre_data(session, turno)
-                det_pedidos = [
-                    {**p, "neto_texto": _money(p["neto"])} for p in data["pedidos"]
-                ]
+                # Ticket térmico = SOLO resumen (sin volcar los pedidos). El
+                # detalle por pedido queda en el PDF y en Historial. Ver
+                # _print_cierre_ticket para el detalle de por qué.
                 _cierre_lines = build_cash_close_ticket_lines(
                     company_name=data["empresa"],
                     turno_id=turno.id or 0,
@@ -837,7 +837,6 @@ class CajaTurnoMixin(rx.State, mixin=True):
                     descuadre_texto=data["descuadre_texto"],
                     notas=data["notas"],
                     paper_width_mm=self._ticket_paper_width_mm(),
-                    detalle_pedidos=det_pedidos,
                     detalle_movimientos=data["movimientos"],
                 )
                 ticket_html = render_ticket_html(
@@ -1255,16 +1254,10 @@ class CajaTurnoMixin(rx.State, mixin=True):
             if turno is None:
                 return rx.toast.error("El turno ya no existe.")
             data = self._build_cierre_data(session, turno)
-            det_pedidos = [
-                {
-                    **p,
-                    "neto_texto": _money(p["neto"]),
-                    "recargo_texto": _money(p["recargo"]) if p.get("recargo", 0) > 0 else "",
-                    "descuento_texto": _money(p["descuento"]) if p.get("descuento", 0) > 0 else "",
-                    "propina_texto": _money(p["propina"]) if p.get("propina", 0) > 0 else "",
-                }
-                for p in data["pedidos"]
-            ]
+            # Ticket térmico = SOLO resumen. El detalle por pedido NO se imprime
+            # (queda en el PDF y en Historial): volcarlo hacía un rollo de ~1 m
+            # ilegible. Los movimientos de caja sí van, porque son pocos y
+            # justifican los ingresos/egresos del arqueo.
             _cierre_lines = build_cash_close_ticket_lines(
                 company_name=data["empresa"],
                 turno_id=turno.id or 0,
@@ -1276,7 +1269,6 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 descuadre_texto=data["descuadre_texto"],
                 notas=data["notas"],
                 paper_width_mm=self._ticket_paper_width_mm(),
-                detalle_pedidos=det_pedidos,
                 detalle_movimientos=data["movimientos"],
                 recon_ventas_texto=(
                     "" if data.get("recon_ventas_cuadra", True)
