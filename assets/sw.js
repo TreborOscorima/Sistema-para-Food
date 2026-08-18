@@ -8,7 +8,13 @@
  * fetch handler registrado) y para mostrar una pagina propia cuando el
  * dispositivo se queda sin conexion en una navegacion (en vez del dinosaurio
  * del navegador). Todo lo demas es passthrough puro a la red.
+ *
+ * La auto-actualizacion del build la maneja el cliente (assets/js/twk-pwa.js):
+ * compara los bundles /assets/ servidos vs. los del build en curso y recarga. El
+ * SW solo aporta skipWaiting + clients.claim para tomar control al publicar una
+ * version nueva de este archivo. Al cambiar SW_VERSION se fuerza su reinstalacion.
  */
+const SW_VERSION = "2026-08-17";
 
 // Pagina offline embebida (no depende de la red ni de ningun asset).
 const OFFLINE_HTML = `<!doctype html>
