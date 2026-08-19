@@ -72,6 +72,7 @@ class UsuariosAdminState(rx.State):
     usuario_form_perm_inventario: bool = False
     usuario_form_perm_costos: bool = False
     usuario_form_perm_reimprimir: bool = False
+    usuario_form_perm_corregir: bool = False
     usuario_form_acceso_mozos: bool = False
     usuario_form_acceso_caja: bool = False
     usuario_form_acceso_cocina: bool = False
@@ -126,6 +127,7 @@ class UsuariosAdminState(rx.State):
         self.usuario_form_perm_inventario = _defs.get("inventario", False)
         self.usuario_form_perm_costos = _defs.get("costos", False)
         self.usuario_form_perm_reimprimir = _defs.get("reimprimir", False)
+        self.usuario_form_perm_corregir = _defs.get("corregir", False)
         _acc = _ROL_ACCESO_DEFAULTS.get(value, {})
         self.usuario_form_acceso_mozos = _acc.get("mozos", False)
         self.usuario_form_acceso_caja = _acc.get("caja", False)
@@ -152,6 +154,9 @@ class UsuariosAdminState(rx.State):
 
     def toggle_uf_perm_reimprimir(self) -> None:
         self.usuario_form_perm_reimprimir = not self.usuario_form_perm_reimprimir
+
+    def toggle_uf_perm_corregir(self) -> None:
+        self.usuario_form_perm_corregir = not self.usuario_form_perm_corregir
 
     def toggle_uf_acceso_mozos(self) -> None:
         self.usuario_form_acceso_mozos = not self.usuario_form_acceso_mozos
@@ -190,6 +195,7 @@ class UsuariosAdminState(rx.State):
         self.usuario_form_perm_inventario = _defs["inventario"]
         self.usuario_form_perm_costos = _defs["costos"]
         self.usuario_form_perm_reimprimir = _defs["reimprimir"]
+        self.usuario_form_perm_corregir = _defs["corregir"]
         _acc = _ROL_ACCESO_DEFAULTS[RolUsuario.MOZO.value]
         self.usuario_form_acceso_mozos = _acc["mozos"]
         self.usuario_form_acceso_caja = _acc["caja"]
@@ -227,6 +233,7 @@ class UsuariosAdminState(rx.State):
                 perm_inventario=u.perm_inventario,
                 perm_costos=u.perm_costos,
                 perm_reimprimir=u.perm_reimprimir,
+                perm_corregir=u.perm_corregir,
                 acceso_mozos=u.acceso_mozos,
                 acceso_caja=u.acceso_caja,
                 acceso_cocina=u.acceso_cocina,
@@ -263,6 +270,7 @@ class UsuariosAdminState(rx.State):
         self.usuario_form_perm_inventario = u.perm_inventario
         self.usuario_form_perm_costos = u.perm_costos
         self.usuario_form_perm_reimprimir = u.perm_reimprimir
+        self.usuario_form_perm_corregir = u.perm_corregir
         self.usuario_form_acceso_mozos = u.acceso_mozos
         self.usuario_form_acceso_caja = u.acceso_caja
         self.usuario_form_acceso_cocina = u.acceso_cocina
@@ -333,6 +341,7 @@ class UsuariosAdminState(rx.State):
                 u.perm_inventario = self.usuario_form_perm_inventario
                 u.perm_costos = self.usuario_form_perm_costos
                 u.perm_reimprimir = self.usuario_form_perm_reimprimir
+                u.perm_corregir = self.usuario_form_perm_corregir
                 u.acceso_mozos = self.usuario_form_acceso_mozos
                 u.acceso_caja = self.usuario_form_acceso_caja
                 u.acceso_cocina = self.usuario_form_acceso_cocina
@@ -358,6 +367,7 @@ class UsuariosAdminState(rx.State):
                     perm_inventario=self.usuario_form_perm_inventario,
                     perm_costos=self.usuario_form_perm_costos,
                     perm_reimprimir=self.usuario_form_perm_reimprimir,
+                    perm_corregir=self.usuario_form_perm_corregir,
                     acceso_mozos=self.usuario_form_acceso_mozos,
                     acceso_caja=self.usuario_form_acceso_caja,
                     acceso_cocina=self.usuario_form_acceso_cocina,

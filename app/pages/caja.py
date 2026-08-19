@@ -24,7 +24,7 @@ from app.states.caja_turno_mixin import (
     TurnoHistorialView,
 )
 from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
-from app.states.food_state import FoodState, MesaView, CajaItemView, MostradorPendienteView, PagoStagedView, UltimoCobroView, ProductoView
+from app.states.food_state import FoodState, MesaView, CajaItemView, MostradorPendienteView, PagoStagedView, UltimoCobroView, ProductoView, CorreccionLineaView
 from app.states.reportes_state import ReportesState
 
 
@@ -1686,11 +1686,25 @@ def _ultimo_cobro_row(cobro: UltimoCobroView) -> rx.Component:
                     _hover={"opacity": "0.7"}),
             content=rx.cond(cobro.comprobante_impreso, "Reimprimir comprobante", "Imprimir comprobante"),
         ),
-        rx.tooltip(
-            rx.icon(tag="trash_2", size=16, color="#EF4444", cursor="pointer",
-                    on_click=FoodState.abrir_reversion_cobro(cobro.pedido_id),
-                    _hover={"opacity": "0.7"}),
-            content="Anular cobro",
+        rx.cond(
+            FoodState.tiene_perm_corregir,
+            rx.tooltip(
+                rx.icon(tag="pencil", size=16, color=ACCENT, cursor="pointer",
+                        on_click=FoodState.abrir_correccion_cobro(cobro.pedido_id),
+                        _hover={"opacity": "0.7"}),
+                content="Corregir cobro",
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            FoodState.tiene_perm_anular,
+            rx.tooltip(
+                rx.icon(tag="trash_2", size=16, color="#EF4444", cursor="pointer",
+                        on_click=FoodState.abrir_reversion_cobro(cobro.pedido_id),
+                        _hover={"opacity": "0.7"}),
+                content="Anular cobro",
+            ),
+            rx.fragment(),
         ),
         width="100%", align="center", gap="10px",
         padding="10px 12px", border_bottom=f"1px solid {DARK_800}",
@@ -1753,6 +1767,178 @@ def _ultimos_cobros_modal() -> rx.Component:
         ),
         open=FoodState.ultimos_cobros_visible,
         on_open_change=FoodState.set_ultimos_cobros_visible,
+    )
+
+
+def _correccion_metodo_btn(metodo: MetodoPagoView) -> rx.Component:
+    """Botón de método de pago para el modal de corrección."""
+    activo = FoodState.correccion_metodo == metodo.codigo
+    return rx.box(
+        rx.text(metodo.icono, font_size="16px", line_height="1"),
+        rx.text(metodo.nombre, font_size="11px", font_weight="700",
+                color=rx.cond(activo, "#FFFFFF", "#94A3B8"),
+                text_align="center", line_height="1.1"),
+        on_click=FoodState.set_correccion_metodo(metodo.codigo),
+        background=rx.cond(activo, ACCENT, DARK_800),
+        border=rx.cond(activo, "2px solid #EA580C", "2px solid #334155"),
+        border_radius="10px", padding="8px 4px", cursor="pointer",
+        display="flex", flex_direction="column", align_items="center", gap="3px",
+        transition="all 0.15s ease", _hover={"border": "2px solid #EA580C"},
+    )
+
+
+def _correccion_linea_row(linea: CorreccionLineaView, idx: int) -> rx.Component:
+    return rx.hstack(
+        rx.vstack(
+            rx.text(linea.nombre, font_size="13px", font_weight="700",
+                    color=TEXT_PRIMARY, no_of_lines=1),
+            rx.text(linea.subtotal_texto, font_size="11px", color=TEXT_MUTED),
+            spacing="0", align="start", flex="1", min_width="0",
+        ),
+        rx.hstack(
+            rx.icon(tag="circle_minus", size=18, color="#94A3B8", cursor="pointer",
+                    on_click=FoodState.correccion_dec_linea(idx),
+                    _hover={"color": "#EF4444"}),
+            rx.text(linea.cantidad, font_size="14px", font_weight="800",
+                    color=TEXT_PRIMARY, min_width="24px", text_align="center"),
+            rx.icon(tag="circle_plus", size=18, color=ACCENT, cursor="pointer",
+                    on_click=FoodState.correccion_inc_linea(idx),
+                    _hover={"opacity": "0.7"}),
+            spacing="2", align="center",
+        ),
+        rx.icon(tag="trash_2", size=15, color="#EF4444", cursor="pointer",
+                on_click=FoodState.correccion_quitar_linea(idx),
+                _hover={"opacity": "0.7"}),
+        width="100%", align="center", gap="10px",
+        padding="8px 10px", border_bottom=f"1px solid {DARK_700}",
+    )
+
+
+def _correccion_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon(tag="pencil", size=18, color=ACCENT),
+                    rx.dialog.title("Corregir cobro — " + FoodState.correccion_referencia,
+                            font_size="17px", font_weight="800", color=TEXT_PRIMARY, margin="0"),
+                    rx.spacer(),
+                    rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.cancelar_correccion),
+                    width="100%", align="center",
+                ),
+                rx.text(
+                    "Corrige esta misma venta (quitar/sumar productos, método, "
+                    "descuento) sin anularla ni duplicarla. Queda registrada en "
+                    "auditoría con el motivo.",
+                    font_size="12px", color=TEXT_MUTED,
+                ),
+                # Líneas editables
+                rx.box(
+                    rx.foreach(FoodState.correccion_lineas, _correccion_linea_row),
+                    width="100%", max_height="220px", overflow_y="auto",
+                    border=f"1px solid {DARK_700}", border_radius="10px",
+                ),
+                # Agregar producto
+                rx.select.root(
+                    rx.select.trigger(
+                        placeholder="+ Agregar producto…", width="100%",
+                    ),
+                    rx.select.content(
+                        rx.foreach(
+                            FoodState.correccion_productos,
+                            lambda o: rx.select.item(o.label, value=o.id.to_string()),
+                        ),
+                    ),
+                    value=FoodState.correccion_producto_sel,
+                    on_change=FoodState.correccion_agregar_producto,
+                    width="100%",
+                ),
+                # Método de pago
+                rx.text("Método de pago", font_size="12px", font_weight="700",
+                        color=TEXT_MUTED, margin_top="4px"),
+                rx.grid(
+                    rx.foreach(FoodState.metodos_pago_activos, _correccion_metodo_btn),
+                    columns="4", spacing="2", width="100%",
+                ),
+                # Descuento / propina
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Descuento (S/)", font_size="11px", color=TEXT_MUTED),
+                        rx.input(
+                            placeholder="0.00", value=FoodState.correccion_descuento,
+                            on_change=FoodState.set_correccion_descuento,
+                            type="number", width="100%",
+                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
+                            _focus={"border_color": ACCENT},
+                        ),
+                        spacing="1", flex="1",
+                    ),
+                    rx.vstack(
+                        rx.text("Propina (S/)", font_size="11px", color=TEXT_MUTED),
+                        rx.input(
+                            placeholder="0.00", value=FoodState.correccion_propina,
+                            on_change=FoodState.set_correccion_propina,
+                            type="number", width="100%",
+                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
+                            _focus={"border_color": ACCENT},
+                        ),
+                        spacing="1", flex="1",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                # Total
+                rx.hstack(
+                    rx.text("Total corregido", font_size="13px", font_weight="700",
+                            color=TEXT_MUTED),
+                    rx.spacer(),
+                    rx.text(FoodState.correccion_total_texto, font_size="18px",
+                            font_weight="800", color=SUCCESS_SOLID),
+                    width="100%", align="center",
+                ),
+                # Motivo
+                rx.input(
+                    placeholder="Motivo de la corrección (obligatorio)",
+                    value=FoodState.correccion_motivo,
+                    on_change=FoodState.set_correccion_motivo,
+                    width="100%", background=DARK_800, border=f"1px solid {DARK_700}",
+                    color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
+                    _focus={"border_color": ACCENT},
+                ),
+                rx.cond(
+                    FoodState.correccion_error != "",
+                    rx.text(FoodState.correccion_error, font_size="12px",
+                            color="#EF4444", font_weight="600"),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Cancelar",
+                        on_click=FoodState.cancelar_correccion,
+                        background=DARK_800, color=TEXT_MUTED,
+                        border=f"1px solid {DARK_700}", border_radius="10px",
+                        font_size="14px", font_weight="600", cursor="pointer",
+                        _hover={"background": "#334155", "color": "#F1F5F9"}, flex="1",
+                    ),
+                    rx.button(
+                        "Guardar corrección",
+                        on_click=FoodState.confirmar_correccion_cobro,
+                        loading=FoodState.correccion_guardando,
+                        background=ACCENT, color=TEXT_WHITE,
+                        border_radius="10px", font_size="14px", font_weight="800",
+                        cursor="pointer", _hover={"opacity": "0.9"}, flex="2",
+                    ),
+                    spacing="3", width="100%",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="480px", width="94vw", max_height="92vh", overflow_y="auto",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.correccion_modal_visible,
+        on_open_change=FoodState.set_correccion_modal_visible,
     )
 
 
@@ -1992,6 +2178,7 @@ def _caja_content() -> rx.Component:
         _cierre_preview_modal(),
         _ultimos_cobros_modal(),
         _reversion_modal(),
+        _correccion_modal(),
         _caja_add_modal(),
         _caja_quitar_modal(),
         anulacion_modal(),

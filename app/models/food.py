@@ -170,6 +170,7 @@ class UsuarioFood(TimestampedModel, table=True):
     perm_inventario: bool = Field(default=False, nullable=False)
     perm_costos: bool = Field(default=False, nullable=False)
     perm_reimprimir: bool = Field(default=False, nullable=False)
+    perm_corregir: bool = Field(default=False, nullable=False)
     acceso_mozos: bool = Field(default=False, nullable=False)
     acceso_caja: bool = Field(default=False, nullable=False)
     acceso_cocina: bool = Field(default=False, nullable=False)

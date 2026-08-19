@@ -90,6 +90,10 @@ from app.services.anulacion_service import (
     reponer_stock_por_pedido,
     revertir_fiado_pedido,
 )
+from app.services.correccion_service import (
+    LineaCorreccion,
+    corregir_venta,
+)
 from app.services.kardex_service import (
     CATEGORIAS_MERMA,
     registrar_ajuste,
@@ -273,10 +277,10 @@ _ROL_BADGE_TEXT: dict[str, str] = {
     RolUsuario.COCINA.value: "#F59E0B",
 }
 _ROL_PERM_DEFAULTS: dict[str, dict[str, bool]] = {
-    RolUsuario.ADMIN.value:  {"descuento": True,  "anular": True,  "reportes": True,  "turno": True,  "inventario": True,  "costos": True,  "reimprimir": True},
-    RolUsuario.CAJA.value:   {"descuento": True,  "anular": False, "reportes": False, "turno": True,  "inventario": False, "costos": False, "reimprimir": True},
-    RolUsuario.MOZO.value:   {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False},
-    RolUsuario.COCINA.value: {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False},
+    RolUsuario.ADMIN.value:  {"descuento": True,  "anular": True,  "reportes": True,  "turno": True,  "inventario": True,  "costos": True,  "reimprimir": True,  "corregir": True},
+    RolUsuario.CAJA.value:   {"descuento": True,  "anular": False, "reportes": False, "turno": True,  "inventario": False, "costos": False, "reimprimir": True,  "corregir": False},
+    RolUsuario.MOZO.value:   {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False, "corregir": False},
+    RolUsuario.COCINA.value: {"descuento": False, "anular": False, "reportes": False, "turno": False, "inventario": False, "costos": False, "reimprimir": False, "corregir": False},
 }
 _ROL_ACCESO_DEFAULTS: dict[str, dict[str, bool]] = {
     RolUsuario.ADMIN.value:  {"mozos": True,  "caja": True,  "cocina": True,  "mostrador": True},
@@ -899,6 +903,26 @@ class UltimoCobroView(BaseModel):
     comprobante_impreso: bool = True
 
 
+class CorreccionLineaView(BaseModel):
+    """Línea editable del cobro que se está corrigiendo."""
+
+    detalle_id: int = 0          # 0 = línea nueva agregada en la corrección
+    producto_id: int = 0
+    nombre: str = ""
+    cantidad: int = 1
+    precio_unitario: float = 0.0
+    subtotal_texto: str = ""
+
+
+class ProductoOption(BaseModel):
+    """Opción de producto para el selector de 'agregar' en la corrección."""
+
+    id: int = 0
+    nombre: str = ""
+    precio: float = 0.0
+    label: str = ""
+
+
 class UsuarioSesion(BaseModel):
     id: int
     nombre: str
@@ -913,6 +937,7 @@ class UsuarioSesion(BaseModel):
     perm_inventario: bool = False
     perm_costos: bool = False
     perm_reimprimir: bool = False
+    perm_corregir: bool = False
     acceso_mozos: bool = False
     acceso_caja: bool = False
     acceso_cocina: bool = False
@@ -1200,6 +1225,7 @@ class UsuarioAdminView(BaseModel):
     perm_inventario: bool = False
     perm_costos: bool = False
     perm_reimprimir: bool = False
+    perm_corregir: bool = False
     acceso_mozos: bool = False
     acceso_caja: bool = False
     acceso_cocina: bool = False
@@ -1641,6 +1667,20 @@ class FoodState(
     reversion_motivo: str = ""
     reversion_error: str = ""
 
+    # Corrección de cobro — edita la misma venta (sin anular ni duplicar)
+    correccion_modal_visible: bool = False
+    correccion_pedido_id: int = 0
+    correccion_referencia: str = ""
+    correccion_motivo: str = ""
+    correccion_error: str = ""
+    correccion_lineas: list[CorreccionLineaView] = []
+    correccion_metodo: str = "efectivo"
+    correccion_descuento: str = ""
+    correccion_propina: str = ""
+    correccion_producto_sel: str = ""
+    correccion_productos: list[ProductoOption] = []
+    correccion_guardando: bool = False
+
     # Nota global del pedido de mesa activo
     nota_pedido_mesa: str = ""
 
@@ -1810,6 +1850,18 @@ class FoodState(
         if self.usuario_actual is None:
             return False
         return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_reimprimir
+
+    @rx.var
+    def tiene_perm_corregir(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_corregir
+
+    @rx.var
+    def tiene_perm_anular(self) -> bool:
+        if self.usuario_actual is None:
+            return False
+        return self.usuario_actual.rol == RolUsuario.ADMIN.value or self.usuario_actual.perm_anular
 
     def _touch_actividad(self) -> None:
         self.ultima_actividad = _utcnow().isoformat()
@@ -2182,6 +2234,7 @@ class FoodState(
             perm_inventario=usuario.perm_inventario,
             perm_costos=usuario.perm_costos,
             perm_reimprimir=usuario.perm_reimprimir,
+            perm_corregir=usuario.perm_corregir,
             acceso_mozos=usuario.acceso_mozos,
             acceso_caja=usuario.acceso_caja,
             acceso_cocina=usuario.acceso_cocina,
@@ -2569,6 +2622,7 @@ class FoodState(
             perm_inventario=usuario.perm_inventario,
             perm_costos=usuario.perm_costos,
             perm_reimprimir=usuario.perm_reimprimir,
+            perm_corregir=usuario.perm_corregir,
             acceso_mozos=usuario.acceso_mozos,
             acceso_caja=usuario.acceso_caja,
             acceso_cocina=usuario.acceso_cocina,
@@ -5947,6 +6001,8 @@ class FoodState(
     def abrir_reversion_cobro(self, pedido_id: int) -> None:
         if self.usuario_actual is None:
             return
+        if not self.tiene_perm_anular:
+            return rx.toast.error("No tienes permiso para anular cobros.")
         with self._tenant_session() as session:
             pedido = session.get(Pedido, pedido_id)
             if pedido is None or pedido.company_id != self._company_id():
@@ -5984,6 +6040,9 @@ class FoodState(
             return
         if self.usuario_actual is None:
             return
+        if not self.tiene_perm_anular:
+            self.reversion_error = "No tienes permiso para anular cobros."
+            return
         fiado_revertido = Decimal("0.00")
         try:
             with self._tenant_session() as session:
@@ -6016,6 +6075,298 @@ class FoodState(
             self.cancelar_cobro()
         fiado_txt = f" Fiado revertido: {_money_text(fiado_revertido)}." if fiado_revertido > 0 else ""
         return rx.toast.success(f"Venta #{pedido_id} anulada. Queda registrada en reportes.{fiado_txt}")
+
+    # ─── Caja — Corrección de cobro (edita la misma venta, sin duplicar) ──────
+
+    @rx.var
+    def correccion_subtotal_valor(self) -> float:
+        return round(
+            sum(l.precio_unitario * l.cantidad for l in self.correccion_lineas), 2
+        )
+
+    @rx.var
+    def correccion_subtotal_texto(self) -> str:
+        return _money_text(self.correccion_subtotal_valor)
+
+    @rx.var
+    def correccion_total_texto(self) -> str:
+        try:
+            desc = max(float((self.correccion_descuento or "0").replace(",", ".")), 0.0)
+        except ValueError:
+            desc = 0.0
+        try:
+            prop = max(float((self.correccion_propina or "0").replace(",", ".")), 0.0)
+        except ValueError:
+            prop = 0.0
+        if (self.correccion_metodo or "efectivo") == "fiado":
+            prop = 0.0
+        total = max(self.correccion_subtotal_valor - desc + prop, 0.0)
+        return _money_text(round(total, 2))
+
+    def set_correccion_motivo(self, v: str) -> None:
+        self.correccion_motivo = v
+
+    def set_correccion_metodo(self, v: str) -> None:
+        self.correccion_metodo = v
+
+    def set_correccion_descuento(self, v: str) -> None:
+        self.correccion_descuento = v
+
+    def set_correccion_propina(self, v: str) -> None:
+        self.correccion_propina = v
+
+    def set_correccion_modal_visible(self, v: bool) -> None:
+        if not v:
+            self.cancelar_correccion()
+        else:
+            self.correccion_modal_visible = True
+
+    def cancelar_correccion(self) -> None:
+        self.correccion_modal_visible = False
+        self.correccion_pedido_id = 0
+        self.correccion_referencia = ""
+        self.correccion_lineas = []
+        self.correccion_productos = []
+        self.correccion_metodo = "efectivo"
+        self.correccion_descuento = ""
+        self.correccion_propina = ""
+        self.correccion_producto_sel = ""
+        self.correccion_motivo = ""
+        self.correccion_error = ""
+
+    def _correccion_recalcular(self, lineas: list[CorreccionLineaView]) -> list[CorreccionLineaView]:
+        return [
+            CorreccionLineaView(
+                detalle_id=l.detalle_id,
+                producto_id=l.producto_id,
+                nombre=l.nombre,
+                cantidad=l.cantidad,
+                precio_unitario=l.precio_unitario,
+                subtotal_texto=_money_text(round(l.precio_unitario * l.cantidad, 2)),
+            )
+            for l in lineas
+        ]
+
+    def correccion_inc_linea(self, idx: int) -> None:
+        lineas = list(self.correccion_lineas)
+        if 0 <= idx < len(lineas):
+            lineas[idx].cantidad += 1
+            self.correccion_lineas = self._correccion_recalcular(lineas)
+
+    def correccion_dec_linea(self, idx: int) -> None:
+        lineas = list(self.correccion_lineas)
+        if 0 <= idx < len(lineas):
+            if lineas[idx].cantidad > 1:
+                lineas[idx].cantidad -= 1
+            else:
+                lineas.pop(idx)
+            self.correccion_lineas = self._correccion_recalcular(lineas)
+
+    def correccion_quitar_linea(self, idx: int) -> None:
+        lineas = list(self.correccion_lineas)
+        if 0 <= idx < len(lineas):
+            lineas.pop(idx)
+            self.correccion_lineas = self._correccion_recalcular(lineas)
+
+    def correccion_agregar_producto(self, prod_id_str: str) -> None:
+        try:
+            pid = int(prod_id_str)
+        except (ValueError, TypeError):
+            return
+        if pid <= 0:
+            return
+        opt = next((o for o in self.correccion_productos if o.id == pid), None)
+        if opt is None:
+            self.correccion_producto_sel = ""
+            return
+        lineas = list(self.correccion_lineas)
+        for l in lineas:
+            if l.producto_id == pid:
+                l.cantidad += 1
+                self.correccion_lineas = self._correccion_recalcular(lineas)
+                self.correccion_producto_sel = ""
+                return
+        lineas.append(CorreccionLineaView(
+            detalle_id=0, producto_id=pid, nombre=opt.nombre,
+            cantidad=1, precio_unitario=opt.precio,
+            subtotal_texto=_money_text(opt.precio),
+        ))
+        self.correccion_lineas = self._correccion_recalcular(lineas)
+        self.correccion_producto_sel = ""
+
+    def abrir_correccion_cobro(self, pedido_id: int) -> None:
+        if self.usuario_actual is None:
+            return
+        if not self.tiene_perm_corregir:
+            return rx.toast.error("No tienes permiso para corregir cobros.")
+        with self._tenant_session() as session:
+            pedido = session.get(Pedido, pedido_id)
+            if pedido is None or pedido.company_id != self._company_id():
+                return rx.toast.error("El pedido no existe.")
+            if pedido.estado != EstadoPedido.COBRADO.value:
+                return rx.toast.error("Solo se pueden corregir cobros ya confirmados.")
+            turno = get_turno_abierto(session, self._company_id(), self._sucursal_id())
+            if turno is None or pedido.turno_caja_id != turno.id:
+                return rx.toast.error("Solo se pueden corregir cobros del turno actual.")
+            detalles = session.exec(
+                select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)
+            ).all()
+            productos = {
+                p.id: p
+                for p in session.exec(
+                    select(Producto).where(Producto.company_id == self._company_id())
+                ).all()
+            }
+            lineas = [
+                CorreccionLineaView(
+                    detalle_id=d.id or 0,
+                    producto_id=d.producto_id,
+                    nombre=(productos[d.producto_id].nombre
+                            if d.producto_id in productos else f"Producto {d.producto_id}"),
+                    cantidad=d.cantidad,
+                    precio_unitario=float(_to_decimal(d.precio_unitario)),
+                    subtotal_texto=_money_text(_to_decimal(d.subtotal)),
+                )
+                for d in detalles
+            ]
+            if pedido.tipo_pedido == TipoPedido.MOSTRADOR.value:
+                ref = f"Para llevar — {_actor_name(pedido.nombre_cliente) or 'Sin nombre'}"
+            elif pedido.mesa_id:
+                mesa = session.get(Mesa, pedido.mesa_id)
+                ref = (f"{mesa.nombre or f'Mesa {mesa.numero}'} — pedido #{pedido.id}"
+                       if mesa else f"Pedido #{pedido.id}")
+            else:
+                ref = f"Pedido #{pedido.id}"
+            opciones = [
+                ProductoOption(
+                    id=p.id or 0, nombre=p.nombre,
+                    precio=float(_to_decimal(p.precio)),
+                    label=f"{p.nombre} — {_money_text(_to_decimal(p.precio))}",
+                )
+                for p in sorted(productos.values(), key=lambda x: (x.nombre or "").lower())
+            ]
+            metodo_ini = pedido.metodo_pago or "efectivo"
+            if metodo_ini == "mixto":
+                metodo_ini = "efectivo"
+            desc_ini = "" if _to_decimal(pedido.descuento) == 0 else f"{_to_decimal(pedido.descuento):.2f}"
+            prop_ini = "" if _to_decimal(pedido.propina) == 0 else f"{_to_decimal(pedido.propina):.2f}"
+        self.correccion_pedido_id = pedido_id
+        self.correccion_referencia = ref
+        self.correccion_lineas = lineas
+        self.correccion_productos = opciones
+        self.correccion_metodo = metodo_ini
+        self.correccion_descuento = desc_ini
+        self.correccion_propina = prop_ini
+        self.correccion_producto_sel = ""
+        self.correccion_motivo = ""
+        self.correccion_error = ""
+        self.correccion_modal_visible = True
+
+    def confirmar_correccion_cobro(self):
+        if self.correccion_guardando:
+            return
+        self.correccion_guardando = True
+        try:
+            return self._confirmar_correccion_impl()
+        finally:
+            self.correccion_guardando = False
+
+    def _confirmar_correccion_impl(self):
+        self.correccion_error = ""
+        if self.usuario_actual is None:
+            return
+        if not self.tiene_perm_corregir:
+            self.correccion_error = "No tienes permiso para corregir cobros."
+            return
+        motivo = (self.correccion_motivo or "").strip()
+        if len(motivo) < 3:
+            self.correccion_error = "Indica el motivo de la corrección (mínimo 3 caracteres)."
+            return
+        pedido_id = self.correccion_pedido_id
+        if pedido_id == 0:
+            return
+        if not self.correccion_lineas:
+            self.correccion_error = "La venta corregida debe tener al menos un producto."
+            return
+        try:
+            descuento = Decimal(str(round(max(
+                float((self.correccion_descuento or "0").replace(",", ".").strip() or "0"), 0.0), 2)))
+        except (ValueError, InvalidOperation):
+            descuento = Decimal("0.00")
+        try:
+            propina = Decimal(str(round(max(
+                float((self.correccion_propina or "0").replace(",", ".").strip() or "0"), 0.0), 2)))
+        except (ValueError, InvalidOperation):
+            propina = Decimal("0.00")
+        metodo = self.correccion_metodo or "efectivo"
+        if metodo == "fiado":
+            propina = Decimal("0.00")
+        lineas = [
+            LineaCorreccion(
+                producto_id=l.producto_id,
+                cantidad=int(l.cantidad),
+                precio_unitario=Decimal(str(l.precio_unitario)),
+                detalle_id=(l.detalle_id or None),
+            )
+            for l in self.correccion_lineas if int(l.cantidad) > 0
+        ]
+        try:
+            with self._tenant_session() as session:
+                pedido = session.get(Pedido, pedido_id)
+                if pedido is None or pedido.company_id != self._company_id():
+                    self.correccion_error = "El pedido ya no existe."
+                    return
+                if pedido.estado != EstadoPedido.COBRADO.value:
+                    self.correccion_error = "Solo se pueden corregir cobros ya confirmados."
+                    return
+                turno = get_turno_abierto(session, self._company_id(), self._sucursal_id())
+                if turno is None or pedido.turno_caja_id != turno.id:
+                    self.correccion_error = "Solo se pueden corregir cobros del turno actual."
+                    return
+                # Se preserva el recargo (delivery/envase/servicio) del cobro
+                # original; esta corrección no lo edita, así no se pierde.
+                recargo = _to_decimal(pedido.recargo)
+                recargo_concepto = pedido.recargo_concepto
+                subtotal = sum(
+                    (Decimal(str(l.precio_unitario)) * int(l.cantidad)
+                     for l in self.correccion_lineas if int(l.cantidad) > 0),
+                    Decimal("0.00"),
+                )
+                total_final = max(subtotal - descuento + propina + recargo, Decimal("0.00"))
+                pagos = [(metodo, total_final)] if total_final > 0 else []
+                validos, efectivos = _validos_y_efectivos_pago(session, self._company_id())
+                corregir_venta(
+                    session, pedido, turno.id,
+                    (self.usuario_actual.id or None) if self.usuario_actual else None,
+                    (self.usuario_actual.nombre if self.usuario_actual else ""),
+                    lineas=lineas,
+                    pagos=pagos,
+                    descuento=descuento,
+                    propina=propina,
+                    recargo=recargo,
+                    recargo_concepto=recargo_concepto,
+                    cliente_id=pedido.cliente_id,
+                    motivo=motivo,
+                    metodos_validos=validos,
+                    metodos_efectivo=efectivos,
+                )
+                session.commit()
+        except ValueError as exc:
+            self.correccion_error = str(exc)
+            return
+        self.cancelar_correccion()
+        self.cargar_menu()
+        self.cargar_mesas()
+        self.cargar_cocina()
+        self.cargar_ultimos_cobros()
+        return [
+            rx.toast.success(
+                f"Cobro #{pedido_id} corregido. Queda registrado en auditoría.",
+                position="top-center",
+            ),
+            ReportesState.cargar_historial_ventas,
+            ReportesState.cargar_dashboard,
+        ]
 
     def confirmar_cobro(self):
         """Candado anti-doble-cobro con liberación garantizada.

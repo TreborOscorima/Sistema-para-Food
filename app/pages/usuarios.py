@@ -317,11 +317,20 @@ def _permisos_section() -> rx.Component:
             ),
             rx.cond(
                 UsuariosAdminState.usuario_form_rol == "Caja",
-                _perm_toggle(
-                    "Anular pedidos",
-                    "Puede anular pedidos desde Caja",
-                    UsuariosAdminState.usuario_form_perm_anular,
-                    UsuariosAdminState.toggle_uf_perm_anular,
+                rx.vstack(
+                    _perm_toggle(
+                        "Anular pedidos",
+                        "Puede anular pedidos y cobros desde Caja",
+                        UsuariosAdminState.usuario_form_perm_anular,
+                        UsuariosAdminState.toggle_uf_perm_anular,
+                    ),
+                    _perm_toggle(
+                        "Corregir cobro",
+                        "Puede corregir cobros ya confirmados (ítems, método, descuento) sin anularlos",
+                        UsuariosAdminState.usuario_form_perm_corregir,
+                        UsuariosAdminState.toggle_uf_perm_corregir,
+                    ),
+                    spacing="0", align="start", width="100%",
                 ),
                 rx.fragment(),
             ),
