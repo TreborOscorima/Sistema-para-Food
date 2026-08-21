@@ -361,7 +361,7 @@ def _top_plato_row(plato, index: int) -> rx.Component:
     return rx.hstack(
         rx.box(
             rx.text((index + 1).to_string(), font_size="11px",
-                    font_weight="800", color=_WHITE),
+                    font_weight="800", color=_TEXT),
             width="24px", height="24px", border_radius="6px",
             background=rx.cond(
                 index == 0, _ORANGE,
@@ -1733,7 +1733,7 @@ def _brand_banner_empresa() -> rx.Component:
                 rx.text(
                     AdminLocalState.login_empresa_nombre[:1].upper(),
                     font_size=rx.breakpoints(initial="38px", md="52px"),
-                    font_weight="800", color=_WHITE, line_height="1",
+                    font_weight="800", color=_TEXT, line_height="1",
                 ),
                 width="100%", height="100%",
                 display="flex", align_items="center", justify_content="center",
@@ -1772,7 +1772,7 @@ def dono_login_page() -> rx.Component:
                 _brand_banner(),
                 rx.vstack(
                     rx.text("Panel Administrativo", font_size="22px",
-                            font_weight="800", color=_WHITE,
+                            font_weight="800", color=_TEXT,
                             text_align="center"),
                     rx.text("Ingresa con tu email y contraseña",
                             font_size="13px", color=_SLATE_500,
@@ -1887,7 +1887,7 @@ def dono_login_page() -> rx.Component:
                     reset_on_submit=False,
                     width="100%",
                     ),
-                    background=_SLATE_800,
+                    background=_SURFACE,
                     border=f"1px solid {_SLATE_700}",
                     border_radius="20px",
                     padding="32px 28px",
