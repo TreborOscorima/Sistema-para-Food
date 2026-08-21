@@ -6,10 +6,13 @@ import reflex as rx
 
 from app.components.shared import (
     ACCENT, ACCENT_HOVER,
+    BORDER_STRONG,
     DANGER_TEXT,
     DARK_600, DARK_700, DARK_800,
     PAGE_BACKGROUND,
-    TEXT_MUTED, TEXT_WHITE,
+    SURFACE_BASE,
+    SURFACE_HOVER,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     _connection_banner_es,
 )
 from app.states.food_state import CompanyOptionView, FoodState, SucursalView
@@ -28,7 +31,7 @@ def _rol_card(emoji: str, label: str, rol_value: str) -> rx.Component:
                 label,
                 font_size="13px",
                 font_weight="600",
-                color=rx.cond(activo, TEXT_WHITE, TEXT_MUTED),
+                color=rx.cond(activo, TEXT_PRIMARY, TEXT_MUTED),
                 line_height="1",
             ),
             spacing="1",
@@ -54,10 +57,10 @@ def _pin_dot(filled: bool) -> rx.Component:
         width="14px",
         height="14px",
         border_radius="50%",
-        background=rx.cond(filled, TEXT_WHITE, "transparent"),
-        border=rx.cond(filled, f"2px solid {TEXT_WHITE}", f"2px solid {DARK_600}"),
+        background=rx.cond(filled, ACCENT, "transparent"),
+        border=rx.cond(filled, f"2px solid {ACCENT}", f"2px solid {BORDER_STRONG}"),
         transition="all 0.12s ease",
-        box_shadow=rx.cond(filled, "0 0 6px rgba(255,255,255,0.4)", "none"),
+        box_shadow=rx.cond(filled, "0 0 6px rgba(234,88,12,0.45)", "none"),
     )
 
 
@@ -80,14 +83,14 @@ def _pin_display() -> rx.Component:
 
 def _key_iphone(num: str, on_click) -> rx.Component:
     return rx.button(
-        rx.text(num, font_size="28px", font_weight="300", color=TEXT_WHITE,
+        rx.text(num, font_size="28px", font_weight="300", color=TEXT_PRIMARY,
                 line_height="1"),
         on_click=on_click,
         aria_label=f"Dígito {num}",
         width="64px",
         height="64px",
         border_radius="50%",
-        background="rgba(255,255,255,0.13)",
+        background=SURFACE_HOVER,
         border="none",
         padding="0",
         min_width="0",
@@ -96,8 +99,8 @@ def _key_iphone(num: str, on_click) -> rx.Component:
         justify_content="center",
         cursor="pointer",
         transition="background 0.1s ease, transform 0.1s ease",
-        _hover={"background": "rgba(255,255,255,0.22)"},
-        _active={"transform": "scale(0.88)", "background": "rgba(255,255,255,0.32)"},
+        _hover={"background": BORDER_STRONG},
+        _active={"transform": "scale(0.88)", "background": ACCENT},
     )
 
 
@@ -118,7 +121,7 @@ def _key_iphone_ghost(content: rx.Component, on_click, aria_label: str) -> rx.Co
         justify_content="center",
         cursor="pointer",
         transition="background 0.1s ease, transform 0.1s ease",
-        _hover={"background": "rgba(255,255,255,0.1)"},
+        _hover={"background": SURFACE_HOVER},
         _active={"transform": "scale(0.88)"},
     )
 
@@ -170,12 +173,12 @@ def _restaurant_card(empresa: CompanyOptionView) -> rx.Component:
                     rx.text(empresa.name[:1].upper(), font_size="22px",
                             font_weight="800", color=TEXT_WHITE, line_height="1"),
                     width="56px", height="56px", border_radius="12px",
-                    background=DARK_700,
+                    background=ACCENT,
                     display="flex", align_items="center", justify_content="center",
                 ),
             ),
             rx.text(empresa.name, font_size="13px", font_weight="600",
-                    color=TEXT_WHITE, text_align="center", no_of_lines=2),
+                    color=TEXT_PRIMARY, text_align="center", no_of_lines=2),
             spacing="2", align="center",
         ),
         on_click=FoodState.seleccionar_restaurante(empresa.id),
@@ -231,7 +234,7 @@ def _restaurant_selector_card() -> rx.Component:
                 text_align="center",
             ),
         ),
-        background=DARK_800,
+        background=SURFACE_BASE,
         border_radius="20px",
         border=f"1px solid {DARK_700}",
         padding="32px",
@@ -356,7 +359,7 @@ def _login_card() -> rx.Component:
             transition="all 0.15s",
         ),
         # Interior del card
-        background=DARK_800,
+        background=SURFACE_BASE,
         border_radius="20px",
         border=f"1px solid {DARK_700}",
         padding="32px",
@@ -372,7 +375,7 @@ def _sucursal_card(suc: SucursalView) -> rx.Component:
         rx.vstack(
             rx.icon(tag="map_pin", size=24, color=ACCENT),
             rx.text(suc.nombre, font_size="14px", font_weight="600",
-                    color=TEXT_WHITE, text_align="center", no_of_lines=2),
+                    color=TEXT_PRIMARY, text_align="center", no_of_lines=2),
             rx.cond(
                 suc.direccion != "",
                 rx.text(suc.direccion, font_size="11px", color=TEXT_MUTED,
@@ -434,7 +437,7 @@ def _sucursal_selector_card() -> rx.Component:
                 text_align="center",
             ),
         ),
-        background=DARK_800,
+        background=SURFACE_BASE,
         border_radius="20px",
         border=f"1px solid {DARK_700}",
         padding="32px",
@@ -504,7 +507,7 @@ def _brand_logo_box_pin() -> rx.Component:
                 ),
                 width="100%", height="100%",
                 display="flex", align_items="center", justify_content="center",
-                background=DARK_700,
+                background=ACCENT,
                 border_radius="20px",
             ),
         ),
@@ -588,5 +591,4 @@ def login_page() -> rx.Component:
         ),
         background=PAGE_BACKGROUND,
         min_height="100vh",
-        class_name="dark",
     )

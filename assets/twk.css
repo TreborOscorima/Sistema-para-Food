@@ -54,6 +54,135 @@
   --twk-sb-hover: rgba(255,255,255,0.08);
 }
 
+/* ── Tema conmutable — paleta OSCURA (default) ──────────────────────────────
+   Estos tokens los consume app/components/theme.py vía var(--twk-…). El modo
+   se cambia con el interruptor: Reflex agrega la clase `light`/`dark` al <html>
+   y html.light (más abajo) sobrescribe estos valores. La paleta oscura vive en
+   :root para que sea el default aunque el JS de color-mode aún no haya corrido
+   (evita parpadeo). */
+:root {
+  /* superficies */
+  --twk-page-bg: #0F172A;
+  --twk-surface-base: #1E293B;
+  --twk-surface-elevated: #1E293B;
+  --twk-surface-soft: #0F172A;
+  --twk-surface-muted: #1E293B;
+  --twk-surface-ghost: #0F172A;
+  --twk-surface-hover: #334155;
+  /* bordes */
+  --twk-border: #334155;
+  --twk-border-strong: #475569;
+  /* texto */
+  --twk-text-primary: #F1F5F9;
+  --twk-text-secondary: #CBD5E1;
+  --twk-text-muted: #94A3B8;
+  /* escala de superficies que se invierte (fondo/borde, nunca texto) */
+  --twk-d900: #0F172A;
+  --twk-d800: #1E293B;
+  --twk-d700: #334155;
+  --twk-d600: #475569;
+  /* escala slate que se invierte */
+  --twk-slate-50: #F8FAFC;
+  --twk-slate-100: #F1F5F9;
+  --twk-slate-200: #E2E8F0;
+  --twk-slate-300: #CBD5E1;
+  --twk-slate-400: #94A3B8;
+  --twk-slate-500: #94A3B8;
+  /* texto semántico (ajustado por contraste) */
+  --twk-accent-text: #FB923C;
+  --twk-success-text: #4ADE80;
+  --twk-danger-text: #F87171;
+  --twk-warning-text: #FBBF24;
+  --twk-info-text: #60A5FA;
+  --twk-purple-text: #A78BFA;
+  /* sólidos (relleno/botón/ícono); en claro se oscurecen para leerse como texto */
+  --twk-success-solid: #22C55E;
+  --twk-warning-solid: #F59E0B;
+  --twk-info-solid: #3B82F6;
+  /* sombras */
+  --twk-glow: 0 1px 3px rgba(0,0,0,0.3),0 1px 2px rgba(0,0,0,0.2);
+  --twk-soft-glow: 0 1px 2px rgba(0,0,0,0.2);
+  /* modales */
+  --twk-modal-bg: #0F172A;
+  --twk-modal-border: #1E293B;
+  --twk-modal-input-bg: #1E293B;
+  --twk-modal-input-bd: #334155;
+  --twk-modal-btn-bg: #1E293B;
+  --twk-modal-btn-bd: #334155;
+  /* sidebar (extendido) */
+  --twk-sb: #0F172A;
+  --twk-sb-bd: #1E293B;
+  --twk-sb-tx: rgba(255,255,255,0.58);
+  --twk-sb-tx-strong: rgba(255,255,255,0.92);
+  --twk-sb-tx-dim: rgba(255,255,255,0.55);
+  --twk-sb-tx-faint: rgba(255,255,255,0.30);
+  --twk-sb-tx-act: #FFFFFF;
+  --twk-sb-hover: rgba(255,255,255,0.08);
+  --twk-sb-divider: rgba(255,255,255,0.07);
+  --twk-sb-soft: rgba(255,255,255,0.04);
+  --twk-sb-icon-bg: rgba(255,255,255,0.06);
+}
+
+/* ── Tema conmutable — paleta CLARA ─────────────────────────────────────────
+   Solo redefine tokens; la estructura vive en :root. Regla clave para "que nada
+   quede invisible": texto oscuro sobre superficies claras, y la escala d900..d600
+   / slate se INVIERTE (lo que era fondo oscuro pasa a fondo claro). */
+html.light {
+  --twk-page-bg: #F1F5F9;
+  --twk-surface-base: #FFFFFF;
+  --twk-surface-elevated: #FFFFFF;
+  --twk-surface-soft: #F8FAFC;
+  --twk-surface-muted: #F1F5F9;
+  --twk-surface-ghost: #F8FAFC;
+  --twk-surface-hover: #E2E8F0;
+  --twk-border: #E2E8F0;
+  --twk-border-strong: #CBD5E1;
+  --twk-text-primary: #0F172A;
+  --twk-text-secondary: #334155;
+  --twk-text-muted: #64748B;
+  --twk-d900: #FFFFFF;
+  --twk-d800: #F1F5F9;
+  --twk-d700: #E2E8F0;
+  --twk-d600: #CBD5E1;
+  --twk-slate-50: #0F172A;
+  --twk-slate-100: #1E293B;
+  --twk-slate-200: #334155;
+  --twk-slate-300: #475569;
+  --twk-slate-400: #64748B;
+  --twk-slate-500: #64748B;
+  --twk-accent-text: #C2410C;
+  --twk-success-text: #15803D;
+  --twk-danger-text: #B91C1C;
+  --twk-warning-text: #B45309;
+  --twk-info-text: #1D4ED8;
+  --twk-purple-text: #6D28D9;
+  --twk-success-solid: #16A34A;
+  --twk-warning-solid: #D97706;
+  --twk-info-solid: #2563EB;
+  --twk-glow: 0 1px 3px rgba(15,23,42,0.08),0 1px 2px rgba(15,23,42,0.04);
+  --twk-soft-glow: 0 1px 2px rgba(15,23,42,0.06);
+  --twk-modal-bg: #FFFFFF;
+  --twk-modal-border: #E2E8F0;
+  --twk-modal-input-bg: #FFFFFF;
+  --twk-modal-input-bd: #CBD5E1;
+  --twk-modal-btn-bg: #F1F5F9;
+  --twk-modal-btn-bd: #E2E8F0;
+  --twk-sb: #FFFFFF;
+  --twk-sb-bd: #E2E8F0;
+  --twk-sb-tx: #475569;
+  --twk-sb-tx-strong: #0F172A;
+  --twk-sb-tx-dim: #64748B;
+  --twk-sb-tx-faint: #6E7B8F;
+  --twk-sb-tx-act: #FFFFFF;
+  --twk-sb-hover: rgba(15,23,42,0.05);
+  --twk-sb-divider: #E2E8F0;
+  --twk-sb-soft: #F8FAFC;
+  --twk-sb-icon-bg: rgba(15,23,42,0.05);
+}
+
+/* Pinta el fondo raíz según el modo (evita flash blanco en oscuro). */
+html { background: var(--twk-page-bg); }
+
 /* ── Tipografia global ──────────────────────────────────────────────────── */
 html, body, *, *::before, *::after { font-family: var(--twk-font) !important; }
 html { scroll-behavior: smooth; }
@@ -77,8 +206,8 @@ input::placeholder, textarea::placeholder {
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+::-webkit-scrollbar-thumb { background: var(--twk-border-strong); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--twk-text-muted); }
 
 [data-radix-select-viewport] { font-size: 14px !important; }
 
@@ -386,7 +515,7 @@ input::placeholder, textarea::placeholder {
   width: 100%;
   color: var(--twk-sb-tx);
 }
-.twk-nav-item:hover { background: var(--twk-sb-hover); color: #fff; }
+.twk-nav-item:hover { background: var(--twk-sb-hover); color: var(--twk-sb-tx-strong); }
 .twk-nav-item-active {
   background: var(--twk-orange) !important;
   color: #fff !important;
@@ -400,24 +529,24 @@ input::placeholder, textarea::placeholder {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(255,255,255,0.06);
+  background: var(--twk-sb-icon-bg);
   transition: all .15s;
 }
 .twk-nav-item-active .twk-nav-icon-box { background: rgba(255,255,255,0.22); }
-.twk-nav-item:hover .twk-nav-icon-box { background: rgba(255,255,255,0.12); }
+.twk-nav-item:hover .twk-nav-icon-box { background: var(--twk-sb-hover); }
 
 /* ── Login dark card ─────────────────────────────────────────────────────── */
 .twk-login-card {
-  background: #1E293B;
-  border: 1px solid #334155;
+  background: var(--twk-surface-base);
+  border: 1px solid var(--twk-border);
   border-radius: 20px;
   padding: 32px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  box-shadow: var(--twk-sh-lg);
 }
 .twk-login-input {
-  border: 2px solid #334155 !important;
-  background: #0F172A !important;
-  color: #FFFFFF !important;
+  border: 2px solid var(--twk-modal-input-bd) !important;
+  background: var(--twk-modal-input-bg) !important;
+  color: var(--twk-text-primary) !important;
   border-radius: 10px !important;
   padding: 12px 14px !important;
   height: auto !important;
@@ -427,7 +556,7 @@ input::placeholder, textarea::placeholder {
   border-color: #EA580C !important;
   box-shadow: 0 0 0 3px rgba(234,88,12,0.15) !important;
 }
-.twk-login-input::placeholder { color: #475569 !important; }
+.twk-login-input::placeholder { color: var(--twk-text-muted) !important; }
 
 /* ── Admin sidebar — overlay en mobile, sticky colapsable en desktop ────── */
 .twk-admin-sb {
@@ -440,8 +569,8 @@ input::placeholder, textarea::placeholder {
   transition: left 0.25s ease;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #0F172A;
-  border-right: 1px solid #1E293B;
+  background: var(--twk-sb);
+  border-right: 1px solid var(--twk-sb-bd);
 }
 .twk-admin-sb.open { left: 0; box-shadow: 4px 0 20px rgba(0,0,0,0.12); }
 .twk-admin-bd {
@@ -491,7 +620,7 @@ input::placeholder, textarea::placeholder {
 }
 .twk-pos-foot {
   flex-shrink: 0;
-  border-top: 1px solid #334155;
+  border-top: 1px solid var(--twk-border);
   padding-top: 10px;
   margin-top: 4px;
 }

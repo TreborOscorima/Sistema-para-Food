@@ -7,12 +7,14 @@ import reflex as rx
 from app.components.shared import (
     app_shell, cumpleanos_banner, loading_placeholder,
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
-    DANGER_SOLID, DANGER_TEXT,
+    DANGER_BG, DANGER_SOLID, DANGER_TEXT,
     DARK_600, DARK_700, DARK_800,
-    PAGE_BACKGROUND,
+    INFO_BG, INFO_TEXT,
+    PAGE_BACKGROUND, SURFACE_BASE,
     PURPLE_LIGHT,
     SUCCESS_SOLID, SUCCESS_TEXT,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
+    WARNING_BG, WARNING_TEXT,
     WARNING_SOLID,
 )
 from app.components.ayuda import ayuda_modal, ayuda_trigger
@@ -62,12 +64,16 @@ def _producto_card(producto: ProductoView) -> rx.Component:
                         producto.stock_diario >= 0,
                         rx.badge(
                             "Stock: " + producto.stock_diario.to_string(),
-                            variant="surface",
                             size="1",
-                            color_scheme=rx.cond(
+                            color=rx.cond(
                                 producto.stock_diario > producto.stock_diario_alerta,
-                                "blue",
-                                rx.cond(producto.stock_diario > 0, "orange", "red"),
+                                INFO_TEXT,
+                                rx.cond(producto.stock_diario > 0, WARNING_TEXT, DANGER_TEXT),
+                            ),
+                            background=rx.cond(
+                                producto.stock_diario > producto.stock_diario_alerta,
+                                INFO_BG,
+                                rx.cond(producto.stock_diario > 0, WARNING_BG, DANGER_BG),
                             ),
                         ),
                     ),
@@ -112,7 +118,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                 ),
                 rx.cond(
                     item.es_combo,
-                    rx.badge("🍱 Combo", background=WARNING_SOLID, color="#FDE68A",
+                    rx.badge("🍱 Combo", background=WARNING_SOLID, color="#78350F",
                              border_radius="4px", font_size="9px", padding="1px 5px"),
                     rx.fragment(),
                 ),
@@ -146,7 +152,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     "+",
                     on_click=FoodState.agregar_producto_mostrador(item.producto_id),
                     width="40px", height="40px",
-                    background="rgba(34,197,94,0.08)", color=SUCCESS_SOLID,
+                    background="rgba(34,197,94,0.08)", color=SUCCESS_TEXT,
                     border="1px solid #BBF7D0", border_radius="8px",
                     font_size="18px", cursor="pointer", padding="0",
                     _hover={"opacity": "0.8"},
@@ -180,7 +186,7 @@ def _carrito_item(item: CarritoItem) -> rx.Component:
                     width=rx.breakpoints(initial="40px", md="30px"),
                     height=rx.breakpoints(initial="40px", md="30px"),
                     flex_shrink="0",
-                    background=DARK_800, color=SUCCESS_SOLID,
+                    background=DARK_800, color=SUCCESS_TEXT,
                     border=f"1px solid {DARK_700}", border_radius="6px",
                     cursor="pointer", padding="0",
                     _hover={"opacity": "0.8"},
@@ -218,15 +224,15 @@ def _pendiente_card(pedido: MostradorPendienteView) -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
-                rx.text(pedido.cliente_nombre, font_size="13px", font_weight="700", color=TEXT_WHITE),
+                rx.text(pedido.cliente_nombre, font_size="13px", font_weight="700", color=TEXT_PRIMARY),
                 rx.spacer(),
                 rx.cond(
                     pedido.en_cocina,
-                    rx.badge("En cocina", background=PAGE_BACKGROUND, color="#FCD34D",
-                             border="1px solid #FCD34D", border_radius="20px",
+                    rx.badge("En cocina", background=PAGE_BACKGROUND, color="var(--twk-warning-text)",
+                             border="1px solid var(--twk-warning-text)", border_radius="20px",
                              font_size="10px", font_weight="700", padding_x="8px"),
-                    rx.badge("Listo", background="#052E16", color="#4ADE80",
-                             border="1px solid #4ADE80", border_radius="20px",
+                    rx.badge("Listo", background=PAGE_BACKGROUND, color="var(--twk-success-text)",
+                             border="1px solid var(--twk-success-text)", border_radius="20px",
                              font_size="10px", font_weight="700", padding_x="8px"),
                 ),
                 width="100%", align="center",
@@ -243,7 +249,7 @@ def _pendiente_card(pedido: MostradorPendienteView) -> rx.Component:
             ),
             spacing="1", width="100%",
         ),
-        background=PAGE_BACKGROUND,
+        background=SURFACE_BASE,
         border=f"1px solid {DARK_700}",
         border_radius="10px",
         padding="12px",
@@ -262,13 +268,13 @@ def _entregado_card(pedido: MostradorEntregadoView) -> rx.Component:
             ),
             rx.spacer(),
             rx.vstack(
-                rx.text(pedido.total_texto, font_size="13px", font_weight="700", color="#4ADE80"),
+                rx.text(pedido.total_texto, font_size="13px", font_weight="700", color="var(--twk-success-text)"),
                 rx.text(pedido.hora_texto, font_size="11px", color=TEXT_MUTED),
                 align="end", spacing="0",
             ),
             width="100%", align="center",
         ),
-        background=DARK_800,
+        background=SURFACE_BASE,
         border=f"1px solid {DARK_700}",
         border_radius="8px",
         padding="10px 14px",
@@ -293,7 +299,7 @@ def _carrito_panel_inner(items_max_height: str) -> rx.Component:
                     rx.fragment(),
                 ),
                 rx.text(FoodState.total_mostrador_neto_texto, font_size="15px",
-                        font_weight="800", color=TEXT_WHITE),
+                        font_weight="800", color=TEXT_PRIMARY),
                 spacing="2", align="center",
             ),
             width="100%", align="center",
@@ -326,7 +332,7 @@ def _carrito_panel_inner(items_max_height: str) -> rx.Component:
                 background="transparent", color=TEXT_MUTED,
                 border=f"1px solid {DARK_700}", border_radius="8px",
                 font_size="12px", cursor="pointer", padding_x="14px", height="42px",
-                _hover={"border_color": DANGER_SOLID, "color": "#FCA5A5"},
+                _hover={"border_color": DANGER_SOLID, "color": "var(--twk-danger-text)"},
             ),
             rx.button(
                 rx.hstack(rx.icon(tag="send", size=15), rx.text("Enviar pedido"),
@@ -347,8 +353,8 @@ def _carrito_panel_inner(items_max_height: str) -> rx.Component:
 def _pendientes_panel() -> rx.Component:
     return rx.vstack(
         rx.hstack(
-            rx.icon(tag="clock", size=13, color="#FCD34D"),
-            rx.text("Pendientes de cobro", font_size="13px", font_weight="700", color="#FCD34D"),
+            rx.icon(tag="clock", size=13, color="var(--twk-warning-text)"),
+            rx.text("Pendientes de cobro", font_size="13px", font_weight="700", color="var(--twk-warning-text)"),
             spacing="2", align="center",
         ),
         rx.cond(
@@ -479,7 +485,7 @@ def _mostrador_content() -> rx.Component:
         # Header
         rx.hstack(
             rx.vstack(
-                rx.text("Mostrador", font_size="22px", font_weight="800", color=TEXT_WHITE),
+                rx.text("Mostrador", font_size="22px", font_weight="800", color=TEXT_PRIMARY),
                 rx.text("Pedidos para llevar", font_size="13px", color=TEXT_MUTED),
                 spacing="0",
             ),
@@ -614,7 +620,7 @@ def _mostrador_content() -> rx.Component:
                             rx.text("Combos", font_size="12px", font_weight="700", color="#FDE68A"),
                             rx.badge(
                                 FoodState.combos_menu.length().to_string(),
-                                background=WARNING_SOLID, color="#FDE68A",
+                                background=WARNING_SOLID, color="#78350F",
                                 border_radius="8px", font_size="10px", padding_x="6px",
                             ),
                             spacing="2", align="center",
@@ -639,7 +645,7 @@ def _mostrador_content() -> rx.Component:
             rx.vstack(
                 rx.box(
                     _carrito_panel_inner("22vh"),
-                    width="100%", background=DARK_800,
+                    width="100%", background=SURFACE_BASE,
                     border=f"1px solid {DARK_700}", border_radius="10px", padding="12px",
                 ),
                 rx.divider(border_color=TEXT_MUTED),
@@ -699,7 +705,7 @@ def _combo_card_m(combo: dict) -> rx.Component:
             ),
             spacing="2", align="center", width="100%",
         ),
-        background=DARK_800, border=f"1px solid {DARK_700}", border_radius="10px",
+        background=SURFACE_BASE, border=f"1px solid {DARK_700}", border_radius="10px",
         padding="8px 10px",
         _hover={"border_color": "#FDE68A"},
         transition="all 0.12s ease",
@@ -718,7 +724,7 @@ def _mod_item_flat_m(item: dict) -> rx.Component:
                 item["min"].to(int) > 0,
                 rx.badge(
                     "Obligatorio",
-                    background="#7F1D1D", color="#FCA5A5",
+                    background="#7F1D1D", color="var(--twk-danger-text)",
                     font_size="9px", border_radius="4px",
                     padding="1px 5px",
                 ),

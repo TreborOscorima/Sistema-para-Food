@@ -8,10 +8,11 @@ from app.states.food_state import CuponLoteView, FoodState, AdminLocalState
 from app.pages.dono import _dono_shell
 from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
+    SUCCESS_TEXT,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_700, DARK_800,
-    PAGE_BACKGROUND,
+    PAGE_BACKGROUND, SURFACE_BASE,
     SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE,
 )
@@ -20,9 +21,9 @@ from app.components.shared import (
 def _tipo_badge(tipo: str) -> rx.Component:
     return rx.cond(
         tipo == "% Porcentaje",
-        rx.badge("%", background="rgba(124,58,237,0.12)", color="#A78BFA",
+        rx.badge("%", background="rgba(124,58,237,0.12)", color="var(--twk-purple-text)",
                  border_radius="5px", font_size="10px", padding="2px 6px"),
-        rx.badge("S/", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+        rx.badge("S/", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                  border_radius="5px", font_size="10px", padding="2px 6px"),
     )
 
@@ -37,11 +38,13 @@ def _cupon_card(c: CuponLoteView) -> rx.Component:
                 ),
                 rx.cond(
                     c.vencido,
-                    rx.text("VENCIDO", font_size="11px", color="#FCA5A5"),
+                    rx.badge("VENCIDO", background="#DC2626", color="#FFFFFF",
+                             border_radius="4px", font_size="9px", font_weight="700",
+                             padding="1px 6px"),
                     rx.fragment(),
                 ),
                 width="100%", align="center",
-                background=rx.cond(c.activo, ACCENT, TEXT_MUTED),
+                background=rx.cond(c.activo, ACCENT, "#475569"),
                 padding="10px 14px",
             ),
             rx.vstack(
@@ -106,7 +109,7 @@ def _cupon_card(c: CuponLoteView) -> rx.Component:
                 spacing="2", align="start", width="100%", padding="14px",
             ),
         ),
-        background=DARK_800,
+        background=SURFACE_BASE,
         border=f"1px solid {DARK_700}",
         border_radius="16px", overflow="hidden",
         opacity=rx.cond(c.activo, "1", "0.65"),
@@ -285,11 +288,11 @@ def _cupones_body() -> rx.Component:
     return rx.vstack(
         rx.box(
             rx.hstack(
-                rx.icon(tag="info", size=14, color="#60A5FA"),
+                rx.icon(tag="info", size=14, color="var(--twk-info-text)"),
                 rx.text(
                     "Los cajeros ingresan el código al cobrar en Caja o Mostrador. "
                     "El sistema valida vigencia, usos y aplica el descuento automáticamente.",
-                    font_size="12px", color="#60A5FA",
+                    font_size="12px", color="var(--twk-info-text)",
                 ),
                 spacing="2", align="center",
             ),

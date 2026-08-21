@@ -8,7 +8,7 @@ from app.states.food_state import AdminLocalState, FoodState
 from app.states.dono_state import DeliveryPedidoView, DonoOperacionesState, ReservaView
 from app.states.reportes_state import ReportesState
 from app.services.plan_service import MSG_UPGRADE
-from app.components.shared import _connection_banner_es
+from app.components.shared import _connection_banner_es, color_mode_toggle
 from app.components.modulos import MODULOS as _M
 from app.components.theme import (
     ACCENT as _ORANGE,
@@ -82,7 +82,7 @@ class AdminPanelState(rx.State):
 def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
     return rx.hstack(
         rx.button(
-            rx.icon(tag="panel_left", size=18, color="#CBD5E1"),
+            rx.icon(tag="panel_left", size=18, color="var(--twk-slate-300)"),
             on_click=AdminPanelState.toggle_sidebar,
             background="transparent",
             border="none",
@@ -119,7 +119,7 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
                 ),
                 color=rx.cond(
                     FoodState.empresa_plan == "profesional",
-                    "#60A5FA", rx.cond(
+                    "var(--twk-info-text)", rx.cond(
                         FoodState.empresa_plan == "trial",
                         _AMBER, _SLATE_500,
                     ),
@@ -128,7 +128,7 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
                     FoodState.empresa_plan == "profesional",
                     "1px solid #93C5FD", rx.cond(
                         FoodState.empresa_plan == "trial",
-                        f"1px solid {_AMBER_BD}", "1px solid #CBD5E1",
+                        f"1px solid {_AMBER_BD}", "1px solid var(--twk-slate-300)",
                     ),
                 ),
                 border_radius="6px",
@@ -140,6 +140,7 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
             align="center",
         ),
         rx.spacer(),
+        color_mode_toggle(on_sidebar=False, size=34),
         rx.button(
             rx.hstack(
                 rx.icon(tag="log_out", size=14, color=_SLATE_500),
@@ -179,7 +180,7 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
         rx.hstack(
             rx.box(
                 rx.icon(tag=icon, size=16,
-                        color=rx.cond(active, _ORANGE, "#E2E8F0")),
+                        color=rx.cond(active, _ORANGE, "var(--twk-slate-200)")),
                 width="34px", height="34px",
                 border_radius="9px",
                 background=rx.cond(active, _ORANGE_LT, _SLATE_800),
@@ -194,11 +195,11 @@ def _admin_nav_item(key: str, label: str, icon: str, desc: str) -> rx.Component:
                 rx.vstack(
                     rx.text(label, font_size="13px",
                             font_weight="600",
-                            color=rx.cond(active, _WHITE, _WHITE),
+                            color=rx.cond(active, _ORANGE, "var(--twk-sb-tx-strong)"),
                             line_height="1"),
                     rx.text(desc, font_size="11px",
                             font_weight="500",
-                            color=rx.cond(active, "#E2E8F0", _SLATE_500),
+                            color=rx.cond(active, "var(--twk-slate-200)", _SLATE_500),
                             line_height="1"),
                     spacing="1", align="start",
                 ),
@@ -322,7 +323,7 @@ def _venta_row(venta) -> rx.Component:
     return rx.hstack(
         rx.text("#" + venta.pedido_id.to_string(), font_size="11px",
                 color=_SLATE_500, min_width="32px", flex_shrink="0"),
-        rx.text(venta.mesa_label, font_size="13px", color="#CBD5E1",
+        rx.text(venta.mesa_label, font_size="13px", color="var(--twk-slate-300)",
                 flex="1", text_overflow="ellipsis", overflow="hidden",
                 white_space="nowrap"),
         rx.badge(
@@ -365,7 +366,7 @@ def _top_plato_row(plato, index: int) -> rx.Component:
             background=rx.cond(
                 index == 0, _ORANGE,
                 rx.cond(index == 1, "#F97316",
-                rx.cond(index == 2, "#FB923C", "#CBD5E1"))),
+                rx.cond(index == 2, "#FB923C", "var(--twk-slate-300)"))),
             display="flex", align_items="center", justify_content="center",
             flex_shrink="0",
         ),
@@ -405,13 +406,13 @@ def _alerta_cumpleanos() -> rx.Component:
                 ),
                 rx.vstack(
                     rx.text("Cumpleaños hoy", font_size="12px",
-                            font_weight="700", color="#F87171"),
+                            font_weight="700", color="var(--twk-danger-text)"),
                     rx.foreach(
                         FoodState.clientes_cumpleanos_hoy,
                         lambda c: rx.text(
                             c.nombre + rx.cond(c.telefono != "",
                                                " · " + c.telefono, ""),
-                            font_size="11px", color="#F87171",
+                            font_size="11px", color="var(--twk-danger-text)",
                         ),
                     ),
                     spacing="0", align="start",
@@ -453,7 +454,7 @@ def _alerta_stock() -> rx.Component:
                     rx.text("Stock bajo", font_size="12px",
                             font_weight="700", color=_TEXT),
                     rx.text(FoodState.inv_alertas_bajo_stock_texto,
-                            font_size="11px", color=_WARN_SOLID),
+                            font_size="11px", color=_AMBER),
                     spacing="0", align="start",
                 ),
                 rx.spacer(),
@@ -730,7 +731,7 @@ def _section_resumen() -> rx.Component:
                 rx.vstack(
                     rx.hstack(
                         rx.text("Últimas ventas", font_size="13px",
-                                font_weight="700", color="#CBD5E1"),
+                                font_weight="700", color="var(--twk-slate-300)"),
                         rx.spacer(),
                         rx.link(
                             rx.hstack(
@@ -770,7 +771,7 @@ def _section_resumen() -> rx.Component:
                 rx.box(
                     rx.vstack(
                         rx.text("Accesos operativos", font_size="13px",
-                                font_weight="700", color="#CBD5E1"),
+                                font_weight="700", color="var(--twk-slate-300)"),
                         rx.grid(
                             _quick_link_card(_M["mozos"].label, _M["mozos"].desc,
                                              _M["mozos"].icon, "/mozos", "🧑‍🍳"),
@@ -792,7 +793,7 @@ def _section_resumen() -> rx.Component:
                 rx.box(
                     rx.vstack(
                         rx.text("Top platos hoy", font_size="13px",
-                                font_weight="700", color="#CBD5E1"),
+                                font_weight="700", color="var(--twk-slate-300)"),
                         rx.cond(
                             ReportesState.dashboard_top_platos.length() == 0,
                             rx.center(
@@ -857,7 +858,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                 rx.hstack(
                     rx.icon(tag="clock", size=12, color=_SLATE_500),
                     rx.text(r.hora, font_size="12px", font_weight="600",
-                            color="#CBD5E1"),
+                            color="var(--twk-slate-300)"),
                     spacing="1", align="center",
                 ),
                 rx.hstack(
@@ -937,7 +938,7 @@ def _reserva_row(r: ReservaView) -> rx.Component:
                     rx.button(
                         rx.icon(tag="x", size=13),
                         on_click=DonoOperacionesState.cancelar_reserva(r.id),
-                        background="rgba(239,68,68,0.12)", color="#F87171",
+                        background="rgba(239,68,68,0.12)", color="var(--twk-danger-text)",
                         border="1px solid #FECACA", border_radius="7px",
                         padding="6px", cursor="pointer", height="auto",
                         _hover={"background": "rgba(239,68,68,0.25)"},
@@ -1112,7 +1113,7 @@ def _reserva_form_dialog() -> rx.Component:
                         rx.button(
                             "Cancelar",
                             background=_SLATE_100,
-                            color="#CBD5E1",
+                            color="var(--twk-slate-300)",
                             border=f"1px solid {_SLATE_200}",
                             border_radius="8px",
                             font_size="13px",
@@ -1179,7 +1180,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 rx.hstack(
                     rx.icon(tag="map_pin", size=12, color=_SLATE_500),
                     rx.text(d.delivery_direccion, font_size="12px",
-                            color="#CBD5E1", no_of_lines=1),
+                            color="var(--twk-slate-300)", no_of_lines=1),
                     spacing="1", align="center",
                 ),
                 rx.cond(
@@ -1195,7 +1196,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                 rx.hstack(
                     rx.icon(tag="clock", size=12, color=_SLATE_500),
                     rx.text(d.hora_texto, font_size="12px", font_weight="600",
-                            color="#CBD5E1"),
+                            color="var(--twk-slate-300)"),
                     spacing="1", align="center",
                 ),
                 spacing="3", align="center", flex_wrap="wrap",
@@ -1262,7 +1263,7 @@ def _delivery_row(d: DeliveryPedidoView) -> rx.Component:
                     rx.button(
                         rx.icon(tag="x", size=13),
                         on_click=DonoOperacionesState.delivery_cancelar(d.pedido_id),
-                        background="rgba(239,68,68,0.12)", color="#F87171",
+                        background="rgba(239,68,68,0.12)", color="var(--twk-danger-text)",
                         border="1px solid #FECACA", border_radius="7px",
                         padding="6px", cursor="pointer", height="auto",
                         _hover={"background": "rgba(239,68,68,0.25)"},
@@ -1290,7 +1291,7 @@ def _delivery_form_dialog() -> rx.Component:
                             font_weight="800", color=_TEXT),
             rx.vstack(
                 rx.text("Nombre del cliente *", font_size="12px",
-                        font_weight="600", color="#CBD5E1"),
+                        font_weight="600", color="var(--twk-slate-300)"),
                 rx.input(
                     value=DonoOperacionesState.delivery_form_nombre,
                     on_change=DonoOperacionesState.on_change_delivery_nombre,
@@ -1300,7 +1301,7 @@ def _delivery_form_dialog() -> rx.Component:
                     _focus={"border_color": _ORANGE},
                 ),
                 rx.text("Dirección *", font_size="12px",
-                        font_weight="600", color="#CBD5E1"),
+                        font_weight="600", color="var(--twk-slate-300)"),
                 rx.input(
                     value=DonoOperacionesState.delivery_form_direccion,
                     on_change=DonoOperacionesState.on_change_delivery_direccion,
@@ -1310,7 +1311,7 @@ def _delivery_form_dialog() -> rx.Component:
                     _focus={"border_color": _ORANGE},
                 ),
                 rx.text("Teléfono", font_size="12px",
-                        font_weight="600", color="#CBD5E1"),
+                        font_weight="600", color="var(--twk-slate-300)"),
                 rx.input(
                     value=DonoOperacionesState.delivery_form_telefono,
                     on_change=DonoOperacionesState.on_change_delivery_telefono,
@@ -1320,7 +1321,7 @@ def _delivery_form_dialog() -> rx.Component:
                     _focus={"border_color": _ORANGE},
                 ),
                 rx.text("Notas", font_size="12px",
-                        font_weight="600", color="#CBD5E1"),
+                        font_weight="600", color="var(--twk-slate-300)"),
                 rx.text_area(
                     value=DonoOperacionesState.delivery_form_notas,
                     on_change=DonoOperacionesState.on_change_delivery_notas,
@@ -1335,7 +1336,7 @@ def _delivery_form_dialog() -> rx.Component:
                 rx.dialog.close(
                     rx.button(
                         "Cancelar",
-                        background=_SLATE_100, color="#CBD5E1",
+                        background=_SLATE_100, color="var(--twk-slate-300)",
                         border_radius="8px", cursor="pointer",
                         _hover={"background": _SLATE_700},
                     ),
@@ -1532,7 +1533,7 @@ def _upgrade_banner(modulo: str) -> rx.Component:
             ),
             rx.text(
                 MSG_UPGRADE,
-                color="#CBD5E1", text_align="center", max_width="400px",
+                color="var(--twk-slate-300)", text_align="center", max_width="400px",
             ),
             align="center", spacing="3",
             padding="48px 24px",
@@ -1786,9 +1787,9 @@ def dono_login_page() -> rx.Component:
                             rx.box(
                                 rx.hstack(
                                     rx.icon(tag="circle_alert", size=14,
-                                            color="#F87171"),
+                                            color="var(--twk-danger-text)"),
                                     rx.text(AdminLocalState.error_msg,
-                                            font_size="13px", color="#F87171",
+                                            font_size="13px", color="var(--twk-danger-text)",
                                             font_weight="600"),
                                     spacing="2", align="center",
                                 ),

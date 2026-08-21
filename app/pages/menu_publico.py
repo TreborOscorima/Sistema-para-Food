@@ -5,11 +5,13 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import (
+    SUCCESS_TEXT, INFO_TEXT,
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_SOLID, DANGER_TEXT,
     DARK_600, DARK_700, DARK_800,
     INFO_SOLID,
     PAGE_BACKGROUND,
+    SURFACE_BASE,
     SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE,
 )
@@ -36,7 +38,7 @@ def _promo_card(promo: PromoPublicaView) -> rx.Component:
             rx.cond(
                 promo.descripcion != "",
                 rx.text(
-                    promo.descripcion, font_size="10px", color="#FDBA74",
+                    promo.descripcion, font_size="10px", color="var(--twk-accent-text)",
                     line_height="1.3", no_of_lines=2,
                 ),
                 rx.fragment(),
@@ -150,7 +152,7 @@ def _producto_item(prod: ProductoPublicoView) -> rx.Component:
             spacing="0", align="start", flex="1", min_width="0",
         ),
         spacing="3", align="start", width="100%",
-        background=DARK_800, border_radius="16px", padding="14px",
+        background=SURFACE_BASE, border_radius="16px", padding="14px",
         box_shadow="0 1px 4px rgba(0,0,0,0.06)",
     )
 
@@ -226,7 +228,7 @@ def _carrito_drawer() -> rx.Component:
                     SelfOrderState.tiene_mesa_qr,
                     rx.badge(
                         SelfOrderState.mesa_nombre_qr,
-                        background="rgba(59,130,246,0.12)", color=INFO_SOLID,
+                        background="rgba(59,130,246,0.12)", color=INFO_TEXT,
                         border_radius="8px", font_size="12px",
                         font_weight="700", padding="4px 10px",
                     ),
@@ -263,7 +265,7 @@ def _carrito_drawer() -> rx.Component:
                         rx.cond(
                             SelfOrderState.pedido_error != "",
                             rx.text(SelfOrderState.pedido_error,
-                                    font_size="12px", color=DANGER_SOLID,
+                                    font_size="12px", color=DANGER_TEXT,
                                     font_weight="600"),
                             rx.fragment(),
                         ),
@@ -288,13 +290,13 @@ def _carrito_drawer() -> rx.Component:
                             border_radius="10px", width="100%",
                             padding_y="8px", cursor="pointer",
                             font_size="13px",
-                            _hover={"background": "rgba(239,68,68,0.10)", "color": "#F87171"},
+                            _hover={"background": "rgba(239,68,68,0.10)", "color": "var(--twk-danger-text)"},
                         ),
                         spacing="3", width="100%",
                     ),
                     rx.center(
                         rx.vstack(
-                            rx.icon(tag="shopping_cart", size=40, color="#CBD5E1"),
+                            rx.icon(tag="shopping_cart", size=40, color="var(--twk-slate-300)"),
                             rx.text("Carrito vacío", font_size="14px",
                                     color=TEXT_MUTED),
                             spacing="2", align="center",
@@ -304,7 +306,7 @@ def _carrito_drawer() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            background=DARK_800,
+            background=SURFACE_BASE,
             padding="20px",
             max_width="420px",
             width="100%",
@@ -326,7 +328,7 @@ def _carrito_fab() -> rx.Component:
                         SelfOrderState.carrito_count > 0,
                         rx.badge(
                             SelfOrderState.carrito_count.to_string(),
-                            background=DARK_800, color=ACCENT,
+                            background=SURFACE_BASE, color=ACCENT,
                             border_radius="50%", font_size="11px",
                             font_weight="800", padding="2px 6px",
                             position="absolute", top="-6px", right="-6px",
@@ -354,7 +356,7 @@ def _carrito_fab() -> rx.Component:
 def _pedido_enviado_screen() -> rx.Component:
     return rx.center(
         rx.vstack(
-            rx.icon(tag="circle_check", size=64, color=SUCCESS_SOLID),
+            rx.icon(tag="circle_check", size=64, color=SUCCESS_TEXT),
             rx.text("Pedido enviado", font_size="22px", font_weight="800",
                     color=TEXT_PRIMARY),
             rx.text(
@@ -367,7 +369,7 @@ def _pedido_enviado_screen() -> rx.Component:
                 SelfOrderState.tiene_mesa_qr,
                 rx.badge(
                     SelfOrderState.mesa_nombre_qr,
-                    background="rgba(59,130,246,0.12)", color=INFO_SOLID,
+                    background="rgba(59,130,246,0.12)", color=INFO_TEXT,
                     border_radius="8px", font_size="14px",
                     font_weight="700", padding="6px 14px",
                 ),
@@ -461,7 +463,7 @@ def _menu_content() -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
-                background=DARK_800,
+                background=SURFACE_BASE,
                 border_bottom=f"1px solid {DARK_700}",
                 padding=rx.breakpoints(initial="16px 16px 12px", md="20px 24px 14px"),
                 position="sticky", top="0", z_index="10",
@@ -486,7 +488,7 @@ def _menu_content() -> rx.Component:
                     MenuPublicoState.no_encontrado,
                     rx.center(
                         rx.vstack(
-                            rx.icon(tag="utensils_crossed", size=48, color="#CBD5E1"),
+                            rx.icon(tag="utensils_crossed", size=48, color="var(--twk-slate-300)"),
                             rx.text("No encontramos esta carta", font_size="17px", font_weight="700", color=TEXT_PRIMARY),
                             rx.text(
                                 "El enlace puede estar mal escrito o el restaurante "
@@ -509,7 +511,7 @@ def _menu_content() -> rx.Component:
                         MenuPublicoState.categorias_menu.length() == 0,
                         rx.center(
                             rx.vstack(
-                                rx.icon(tag="book_open", size=48, color="#CBD5E1"),
+                                rx.icon(tag="book_open", size=48, color="var(--twk-slate-300)"),
                                 rx.text("Carta sin productos", font_size="15px", font_weight="600", color=TEXT_MUTED),
                                 spacing="3",
                                 align="center",
@@ -521,7 +523,7 @@ def _menu_content() -> rx.Component:
                             MenuPublicoState.categorias_menu_filtradas.length() == 0,
                             rx.center(
                                 rx.vstack(
-                                    rx.icon(tag="search_x", size=40, color="#CBD5E1"),
+                                    rx.icon(tag="search_x", size=40, color="var(--twk-slate-300)"),
                                     rx.text("Sin resultados", font_size="15px", font_weight="600", color=TEXT_MUTED),
                                     rx.text("Prueba con otro término", font_size="13px", color=TEXT_MUTED),
                                     spacing="2", align="center",
@@ -547,7 +549,7 @@ def _menu_content() -> rx.Component:
             rx.center(
                 rx.text(
                     "Powered by TUWAYKIFOOD · Escanea el QR de la mesa",
-                    font_size="12px", color="#CBD5E1",
+                    font_size="12px", color="var(--twk-slate-300)",
                 ),
                 padding="24px 16px",
                 width="100%",

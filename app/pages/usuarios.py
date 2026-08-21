@@ -85,9 +85,10 @@ def _usuario_row(u: UsuarioAdminView) -> rx.Component:
         rx.hstack(
             rx.box(
                 rx.text(u.nombre[:1].upper(), font_size="14px", font_weight="800",
-                        color=TEXT_WHITE),
+                        color=u.badge_text),
                 width="36px", height="36px", border_radius="full",
-                background=u.badge_text, display="flex",
+                background=u.badge_bg, border=f"1.5px solid {u.badge_text}",
+                display="flex",
                 align_items="center", justify_content="center", flex_shrink="0",
             ),
             rx.vstack(

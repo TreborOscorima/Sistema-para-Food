@@ -93,6 +93,46 @@ def switch_toggle(checked, on_click, *, color: str = ACCENT, size: str = "sm") -
     )
 
 
+def color_mode_toggle(*, on_sidebar: bool = False, size: int = 30) -> rx.Component:
+    """Interruptor claro/oscuro (sol/luna).
+
+    Usa el color-mode nativo de Reflex: ``rx.toggle_color_mode`` alterna y la
+    elección se persiste sola en el navegador (localStorage 'theme'), agregando
+    la clase ``light``/``dark`` al <html>. En modo oscuro muestra el sol (para
+    pasar a claro); en claro muestra la luna. ``on_sidebar`` usa la paleta del
+    sidebar; si no, la de header/superficie.
+    """
+    if on_sidebar:
+        base_color, base_bg = SIDEBAR_TEXT, SIDEBAR_HOVER_BG
+        hover = {"background": SURFACE_HOVER, "color": SIDEBAR_TEXT_ACTIVE}
+    else:
+        base_color, base_bg = TEXT_SECONDARY, SURFACE_MUTED
+        hover = {"background": SURFACE_HOVER, "color": TEXT_PRIMARY}
+    return rx.tooltip(
+        rx.box(
+            rx.color_mode_cond(
+                light=rx.icon(tag="moon", size=15),
+                dark=rx.icon(tag="sun", size=15),
+            ),
+            on_click=rx.toggle_color_mode,
+            width=f"{size}px",
+            height=f"{size}px",
+            border_radius="8px",
+            display="flex",
+            align_items="center",
+            justify_content="center",
+            cursor="pointer",
+            flex_shrink="0",
+            color=base_color,
+            background=base_bg,
+            border=f"1px solid {BORDER_COLOR}" if not on_sidebar else "1px solid transparent",
+            _hover=hover,
+            transition="background .15s ease, color .15s ease",
+        ),
+        content="Cambiar tema (claro / oscuro)",
+    )
+
+
 def surface_card(*children, **props) -> rx.Component:
     bg           = props.pop("background", SURFACE_BASE)
     border       = props.pop("border", f"1px solid {BORDER_COLOR}")
@@ -293,11 +333,11 @@ def _sidebar_user_badge() -> rx.Component:
             FoodState.sidebar_collapsed,
             rx.fragment(),
             rx.vstack(
-                rx.text(FoodState.usuario_nombre, color="rgba(255,255,255,0.88)",
+                rx.text(FoodState.usuario_nombre, color="var(--twk-sb-tx-strong)",
                         font_weight="600", font_size="12px",
                         max_width="110px", overflow="hidden",
                         text_overflow="ellipsis", white_space="nowrap"),
-                rx.text(FoodState.usuario_rol, color="rgba(255,255,255,0.42)",
+                rx.text(FoodState.usuario_rol, color="var(--twk-sb-tx-dim)",
                         font_size="11px"),
                 align="start",
                 spacing="0",
@@ -315,12 +355,12 @@ def _sidebar_user_badge() -> rx.Component:
                 rx.icon(tag="log_out", size=13),
                 on_click=FoodState.logout,
                 background="rgba(220,38,38,0.15)",
-                color="#FCA5A5",
+                color="var(--twk-danger-text)",
                 border="1px solid rgba(220,38,38,0.2)",
                 border_radius="7px",
                 width="30px",
                 height="30px",
-                _hover={"background": "rgba(220,38,38,0.28)", "color": "#FCA5A5"},
+                _hover={"background": "rgba(220,38,38,0.28)", "color": "var(--twk-danger-text)"},
             ),
         ),
         spacing="2",
@@ -364,7 +404,7 @@ def _desktop_nav_item(label: str, href: str, icon_tag: str,
                     rx.icon(
                         tag=icon_tag,
                         size=15,
-                        color=rx.cond(active, "#FFFFFF", "rgba(255,255,255,0.80)"),
+                        color=rx.cond(active, "#FFFFFF", "var(--twk-sb-tx)"),
                     ),
                     class_name="twk-nav-icon-box",
                 ),
@@ -375,15 +415,15 @@ def _desktop_nav_item(label: str, href: str, icon_tag: str,
                     rx.vstack(
                         rx.text(
                             label,
-                            color=rx.cond(active, "#FFFFFF", "rgba(255,255,255,0.92)"),
+                            color=rx.cond(active, "#FFFFFF", "var(--twk-sb-tx-strong)"),
                             font_weight=rx.cond(active, "700", "500"),
                             font_size="13px",
                             line_height="1",
                         ),
                         rx.text(
                             desc,
-                            color=rx.cond(active, "rgba(255,255,255,0.85)",
-                                          "rgba(255,255,255,0.55)"),
+                            color=rx.cond(active, "rgba(255,255,255,0.95)",
+                                          "var(--twk-sb-tx-dim)"),
                             font_size="10.5px",
                             line_height="1",
                         ),
@@ -445,9 +485,9 @@ def _nav_group_label(text: str, mobile: bool = False) -> rx.Component:
     return rx.cond(
         FoodState.sidebar_collapsed,
         rx.box(height="1px", width="70%", margin="10px auto 4px",
-               background="rgba(255,255,255,0.10)"),
+               background="var(--twk-sb-divider)"),
         rx.text(
-            text, font_size="10px", font_weight="700", color="rgba(255,255,255,0.40)",
+            text, font_size="10px", font_weight="700", color="var(--twk-sb-tx-faint)",
             text_transform="uppercase", letter_spacing="0.08em",
             padding_x="6px", padding_top="12px", padding_bottom="2px",
         ),
@@ -523,23 +563,33 @@ def _desktop_sidebar(active: str) -> rx.Component:
                              border_radius="9px", alt="TUWAYKIFOOD"),
                     _brand(compact=False, dark=True),
                 ),
-                rx.tooltip(
-                    rx.icon_button(
-                        rx.icon(
-                            tag=rx.cond(FoodState.sidebar_collapsed, "panel_left_open", "panel_left_close"),
-                            size=14,
-                        ),
-                        on_click=FoodState.toggle_sidebar,
-                        background="rgba(255,255,255,0.07)",
-                        color="rgba(255,255,255,0.45)",
-                        border="none",
-                        border_radius="7px",
-                        width="28px",
-                        height="28px",
-                        flex_shrink="0",
-                        _hover={"background": "rgba(255,255,255,0.12)", "color": "#fff"},
+                rx.hstack(
+                    rx.cond(
+                        FoodState.sidebar_collapsed,
+                        rx.fragment(),
+                        color_mode_toggle(on_sidebar=True, size=28),
                     ),
-                    content=rx.cond(FoodState.sidebar_collapsed, "Expandir menú", "Contraer menú"),
+                    rx.tooltip(
+                        rx.icon_button(
+                            rx.icon(
+                                tag=rx.cond(FoodState.sidebar_collapsed, "panel_left_open", "panel_left_close"),
+                                size=14,
+                            ),
+                            on_click=FoodState.toggle_sidebar,
+                            background=SIDEBAR_HOVER_BG,
+                            color=SIDEBAR_TEXT,
+                            border="none",
+                            border_radius="7px",
+                            width="28px",
+                            height="28px",
+                            flex_shrink="0",
+                            _hover={"background": SURFACE_HOVER, "color": SIDEBAR_TEXT_ACTIVE},
+                        ),
+                        content=rx.cond(FoodState.sidebar_collapsed, "Expandir menú", "Contraer menú"),
+                    ),
+                    spacing="2",
+                    align="center",
+                    flex_shrink="0",
                 ),
                 width="100%",
                 justify="between",
@@ -547,7 +597,7 @@ def _desktop_sidebar(active: str) -> rx.Component:
             ),
             # ── Separador ─────────────────────────────────────────────────────
             rx.box(height="1px", width="100%",
-                   background="rgba(255,255,255,0.07)"),
+                   background="var(--twk-sb-divider)"),
             # ── Navegacion ────────────────────────────────────────────────────
             rx.box(
                 _nav_stack(active, mobile=False),
@@ -560,16 +610,16 @@ def _desktop_sidebar(active: str) -> rx.Component:
                 FoodState.puede_ver_panel_admin,
                 rx.link(
                     rx.hstack(
-                        rx.icon(tag="arrow_left", size=13, color="rgba(255,255,255,0.6)"),
+                        rx.icon(tag="arrow_left", size=13, color="var(--twk-sb-tx-dim)"),
                         rx.cond(
                             FoodState.sidebar_collapsed,
                             rx.fragment(),
                             rx.vstack(
                                 rx.text("Panel Administrativo", font_size="12px",
-                                        color="rgba(255,255,255,0.6)", font_weight="600",
+                                        color="var(--twk-sb-tx-dim)", font_weight="600",
                                         line_height="1.1"),
                                 rx.text("Reportes del dueño, inventario y más",
-                                        font_size="10px", color="rgba(255,255,255,0.4)",
+                                        font_size="10px", color="var(--twk-sb-tx-faint)",
                                         line_height="1.1"),
                                 spacing="1", align="start",
                             ),
@@ -581,7 +631,7 @@ def _desktop_sidebar(active: str) -> rx.Component:
                     padding="8px 10px",
                     border_radius="8px",
                     text_decoration="none",
-                    _hover={"background": "rgba(255,255,255,0.06)"},
+                    _hover={"background": "var(--twk-sb-hover)"},
                 ),
                 rx.fragment(),
             ),
@@ -591,24 +641,24 @@ def _desktop_sidebar(active: str) -> rx.Component:
                 rx.fragment(),
                 rx.box(
                     rx.vstack(
-                        rx.text("Operacion en LAN", color="rgba(255,255,255,0.45)",
+                        rx.text("Operacion en LAN", color="var(--twk-sb-tx-dim)",
                                 font_size="10.5px", font_weight="700",
                                 letter_spacing="0.04em", text_transform="uppercase"),
                         rx.text("Optimizado para tablets, caja y cocina.",
-                                color="rgba(255,255,255,0.28)", font_size="10px"),
+                                color="var(--twk-sb-tx-faint)", font_size="10px"),
                         align="start",
                         spacing="1",
                     ),
                     width="100%",
                     padding="8px 10px",
                     border_radius="8px",
-                    background="rgba(255,255,255,0.04)",
-                    border="1px solid rgba(255,255,255,0.06)",
+                    background="var(--twk-sb-soft)",
+                    border="1px solid var(--twk-sb-divider)",
                 ),
             ),
             # ── Separador ─────────────────────────────────────────────────────
             rx.box(height="1px", width="100%",
-                   background="rgba(255,255,255,0.07)"),
+                   background="var(--twk-sb-divider)"),
             # ── Usuario ───────────────────────────────────────────────────────
             _sidebar_user_badge(),
             # ── Sucursal (solo si multi-local) ────────────────────────────────
@@ -621,7 +671,7 @@ def _desktop_sidebar(active: str) -> rx.Component:
                         rx.fragment(),
                         rx.text(
                             FoodState.sucursal_actual_nombre,
-                            font_size="11px", color="rgba(255,255,255,0.6)",
+                            font_size="11px", color="var(--twk-sb-tx-dim)",
                             max_width="130px", overflow="hidden",
                             text_overflow="ellipsis", white_space="nowrap",
                         ),
@@ -642,8 +692,8 @@ def _desktop_sidebar(active: str) -> rx.Component:
         position="sticky",
         top="0",
         padding="14px 10px",
-        background="#0F172A",
-        border_right="1px solid #1E293B",
+        background=SIDEBAR_BG,
+        border_right=f"1px solid {SIDEBAR_BORDER}",
         display=rx.breakpoints(initial="none", lg="flex"),
         flex_direction="column",
         flex_shrink="0",
@@ -676,14 +726,19 @@ def _mobile_nav_drawer(active: str) -> rx.Component:
                         rx.vstack(
                             rx.hstack(
                                 _brand(compact=False, dark=False),
-                                rx.drawer.close(
-                                    rx.icon_button(
-                                        rx.icon(tag="x", size=16),
-                                        background=SURFACE_MUTED,
-                                        color=TEXT_SECONDARY,
-                                        border=f"1px solid {BORDER_COLOR}",
-                                        border_radius="8px",
-                                    )
+                                rx.hstack(
+                                    color_mode_toggle(on_sidebar=False, size=34),
+                                    rx.drawer.close(
+                                        rx.icon_button(
+                                            rx.icon(tag="x", size=16),
+                                            background=SURFACE_MUTED,
+                                            color=TEXT_SECONDARY,
+                                            border=f"1px solid {BORDER_COLOR}",
+                                            border_radius="8px",
+                                        )
+                                    ),
+                                    spacing="2",
+                                    align="center",
                                 ),
                                 width="100%",
                                 justify="between",
@@ -797,6 +852,7 @@ def _mobile_topbar(active: str) -> rx.Component:
             _mobile_nav_drawer(active),
             _brand(compact=False, dark=False),
             rx.spacer(),
+            color_mode_toggle(on_sidebar=False, size=36),
             spacing="3",
             align="center",
             width="100%",
@@ -828,12 +884,12 @@ def cumpleanos_banner() -> rx.Component:
             rx.hstack(
                 rx.text("🎂", font_size="16px", line_height="1"),
                 rx.text("Hoy cumplen años:", font_size="12px", font_weight="700",
-                        color="#991B1B", flex_shrink="0"),
+                        color=DANGER_TEXT, flex_shrink="0"),
                 rx.foreach(
                     FoodState.clientes_cumpleanos_hoy,
                     lambda c: rx.badge(
                         c.nombre,
-                        background="#1E293B", color="#F87171",
+                        background=SURFACE_BASE, color=DANGER_TEXT,
                         border="1px solid rgba(239,68,68,0.25)", border_radius="6px",
                         font_size="11px", font_weight="600",
                     ),
@@ -855,7 +911,7 @@ def loading_placeholder(*, dark: bool = False) -> rx.Component:
     return rx.center(
         rx.vstack(
             rx.spinner(size="3", color="#EA580C"),
-            rx.text("Cargando…", font_size="13px", color="#94A3B8", font_weight="500"),
+            rx.text("Cargando…", font_size="13px", color=TEXT_MUTED, font_weight="500"),
             spacing="3",
             align="center",
         ),

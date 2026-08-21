@@ -24,6 +24,7 @@ from app.components.shared import (
     DARK_600, DARK_700, DARK_800,
     PAGE_BACKGROUND,
     SUCCESS_DARK,
+    SURFACE_BASE,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
 )
 from app.states.food_state import FoodState
@@ -44,8 +45,8 @@ def _stat_card(label: str, value, icon_tag: str) -> rx.Component:
             spacing="2",
             align="center",
         ),
-        rx.text(value, font_size="22px", font_weight="800", color=TEXT_WHITE),
-        background=DARK_800,
+        rx.text(value, font_size="22px", font_weight="800", color=TEXT_PRIMARY),
+        background=SURFACE_BASE,
         border=f"1px solid {DARK_700}",
         border_radius="12px",
         padding="16px 18px",
@@ -92,7 +93,7 @@ def _estacion_content() -> rx.Component:
                         "Estación de impresión",
                         font_size="22px",
                         font_weight="800",
-                        color=TEXT_WHITE,
+                        color=TEXT_PRIMARY,
                     ),
                     rx.text(
                         FoodState.config_nombre_local,
@@ -117,7 +118,7 @@ def _estacion_content() -> rx.Component:
                             "El agente local está a cargo de la impresión",
                             font_size="15px",
                             font_weight="700",
-                            color=TEXT_WHITE,
+                            color=TEXT_PRIMARY,
                         ),
                         rx.text(
                             "Tienes el modo \"Agente local\" activado, así que las "
@@ -132,7 +133,7 @@ def _estacion_content() -> rx.Component:
                     ),
                     spacing="3",
                     align="center",
-                    background=DARK_800,
+                    background=SURFACE_BASE,
                     border=f"1px solid {DARK_700}",
                     border_radius="12px",
                     padding="16px 18px",
@@ -153,7 +154,7 @@ def _estacion_content() -> rx.Component:
                             "Activa — escuchando comandas",
                             font_size="15px",
                             font_weight="700",
-                            color=TEXT_WHITE,
+                            color=TEXT_PRIMARY,
                         ),
                         rx.text(
                             "Las comandas enviadas desde cualquier celular o tablet "
@@ -168,7 +169,7 @@ def _estacion_content() -> rx.Component:
                     ),
                     spacing="3",
                     align="center",
-                    background=DARK_800,
+                    background=SURFACE_BASE,
                     border=f"1px solid {SUCCESS_DARK}",
                     border_radius="12px",
                     padding="16px 18px",
@@ -225,7 +226,7 @@ def _estacion_content() -> rx.Component:
                 _instruccion("4", "Usa el botón de arriba para imprimir un ticket de prueba y confirmar que sale el papel."),
                 spacing="3",
                 align="start",
-                background=DARK_800,
+                background=SURFACE_BASE,
                 border=f"1px solid {DARK_700}",
                 border_radius="12px",
                 padding="18px",
@@ -264,8 +265,7 @@ def _shell(content: rx.Component) -> rx.Component:
         min_height="100vh",
         width="100%",
         background=PAGE_BACKGROUND,
-        color=TEXT_WHITE,
-        class_name="dark",
+        color=TEXT_PRIMARY,
     )
 
 

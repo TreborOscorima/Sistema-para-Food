@@ -15,6 +15,7 @@ from app.states.food_state import AdminLocalState
 from app.pages.dono import _dono_shell
 from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
+    WARNING_TEXT, SUCCESS_TEXT, DANGER_TEXT,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_700, DARK_800,
@@ -63,12 +64,12 @@ def _alerta_bajo_stock() -> rx.Component:
                         "Stock bajo — requiere reposición",
                         font_size="13px",
                         font_weight="700",
-                        color=WARNING_SOLID,
+                        color=WARNING_TEXT,
                     ),
                     rx.text(
                         rx.foreach(
                             FoodState.inv_alertas_bajo_stock,
-                            lambda n: rx.text(n, font_size="12px", color=WARNING_SOLID),
+                            lambda n: rx.text(n, font_size="12px", color=WARNING_TEXT),
                         ),
                     ),
                     spacing="1",
@@ -98,9 +99,9 @@ def _alerta_vencimientos() -> rx.Component:
         FoodState.inv_alertas_vencimiento.length() > 0,
         rx.box(
             rx.hstack(
-                rx.icon(tag="calendar_x", size=14, color="#F87171"),
+                rx.icon(tag="calendar_x", size=14, color="var(--twk-danger-text)"),
                 rx.text("Vencimientos: " + FoodState.inv_alertas_vencimiento_texto,
-                        font_size="12px", color="#F87171", font_weight="600"),
+                        font_size="12px", color="var(--twk-danger-text)", font_weight="600"),
                 spacing="2", align="center",
             ),
             background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
@@ -166,7 +167,7 @@ def _mov_insumo_modal() -> rx.Component:
                 rx.cond(
                     FoodState.inv_mov_error != "",
                     rx.text(FoodState.inv_mov_error, font_size="12px",
-                            color="#F87171", font_weight="600"),
+                            color="var(--twk-danger-text)", font_weight="600"),
                     rx.fragment(),
                 ),
                 rx.hstack(
@@ -206,7 +207,7 @@ def _kardex_row(mov) -> rx.Component:
                 rx.badge(
                     mov.tipo_label,
                     background=rx.cond(mov.es_entrada, "rgba(34,197,94,0.12)", "rgba(239,68,68,0.12)"),
-                    color=rx.cond(mov.es_entrada, "#22C55E", "#F87171"),
+                    color=rx.cond(mov.es_entrada, "#22C55E", "var(--twk-danger-text)"),
                     border_radius="6px", font_size="10px", font_weight="700",
                 ),
                 rx.text(mov.fecha_texto, font_size="11px", color=TEXT_MUTED),
@@ -299,7 +300,7 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                 width="8px", height="8px", border_radius="full",
                 background=rx.cond(
                     ins.bajo_stock, "#EF4444",
-                    rx.cond(ins.activo, "#22C55E", "#94A3B8"),
+                    rx.cond(ins.activo, "#22C55E", "var(--twk-slate-400)"),
                 ),
                 flex_shrink="0",
             ),
@@ -321,7 +322,7 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                     rx.cond(ins.vencimiento_estado == "vencido", "Vencido ", "Vence ")
                     + ins.vencimiento_texto,
                     background=rx.cond(ins.vencimiento_estado == "vencido", "rgba(239,68,68,0.12)", "rgba(245,158,11,0.12)"),
-                    color=rx.cond(ins.vencimiento_estado == "vencido", "#F87171", "#F59E0B"),
+                    color=rx.cond(ins.vencimiento_estado == "vencido", "var(--twk-danger-text)", "#F59E0B"),
                     border_radius="20px", font_size="10px", font_weight="700",
                     padding="2px 8px", width="fit-content",
                 ),
@@ -348,7 +349,7 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
                 rx.button(
                     rx.icon(tag="circle_minus", size=15),
                     on_click=FoodState.abrir_mov_insumo(ins.id, "merma"),
-                    background="transparent", color=DANGER_SOLID,
+                    background="transparent", color=DANGER_TEXT,
                     border="none", padding="2px", cursor="pointer",
                     _hover={"opacity": "0.7"},
                 ),
@@ -383,9 +384,9 @@ def _insumo_row(ins: InsumoView) -> rx.Component:
         columns=rx.breakpoints(initial="1fr auto auto", md=_INV_GRID_COLS),
         gap="8px", width="100%", align_items="center",
         padding="10px", border_radius="8px",
-        background=rx.cond(ins.bajo_stock, "rgba(245,158,11,0.10)", "#1E293B"),
+        background=rx.cond(ins.bajo_stock, "rgba(245,158,11,0.10)", "var(--twk-d800)"),
         border=rx.cond(ins.bajo_stock, "1px solid rgba(245,158,11,0.25)", f"1px solid {DARK_700}"),
-        _hover={"background": rx.cond(ins.bajo_stock, "rgba(245,158,11,0.15)", "#334155")},
+        _hover={"background": rx.cond(ins.bajo_stock, "rgba(245,158,11,0.15)", "var(--twk-d700)")},
     )
 
 
@@ -658,7 +659,7 @@ def _receta_item_row(item: RecetaItemView) -> rx.Component:
         rx.badge(
             item.cantidad_texto,
             background="rgba(59,130,246,0.08)",
-            color="#60A5FA",
+            color="var(--twk-info-text)",
             border_radius="5px",
             font_size="11px",
             padding="2px 7px",
@@ -668,7 +669,7 @@ def _receta_item_row(item: RecetaItemView) -> rx.Component:
                 rx.icon(tag="trash_2", size=12),
                 on_click=FoodState.eliminar_receta_item(item.id),
                 background="rgba(239,68,68,0.08)",
-                color="#F87171",
+                color="var(--twk-danger-text)",
                 border="1px solid #FECACA",
                 border_radius="6px",
                 padding="4px 7px",
@@ -820,14 +821,14 @@ def _plan_item_row(item: ProduccionPlanItem) -> rx.Component:
         rx.text(item.nombre, font_size="13px", color=TEXT_PRIMARY, font_weight="600", flex="1"),
         rx.badge(
             rx.text(item.cantidad, font_size="12px"),
-            background="rgba(59,130,246,0.08)", color="#60A5FA",
+            background="rgba(59,130,246,0.08)", color="var(--twk-info-text)",
             border_radius="5px", padding="2px 10px",
         ),
         rx.tooltip(
             rx.button(
                 rx.icon(tag="x", size=12),
                 on_click=FoodState.prod_quitar_item(item.producto_id),
-                background="rgba(239,68,68,0.08)", color="#F87171",
+                background="rgba(239,68,68,0.08)", color="var(--twk-danger-text)",
                 border="1px solid #FECACA", border_radius="6px",
                 padding="4px 7px", cursor="pointer",
                 _hover={"opacity": "0.8"},
@@ -845,7 +846,7 @@ def _resultado_row(nec: ProduccionNecesidadView) -> rx.Component:
     return rx.grid(
         rx.text(nec.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY,
                 overflow="hidden", text_overflow="ellipsis", white_space="nowrap"),
-        rx.text(nec.cantidad_necesaria_texto, font_size="13px", color="#CBD5E1",
+        rx.text(nec.cantidad_necesaria_texto, font_size="13px", color="var(--twk-slate-300)",
                 text_align="right"),
         rx.text(nec.stock_actual_texto, font_size="13px", color=TEXT_MUTED,
                 text_align="right"),
@@ -854,7 +855,7 @@ def _resultado_row(nec: ProduccionNecesidadView) -> rx.Component:
             color=rx.cond(es_faltante, "#DC2626", "#16A34A"),
             text_align="right",
         ),
-        rx.text(nec.costo_estimado_texto, font_size="13px", color="#CBD5E1",
+        rx.text(nec.costo_estimado_texto, font_size="13px", color="var(--twk-slate-300)",
                 text_align="right"),
         rx.box(
             width="10px", height="10px", border_radius="full",
@@ -864,7 +865,7 @@ def _resultado_row(nec: ProduccionNecesidadView) -> rx.Component:
         columns="2fr 1fr 1fr 1fr 1fr 30px",
         gap="8px", width="100%", align_items="center",
         padding="8px 10px", border_radius="6px",
-        background=rx.cond(es_faltante, "rgba(239,68,68,0.10)", "#1E293B"),
+        background=rx.cond(es_faltante, "rgba(239,68,68,0.10)", "var(--twk-d800)"),
         border=rx.cond(es_faltante, "1px solid rgba(239,68,68,0.25)", f"1px solid {DARK_700}"),
     )
 
@@ -955,7 +956,7 @@ def _produccion_section() -> rx.Component:
                         spacing="2", align="center",
                     ),
                     on_click=FoodState.prod_calcular,
-                    background="#60A5FA", color=TEXT_WHITE,
+                    background="var(--twk-info-text)", color=TEXT_WHITE,
                     border_radius="8px", padding_x="20px", padding_y="10px",
                     cursor="pointer", width="100%",
                     _hover={"background": "#3B82F6"},
@@ -976,13 +977,13 @@ def _produccion_section() -> rx.Component:
                         rx.badge(
                             rx.text(FoodState.prod_faltantes_count, font_size="11px"),
                             " faltante(s)",
-                            background="rgba(239,68,68,0.12)", color=DANGER_SOLID,
+                            background="rgba(239,68,68,0.12)", color=DANGER_TEXT,
                             border_radius="20px", font_size="11px", font_weight="700",
                             padding="3px 10px",
                         ),
                         rx.badge(
                             "Stock suficiente",
-                            background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+                            background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                             border_radius="20px", font_size="11px", font_weight="700",
                             padding="3px 10px",
                         ),
@@ -1010,7 +1011,7 @@ def _produccion_section() -> rx.Component:
                                 font_weight="700", color=TEXT_PRIMARY),
                         rx.spacer(),
                         rx.text(FoodState.prod_costo_total_texto, font_size="18px",
-                                font_weight="800", color="#60A5FA"),
+                                font_weight="800", color="var(--twk-info-text)"),
                         width="100%", align="center",
                     ),
                     background="rgba(59,130,246,0.08)", border="1px solid #BFDBFE",
@@ -1048,7 +1049,7 @@ def _inventario_ayuda() -> rx.Component:
         leyenda=[
             ("#EF4444", "Bajo stock"),
             ("#22C55E", "Stock OK"),
-            ("#94A3B8", "Inactivo"),
+            ("var(--twk-slate-400)", "Inactivo"),
         ],
     )
 

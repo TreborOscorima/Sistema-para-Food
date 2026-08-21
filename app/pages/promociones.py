@@ -8,11 +8,12 @@ from app.states.food_state import FoodState, PromocionView, AdminLocalState
 from app.pages.dono import _dono_shell, AdminPanelState
 from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.shared import (
+    WARNING_TEXT, SUCCESS_TEXT,
     styled_switch,
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_SOLID,
     DARK_600, DARK_700, DARK_800,
-    PAGE_BACKGROUND,
+    PAGE_BACKGROUND, SURFACE_BASE,
     PURPLE_LIGHT,
     SUCCESS_DARK, SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE,
@@ -52,7 +53,7 @@ def _tipo_label(tipo: str) -> rx.Component:
                  border_radius="5px", font_size="10px", padding="2px 6px"),
         rx.cond(
             tipo == "MONTO_FIJO",
-            rx.badge("S/", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+            rx.badge("S/", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                      border_radius="5px", font_size="10px", padding="2px 6px"),
             rx.badge("HH", background="#FEF9C3", color="#713F12",
                      border_radius="5px", font_size="10px", padding="2px 6px"),
@@ -61,7 +62,9 @@ def _tipo_label(tipo: str) -> rx.Component:
 
 
 def _promo_card(p: PromocionView) -> rx.Component:
-    header_bg = rx.cond(p.activa, SUCCESS_DARK, TEXT_MUTED)
+    # Pausada: slate-600 fijo (no TEXT_MUTED, que como fondo daba blanco sobre
+    # gris claro ~3.1 en oscuro). Blanco sobre #475569 lee ~7.5 en ambos modos.
+    header_bg = rx.cond(p.activa, SUCCESS_DARK, "#475569")
     return rx.box(
         rx.vstack(
             rx.hstack(
@@ -94,7 +97,7 @@ def _promo_card(p: PromocionView) -> rx.Component:
             rx.text(p.dias_texto + " · " + p.alcance_texto, font_size="11px", color=TEXT_MUTED),
             rx.cond(
                 p.auto_aplicar,
-                rx.badge("Auto en caja", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+                rx.badge("Auto en caja", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                          border_radius="6px", font_size="10px", font_weight="700"),
                 rx.badge("Sugerencia manual", background=DARK_800, color=TEXT_MUTED,
                          border_radius="6px", font_size="10px", font_weight="700"),
@@ -133,7 +136,7 @@ def _promo_card(p: PromocionView) -> rx.Component:
             ),
             spacing="2", align="start", width="100%", padding="16px",
         ),
-        background=DARK_800,
+        background=SURFACE_BASE,
         border=rx.cond(p.aplica_ahora, f"2px solid {ACCENT}", f"1px solid {DARK_700}"),
         border_radius="16px", overflow="hidden",
         opacity=rx.cond(p.activa, "1", "0.65"),
@@ -348,7 +351,7 @@ def _promo_activa_banner() -> rx.Component:
         FoodState.hay_promo_activa,
         rx.box(
             rx.hstack(
-                rx.icon(tag="zap", size=14, color=WARNING_SOLID),
+                rx.icon(tag="zap", size=14, color=WARNING_TEXT),
                 rx.vstack(
                     rx.text(
                         "¡Promoción activa ahora: " + FoodState.promo_activa_nombre + "!",

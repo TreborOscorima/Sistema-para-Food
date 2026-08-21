@@ -8,8 +8,9 @@ from app.states.food_state import FoodState, ClienteView, AdminLocalState
 from app.pages.dono import _dono_shell
 from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
+    WARNING_TEXT, DANGER_TEXT,
     ACCENT, ACCENT_HOVER, DARK_700, DARK_800, DANGER_SOLID,
-    INFO_SOLID, INFO_TEXT, PAGE_BACKGROUND, SUCCESS_DARK,
+    INFO_SOLID, INFO_TEXT, PAGE_BACKGROUND, SURFACE_BASE, SUCCESS_DARK,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_WHITE, WARNING_SOLID,
     switch_toggle,
 )
@@ -132,7 +133,7 @@ def _cliente_card(c: ClienteView) -> rx.Component:
             color=ACCENT, cursor="pointer", margin_top="10px",
             _hover={"text_decoration": "none", "color": ACCENT_HOVER},
         ),
-        background=rx.cond(c.cumple_hoy, "rgba(245,158,11,0.10)", DARK_800),
+        background=rx.cond(c.cumple_hoy, "rgba(245,158,11,0.10)", SURFACE_BASE),
         border=rx.cond(c.cumple_hoy, "1px solid rgba(245,158,11,0.25)", f"1px solid {DARK_700}"),
         border_radius="14px", padding="18px", width="100%",
         opacity=rx.cond(c.activo, "1", "0.6"),
@@ -181,7 +182,7 @@ def _cli_form() -> rx.Component:
                     ),
                     rx.cond(
                         FoodState.cli_dni_ruc_error != "",
-                        rx.text(FoodState.cli_dni_ruc_error, font_size="11px", color=DANGER_SOLID),
+                        rx.text(FoodState.cli_dni_ruc_error, font_size="11px", color=DANGER_TEXT),
                     ),
                     spacing="1", align="start", width="100%",
                 ),
@@ -290,14 +291,14 @@ def _cumpleanos_section() -> rx.Component:
         rx.box(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="cake", size=14, color=WARNING_SOLID),
+                    rx.icon(tag="cake", size=14, color=WARNING_TEXT),
                     rx.text("Cumpleaños", font_size="14px", font_weight="700", color=TEXT_PRIMARY),
                     spacing="2", align="center",
                 ),
                 rx.cond(
                     FoodState.clientes_cumpleanos_hoy.length() > 0,
                     rx.vstack(
-                        rx.text("Hoy", font_size="11px", font_weight="700", color=WARNING_SOLID,
+                        rx.text("Hoy", font_size="11px", font_weight="700", color=WARNING_TEXT,
                                 text_transform="uppercase", letter_spacing="0.05em"),
                         rx.foreach(
                             FoodState.clientes_cumpleanos_hoy,
@@ -403,7 +404,7 @@ def _clientes_content() -> rx.Component:
                 placeholder="Buscar cliente...",
                 value=FoodState.cli_busqueda,
                 on_change=FoodState.set_cli_busqueda,
-                background=DARK_800, border=f"1px solid {DARK_700}",
+                background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                 border_radius="9px", font_size="13px",
                 padding_x="14px", padding_y="8px",
                 width=rx.breakpoints(initial="100%", sm="220px"),

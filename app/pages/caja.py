@@ -5,11 +5,12 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import (
+    WARNING_TEXT, SUCCESS_TEXT, DANGER_TEXT,
     anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder, styled_switch,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_700, DARK_800,
-    PAGE_BACKGROUND,
+    PAGE_BACKGROUND, SURFACE_BASE,
     SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
@@ -58,11 +59,11 @@ def _metodo_btn_dyn(metodo: MetodoPagoView) -> rx.Component:
     return rx.box(
         rx.text(metodo.icono, font_size="18px", line_height="1"),
         rx.text(metodo.nombre, font_size="12px", font_weight="700",
-                color=rx.cond(activo, "#FFFFFF", "#94A3B8"),
+                color=rx.cond(activo, "#FFFFFF", "var(--twk-slate-400)"),
                 text_align="center", line_height="1.1"),
         on_click=FoodState.set_caja_cobro_metodo(metodo.codigo),
         background=rx.cond(activo, ACCENT, DARK_800),
-        border=rx.cond(activo, "2px solid #EA580C", "2px solid #334155"),
+        border=rx.cond(activo, "2px solid #EA580C", "2px solid var(--twk-d700)"),
         border_radius="10px",
         padding="12px 4px",
         cursor="pointer",
@@ -101,7 +102,7 @@ def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
             ),
             rx.vstack(
                 rx.text(item.producto_nombre, font_size="13px", font_weight="600",
-                        color=rx.cond(asignado & FoodState.caja_split_por_items, "#94A3B8", "#F1F5F9")),
+                        color=rx.cond(asignado & FoodState.caja_split_por_items, "var(--twk-slate-400)", "var(--twk-text-primary)")),
                 rx.cond(
                     item.notas != "",
                     rx.text(item.notas, font_size="11px", color=TEXT_MUTED),
@@ -110,9 +111,9 @@ def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
                 spacing="0", align="start",
             ),
             rx.text("×" + item.cantidad.to_string(), font_size="13px", font_weight="600",
-                    color="#CBD5E1", text_align="center"),
+                    color="var(--twk-slate-300)", text_align="center"),
             rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
-                    color=rx.cond(asignado & FoodState.caja_split_por_items, "#94A3B8", "#F1F5F9"),
+                    color=rx.cond(asignado & FoodState.caja_split_por_items, "var(--twk-slate-400)", "var(--twk-text-primary)"),
                     text_align="right"),
             # Quitar ítem (solo cobro de mesa, fuera del modo dividido).
             rx.cond(
@@ -136,7 +137,7 @@ def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
         background=rx.cond(
             item.seleccionado & FoodState.caja_split_por_items,
             "rgba(234,88,12,0.08)",
-            rx.cond(asignado & FoodState.caja_split_por_items, "#0F172A", "transparent"),
+            rx.cond(asignado & FoodState.caja_split_por_items, "var(--twk-d900)", "transparent"),
         ),
         width="100%",
         cursor=rx.cond(
@@ -154,7 +155,7 @@ def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
 def _pago_staged_chip(pago: PagoStagedView, idx) -> rx.Component:
     return rx.vstack(
         rx.hstack(
-            rx.text(pago.metodo_label, font_size="12px", font_weight="700", color="#CBD5E1"),
+            rx.text(pago.metodo_label, font_size="12px", font_weight="700", color="var(--twk-slate-300)"),
             rx.text(pago.monto_texto, font_size="12px", font_weight="800", color=TEXT_PRIMARY),
             rx.icon(
                 tag="x", size=13, color=TEXT_MUTED, cursor="pointer",
@@ -243,7 +244,7 @@ def _pagos_divididos_panel() -> rx.Component:
                 rx.button(
                     "Seleccionar restantes",
                     on_click=FoodState.seleccionar_todos_restantes,
-                    background="transparent", color="#60A5FA",
+                    background="transparent", color="var(--twk-info-text)",
                     border="0.5px solid #BFDBFE", border_radius="6px",
                     font_size="11px", font_weight="600", cursor="pointer",
                     padding_x="8px", padding_y="4px",
@@ -269,13 +270,13 @@ def _pagos_divididos_panel() -> rx.Component:
                 rx.cond(
                     FoodState.caja_pagos_cubierto,
                     rx.badge(
-                        "Cuenta cubierta ✓", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+                        "Cuenta cubierta ✓", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                         border_radius="8px", font_size="12px", font_weight="700",
                         padding_x="10px", padding_y="4px",
                     ),
                     rx.badge(
                         "Restante: " + FoodState.caja_pagos_restante_texto,
-                        background="rgba(245,158,11,0.12)", color=WARNING_SOLID,
+                        background="rgba(245,158,11,0.12)", color=WARNING_TEXT,
                         border_radius="8px", font_size="12px", font_weight="700",
                         padding_x="10px", padding_y="4px",
                     ),
@@ -284,14 +285,14 @@ def _pagos_divididos_panel() -> rx.Component:
                 rx.cond(
                     FoodState.caja_pagos_vuelto_texto != "",
                     rx.text("Vuelto: " + FoodState.caja_pagos_vuelto_texto,
-                            font_size="13px", font_weight="700", color=SUCCESS_SOLID),
+                            font_size="13px", font_weight="700", color=SUCCESS_TEXT),
                     rx.fragment(),
                 ),
                 width="100%", align="center",
             ),
             spacing="3", width="100%",
         ),
-        background=DARK_800, border=f"1px solid {DARK_700}",
+        background=SURFACE_BASE, border=f"1px solid {DARK_700}",
         border_radius="14px", padding="18px", width="100%",
     )
 
@@ -316,7 +317,7 @@ def _cobro_panel() -> rx.Component:
             # Centrado sobre el terminal (encima de TOTAL A COBRAR).
             rx.box(
                 rx.badge(
-                    "Cuenta pedida", background="rgba(239,68,68,0.12)", color=DANGER_SOLID,
+                    "Cuenta pedida", background="rgba(239,68,68,0.12)", color=DANGER_TEXT,
                     border_radius="20px", font_size="11px", font_weight="700",
                     padding_x="12px", padding_y="5px",
                 ),
@@ -342,7 +343,7 @@ def _cobro_panel() -> rx.Component:
                                 font_weight="600", color=TEXT_MUTED, text_transform="uppercase"),
                         rx.text("TOTAL", width="80px", text_align="right", font_size="9px",
                                 font_weight="600", color=TEXT_MUTED, text_transform="uppercase"),
-                        padding="9px 16px", border_bottom="0.5px solid #F1F5F9", width="100%",
+                        padding="9px 16px", border_bottom="0.5px solid var(--twk-text-primary)", width="100%",
                     ),
                     rx.cond(
                         FoodState.caja_cobro_items.length() > 0,
@@ -380,7 +381,7 @@ def _cobro_panel() -> rx.Component:
                             rx.text(
                                 "Promo: " + FoodState.caja_promo_aplicada_nombre
                                 + " · " + FoodState.caja_promo_aplicada_texto + " descontado",
-                                font_size="11px", color=SUCCESS_SOLID, font_weight="600",
+                                font_size="11px", color=SUCCESS_TEXT, font_weight="600",
                             ),
                             rx.spacer(),
                             rx.button(
@@ -417,10 +418,10 @@ def _cobro_panel() -> rx.Component:
                         rx.fragment(),
                     ),
                     rx.hstack(
-                        rx.text("Subtotal items", font_size="13px", font_weight="600", color="#CBD5E1"),
+                        rx.text("Subtotal items", font_size="13px", font_weight="600", color="var(--twk-slate-300)"),
                         rx.spacer(),
                         rx.text(FoodState.caja_cobro_total_base_texto, font_size="20px",
-                                font_weight="800", color="#CBD5E1", letter_spacing="-0.5px"),
+                                font_weight="800", color="var(--twk-slate-300)", letter_spacing="-0.5px"),
                         align="center", padding="10px 16px", width="100%",
                         border_top=f"1px solid {DARK_700}",
                     ),
@@ -473,7 +474,7 @@ def _cobro_panel() -> rx.Component:
                                 ),
                                 on_click=FoodState.toggle_descuento_modo,
                                 padding="1px 5px",
-                                border="1px solid #CBD5E1",
+                                border="1px solid var(--twk-slate-300)",
                                 border_radius="4px",
                                 cursor="pointer",
                                 _hover={"background": DARK_700},
@@ -500,7 +501,7 @@ def _cobro_panel() -> rx.Component:
                             *[
                                 rx.box(
                                     rx.text(f"{p}%", font_size="10px", font_weight="700",
-                                            color=rx.cond(FoodState.caja_cobro_propina_pct == p, "#FFFFFF", "#94A3B8")),
+                                            color=rx.cond(FoodState.caja_cobro_propina_pct == p, "#FFFFFF", "var(--twk-slate-400)")),
                                     on_click=FoodState.seleccionar_propina_pct(p),
                                     padding="1px 6px",
                                     background=rx.cond(FoodState.caja_cobro_propina_pct == p, ACCENT, TEXT_PRIMARY),
@@ -535,9 +536,9 @@ def _cobro_panel() -> rx.Component:
                             rx.hstack(
                                 rx.icon(tag="ticket_percent", size=13, color="#16A34A"),
                                 rx.text(FoodState.caja_cupon_nombre_aplicado,
-                                        font_size="11px", color=SUCCESS_SOLID, font_weight="600", no_of_lines=1),
+                                        font_size="11px", color=SUCCESS_TEXT, font_weight="600", no_of_lines=1),
                                 rx.text("-" + FoodState.caja_cupon_descuento_aplicado,
-                                        font_size="11px", color=SUCCESS_SOLID),
+                                        font_size="11px", color=SUCCESS_TEXT),
                                 rx.icon(tag="x", size=13, color=TEXT_MUTED, cursor="pointer",
                                         on_click=FoodState.quitar_cupon_caja),
                                 spacing="1", align="center",
@@ -567,7 +568,7 @@ def _cobro_panel() -> rx.Component:
                         ),
                         rx.cond(
                             FoodState.caja_cupon_error != "",
-                            rx.text(FoodState.caja_cupon_error, font_size="10px", color=DANGER_SOLID),
+                            rx.text(FoodState.caja_cupon_error, font_size="10px", color=DANGER_TEXT),
                             rx.fragment(),
                         ),
                         spacing="1", width="100%",
@@ -613,8 +614,8 @@ def _cobro_panel() -> rx.Component:
                     FoodState.caja_cobro_es_fiado | FoodState.caja_pagos_tiene_fiado,
                     rx.vstack(
                         rx.hstack(
-                            rx.text("Cliente", font_size="11px", font_weight="700", color="#CBD5E1"),
-                            rx.text("*", font_size="11px", font_weight="700", color=DANGER_SOLID),
+                            rx.text("Cliente", font_size="11px", font_weight="700", color="var(--twk-slate-300)"),
+                            rx.text("*", font_size="11px", font_weight="700", color=DANGER_TEXT),
                             rx.text("(fiado)", font_size="11px", color=TEXT_MUTED),
                             spacing="1", align="center",
                         ),
@@ -643,7 +644,7 @@ def _cobro_panel() -> rx.Component:
                             type="number", min="0", step="0.50",
                             font_size="18px", font_weight="800", text_align="right",
                             color=TEXT_PRIMARY,
-                            border="1.5px solid #CBD5E1", border_radius="8px",
+                            border="1.5px solid var(--twk-slate-300)", border_radius="8px",
                             width="100%", height="44px",
                             _focus={"border_color": ACCENT},
                         ),
@@ -668,9 +669,9 @@ def _cobro_panel() -> rx.Component:
                 rx.cond(
                     FoodState.caja_cobro_error != "",
                     rx.hstack(
-                        rx.icon(tag="circle_alert", size=13, color="#F87171"),
+                        rx.icon(tag="circle_alert", size=13, color="var(--twk-danger-text)"),
                         rx.text(FoodState.caja_cobro_error, font_size="11px",
-                                color="#F87171", font_weight="600"),
+                                color="var(--twk-danger-text)", font_weight="600"),
                         spacing="2", align="center",
                         background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
                         border_radius="7px", padding="8px 10px", width="100%",
@@ -697,7 +698,7 @@ def _cobro_panel() -> rx.Component:
                             rx.hstack(rx.icon(tag="printer", size=12), rx.text("Pre-cuenta"),
                                       spacing="1", align="center"),
                             on_click=FoodState.imprimir_precuenta(FoodState.caja_cobro_mesa_id),
-                            background="transparent", color="#60A5FA",
+                            background="transparent", color="var(--twk-info-text)",
                             border="0.5px solid #BFDBFE", border_radius="8px",
                             font_size="12px", font_weight="600", cursor="pointer",
                             _hover={"background": "rgba(59,130,246,0.08)"}, flex="1", padding_y="7px",
@@ -710,7 +711,7 @@ def _cobro_panel() -> rx.Component:
                             rx.hstack(rx.icon(tag="ban", size=12), rx.text("Anular"),
                                       spacing="1", align="center"),
                             on_click=FoodState.abrir_anulacion_pedido_abierto(FoodState.caja_cobro_mesa_id),
-                            background="transparent", color=DANGER_SOLID,
+                            background="transparent", color=DANGER_TEXT,
                             border="0.5px solid #FECACA", border_radius="8px",
                             font_size="12px", font_weight="600", cursor="pointer",
                             _hover={"background": "rgba(239,68,68,0.10)"}, flex="1", padding_y="7px",
@@ -721,7 +722,7 @@ def _cobro_panel() -> rx.Component:
                         "Cancelar",
                         on_click=FoodState.cancelar_cobro,
                         background="transparent", color=TEXT_MUTED,
-                        border="0.5px solid #334155", border_radius="8px",
+                        border="0.5px solid var(--twk-d700)", border_radius="8px",
                         font_size="12px", font_weight="600", cursor="pointer",
                         _hover={"background": DARK_700}, flex="1", padding_y="7px",
                     ),
@@ -759,7 +760,7 @@ def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
                 rx.vstack(
                     rx.hstack(
                         rx.text(pedido.cliente_nombre, font_size="14px", font_weight="700",
-                                color=rx.cond(seleccionado, ACCENT, "#CBD5E1")),
+                                color=rx.cond(seleccionado, ACCENT, "var(--twk-slate-300)")),
                         rx.text("#" + pedido.pedido_id.to_string(),
                                 font_size="13px", font_weight="800", color=ACCENT),
                         spacing="2", align="center",
@@ -770,13 +771,13 @@ def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
                 rx.spacer(),
                 rx.vstack(
                     rx.text(pedido.total_texto, font_size="16px", font_weight="800",
-                            color=rx.cond(seleccionado, ACCENT, "#CBD5E1")),
+                            color=rx.cond(seleccionado, ACCENT, "var(--twk-slate-300)")),
                     rx.cond(
                         pedido.en_cocina,
-                        rx.badge("En cocina", background="rgba(245,158,11,0.12)", color=WARNING_SOLID,
+                        rx.badge("En cocina", background="rgba(245,158,11,0.12)", color=WARNING_TEXT,
                                  border_radius="20px", font_size="10px", font_weight="700",
                                  padding_x="8px", padding_y="2px"),
-                        rx.badge("Listo", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID,
+                        rx.badge("Listo", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                                  border_radius="20px", font_size="10px", font_weight="700",
                                  padding_x="8px", padding_y="2px"),
                     ),
@@ -808,7 +809,7 @@ def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
             padding_x="16px",
             padding_bottom="8px",
         ),
-        background=rx.cond(seleccionado, "rgba(234,88,12,0.08)", "#1E293B"),
+        background=rx.cond(seleccionado, "rgba(234,88,12,0.08)", "var(--twk-d800)"),
         border_left=rx.cond(seleccionado, "3px solid #EA580C", "3px solid transparent"),
         border_bottom=f"1px solid {DARK_700}",
         width="100%",
@@ -822,7 +823,7 @@ def _mesa_sidebar_row(mesa: MesaView) -> rx.Component:
             rx.vstack(
                 rx.text(
                     mesa.nombre, font_size="15px", font_weight="700",
-                    color=rx.cond(seleccionada, ACCENT, "#CBD5E1"),
+                    color=rx.cond(seleccionada, ACCENT, "var(--twk-slate-300)"),
                 ),
                 rx.text(
                     mesa.items_total_count.to_string() + " items · " + mesa.tiempo_abierto_texto,
@@ -833,18 +834,18 @@ def _mesa_sidebar_row(mesa: MesaView) -> rx.Component:
             rx.spacer(),
             rx.text(
                 mesa.total_abierto_texto, font_size="17px", font_weight="800",
-                color=rx.cond(seleccionada, "#F1F5F9", "#CBD5E1"),
+                color=rx.cond(seleccionada, "var(--twk-text-primary)", "var(--twk-slate-300)"),
             ),
             width="100%", align="center",
         ),
         on_click=FoodState.abrir_cobro_mesa(mesa.id),
         padding="14px 16px",
-        background=rx.cond(seleccionada, "rgba(234,88,12,0.08)", "#1E293B"),
+        background=rx.cond(seleccionada, "rgba(234,88,12,0.08)", "var(--twk-d800)"),
         border_left=rx.cond(seleccionada, "3px solid #EA580C", "3px solid transparent"),
         border_bottom=f"1px solid {DARK_700}",
         cursor="pointer",
         width="100%",
-        _hover={"background": rx.cond(seleccionada, "rgba(234,88,12,0.08)", "#334155")},
+        _hover={"background": rx.cond(seleccionada, "rgba(234,88,12,0.08)", "var(--twk-d700)")},
     )
 
 
@@ -1034,7 +1035,7 @@ def _turno_cerrado_card() -> rx.Component:
                     value=FoodState.turno_apertura_monto,
                     on_change=FoodState.set_turno_apertura_monto,
                     type="number", min="0", step="0.50",
-                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     border_radius="8px", padding_x="12px", padding_y="8px",
                     font_size="13px", width="150px",
                     _focus={"border_color": ACCENT},
@@ -1062,7 +1063,7 @@ def _turno_cerrado_card() -> rx.Component:
         ),
         rx.cond(
             FoodState.turno_error != "",
-            rx.text(FoodState.turno_error, font_size="12px", color="#F87171",
+            rx.text(FoodState.turno_error, font_size="12px", color="var(--twk-danger-text)",
                     font_weight="600", margin_top="8px"),
             rx.fragment(),
         ),
@@ -1092,7 +1093,7 @@ def _turno_abierto_bar() -> rx.Component:
                     rx.hstack(rx.icon(tag="arrow_down_up", size=14), rx.text("Ingresos / Gastos"),
                               spacing="1", align="center"),
                     on_click=FoodState.abrir_mov_modal,
-                    background=DARK_800, color="#CBD5E1",
+                    background=DARK_800, color="var(--twk-slate-300)",
                     border=f"1px solid {DARK_700}", border_radius="8px",
                     font_size="13px", font_weight="600", cursor="pointer",
                     _hover={"border_color": ACCENT},
@@ -1101,7 +1102,7 @@ def _turno_abierto_bar() -> rx.Component:
                     rx.hstack(rx.icon(tag="printer", size=14), rx.text("Últimos cobros"),
                               spacing="1", align="center"),
                     on_click=FoodState.toggle_ultimos_cobros,
-                    background=DARK_800, color="#CBD5E1",
+                    background=DARK_800, color="var(--twk-slate-300)",
                     border=f"1px solid {DARK_700}", border_radius="8px",
                     font_size="13px", font_weight="600", cursor="pointer",
                     _hover={"border_color": ACCENT},
@@ -1118,7 +1119,8 @@ def _turno_abierto_bar() -> rx.Component:
                     rx.hstack(rx.icon(tag="lock", size=14), rx.text("Cerrar turno"),
                               spacing="1", align="center"),
                     on_click=FoodState.abrir_cierre_turno,
-                    background=PAGE_BACKGROUND, color=TEXT_WHITE,
+                    background=PAGE_BACKGROUND, color=TEXT_PRIMARY,
+                    border=f"1px solid {DARK_700}",
                     border_radius="8px", font_size="13px", font_weight="700",
                     cursor="pointer", _hover={"opacity": "0.9"},
                 ),
@@ -1142,7 +1144,7 @@ def _mov_row(mov: MovimientoCajaView) -> rx.Component:
         rx.badge(
             mov.tipo_label,
             background=rx.cond(es_ingreso, "rgba(34,197,94,0.12)", "rgba(239,68,68,0.12)"),
-            color=rx.cond(es_ingreso, "#22C55E", "#F87171"),
+            color=rx.cond(es_ingreso, "#22C55E", "var(--twk-danger-text)"),
             border_radius="6px", font_size="11px", font_weight="700",
         ),
         rx.vstack(
@@ -1177,7 +1179,7 @@ def _mov_modal() -> rx.Component:
                     rx.text("Ingresos: " + FoodState.turno_ingresos_texto,
                             font_size="12px", font_weight="700", color="#16A34A"),
                     rx.text("Egresos: " + FoodState.turno_egresos_texto,
-                            font_size="12px", font_weight="700", color=DANGER_SOLID),
+                            font_size="12px", font_weight="700", color=DANGER_TEXT),
                     spacing="4",
                 ),
                 # Formulario
@@ -1202,7 +1204,7 @@ def _mov_modal() -> rx.Component:
                                 on_change=FoodState.set_turno_mov_monto,
                                 type="number", min="0", step="0.50",
                                 width="110px",
-                                background=DARK_800, border=f"1px solid {DARK_700}",
+                                background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                                 border_radius="8px", font_size="13px", color=TEXT_PRIMARY,
                                 _focus={"border_color": ACCENT},
                             ),
@@ -1214,7 +1216,7 @@ def _mov_modal() -> rx.Component:
                                 value=FoodState.turno_mov_motivo,
                                 on_change=FoodState.set_turno_mov_motivo,
                                 flex="1",
-                                background=DARK_800, border=f"1px solid {DARK_700}",
+                                background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                                 border_radius="8px", font_size="13px", color=TEXT_PRIMARY,
                                 _focus={"border_color": ACCENT},
                             ),
@@ -1231,12 +1233,12 @@ def _mov_modal() -> rx.Component:
                         rx.cond(
                             FoodState.turno_mov_error != "",
                             rx.text(FoodState.turno_mov_error, font_size="12px",
-                                    color="#F87171", font_weight="600"),
+                                    color="var(--twk-danger-text)", font_weight="600"),
                             rx.fragment(),
                         ),
                         spacing="2", width="100%",
                     ),
-                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     border_radius="10px", padding="12px", width="100%",
                 ),
                 # Lista
@@ -1271,14 +1273,14 @@ def _mov_modal() -> rx.Component:
 
 def _denominacion_row(row: DenominacionRow) -> rx.Component:
     return rx.hstack(
-        rx.text(row.etiqueta, font_size="13px", color="#CBD5E1", width="140px"),
+        rx.text(row.etiqueta, font_size="13px", color="var(--twk-slate-300)", width="140px"),
         rx.input(
             placeholder="0",
             value=row.cantidad,
             on_change=lambda v: FoodState.set_conteo_denominacion(row.key, v),
             type="number", min="0", step="1",
             width="70px", text_align="center",
-            background=DARK_800, border=f"1px solid {DARK_700}",
+            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
             border_radius="7px", font_size="13px", color=TEXT_PRIMARY,
             _focus={"border_color": ACCENT},
         ),
@@ -1300,7 +1302,7 @@ def _resumen_cierre_row(row: ResumenCierreRow) -> rx.Component:
             row.monto_texto,
             font_size=rx.cond(row.enfasis, "14px", "13px"),
             font_weight=rx.cond(row.enfasis, "900", "700"),
-            color=rx.cond(row.enfasis, ACCENT, "#CBD5E1"),
+            color=rx.cond(row.enfasis, ACCENT, "var(--twk-slate-300)"),
         ),
         width="100%", align="center",
     )
@@ -1329,7 +1331,7 @@ def _cierre_modal() -> rx.Component:
                                 letter_spacing="0.05em", margin_bottom="10px"),
                         rx.vstack(
                             rx.foreach(FoodState.turno_cierre_resumen, _resumen_cierre_row),
-                            rx.box(border_top="2px solid #334155", width="100%", padding_top="4px"),
+                            rx.box(border_top="2px solid var(--twk-d700)", width="100%", padding_top="4px"),
                             rx.hstack(
                                 rx.text("Efectivo esperado en caja", font_size="14px",
                                         font_weight="800", color=TEXT_PRIMARY),
@@ -1340,7 +1342,7 @@ def _cierre_modal() -> rx.Component:
                             ),
                             spacing="2", width="100%",
                         ),
-                        background=DARK_800, border=f"1px solid {DARK_700}",
+                        background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                         border_radius="10px", padding="14px", flex="1", min_width="240px",
                     ),
                     # Columna arqueo
@@ -1377,7 +1379,7 @@ def _cierre_modal() -> rx.Component:
                         ),
                         width="100%", align="center",
                     ),
-                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     border_radius="10px", padding="12px 16px", width="100%",
                 ),
                 rx.input(
@@ -1385,14 +1387,14 @@ def _cierre_modal() -> rx.Component:
                     value=FoodState.turno_cierre_notas,
                     on_change=FoodState.set_turno_cierre_notas,
                     width="100%",
-                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     border_radius="8px", font_size="13px", color=TEXT_PRIMARY,
                     _focus={"border_color": ACCENT},
                 ),
                 rx.cond(
                     FoodState.turno_cierre_error != "",
                     rx.text(FoodState.turno_cierre_error, font_size="12px",
-                            color="#F87171", font_weight="600"),
+                            color="var(--twk-danger-text)", font_weight="600"),
                     rx.fragment(),
                 ),
                 rx.hstack(
@@ -1529,7 +1531,7 @@ def _cierre_preview_pedido_row(p: CierrePreviewPedidoRow) -> rx.Component:
             rx.text(p.hora, font_size="11px", color=TEXT_MUTED, font_weight="600"),
             rx.text(p.mesa, font_size="12px", color=TEXT_PRIMARY, font_weight="700"),
             rx.spacer(),
-            rx.text(p.neto_texto, font_size="12px", font_weight="800", color="#CBD5E1"),
+            rx.text(p.neto_texto, font_size="12px", font_weight="800", color="var(--twk-slate-300)"),
             width="100%", align="center", gap="8px",
         ),
         rx.text("Método: " + p.metodo, font_size="11px", color=TEXT_MUTED),
@@ -1549,7 +1551,7 @@ def _cierre_preview_mov_row(m: CierrePreviewMovRow) -> rx.Component:
         rx.text(m.hora, font_size="11px", color=TEXT_MUTED, min_width="70px"),
         rx.text(m.tipo, font_size="11px", color=TEXT_PRIMARY, font_weight="700", min_width="60px"),
         rx.text(m.detalle, font_size="11px", color=TEXT_MUTED, no_of_lines=1, flex="1"),
-        rx.text(m.monto_texto, font_size="11px", font_weight="700", color="#CBD5E1"),
+        rx.text(m.monto_texto, font_size="11px", font_weight="700", color="var(--twk-slate-300)"),
         width="100%", align="center", gap="8px",
         padding="6px 10px", border_bottom=f"1px solid {DARK_800}",
     )
@@ -1581,7 +1583,7 @@ def _cierre_preview_modal() -> rx.Component:
                         rx.hstack(
                             rx.text("Descuadre", font_size="12px", color=TEXT_MUTED),
                             rx.spacer(),
-                            rx.text(FoodState.cierre_preview_descuadre_texto, font_size="12px", font_weight="800", color="#CBD5E1"),
+                            rx.text(FoodState.cierre_preview_descuadre_texto, font_size="12px", font_weight="800", color="var(--twk-slate-300)"),
                             width="100%",
                         ),
                         rx.text(
@@ -1678,7 +1680,7 @@ def _ultimo_cobro_row(cobro: UltimoCobroView) -> rx.Component:
             rx.text(cobro.detalle, font_size="12px", color=TEXT_MUTED, no_of_lines=1),
             spacing="0", flex="1", min_width="0",
         ),
-        rx.text(cobro.total_texto, font_size="13px", font_weight="700", color=SUCCESS_SOLID,
+        rx.text(cobro.total_texto, font_size="13px", font_weight="700", color=SUCCESS_TEXT,
                 min_width="80px", text_align="right"),
         rx.tooltip(
             rx.icon(tag="printer", size=16, color=ACCENT, cursor="pointer",
@@ -1725,7 +1727,7 @@ def _ultimos_cobros_modal() -> rx.Component:
                     rx.spacer(),
                     rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
                             on_click=FoodState.toggle_ultimos_cobros,
-                            _hover={"color": "#F1F5F9"}),
+                            _hover={"color": "var(--twk-text-primary)"}),
                     width="100%", align="center",
                 ),
                 rx.text("Últimas 20 ventas cobradas en el turno activo.",
@@ -1776,11 +1778,11 @@ def _correccion_metodo_btn(metodo: MetodoPagoView) -> rx.Component:
     return rx.box(
         rx.text(metodo.icono, font_size="16px", line_height="1"),
         rx.text(metodo.nombre, font_size="11px", font_weight="700",
-                color=rx.cond(activo, "#FFFFFF", "#94A3B8"),
+                color=rx.cond(activo, "#FFFFFF", "var(--twk-slate-400)"),
                 text_align="center", line_height="1.1"),
         on_click=FoodState.set_correccion_metodo(metodo.codigo),
         background=rx.cond(activo, ACCENT, DARK_800),
-        border=rx.cond(activo, "2px solid #EA580C", "2px solid #334155"),
+        border=rx.cond(activo, "2px solid #EA580C", "2px solid var(--twk-d700)"),
         border_radius="10px", padding="8px 4px", cursor="pointer",
         display="flex", flex_direction="column", align_items="center", gap="3px",
         transition="all 0.15s ease", _hover={"border": "2px solid #EA580C"},
@@ -1796,7 +1798,7 @@ def _correccion_linea_row(linea: CorreccionLineaView, idx: int) -> rx.Component:
             spacing="0", align="start", flex="1", min_width="0",
         ),
         rx.hstack(
-            rx.icon(tag="circle_minus", size=18, color="#94A3B8", cursor="pointer",
+            rx.icon(tag="circle_minus", size=18, color="var(--twk-slate-400)", cursor="pointer",
                     on_click=FoodState.correccion_dec_linea(idx),
                     _hover={"color": "#EF4444"}),
             rx.text(linea.cantidad, font_size="14px", font_weight="800",
@@ -1869,7 +1871,7 @@ def _correccion_modal() -> rx.Component:
                             placeholder="0.00", value=FoodState.correccion_descuento,
                             on_change=FoodState.set_correccion_descuento,
                             type="number", width="100%",
-                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                             color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
                             _focus={"border_color": ACCENT},
                         ),
@@ -1881,7 +1883,7 @@ def _correccion_modal() -> rx.Component:
                             placeholder="0.00", value=FoodState.correccion_propina,
                             on_change=FoodState.set_correccion_propina,
                             type="number", width="100%",
-                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                             color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
                             _focus={"border_color": ACCENT},
                         ),
@@ -1895,7 +1897,7 @@ def _correccion_modal() -> rx.Component:
                             color=TEXT_MUTED),
                     rx.spacer(),
                     rx.text(FoodState.correccion_total_texto, font_size="18px",
-                            font_weight="800", color=SUCCESS_SOLID),
+                            font_weight="800", color=SUCCESS_TEXT),
                     width="100%", align="center",
                 ),
                 # Motivo
@@ -1903,7 +1905,7 @@ def _correccion_modal() -> rx.Component:
                     placeholder="Motivo de la corrección (obligatorio)",
                     value=FoodState.correccion_motivo,
                     on_change=FoodState.set_correccion_motivo,
-                    width="100%", background=DARK_800, border=f"1px solid {DARK_700}",
+                    width="100%", background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
                     _focus={"border_color": ACCENT},
                 ),
@@ -1920,7 +1922,7 @@ def _correccion_modal() -> rx.Component:
                         background=DARK_800, color=TEXT_MUTED,
                         border=f"1px solid {DARK_700}", border_radius="10px",
                         font_size="14px", font_weight="600", cursor="pointer",
-                        _hover={"background": "#334155", "color": "#F1F5F9"}, flex="1",
+                        _hover={"background": "var(--twk-d700)", "color": "var(--twk-text-primary)"}, flex="1",
                     ),
                     rx.button(
                         "Guardar corrección",
@@ -1947,7 +1949,7 @@ def _reversion_modal() -> rx.Component:
         rx.dialog.content(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="triangle_alert", size=18, color=DANGER_SOLID),
+                    rx.icon(tag="triangle_alert", size=18, color=DANGER_TEXT),
                     rx.dialog.title("Anular cobro — " + FoodState.reversion_referencia,
                             font_size="17px", font_weight="800", color=TEXT_PRIMARY, margin="0"),
                     spacing="2", align="center",
@@ -1964,7 +1966,7 @@ def _reversion_modal() -> rx.Component:
                     value=FoodState.reversion_motivo,
                     on_change=FoodState.set_reversion_motivo,
                     width="100%",
-                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     color=TEXT_PRIMARY,
                     border_radius="8px", font_size="13px",
                     _focus={"border_color": "#DC2626"},
@@ -1982,7 +1984,7 @@ def _reversion_modal() -> rx.Component:
                         background=DARK_800, color=TEXT_MUTED,
                         border=f"1px solid {DARK_700}", border_radius="10px",
                         font_size="14px", font_weight="600", cursor="pointer",
-                        _hover={"background": "#334155", "color": "#F1F5F9"}, flex="1",
+                        _hover={"background": "var(--twk-d700)", "color": "var(--twk-text-primary)"}, flex="1",
                     ),
                     rx.button(
                         "Confirmar anulación",
@@ -2016,7 +2018,7 @@ def _caja_add_producto_row(p: ProductoView) -> rx.Component:
             rx.text(p.categoria_nombre, font_size="11px", color=TEXT_MUTED),
             spacing="0", align="start", flex="1", min_width="0",
         ),
-        rx.text(p.precio_texto, font_size="13px", font_weight="700", color="#CBD5E1"),
+        rx.text(p.precio_texto, font_size="13px", font_weight="700", color="var(--twk-slate-300)"),
         rx.icon(tag="circle_plus", size=18, color=ACCENT),
         on_click=FoodState.caja_agregar_producto(p.id),
         width="100%", align="center", gap="10px",
@@ -2046,7 +2048,7 @@ def _caja_add_modal() -> rx.Component:
                     placeholder="Buscar producto...",
                     value=FoodState.caja_add_busqueda,
                     on_change=FoodState.set_caja_add_busqueda,
-                    width="100%", background=DARK_800, border=f"1px solid {DARK_700}",
+                    width="100%", background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
                     _focus={"border_color": ACCENT},
                 ),
@@ -2084,7 +2086,7 @@ def _caja_quitar_modal() -> rx.Component:
         rx.dialog.content(
             rx.vstack(
                 rx.hstack(
-                    rx.icon(tag="triangle_alert", size=18, color=DANGER_SOLID),
+                    rx.icon(tag="triangle_alert", size=18, color=DANGER_TEXT),
                     rx.dialog.title("Quitar — " + FoodState.caja_quitar_item_nombre,
                             font_size="17px", font_weight="800", color=TEXT_PRIMARY, margin="0"),
                     spacing="2", align="center",
@@ -2098,7 +2100,7 @@ def _caja_quitar_modal() -> rx.Component:
                     placeholder="Motivo (obligatorio)",
                     value=FoodState.caja_quitar_motivo,
                     on_change=FoodState.set_caja_quitar_motivo,
-                    width="100%", background=DARK_800, border=f"1px solid {DARK_700}",
+                    width="100%", background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     color=TEXT_PRIMARY, border_radius="8px", font_size="13px",
                     _focus={"border_color": "#DC2626"},
                 ),
@@ -2113,7 +2115,7 @@ def _caja_quitar_modal() -> rx.Component:
                         "Volver", on_click=FoodState.cancelar_caja_quitar,
                         background=DARK_800, color=TEXT_MUTED, border=f"1px solid {DARK_700}",
                         border_radius="10px", font_size="14px", font_weight="600",
-                        cursor="pointer", _hover={"background": "#334155", "color": "#F1F5F9"}, flex="1",
+                        cursor="pointer", _hover={"background": "var(--twk-d700)", "color": "var(--twk-text-primary)"}, flex="1",
                     ),
                     rx.button(
                         "Quitar ítem", on_click=FoodState.caja_confirmar_quitar,

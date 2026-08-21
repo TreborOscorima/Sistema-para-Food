@@ -8,10 +8,11 @@ from app.states.food_state import FoodState, CuentaView, MovimientoView, AdminLo
 from app.pages.dono import _dono_shell
 from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
+    SUCCESS_DARK,
     ACCENT, ACCENT_HOVER, ACCENT_TEXT,
     DANGER_TEXT, DANGER_SOLID, SUCCESS_SOLID, SUCCESS_DARK, WARNING_SOLID,
     DARK_600, DARK_700, DARK_800,
-    PAGE_BACKGROUND, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_WHITE,
+    PAGE_BACKGROUND, SURFACE_BASE, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, TEXT_WHITE,
 )
 
 
@@ -29,7 +30,7 @@ def _cc_kpi_card(label: str, value, icon: str, accent: str, bg: str) -> rx.Compo
                     text_transform="uppercase", letter_spacing="0.06em"),
             spacing="2", align="start", width="100%",
         ),
-        background=DARK_800, border=f"1px solid {DARK_700}",
+        background=SURFACE_BASE, border=f"1px solid {DARK_700}",
         border_radius="12px", padding="14px 16px",
         box_shadow="0 1px 3px rgba(0,0,0,0.06)", flex="1", min_width="0",
     )
@@ -152,7 +153,7 @@ def _pago_form() -> rx.Component:
                 rx.icon(tag="check", size=13),
                 "Registrar pago",
                 on_click=FoodState.registrar_pago_cc,
-                background=SUCCESS_SOLID, color=TEXT_WHITE,
+                background=SUCCESS_DARK, color=TEXT_WHITE,
                 border_radius="7px", font_size="13px", font_weight="700",
                 padding_x="16px", padding_y="8px", cursor="pointer",
                 width="100%", justify="center",
@@ -216,7 +217,7 @@ def _cuenta_detalle() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            background=DARK_800, border=f"1px solid {DARK_700}",
+            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
             border_radius="12px", padding="16px 18px", width="100%",
             box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),
@@ -283,7 +284,7 @@ def _cuentas_content() -> rx.Component:
                     spacing="1", align="center",
                 ),
                 on_click=FoodState.exportar_cuentas_excel,
-                background=SUCCESS_SOLID,
+                background=SUCCESS_DARK,
                 border_radius="8px",
                 padding_x="14px", padding_y="7px",
                 cursor="pointer",
@@ -351,7 +352,7 @@ def _cuentas_content() -> rx.Component:
                 ),
                 spacing="3", width="100%",
             ),
-            background=DARK_800, border=f"1px solid {DARK_700}",
+            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
             border_radius="12px", padding="16px 18px", width="100%",
             box_shadow="0 1px 3px rgba(0,0,0,0.06)",
         ),

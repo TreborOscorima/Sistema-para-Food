@@ -178,22 +178,27 @@ MESA_LABELS = {
     EstadoMesa.ESPERANDO_CUENTA.value: "Esperando cuenta",
 }
 MESA_BADGE_BACKGROUNDS = {
-    EstadoMesa.LIBRE.value: "rgba(51,65,85,0.5)",
+    # "Libre" usa un chip neutro que se adapta al modo (antes rgba fija + slate
+    # como texto → casi invisible en claro). d700 se invierte a gris claro y
+    # text-secondary se oscurece en claro: legible en ambos modos.
+    EstadoMesa.LIBRE.value: "var(--twk-d700)",
     EstadoMesa.OCUPADA.value: "rgba(234,88,12,0.18)",
     EstadoMesa.ESPERANDO_CUENTA.value: "rgba(245,158,11,0.18)",
 }
 MESA_BADGE_TEXTS = {
-    EstadoMesa.LIBRE.value: "#94A3B8",
-    EstadoMesa.OCUPADA.value: "#FDBA74",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#FCD34D",
+    EstadoMesa.LIBRE.value: "var(--twk-text-secondary)",
+    EstadoMesa.OCUPADA.value: "var(--twk-accent-text)",
+    EstadoMesa.ESPERANDO_CUENTA.value: "var(--twk-warning-text)",
 }
 MESA_CARD_BACKGROUNDS = {
-    EstadoMesa.LIBRE.value: "#1E293B",
-    EstadoMesa.OCUPADA.value: "#1E293B",
-    EstadoMesa.ESPERANDO_CUENTA.value: "#1E293B",
+    # surface-base (no d800): en oscuro es el mismo #1E293B, pero en claro es
+    # blanco en vez de #F1F5F9 (= page-bg) → la tarjeta se despega del fondo.
+    EstadoMesa.LIBRE.value: "var(--twk-surface-base)",
+    EstadoMesa.OCUPADA.value: "var(--twk-surface-base)",
+    EstadoMesa.ESPERANDO_CUENTA.value: "var(--twk-surface-base)",
 }
 MESA_CARD_BORDERS = {
-    EstadoMesa.LIBRE.value: "2px solid #334155",
+    EstadoMesa.LIBRE.value: "2px solid var(--twk-d700)",
     EstadoMesa.OCUPADA.value: "2px solid #EA580C",
     EstadoMesa.ESPERANDO_CUENTA.value: "2px solid #F59E0B",
 }
@@ -271,10 +276,10 @@ _ROL_BADGE_BG: dict[str, str] = {
     RolUsuario.COCINA.value: "rgba(245,158,11,0.12)",
 }
 _ROL_BADGE_TEXT: dict[str, str] = {
-    RolUsuario.ADMIN.value: "#EA580C",
-    RolUsuario.MOZO.value: "#3B82F6",
-    RolUsuario.CAJA.value: "#22C55E",
-    RolUsuario.COCINA.value: "#F59E0B",
+    RolUsuario.ADMIN.value: "var(--twk-accent-text)",
+    RolUsuario.MOZO.value: "var(--twk-info-text)",
+    RolUsuario.CAJA.value: "var(--twk-success-text)",
+    RolUsuario.COCINA.value: "var(--twk-warning-text)",
 }
 _ROL_PERM_DEFAULTS: dict[str, dict[str, bool]] = {
     RolUsuario.ADMIN.value:  {"descuento": True,  "anular": True,  "reportes": True,  "turno": True,  "inventario": True,  "costos": True,  "reimprimir": True,  "corregir": True},

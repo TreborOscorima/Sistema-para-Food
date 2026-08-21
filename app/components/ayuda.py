@@ -19,8 +19,8 @@ from app.components.shared import (
     ACCENT, ACCENT_HOVER,
     DARK_700, DARK_800,
     DARK_MODAL_MUTED, DARK_MODAL_PROPS, DARK_MODAL_TEXT,
-    PAGE_BACKGROUND,
-    TEXT_MUTED, TEXT_WHITE,
+    PAGE_BACKGROUND, SURFACE_BASE,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
 )
 
 
@@ -48,7 +48,7 @@ def ayuda_trigger() -> rx.Component:
         rx.text("¿Cómo funciona?", font_size="12px", font_weight="600", color=TEXT_MUTED),
         on_click=AyudaState.abrir,
         spacing="2", align="center", cursor="pointer",
-        background=DARK_800, border=f"1px solid {DARK_700}",
+        background=SURFACE_BASE, border=f"1px solid {DARK_700}",
         border_radius="8px", padding="6px 12px",
         _hover={"border_color": ACCENT, "color": TEXT_WHITE},
         flex_shrink="0",
@@ -156,7 +156,7 @@ def empty_state(*, icono: str, titulo: str, texto: str,
     solución. Pensado para las vistas oscuras (Mozos/Caja/Cocina)."""
     hijos = [
         rx.icon(tag=icono, size=30, color=TEXT_MUTED),
-        rx.text(titulo, font_size="14px", font_weight="700", color=TEXT_WHITE),
+        rx.text(titulo, font_size="14px", font_weight="700", color=TEXT_PRIMARY),
         rx.text(texto, font_size="12px", color=TEXT_MUTED,
                 line_height="1.5", text_align="center"),
     ]

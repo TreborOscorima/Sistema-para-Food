@@ -6,11 +6,12 @@ import reflex as rx
 
 from app.components.ayuda import ayuda_modal, ayuda_trigger, empty_state
 from app.components.shared import (
+    SUCCESS_TEXT, DANGER_TEXT,
     app_shell,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_700, DARK_800,
-    PAGE_BACKGROUND,
+    PAGE_BACKGROUND, SURFACE_BASE,
     SUCCESS_SOLID,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_WHITE,
     WARNING_SOLID,
@@ -31,8 +32,8 @@ def _categoria_row(cat: CategoriaView) -> rx.Component:
                 ),
                 rx.cond(
                     cat.activa,
-                    rx.badge("Activa", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID, border_radius="5px", font_size="10px"),
-                    rx.badge("Inactiva", background="rgba(239,68,68,0.12)", color="#F87171", border_radius="5px", font_size="10px"),
+                    rx.badge("Activa", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT, border_radius="5px", font_size="10px"),
+                    rx.badge("Inactiva", background="rgba(239,68,68,0.12)", color="var(--twk-danger-text)", border_radius="5px", font_size="10px"),
                 ),
                 spacing="2",
                 align="center",
@@ -114,7 +115,7 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                 width="40px",
                 height="40px",
                 border_radius="10px",
-                background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                background="linear-gradient(135deg,var(--twk-accent-text),#EA580C)",
                 display="flex",
                 align_items="center",
                 justify_content="center",
@@ -127,8 +128,8 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                 rx.text(prod.nombre, font_size="13px", font_weight="600", color=TEXT_PRIMARY),
                 rx.cond(
                     prod.disponible,
-                    rx.badge("Disponible", background="rgba(34,197,94,0.12)", color=SUCCESS_SOLID, border_radius="5px", font_size="10px"),
-                    rx.badge("No disponible", background="rgba(239,68,68,0.12)", color="#F87171", border_radius="5px", font_size="10px"),
+                    rx.badge("Disponible", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT, border_radius="5px", font_size="10px"),
+                    rx.badge("No disponible", background="rgba(239,68,68,0.12)", color="var(--twk-danger-text)", border_radius="5px", font_size="10px"),
                 ),
                 rx.cond(
                     prod.stock_diario >= 0,
@@ -153,11 +154,11 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                         ),
                         color=rx.cond(
                             prod.stock_diario > prod.stock_diario_alerta,
-                            "#60A5FA",
+                            "var(--twk-info-text)",
                             rx.cond(
                                 prod.stock_diario > 0,
-                                "#F59E0B",
-                                "#F87171",
+                                "var(--twk-warning-text)",
+                                "var(--twk-danger-text)",
                             ),
                         ),
                         border_radius="5px", font_size="10px", font_weight="700",
@@ -205,14 +206,14 @@ def _producto_row(prod: ProductoView) -> rx.Component:
                         ),
                         color=rx.cond(
                             prod.margen_pct >= 50, "#22C55E",
-                            rx.cond(prod.margen_pct >= 30, "#713F12", "#F87171"),
+                            rx.cond(prod.margen_pct >= 30, "#713F12", "var(--twk-danger-text)"),
                         ),
                         border_radius="5px", font_size="10px", font_weight="700",
                         padding="1px 6px",
                     ),
                     rx.fragment(),
                 ),
-                rx.text("·", color="#CBD5E1", font_size="10px"),
+                rx.text("·", color="var(--twk-slate-300)", font_size="10px"),
                 rx.text(prod.categoria_nombre, font_size="11px", color=TEXT_MUTED),
                 spacing="1",
                 align="center",
@@ -254,8 +255,8 @@ def _producto_row(prod: ProductoView) -> rx.Component:
             rx.button(
                 rx.icon(tag="settings_2", size=15),
                 on_click=FoodState.abrir_mod_asignar(prod.id),
-                background=rx.cond(prod.tiene_modificadores, "rgba(124,58,237,0.12)", "#0F172A"),
-                color=rx.cond(prod.tiene_modificadores, "#7C3AED", "#94A3B8"),
+                background=rx.cond(prod.tiene_modificadores, "rgba(124,58,237,0.12)", "var(--twk-d900)"),
+                color=rx.cond(prod.tiene_modificadores, "#7C3AED", "var(--twk-slate-400)"),
                 border=rx.cond(prod.tiene_modificadores, "1px solid rgba(124,58,237,0.30)", f"1px solid {DARK_700}"),
                 border_radius="6px", cursor="pointer",
                 padding="6px", min_width="0", height="auto",
@@ -295,7 +296,7 @@ def _cat_modal() -> rx.Component:
                         color=TEXT_MUTED,
                         border="none",
                         border_radius="6px",
-                        _hover={"background": "#334155", "color": "#F1F5F9"},
+                        _hover={"background": "var(--twk-d700)", "color": "var(--twk-text-primary)"},
                     ),
                     width="100%", align="center",
                 ),
@@ -427,7 +428,7 @@ def _prod_modal() -> rx.Component:
                         color=TEXT_MUTED,
                         border="none",
                         border_radius="6px",
-                        _hover={"background": "#334155", "color": "#F1F5F9"},
+                        _hover={"background": "var(--twk-d700)", "color": "var(--twk-text-primary)"},
                     ),
                     width="100%", align="center",
                 ),
@@ -538,7 +539,7 @@ def _prod_modal() -> rx.Component:
                                 font_size="20px", line_height="1",
                             ),
                             width="40px", height="40px", border_radius="10px",
-                            background="linear-gradient(135deg,#FDBA74,#EA580C)",
+                            background="linear-gradient(135deg,var(--twk-accent-text),#EA580C)",
                             display="flex", align_items="center", justify_content="center",
                             flex_shrink="0",
                         ),
@@ -546,7 +547,7 @@ def _prod_modal() -> rx.Component:
                             placeholder="Auto: " + FoodState.producto_form_emoji_sugerido,
                             value=FoodState.producto_form_emoji,
                             on_change=FoodState.set_producto_form_emoji,
-                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                             color=TEXT_PRIMARY, border_radius="8px",
                             padding_x="12px", padding_y="8px", font_size="13px",
                             flex="1",
@@ -583,11 +584,11 @@ def _prod_modal() -> rx.Component:
                                 on_click=FoodState.toggle_producto_tag(tag),
                                 background=rx.cond(
                                     FoodState.producto_form_tags.contains(tag),
-                                    "rgba(234,88,12,0.08)", "#0F172A",
+                                    "rgba(234,88,12,0.08)", "var(--twk-d900)",
                                 ),
                                 color=rx.cond(
                                     FoodState.producto_form_tags.contains(tag),
-                                    "#C2410C", "#94A3B8",
+                                    "#C2410C", "var(--twk-slate-400)",
                                 ),
                                 border=rx.cond(
                                     FoodState.producto_form_tags.contains(tag),
@@ -624,11 +625,11 @@ def _prod_modal() -> rx.Component:
                                 border=f"1px solid {DARK_700}",
                             ),
                             rx.vstack(
-                                rx.text("Imagen cargada", font_size="11px", color=SUCCESS_SOLID, font_weight="600"),
+                                rx.text("Imagen cargada", font_size="11px", color=SUCCESS_TEXT, font_weight="600"),
                                 rx.button(
                                     "Quitar imagen",
                                     on_click=FoodState.quitar_imagen_producto,
-                                    background="rgba(239,68,68,0.08)", color="#F87171",
+                                    background="rgba(239,68,68,0.08)", color="var(--twk-danger-text)",
                                     border="1px solid #FECACA", border_radius="6px",
                                     font_size="11px", cursor="pointer",
                                     padding_x="8px", padding_y="3px",
@@ -651,7 +652,7 @@ def _prod_modal() -> rx.Component:
                             ),
                             accept={"image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"]},
                             max_files=1,
-                            border="2px dashed #334155",
+                            border="2px dashed var(--twk-d700)",
                             border_radius="8px",
                             padding="16px",
                             width="100%",
@@ -712,7 +713,7 @@ def _prod_modal() -> rx.Component:
                         rx.cond(FoodState.producto_form_disponible, "Disponible", "No disponible"),
                         on_click=FoodState.set_producto_form_disponible(~FoodState.producto_form_disponible),
                         background=rx.cond(FoodState.producto_form_disponible, "rgba(34,197,94,0.12)", "rgba(239,68,68,0.12)"),
-                        color=rx.cond(FoodState.producto_form_disponible, "#22C55E", "#F87171"),
+                        color=rx.cond(FoodState.producto_form_disponible, "#22C55E", "var(--twk-danger-text)"),
                         border=rx.cond(FoodState.producto_form_disponible, "1px solid #BBF7D0", "1px solid #FECACA"),
                         border_radius="6px",
                         font_size="12px",
@@ -772,12 +773,12 @@ def _grupo_mod_row(grupo: GrupoModificadorAdminView) -> rx.Component:
                     grupo.opciones_count.to_string() + " opciones",
                     font_size="11px", color=TEXT_MUTED,
                 ),
-                rx.text("·", color="#CBD5E1", font_size="10px"),
+                rx.text("·", color="var(--twk-slate-300)", font_size="10px"),
                 rx.text(
                     grupo.productos_count.to_string() + " productos",
                     font_size="11px", color=TEXT_MUTED,
                 ),
-                rx.text("·", color="#CBD5E1", font_size="10px"),
+                rx.text("·", color="var(--twk-slate-300)", font_size="10px"),
                 rx.text(
                     "mín " + grupo.min_selecciones.to_string() + " / máx " + grupo.max_selecciones.to_string(),
                     font_size="11px", color=TEXT_MUTED,
@@ -796,7 +797,7 @@ def _grupo_mod_row(grupo: GrupoModificadorAdminView) -> rx.Component:
             _hover={"opacity": "0.85"},
         ),
         rx.button(
-            rx.icon(tag="trash_2", size=12, color="#F87171"),
+            rx.icon(tag="trash_2", size=12, color="var(--twk-danger-text)"),
             on_click=FoodState.eliminar_grupo_modificador(grupo.id),
             background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
             border_radius="6px", cursor="pointer",
@@ -822,7 +823,7 @@ def _mod_grupo_modal() -> rx.Component:
                     placeholder="Nombre del grupo (ej: Tamaño, Extras, Término)",
                     value=FoodState.mod_grupo_form_nombre,
                     on_change=FoodState.set_mod_grupo_form_nombre,
-                    background=DARK_800, border=f"1px solid {DARK_700}",
+                    background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                     color=TEXT_PRIMARY, border_radius="8px",
                     padding="8px 12px", font_size="13px", width="100%",
                     _focus={"border_color": "#EA580C"},
@@ -834,7 +835,7 @@ def _mod_grupo_modal() -> rx.Component:
                             value=FoodState.mod_grupo_form_min,
                             on_change=FoodState.set_mod_grupo_form_min,
                             type="number", min="0", width="80px",
-                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                             color=TEXT_PRIMARY, border_radius="8px",
                             padding="6px 10px", font_size="13px",
                         ),
@@ -846,7 +847,7 @@ def _mod_grupo_modal() -> rx.Component:
                             value=FoodState.mod_grupo_form_max,
                             on_change=FoodState.set_mod_grupo_form_max,
                             type="number", min="1", width="80px",
-                            background=DARK_800, border=f"1px solid {DARK_700}",
+                            background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                             color=TEXT_PRIMARY, border_radius="8px",
                             padding="6px 10px", font_size="13px",
                         ),
@@ -854,7 +855,7 @@ def _mod_grupo_modal() -> rx.Component:
                     ),
                     spacing="3",
                 ),
-                rx.text("Opciones", font_size="13px", font_weight="600", color="#CBD5E1"),
+                rx.text("Opciones", font_size="13px", font_weight="600", color="var(--twk-slate-300)"),
                 rx.vstack(
                     rx.foreach(
                         FoodState.mod_opciones_form,
@@ -864,7 +865,7 @@ def _mod_grupo_modal() -> rx.Component:
                                 value=op["nombre"].to(str),
                                 on_change=lambda v: FoodState.set_opcion_mod_nombre(idx.to_string() + "|" + v),
                                 flex="1", min_width="100px",
-                                background=DARK_800, border=f"1px solid {DARK_700}",
+                                background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                                 color=TEXT_PRIMARY, border_radius="6px",
                                 padding="5px 8px", font_size="12px",
                             ),
@@ -873,12 +874,12 @@ def _mod_grupo_modal() -> rx.Component:
                                 value=op["precio_extra"].to(str),
                                 on_change=lambda v: FoodState.set_opcion_mod_precio(idx.to_string() + "|" + v),
                                 type="number", step="0.50", width="80px",
-                                background=DARK_800, border=f"1px solid {DARK_700}",
+                                background=SURFACE_BASE, border=f"1px solid {DARK_700}",
                                 color=TEXT_PRIMARY, border_radius="6px",
                                 padding="5px 8px", font_size="12px",
                             ),
                             rx.button(
-                                rx.icon(tag="x", size=12, color="#F87171"),
+                                rx.icon(tag="x", size=12, color="var(--twk-danger-text)"),
                                 on_click=FoodState.eliminar_opcion_mod_form(idx),
                                 background="rgba(239,68,68,0.08)", border="1px solid #FECACA",
                                 border_radius="6px", padding="4px", cursor="pointer",
@@ -896,7 +897,7 @@ def _mod_grupo_modal() -> rx.Component:
                     ),
                     on_click=FoodState.agregar_opcion_mod_form,
                     background=PAGE_BACKGROUND, color=TEXT_MUTED,
-                    border="1px dashed #CBD5E1", border_radius="6px",
+                    border="1px dashed var(--twk-slate-300)", border_radius="6px",
                     font_size="12px", cursor="pointer", width="100%",
                     padding_y="6px",
                     _hover={"background": DARK_700},
@@ -1023,7 +1024,7 @@ def _combo_row(combo: dict) -> rx.Component:
                     rx.icon(tag="pencil", size=12),
                     on_click=FoodState.editar_combo(combo["id"].to(int)),
                     background="transparent", color=TEXT_MUTED, border="none", size="1",
-                    cursor="pointer", _hover={"color": "#F1F5F9"},
+                    cursor="pointer", _hover={"color": "var(--twk-text-primary)"},
                 ),
                 content="Editar combo",
             ),
@@ -1032,7 +1033,7 @@ def _combo_row(combo: dict) -> rx.Component:
                     rx.icon(tag=rx.cond(combo["activo"].to(bool), "eye", "eye_off"), size=12),
                     on_click=FoodState.toggle_combo_activo(combo["id"].to(int)),
                     background="transparent",
-                    color=rx.cond(combo["activo"].to(bool), "#16A34A", "#94A3B8"),
+                    color=rx.cond(combo["activo"].to(bool), "#16A34A", "var(--twk-slate-400)"),
                     border="none", size="1", cursor="pointer",
                 ),
                 content=rx.cond(combo["activo"].to(bool), "Ocultar de la carta", "Mostrar en la carta"),
@@ -1041,8 +1042,8 @@ def _combo_row(combo: dict) -> rx.Component:
                 rx.icon_button(
                     rx.icon(tag="trash_2", size=12),
                     on_click=FoodState.eliminar_combo(combo["id"].to(int)),
-                    background="transparent", color=DANGER_SOLID, border="none", size="1",
-                    cursor="pointer", _hover={"color": "#F87171"},
+                    background="transparent", color=DANGER_TEXT, border="none", size="1",
+                    cursor="pointer", _hover={"color": "var(--twk-danger-text)"},
                 ),
                 content="Eliminar combo",
             ),
@@ -1051,7 +1052,7 @@ def _combo_row(combo: dict) -> rx.Component:
         width="100%", align="center", spacing="3",
         padding="10px 12px",
         border=f"1px solid {DARK_700}", border_radius="8px",
-        background=rx.cond(combo["activo"].to(bool), "#1E293B", "#0F172A"),
+        background=rx.cond(combo["activo"].to(bool), "var(--twk-d800)", "var(--twk-d900)"),
         opacity=rx.cond(combo["activo"].to(bool), "1", "0.6"),
     )
 
@@ -1092,7 +1093,7 @@ def _combo_modal() -> rx.Component:
                     width="100%", align="center",
                 ),
                 rx.vstack(
-                    rx.text("Nombre", font_size="12px", font_weight="600", color="#CBD5E1"),
+                    rx.text("Nombre", font_size="12px", font_weight="600", color="var(--twk-slate-300)"),
                     rx.input(
                         value=FoodState.combo_form_nombre,
                         on_change=FoodState.set_combo_form_nombre,
@@ -1105,7 +1106,7 @@ def _combo_modal() -> rx.Component:
                 ),
                 rx.hstack(
                     rx.vstack(
-                        rx.text("Precio", font_size="12px", font_weight="600", color="#CBD5E1"),
+                        rx.text("Precio", font_size="12px", font_weight="600", color="var(--twk-slate-300)"),
                         rx.input(
                             value=FoodState.combo_form_precio,
                             on_change=FoodState.set_combo_form_precio,
@@ -1117,7 +1118,7 @@ def _combo_modal() -> rx.Component:
                         spacing="1", flex="1",
                     ),
                     rx.vstack(
-                        rx.text("Emoji", font_size="12px", font_weight="600", color="#CBD5E1"),
+                        rx.text("Emoji", font_size="12px", font_weight="600", color="var(--twk-slate-300)"),
                         rx.input(
                             value=FoodState.combo_form_emoji,
                             on_change=FoodState.set_combo_form_emoji,
@@ -1131,7 +1132,7 @@ def _combo_modal() -> rx.Component:
                     width="100%", spacing="3",
                 ),
                 rx.vstack(
-                    rx.text("Descripción (opcional)", font_size="12px", font_weight="600", color="#CBD5E1"),
+                    rx.text("Descripción (opcional)", font_size="12px", font_weight="600", color="var(--twk-slate-300)"),
                     rx.text_area(
                         value=FoodState.combo_form_descripcion,
                         on_change=FoodState.set_combo_form_descripcion,
@@ -1144,7 +1145,7 @@ def _combo_modal() -> rx.Component:
                 ),
                 rx.vstack(
                     rx.hstack(
-                        rx.text("Productos del combo", font_size="12px", font_weight="600", color="#CBD5E1"),
+                        rx.text("Productos del combo", font_size="12px", font_weight="600", color="var(--twk-slate-300)"),
                         rx.spacer(),
                         rx.button(
                             rx.hstack(rx.icon(tag="plus", size=10), rx.text("Agregar", font_size="10px"), spacing="1", align="center"),
@@ -1179,7 +1180,7 @@ def _combo_modal() -> rx.Component:
                                 rx.icon_button(
                                     rx.icon(tag="trash_2", size=11),
                                     on_click=FoodState.combo_remove_item(idx),
-                                    background="transparent", color=DANGER_SOLID,
+                                    background="transparent", color=DANGER_TEXT,
                                     border="none", size="1", cursor="pointer",
                                 ),
                                 spacing="2", width="100%", align="center",
@@ -1219,7 +1220,7 @@ def _combos_section() -> rx.Component:
             rx.text("Combos", font_size="15px", font_weight="700", color=TEXT_MUTED),
             rx.badge(
                 FoodState.combos_admin.length().to_string(),
-                background="rgba(245,158,11,0.12)", color="#F59E0B",
+                background="rgba(245,158,11,0.12)", color="var(--twk-warning-text)",
                 border_radius="12px", font_size="11px", font_weight="700",
                 padding_x="8px",
             ),
@@ -1231,7 +1232,7 @@ def _combos_section() -> rx.Component:
                     spacing="1", align="center",
                 ),
                 on_click=FoodState.abrir_combo_modal,
-                background="rgba(245,158,11,0.12)", color="#F59E0B",
+                background="rgba(245,158,11,0.12)", color="var(--twk-warning-text)",
                 border="1px solid rgba(245,158,11,0.25)", border_radius="6px",
                 cursor="pointer", padding_x="10px", padding_y="5px",
                 _hover={"background": "rgba(245,158,11,0.20)"},
@@ -1414,7 +1415,7 @@ def _carta_content() -> rx.Component:
                 min_width="0",
                 class_name="twk-panel",
             ),
-            rx.divider(orientation="vertical", border_color="#334155", height="auto",
+            rx.divider(orientation="vertical", border_color="var(--twk-d700)", height="auto",
                        class_name="twk-sep"),
             # ─── Productos ────────────────────────────────────────────────
             rx.vstack(
@@ -1442,7 +1443,7 @@ def _carta_content() -> rx.Component:
                         color=TEXT_PRIMARY,
                         font_size="13px",
                         flex="1",
-                        _placeholder={"color": "#94A3B8"},
+                        _placeholder={"color": "var(--twk-slate-400)"},
                     ),
                     rx.cond(
                         FoodState.carta_busqueda_productos != "",
@@ -1454,7 +1455,7 @@ def _carta_content() -> rx.Component:
                             border="none",
                             size="1",
                             cursor="pointer",
-                            _hover={"color": "#F1F5F9"},
+                            _hover={"color": "var(--twk-text-primary)"},
                         ),
                         rx.fragment(),
                     ),
