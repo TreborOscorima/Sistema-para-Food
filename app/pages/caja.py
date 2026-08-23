@@ -1181,15 +1181,21 @@ def _mov_row(mov: MovimientoCajaView) -> rx.Component:
                     spacing="1", align="center",
                 ),
                 rx.hstack(
-                    rx.icon(
-                        tag="pencil", size=15, color=TEXT_MUTED, cursor="pointer",
-                        on_click=FoodState.iniciar_edicion_movimiento(mov.id),
-                        _hover={"color": ACCENT},
+                    rx.tooltip(
+                        rx.icon(
+                            tag="pencil", size=15, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.iniciar_edicion_movimiento(mov.id),
+                            _hover={"color": ACCENT},
+                        ),
+                        content="Corregir movimiento",
                     ),
-                    rx.icon(
-                        tag="trash-2", size=15, color=TEXT_MUTED, cursor="pointer",
-                        on_click=FoodState.pedir_borrar_movimiento(mov.id),
-                        _hover={"color": "#DC2626"},
+                    rx.tooltip(
+                        rx.icon(
+                            tag="trash-2", size=15, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.pedir_borrar_movimiento(mov.id),
+                            _hover={"color": "#DC2626"},
+                        ),
+                        content="Eliminar movimiento",
                     ),
                     spacing="3", align="center",
                 ),
