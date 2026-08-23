@@ -12,14 +12,24 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 import app.models  # noqa: F401  registra todos los modelos SQLModel
-from app.models.food import EstadoPedido, EstadoTurnoCaja, Pedido, TipoMovimientoCaja
+from app.models.food import (
+    Auditoria,
+    EstadoPedido,
+    EstadoTurnoCaja,
+    MovimientoCaja,
+    Pedido,
+    TipoMovimientoCaja,
+)
 from app.states.caja_turno_mixin import (
     abrir_turno_caja,
     calcular_resumen_turno,
     cerrar_turno_caja,
+    editar_movimiento_caja,
+    eliminar_movimiento_caja,
     get_turno_abierto,
     registrar_movimiento_caja,
 )
+from sqlmodel import select
 from app.utils.tenant import (
     _refresh_tenant_models,
     register_tenant_listeners,
@@ -113,6 +123,104 @@ def test_movimientos_validaciones(db_engine):
             session.commit()
             assert mov.monto == Decimal("35.50")
             assert mov.turno_id == turno.id
+
+
+def test_corregir_movimiento_cambia_tipo_y_audita(db_engine):
+    """Corregir un egreso mal cargado a ingreso ajusta el arqueo y deja rastro."""
+    with Session(db_engine) as session:
+        with tenant_context(1, None):
+            turno = abrir_turno_caja(session, 1, usuario_id=None, monto_inicial=Decimal("100.00"))
+            session.commit()
+            # Se cargó un EGRESO de 10 por error (debía ser INGRESO).
+            mov = registrar_movimiento_caja(
+                session, turno, None, TipoMovimientoCaja.EGRESO.value,
+                "Otros", Decimal("10.00"), "fondo (mal cargado)",
+            )
+            session.commit()
+            assert calcular_resumen_turno(session, turno)["esperado_efectivo"] == Decimal("90.00")
+
+            # Corrección: pasa a INGRESO por el mismo monto.
+            editar_movimiento_caja(
+                session, turno, mov.id or 0, usuario_id=7, usuario_nombre="Ana",
+                tipo=TipoMovimientoCaja.INGRESO.value, categoria="Fondo adicional",
+                monto=Decimal("10.00"), motivo="Corrección: era ingreso",
+            )
+            session.commit()
+
+            resumen = calcular_resumen_turno(session, turno)
+            assert resumen["ingresos"] == Decimal("10.00")
+            assert resumen["egresos"] == Decimal("0.00")
+            # 100 fondo + 10 ingreso = 110 (antes daba 90)
+            assert resumen["esperado_efectivo"] == Decimal("110.00")
+
+            # Sigue siendo el MISMO registro (no se duplicó).
+            assert len(session.exec(select(MovimientoCaja)).all()) == 1
+
+            audit = session.exec(
+                select(Auditoria).where(Auditoria.accion == "correccion_movimiento_caja")
+            ).all()
+            assert len(audit) == 1
+            assert audit[0].entidad_id == mov.id
+            assert '"tipo": "egreso"' in (audit[0].detalle or "")   # before
+            assert '"tipo": "ingreso"' in (audit[0].detalle or "")  # after
+
+
+def test_eliminar_movimiento_lo_saca_del_arqueo_y_audita(db_engine):
+    with Session(db_engine) as session:
+        with tenant_context(1, None):
+            turno = abrir_turno_caja(session, 1, usuario_id=None, monto_inicial=Decimal("100.00"))
+            session.commit()
+            mov = registrar_movimiento_caja(
+                session, turno, None, TipoMovimientoCaja.EGRESO.value,
+                "Mercado", Decimal("25.00"), "compra que no fue",
+            )
+            session.commit()
+            assert calcular_resumen_turno(session, turno)["esperado_efectivo"] == Decimal("75.00")
+
+            eliminar_movimiento_caja(
+                session, turno, mov.id or 0, usuario_id=7, usuario_nombre="Ana",
+            )
+            session.commit()
+
+            # Sale del arqueo y de la lista, pero queda su rastro en Auditoría.
+            assert calcular_resumen_turno(session, turno)["esperado_efectivo"] == Decimal("100.00")
+            assert session.exec(select(MovimientoCaja)).all() == []
+            audit = session.exec(
+                select(Auditoria).where(Auditoria.accion == "eliminacion_movimiento_caja")
+            ).all()
+            assert len(audit) == 1
+            assert '"monto": "25.00"' in (audit[0].detalle or "")
+
+
+def test_corregir_movimiento_turno_cerrado_falla(db_engine):
+    with Session(db_engine) as session:
+        with tenant_context(1, None):
+            turno = abrir_turno_caja(session, 1, usuario_id=None, monto_inicial=Decimal("50.00"))
+            session.commit()
+            mov = registrar_movimiento_caja(
+                session, turno, None, TipoMovimientoCaja.EGRESO.value,
+                "Mercado", Decimal("10.00"), "x",
+            )
+            cerrar_turno_caja(session, turno, None, Decimal("40.00"))
+            session.commit()
+
+            with pytest.raises(ValueError, match="cerrado"):
+                editar_movimiento_caja(
+                    session, turno, mov.id or 0, usuario_id=None, usuario_nombre="",
+                    tipo=TipoMovimientoCaja.INGRESO.value, categoria="Otros",
+                    monto=Decimal("10.00"), motivo="tarde",
+                )
+            with pytest.raises(ValueError, match="cerrado"):
+                eliminar_movimiento_caja(session, turno, mov.id or 0, None, "")
+
+
+def test_corregir_movimiento_inexistente_falla(db_engine):
+    with Session(db_engine) as session:
+        with tenant_context(1, None):
+            turno = abrir_turno_caja(session, 1, usuario_id=None, monto_inicial=Decimal("50.00"))
+            session.commit()
+            with pytest.raises(ValueError, match="no existe"):
+                eliminar_movimiento_caja(session, turno, 9999, None, "")
 
 
 def test_resumen_turno_buckets_y_esperado(db_engine):

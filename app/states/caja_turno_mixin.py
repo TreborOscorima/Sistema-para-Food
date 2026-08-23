@@ -36,6 +36,7 @@ from app.models.food import (
     TurnoCaja,
     UsuarioFood,
 )
+from app.services.auditoria_service import registrar_auditoria
 from app.services.metodos_pago_service import (
     mapa_nombres,
     mapa_tipos,
@@ -163,6 +164,102 @@ def registrar_movimiento_caja(
     session.add(movimiento)
     session.flush()
     return movimiento
+
+
+def _mov_snapshot(m: MovimientoCaja) -> dict:
+    """Estado auditable de un movimiento (para el rastro antes/después)."""
+    return {
+        "tipo": m.tipo,
+        "categoria": m.categoria,
+        "monto": str(_dec(m.monto)),
+        "motivo": m.motivo,
+    }
+
+
+def _mov_del_turno(session, turno: TurnoCaja, movimiento_id: int) -> MovimientoCaja:
+    """Carga un movimiento verificando que pertenece a este turno/empresa."""
+    movimiento = session.exec(
+        select(MovimientoCaja).where(
+            MovimientoCaja.id == movimiento_id,
+            MovimientoCaja.company_id == turno.company_id,
+            MovimientoCaja.turno_id == turno.id,
+        )
+    ).first()
+    if movimiento is None:
+        raise ValueError("El movimiento no existe o no pertenece a este turno.")
+    return movimiento
+
+
+def editar_movimiento_caja(
+    session,
+    turno: TurnoCaja,
+    movimiento_id: int,
+    usuario_id: int | None,
+    usuario_nombre: str,
+    tipo: str,
+    categoria: str,
+    monto: Decimal,
+    motivo: str,
+) -> MovimientoCaja:
+    """Corrige un movimiento de caja ya registrado, in-place y auditado.
+
+    Solo se permite dentro del turno abierto. Registra un asiento de Auditoría
+    con el estado antes/después para que la corrección quede rastreable (quién,
+    cuándo, qué cambió).
+    """
+    if turno.estado != EstadoTurnoCaja.ABIERTO.value:
+        raise ValueError("El turno de caja ya está cerrado.")
+    if tipo not in (TipoMovimientoCaja.INGRESO.value, TipoMovimientoCaja.EGRESO.value):
+        raise ValueError("Tipo de movimiento inválido.")
+    monto = _dec(monto)
+    if monto <= 0:
+        raise ValueError("El monto debe ser mayor a cero.")
+    if not (motivo or "").strip():
+        raise ValueError("Indica el motivo del movimiento.")
+    movimiento = _mov_del_turno(session, turno, movimiento_id)
+    before = _mov_snapshot(movimiento)
+    movimiento.tipo = tipo
+    movimiento.categoria = (categoria or "Otros").strip()[:40]
+    movimiento.monto = monto
+    movimiento.motivo = motivo.strip()[:240]
+    movimiento.updated_at = utc_now_naive()
+    session.add(movimiento)
+    after = _mov_snapshot(movimiento)
+    registrar_auditoria(
+        session, turno.company_id, "correccion_movimiento_caja",
+        usuario_id=usuario_id, usuario_nombre=usuario_nombre,
+        entidad="movimiento_caja", entidad_id=movimiento_id,
+        detalle={"before": before, "after": after},
+    )
+    session.flush()
+    return movimiento
+
+
+def eliminar_movimiento_caja(
+    session,
+    turno: TurnoCaja,
+    movimiento_id: int,
+    usuario_id: int | None,
+    usuario_nombre: str,
+) -> None:
+    """Elimina un movimiento de caja ya registrado (auditado).
+
+    Solo dentro del turno abierto. El movimiento eliminado queda registrado en
+    Auditoría con su snapshot completo: el rastro no se pierde aunque la fila
+    salga de la lista y del arqueo.
+    """
+    if turno.estado != EstadoTurnoCaja.ABIERTO.value:
+        raise ValueError("El turno de caja ya está cerrado.")
+    movimiento = _mov_del_turno(session, turno, movimiento_id)
+    before = _mov_snapshot(movimiento)
+    registrar_auditoria(
+        session, turno.company_id, "eliminacion_movimiento_caja",
+        usuario_id=usuario_id, usuario_nombre=usuario_nombre,
+        entidad="movimiento_caja", entidad_id=movimiento_id,
+        detalle={"before": before},
+    )
+    session.delete(movimiento)
+    session.flush()
 
 
 def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
@@ -322,6 +419,7 @@ class MovimientoCajaView(BaseModel):
     tipo_label: str
     categoria: str
     monto_texto: str
+    monto_raw: str  # "10.00" — para precargar el formulario al corregir
     motivo: str
     usuario: str
 
@@ -407,6 +505,9 @@ class CajaTurnoMixin(rx.State, mixin=True):
     turno_movimientos: list[MovimientoCajaView] = []
     turno_ingresos_texto: str = "S/ 0.00"
     turno_egresos_texto: str = "S/ 0.00"
+    # Corrección auditada de un movimiento existente
+    turno_mov_editando_id: int = 0        # 0 = alta nueva; >0 = corrigiendo ese id
+    turno_mov_confirm_delete_id: int = 0  # id con confirmación de borrado pendiente
 
     # Cierre con arqueo
     turno_cierre_visible: bool = False
@@ -575,6 +676,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 tipo_label="Ingreso" if es_ingreso else "Egreso",
                 categoria=m.categoria,
                 monto_texto=_money(m.monto),
+                monto_raw=f"{_dec(m.monto):.2f}",
                 motivo=m.motivo,
                 usuario=usuarios.get(m.usuario_id or 0, "—"),
             ))
@@ -676,6 +778,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
     def abrir_mov_modal(self) -> None:
         self.turno_mov_modal_visible = True
         self.turno_mov_error = ""
+        self.turno_mov_editando_id = 0
+        self.turno_mov_confirm_delete_id = 0
         self.turno_mov_tipo = TipoMovimientoCaja.EGRESO.value
         self.turno_mov_categoria = "Mercado"
         self.turno_mov_monto = ""
@@ -683,6 +787,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
 
     def cerrar_mov_modal(self) -> None:
         self.turno_mov_modal_visible = False
+        self.turno_mov_editando_id = 0
+        self.turno_mov_confirm_delete_id = 0
 
     def set_turno_mov_tipo(self, v: str) -> None:
         self.turno_mov_tipo = v
@@ -706,6 +812,11 @@ class CajaTurnoMixin(rx.State, mixin=True):
         if self.caja_registrando_mov:
             return
         self.turno_mov_error = ""
+        editando_id = self.turno_mov_editando_id
+        # Corregir un movimiento existente exige el permiso dedicado.
+        if editando_id and not self.tiene_perm_corregir:
+            self.turno_mov_error = "No tienes permiso para corregir movimientos de caja."
+            return
         motivo = (self.turno_mov_motivo or "").strip()
         if not motivo:
             self.turno_mov_error = "El motivo es obligatorio."
@@ -724,25 +835,89 @@ class CajaTurnoMixin(rx.State, mixin=True):
                     self.turno_mov_error = "No hay turno de caja abierto."
                     self.caja_registrando_mov = False
                     return
-                registrar_movimiento_caja(
-                    session,
-                    turno,
-                    (self.usuario_actual.id or None) if self.usuario_actual else None,
-                    self.turno_mov_tipo,
-                    self.turno_mov_categoria,
-                    monto,
-                    motivo,
-                )
+                usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
+                if editando_id:
+                    editar_movimiento_caja(
+                        session, turno, editando_id, usuario_id,
+                        self.usuario_actual.nombre if self.usuario_actual else "",
+                        self.turno_mov_tipo, self.turno_mov_categoria, monto, motivo,
+                    )
+                else:
+                    registrar_movimiento_caja(
+                        session, turno, usuario_id,
+                        self.turno_mov_tipo, self.turno_mov_categoria, monto, motivo,
+                    )
                 session.commit()
         except ValueError as exc:
             self.turno_mov_error = str(exc)
             self.caja_registrando_mov = False
             return
         self.caja_registrando_mov = False
+        self.turno_mov_editando_id = 0
+        self.turno_mov_tipo = TipoMovimientoCaja.EGRESO.value
+        self.turno_mov_categoria = "Mercado"
         self.turno_mov_monto = ""
         self.turno_mov_motivo = ""
         self.cargar_turno_caja()
         self.turno_mov_modal_visible = True
+
+    def iniciar_edicion_movimiento(self, mov_id: int):
+        """Precarga un movimiento en el formulario para corregirlo (auditado)."""
+        if not self.tiene_perm_corregir:
+            return rx.toast.error("No tienes permiso para corregir movimientos de caja.")
+        self.turno_mov_confirm_delete_id = 0
+        self.turno_mov_error = ""
+        for m in self.turno_movimientos:
+            if m.id == mov_id:
+                self.turno_mov_editando_id = mov_id
+                self.turno_mov_tipo = m.tipo
+                self.turno_mov_categoria = m.categoria
+                self.turno_mov_monto = m.monto_raw
+                self.turno_mov_motivo = m.motivo
+                break
+
+    def cancelar_edicion_movimiento(self) -> None:
+        """Vuelve el formulario al modo 'alta nueva' sin guardar cambios."""
+        self.turno_mov_editando_id = 0
+        self.turno_mov_error = ""
+        self.turno_mov_tipo = TipoMovimientoCaja.EGRESO.value
+        self.turno_mov_categoria = "Mercado"
+        self.turno_mov_monto = ""
+        self.turno_mov_motivo = ""
+
+    def pedir_borrar_movimiento(self, mov_id: int):
+        """Muestra la confirmación en línea para eliminar ese movimiento."""
+        if not self.tiene_perm_corregir:
+            return rx.toast.error("No tienes permiso para eliminar movimientos de caja.")
+        self.turno_mov_confirm_delete_id = mov_id
+
+    def cancelar_borrar_movimiento(self) -> None:
+        self.turno_mov_confirm_delete_id = 0
+
+    def eliminar_movimiento(self, mov_id: int):
+        """Elimina un movimiento (auditado). Solo con permiso y turno abierto."""
+        if not self.tiene_perm_corregir:
+            return rx.toast.error("No tienes permiso para eliminar movimientos de caja.")
+        self.turno_mov_confirm_delete_id = 0
+        try:
+            with self._tenant_session() as session:
+                turno = get_turno_abierto(session, self._company_id(), self._sucursal_id())
+                if turno is None:
+                    return rx.toast.error("No hay turno de caja abierto.")
+                eliminar_movimiento_caja(
+                    session, turno, mov_id,
+                    (self.usuario_actual.id or None) if self.usuario_actual else None,
+                    self.usuario_actual.nombre if self.usuario_actual else "",
+                )
+                session.commit()
+        except ValueError as exc:
+            return rx.toast.error(str(exc))
+        # Si estabas corrigiendo justo el que borraste, sal del modo edición.
+        if self.turno_mov_editando_id == mov_id:
+            self.cancelar_edicion_movimiento()
+        self.cargar_turno_caja()
+        self.turno_mov_modal_visible = True
+        return rx.toast.success("Movimiento eliminado. Queda registrado en auditoría.")
 
     # ── Cierre con arqueo ────────────────────────────────────────────────────
 

@@ -1159,6 +1159,43 @@ def _mov_row(mov: MovimientoCajaView) -> rx.Component:
             font_size="14px", font_weight="800",
             color=rx.cond(es_ingreso, "#16A34A", "#DC2626"),
         ),
+        # Corregir / eliminar (solo con permiso). Auditado en ambos casos.
+        rx.cond(
+            FoodState.tiene_perm_corregir,
+            rx.cond(
+                FoodState.turno_mov_confirm_delete_id == mov.id,
+                rx.hstack(
+                    rx.text("¿Eliminar?", font_size="11px", font_weight="700",
+                            color=DANGER_TEXT),
+                    rx.button(
+                        "Sí", on_click=FoodState.eliminar_movimiento(mov.id),
+                        size="1", background="#DC2626", color=TEXT_WHITE,
+                        border_radius="6px", font_size="11px", font_weight="700",
+                        cursor="pointer", _hover={"opacity": "0.9"},
+                    ),
+                    rx.button(
+                        "No", on_click=FoodState.cancelar_borrar_movimiento,
+                        size="1", variant="soft", color_scheme="gray",
+                        border_radius="6px", font_size="11px", cursor="pointer",
+                    ),
+                    spacing="1", align="center",
+                ),
+                rx.hstack(
+                    rx.icon(
+                        tag="pencil", size=15, color=TEXT_MUTED, cursor="pointer",
+                        on_click=FoodState.iniciar_edicion_movimiento(mov.id),
+                        _hover={"color": ACCENT},
+                    ),
+                    rx.icon(
+                        tag="trash-2", size=15, color=TEXT_MUTED, cursor="pointer",
+                        on_click=FoodState.pedir_borrar_movimiento(mov.id),
+                        _hover={"color": "#DC2626"},
+                    ),
+                    spacing="3", align="center",
+                ),
+            ),
+            rx.fragment(),
+        ),
         width="100%", align="center", gap="10px",
         padding="10px 12px", border_bottom=f"1px solid {DARK_800}",
     )
@@ -1185,6 +1222,18 @@ def _mov_modal() -> rx.Component:
                 # Formulario
                 rx.box(
                     rx.vstack(
+                        rx.cond(
+                            FoodState.turno_mov_editando_id > 0,
+                            rx.hstack(
+                                rx.icon(tag="pencil", size=13, color=ACCENT),
+                                rx.text(
+                                    "Corrigiendo un movimiento — el cambio queda auditado.",
+                                    font_size="11px", font_weight="700", color=ACCENT,
+                                ),
+                                spacing="1", align="center", width="100%",
+                            ),
+                            rx.fragment(),
+                        ),
                         rx.hstack(
                             rx.select(
                                 ["egreso", "ingreso"],
@@ -1221,12 +1270,26 @@ def _mov_modal() -> rx.Component:
                                 _focus={"border_color": ACCENT},
                             ),
                             rx.button(
-                                "Registrar",
+                                rx.cond(
+                                    FoodState.turno_mov_editando_id > 0,
+                                    "Guardar cambios", "Registrar",
+                                ),
                                 on_click=FoodState.guardar_movimiento_caja,
                                 is_loading=FoodState.caja_registrando_mov,
                                 background=ACCENT, color=TEXT_WHITE,
                                 border_radius="8px", font_size="13px", font_weight="700",
                                 cursor="pointer", _hover={"background": ACCENT_HOVER},
+                            ),
+                            rx.cond(
+                                FoodState.turno_mov_editando_id > 0,
+                                rx.button(
+                                    "Cancelar",
+                                    on_click=FoodState.cancelar_edicion_movimiento,
+                                    variant="soft", color_scheme="gray",
+                                    border_radius="8px", font_size="13px",
+                                    cursor="pointer",
+                                ),
+                                rx.fragment(),
                             ),
                             spacing="2", width="100%",
                         ),
