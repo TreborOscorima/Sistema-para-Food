@@ -29,6 +29,11 @@ reflex_run*.err
 .web/
 .states/
 node_modules/
+# bun.lock local fuera del build: así el install hace fresh-resolve honrando el
+# override es-toolkit ^1.48.0 de reflex.lock/package.json (evita mismatch con
+# --frozen-lockfile si el lock local no registra el override). package.json SÍ
+# entra (no está excluido) para aportar el override.
+reflex.lock/bun.lock
 
 # Env local (se inyecta por compose)
 .env

@@ -1,0 +1,3 @@
+# Lockfile persistido de Reflex versionado: LF forzado para estabilidad
+# entre checkouts Windows/Linux (Reflex lo round-trippea en cada build).
+reflex.lock/package.json text eol=lf

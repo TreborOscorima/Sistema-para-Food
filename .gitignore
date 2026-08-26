@@ -40,7 +40,11 @@ reflex_run*.err
 dev.err
 
 # Reflex runtime lock
-reflex.lock/
+reflex.lock/*
+# Excepción: versionamos package.json para fijar el override es-toolkit ^1.48.0
+# (blindaje contra el bug recharts/compat CJS de es-toolkit <=1.47.0). bun.lock
+# se mantiene ignorado: el build hace fresh-resolve pero con el piso ^1.48.0.
+!reflex.lock/package.json
 
 # Backups MySQL (generados por scripts/backup-mysql.sh)
 backups/*.sql.gz
