@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Column, Date, Index, JSON, Numeric, Text, UniqueConstraint, event
+from sqlalchemy import Boolean, Column, Date, Index, JSON, Numeric, Text, UniqueConstraint, event
 from sqlmodel import Field, Relationship, SQLModel
 from tuwayki_core.utils.timezone import utc_now_naive
 
@@ -238,6 +238,13 @@ class Producto(TimestampedModel, table=True):
         sa_column=Column(Numeric(10, 2), nullable=False),
     )
     disponible: bool = Field(default=True, nullable=False)
+    # Borrado lógico: un producto con historial de ventas no se puede borrar
+    # físicamente (rompería los detalles de pedidos/reportes), así que se
+    # archiva. Los archivados no aparecen en la carta ni en el POS.
+    eliminado: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default="0"),
+    )
     imagen_url: str | None = Field(default=None, max_length=500)
     emoji: str | None = Field(default=None, max_length=16)
     estacion: str | None = Field(default=None, max_length=20)
@@ -384,6 +391,14 @@ class Pedido(TimestampedModel, table=True):
     )
     recargo_concepto: str | None = Field(default=None, max_length=60)
     metodo_pago: str | None = Field(default=None, max_length=24)
+    # Vuelto entregado al cliente en el cobro (sale solo del efectivo). Se
+    # persiste para poder mostrarlo en el comprobante también al REIMPRIMIR:
+    # el efectivo se guarda neto de vuelto en food_pagos_pedido, así que sin
+    # esta columna el vuelto se perdía después del cobro.
+    vuelto: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=Column(Numeric(10, 2), nullable=False, server_default="0.00"),
+    )
     abierto_en: datetime = Field(default_factory=utc_now_naive, nullable=False)
     cerrado_en: datetime | None = Field(default=None)
     # Marca de "comprobante ya impreso/emitido". La setea la primera impresión

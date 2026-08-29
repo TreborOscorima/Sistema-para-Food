@@ -41,6 +41,8 @@ from app.models.food import (
     OpcionModificador,
     Producto,
     ProductoGrupoModificador,
+    Promocion,
+    RecetaItem,
 )
 from app.services.auditoria_service import registrar_auditoria
 from app.services.estaciones import requiere_preparacion as _requiere_prep
@@ -71,6 +73,17 @@ class CartaMixin(rx.State, mixin=True):
     carta_prod_modal: bool = False
     carta_busqueda_productos: str = ""
     carta_productos_pagina: int = 1
+
+    # Eliminar producto (con confirmación). Si el producto tiene ventas/uso se
+    # archiva; si nunca se usó se borra físicamente.
+    carta_eliminar_prod_modal: bool = False
+    carta_eliminar_prod_id: int = 0
+    carta_eliminar_prod_nombre: str = ""
+    carta_eliminar_prod_en_uso: bool = False
+
+    # Productos archivados (eliminados lógicos) y vista para restaurarlos.
+    productos_archivados: list[ProductoView] = []
+    carta_ver_archivados: bool = False
 
     categoria_form_id: int = 0
     categoria_form_nombre: str = ""
@@ -1185,6 +1198,110 @@ class CartaMixin(rx.State, mixin=True):
         if nuevo_estado:
             return rx.toast.success(f"{nombre} disponible nuevamente")
         return rx.toast.warning(f"{nombre} marcado como agotado (86)")
+
+    def _producto_en_uso(self, session, producto_id: int) -> bool:
+        """¿El producto tiene ventas o está referenciado por combos/promos?
+
+        Un producto en uso NO puede borrarse físicamente sin romper el historial
+        de ventas ni las definiciones de combos/promos, así que se archiva.
+        """
+        vendido = session.exec(
+            select(DetallePedido.id).where(DetallePedido.producto_id == producto_id).limit(1)
+        ).first()
+        if vendido is not None:
+            return True
+        en_combo = session.exec(
+            select(ComboItem.id).where(ComboItem.producto_id == producto_id).limit(1)
+        ).first()
+        if en_combo is not None:
+            return True
+        en_promo = session.exec(
+            select(Promocion.id).where(Promocion.producto_id == producto_id).limit(1)
+        ).first()
+        return en_promo is not None
+
+    def solicitar_eliminar_producto(self, producto_id: int):
+        """Abre la confirmación de eliminación, indicando si se archivará."""
+        with self._tenant_session() as session:
+            prod = session.get(Producto, producto_id)
+            if prod is None or prod.company_id != self._company_id():
+                return rx.toast.error("Ese producto ya no existe.")
+            self.carta_eliminar_prod_id = producto_id
+            self.carta_eliminar_prod_nombre = prod.nombre
+            self.carta_eliminar_prod_en_uso = self._producto_en_uso(session, producto_id)
+        self.carta_eliminar_prod_modal = True
+
+    def set_carta_eliminar_prod_modal(self, v: bool) -> None:
+        self.carta_eliminar_prod_modal = v
+
+    def cancelar_eliminar_producto(self) -> None:
+        self.carta_eliminar_prod_modal = False
+        self.carta_eliminar_prod_id = 0
+        self.carta_eliminar_prod_nombre = ""
+        self.carta_eliminar_prod_en_uso = False
+
+    def confirmar_eliminar_producto(self):
+        pid = self.carta_eliminar_prod_id
+        if pid <= 0:
+            return
+        with self._tenant_session() as session:
+            prod = session.get(Producto, pid)
+            if prod is None or prod.company_id != self._company_id():
+                self.cancelar_eliminar_producto()
+                return rx.toast.error("Ese producto ya no existe.")
+            nombre = prod.nombre
+            if self._producto_en_uso(session, pid):
+                # Archivar: conserva el historial de ventas y las referencias.
+                prod.eliminado = True
+                prod.disponible = False
+                prod.updated_at = _utcnow()
+                session.add(prod)
+                session.commit()
+                accion = "archivado"
+            else:
+                # Sin ninguna referencia: borrado físico + limpieza de receta y
+                # modificadores asignados (no tienen valor histórico por sí solos).
+                for ri in session.exec(
+                    select(RecetaItem).where(RecetaItem.producto_id == pid)
+                ).all():
+                    session.delete(ri)
+                for pg in session.exec(
+                    select(ProductoGrupoModificador).where(
+                        ProductoGrupoModificador.producto_id == pid
+                    )
+                ).all():
+                    session.delete(pg)
+                session.delete(prod)
+                session.commit()
+                accion = "eliminado"
+        self.cancelar_eliminar_producto()
+        self.cargar_menu()
+        if accion == "archivado":
+            return rx.toast.success(
+                f"{nombre} archivado. Se quitó de la carta; el historial se conserva."
+            )
+        return rx.toast.success(f"{nombre} eliminado de la carta.")
+
+    def toggle_carta_ver_archivados(self) -> None:
+        self.carta_ver_archivados = not self.carta_ver_archivados
+
+    def desarchivar_producto(self, producto_id: int):
+        """Restaura un producto archivado: vuelve a la carta (No disponible)."""
+        with self._tenant_session() as session:
+            prod = session.get(Producto, producto_id)
+            if prod is None or prod.company_id != self._company_id():
+                return rx.toast.error("Ese producto ya no existe.")
+            nombre = prod.nombre
+            prod.eliminado = False
+            # Vuelve como "No disponible" para que el dueño decida cuándo activarlo.
+            prod.disponible = False
+            prod.updated_at = _utcnow()
+            session.add(prod)
+            session.commit()
+        self.cargar_menu()
+        return rx.toast.success(
+            f"{nombre} restaurado. Está en la carta como “No disponible”; actívalo cuando quieras venderlo."
+        )
 
     def _reset_producto_form(self) -> None:
         self.producto_form_id = 0

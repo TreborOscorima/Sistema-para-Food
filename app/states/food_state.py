@@ -1657,6 +1657,18 @@ class FoodState(
     ultimos_cobros_visible: bool = False
     ultimos_cobros: list[UltimoCobroView] = []
 
+    # Preview en pantalla de comprobante / pre-cuenta (antes de imprimir). Sirve
+    # para PODER previsualizar aun en modo "agente" (donde imprimir solo encola
+    # al agente local) y para reimprimir viendo primero el ticket.
+    preview_ticket_visible: bool = False
+    preview_ticket_titulo: str = ""
+    preview_ticket_text: str = ""
+    preview_ticket_html: str = ""
+    preview_ticket_rol: str = "caja"
+    preview_ticket_tipo: str = "comprobante"
+    preview_ticket_pedido_id: int = 0
+    preview_ticket_marcar_impreso: bool = False
+
     # Anulación auditada de pedidos/ventas
     anulacion_modal_visible: bool = False
     anulacion_pedido_id: int = 0
@@ -3720,6 +3732,63 @@ class FoodState(
                 return None
         return rx.call_script(build_print_script(html))
 
+    # ─── Preview de comprobante / pre-cuenta ─────────────────────────────────
+    def _abrir_preview_ticket(
+        self,
+        *,
+        titulo: str,
+        lines: list[str],
+        rol: str = "caja",
+        tipo_doc: str = "comprobante",
+        pedido_id: int = 0,
+        marcar_impreso: bool = False,
+    ) -> None:
+        """Guarda el ticket ya armado y abre el modal de previsualización.
+
+        La impresión real (navegador o agente) se dispara desde el botón
+        "Imprimir" del modal (ver :meth:`imprimir_preview_ticket`), así el
+        usuario ve primero el comprobante aun cuando la empresa imprime por
+        agente local.
+        """
+        self.preview_ticket_titulo = titulo
+        self.preview_ticket_text = ticket_text(lines)
+        self.preview_ticket_html = render_ticket_html(
+            titulo, lines, self._ticket_paper_width_mm()
+        )
+        self.preview_ticket_rol = rol
+        self.preview_ticket_tipo = tipo_doc
+        self.preview_ticket_pedido_id = pedido_id
+        self.preview_ticket_marcar_impreso = marcar_impreso
+        self.preview_ticket_visible = True
+
+    def set_preview_ticket_visible(self, v: bool) -> None:
+        self.preview_ticket_visible = v
+
+    def cerrar_preview_ticket(self) -> None:
+        self.preview_ticket_visible = False
+
+    def imprimir_preview_ticket(self):
+        """Imprime (o encola) el ticket que se está previsualizando."""
+        # La emisión del comprobante se marca al IMPRIMIR de verdad, no al
+        # previsualizar: así previsualizar no "gasta" la primera impresión.
+        if self.preview_ticket_marcar_impreso and self.preview_ticket_pedido_id > 0:
+            with self._tenant_session() as session:
+                pedido = session.get(Pedido, self.preview_ticket_pedido_id)
+                if pedido is not None and pedido.comprobante_impreso_at is None:
+                    pedido.comprobante_impreso_at = _utcnow()
+                    session.add(pedido)
+                    session.commit()
+        evento = self._imprimir_o_encolar(
+            rol=self.preview_ticket_rol,
+            tipo_doc=self.preview_ticket_tipo,
+            texto=self.preview_ticket_text,
+            html=self.preview_ticket_html,
+            pedido_id=self.preview_ticket_pedido_id or None,
+            feedback=True,
+        )
+        self.preview_ticket_visible = False
+        return evento
+
     def _init_cocina_auto_print(self) -> None:
         """Ya no se usa un watermark en memoria: la dedupe de impresión vive en
         la BD (DetallePedido.ticket_impreso_at), así cada comanda sale UNA sola
@@ -4179,7 +4248,12 @@ class FoodState(
                 select(Categoria).where(Categoria.company_id == self._company_id()).order_by(Categoria.orden, Categoria.nombre)
             ).all()
             productos_db = session.exec(
-                select(Producto).where(Producto.company_id == self._company_id()).order_by(Producto.nombre)
+                select(Producto)
+                .where(
+                    Producto.company_id == self._company_id(),
+                    Producto.eliminado.is_(False),
+                )
+                .order_by(Producto.nombre)
             ).all()
             categorias_map = {c.id: c.nombre for c in categorias_db}
             conteo_por_categoria: dict[int, int] = {}
@@ -4253,6 +4327,38 @@ class FoodState(
                 )
                 for p in productos_db
             ]
+            # Archivados (borrado lógico): se listan aparte para poder restaurarlos.
+            archivados_db = session.exec(
+                select(Producto)
+                .where(
+                    Producto.company_id == self._company_id(),
+                    Producto.eliminado.is_(True),
+                )
+                .order_by(Producto.nombre)
+            ).all()
+            self.productos_archivados = [
+                ProductoView(
+                    id=p.id or 0,
+                    categoria_id=p.categoria_id,
+                    categoria_nombre=categorias_map.get(p.categoria_id, "General"),
+                    nombre=p.nombre,
+                    descripcion=p.descripcion or "",
+                    precio=float(_to_decimal(p.precio)),
+                    precio_texto=_money_text(p.precio),
+                    disponible=p.disponible,
+                    imagen_url=p.imagen_url or "",
+                    emoji=p.emoji or _emoji_para_producto(p.nombre),
+                    tiene_modificadores=False,
+                    tiene_receta=False,
+                    margen_pct=-1.0,
+                    stock_diario=p.stock_diario if p.stock_diario is not None else -1,
+                    stock_diario_alerta=p.stock_diario_alerta,
+                )
+                for p in archivados_db
+            ]
+            # Si ya no quedan archivados, sal de esa vista para no dejarla vacía.
+            if not self.productos_archivados:
+                self.carta_ver_archivados = False
 
     def seleccionar_categoria(self, categoria_id: int) -> None:
         self.categoria_activa_id = categoria_id
@@ -4439,14 +4545,14 @@ class FoodState(
         for i in range(len(items)):
             items[i] = items[i].model_copy(update={"sel_precuenta": False})
         self.historial_pedido = items
-        return self._imprimir_o_encolar(
+        self._abrir_preview_ticket(
+            titulo="Pre-cuenta",
+            lines=_lines,
             rol="caja",
             tipo_doc="comprobante",
-            texto=ticket_text(_lines),
-            html=render_ticket_html("Pre-cuenta", _lines, self._ticket_paper_width_mm()),
             pedido_id=pedido_id,
+            marcar_impreso=False,
         )
-        self.transfer_modal_abierto = v
 
     def transferir_a_mesa(self, mesa_destino_id: int) -> None:
         if not self.mesa_seleccionada_id or self.mesa_seleccionada_id == mesa_destino_id:
@@ -5630,10 +5736,8 @@ class FoodState(
                 or self.usuario_actual.perm_reimprimir
             ):
                 return rx.toast.error("No tienes permiso para reimprimir comprobantes.")
-            if not ya_impreso:
-                pedido.comprobante_impreso_at = _utcnow()
-                session.add(pedido)
-                session.commit()
+            # La emisión (comprobante_impreso_at) se marca al imprimir de verdad
+            # desde el preview, no al abrir la previsualización.
             detalles = session.exec(
                 select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)
             ).all()
@@ -5677,6 +5781,31 @@ class FoodState(
             recargo = float(_to_decimal(pedido.recargo))
             recargo_concepto = pedido.recargo_concepto or ""
             total_final = float(_to_decimal(pedido.total)) - descuento + propina + recargo
+            metodo_pago_txt = pedido.metodo_pago or "efectivo"
+            # Desglose de pago para la reimpresión: se reconstruye desde
+            # food_pagos_pedido (una fila por método, efectivo NETO de vuelto).
+            # El vuelto persistido se re-suma al efectivo para mostrar lo
+            # realmente ENTREGADO, igual que en el comprobante del cobro.
+            pagos_rows = session.exec(
+                select(PagoPedido)
+                .where(PagoPedido.pedido_id == pedido.id)
+                .order_by(PagoPedido.id)
+            ).all()
+            _validos_r, _efectivos_r = _validos_y_efectivos_pago(
+                session, self._company_id()
+            )
+            _labels_mp = {m.codigo: m.nombre for m in self.metodos_pago_activos}
+            _vuelto_reimp = float(_to_decimal(pedido.vuelto))
+            _vuelto_rest = _vuelto_reimp
+            _desglose_reimp: list[tuple[str, float]] = []
+            for _pr in pagos_rows:
+                _monto = float(_to_decimal(_pr.monto))
+                if _vuelto_rest > 0 and _pr.metodo in _efectivos_r:
+                    _monto += _vuelto_rest
+                    _vuelto_rest = 0.0
+                _desglose_reimp.append(
+                    (_labels_mp.get(_pr.metodo, _pr.metodo.capitalize()), _monto)
+                )
         try:
             _pct_iva = float(self.config_porcentaje_iva or "18.0")
         except (ValueError, AttributeError):
@@ -5696,19 +5825,25 @@ class FoodState(
             propina=propina,
             recargo=recargo,
             recargo_concepto=recargo_concepto,
-            metodo_pago=(pedido.metodo_pago or "efectivo"),
+            metodo_pago=metodo_pago_txt,
+            pagos_desglose=_desglose_reimp or None,
+            vuelto=_vuelto_reimp,
             mensaje_footer=self.config_mensaje_ticket,
             mostrar_iva=self.config_mostrar_iva,
             nombre_impuesto=self.config_nombre_impuesto or "IGV",
             porcentaje_iva=_pct_iva,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
-        return self._imprimir_o_encolar(
+        # Si la reimpresión se pidió desde el modal de "Últimos cobros", se
+        # cierra para que el preview no quede detrás.
+        self.ultimos_cobros_visible = False
+        self._abrir_preview_ticket(
+            titulo="Comprobante de Pago",
+            lines=_lines,
             rol="caja",
             tipo_doc="comprobante",
-            texto=ticket_text(_lines),
-            html=render_ticket_html("Comprobante de Pago", _lines, self._ticket_paper_width_mm()),
             pedido_id=pedido_id,
+            marcar_impreso=True,
         )
 
     # ─── Caja — Cobro dividido / pago mixto ──────────────────────────────────
@@ -6551,6 +6686,19 @@ class FoodState(
             pedido.descuento = descuento
             pedido.recargo = recargo
             pedido.recargo_concepto = recargo_concepto if recargo > 0 else None
+            # Vuelto del cobro (sale del efectivo): se persiste para poder
+            # mostrarlo en el comprobante también al reimprimir. En pago mixto
+            # el vuelto lo calcula validar_pagos; en modo simple con efectivo
+            # viene del campo "Efectivo recibido" (caja_cobro_vuelto), que el
+            # cobro simple no metía en pagos_lista (registra el monto exacto).
+            _cobro_fue_dividido = self.caja_cobro_dividido
+            if _cobro_fue_dividido:
+                _vuelto_final = resultado_pagos.vuelto if resultado_pagos else Decimal("0.00")
+            elif resultado_pagos and pagos_lista and pagos_lista[0][0] in _efectivos:
+                _vuelto_final = _to_decimal(self.caja_cobro_vuelto)
+            else:
+                _vuelto_final = Decimal("0.00")
+            pedido.vuelto = _vuelto_final
             if self.caja_cobro_cliente_id > 0:
                 pedido.cliente_id = self.caja_cobro_cliente_id
             # En modo automático el comprobante se imprime al cobrar (más abajo):
@@ -6641,6 +6789,20 @@ class FoodState(
             _pct_iva = float(self.config_porcentaje_iva or "18.0")
         except (ValueError, AttributeError):
             _pct_iva = 18.0
+        # Desglose de pago para el comprobante: cada método con lo ENTREGADO
+        # (efectivo bruto) y el vuelto aparte. En pago mixto, pagos_lista ya
+        # trae los montos brutos que ingresó el cajero. En modo simple con
+        # vuelto, pagos_lista trae el monto exacto (neto), así que se le suma el
+        # vuelto a la fila de efectivo para mostrar lo realmente recibido.
+        _labels_mp = {m.codigo: m.nombre for m in self.metodos_pago_activos}
+        _vuelto_cobro = float(_vuelto_final)
+        _desglose_cobro = [
+            (_labels_mp.get(cod, cod.capitalize()), float(monto))
+            for cod, monto in pagos_lista
+        ]
+        if not _cobro_fue_dividido and _vuelto_cobro > 0 and _desglose_cobro:
+            _etq, _m = _desglose_cobro[0]
+            _desglose_cobro[0] = (_etq, _m + _vuelto_cobro)
         comprobante_lines = build_cashier_ticket_lines(
             order_reference=mesa_label,
             pedido_id=pedido_id,
@@ -6657,6 +6819,8 @@ class FoodState(
             recargo=float(recargo),
             recargo_concepto=recargo_concepto or "",
             metodo_pago=metodo_final,
+            pagos_desglose=_desglose_cobro or None,
+            vuelto=_vuelto_cobro,
             mensaje_footer=self.config_mensaje_ticket,
             mostrar_iva=self.config_mostrar_iva,
             nombre_impuesto=self.config_nombre_impuesto or "IGV",
@@ -6766,12 +6930,13 @@ class FoodState(
             descuento=descuento,
             paper_width_mm=self._ticket_paper_width_mm(),
         )
-        return self._imprimir_o_encolar(
+        self._abrir_preview_ticket(
+            titulo="Pre-cuenta",
+            lines=_lines,
             rol="caja",
             tipo_doc="comprobante",
-            texto=ticket_text(_lines),
-            html=render_ticket_html("Pre-cuenta", _lines, self._ticket_paper_width_mm()),
             pedido_id=pedido_id,
+            marcar_impreso=False,
         )
 
     def abrir_cobro_pedido_mostrador(self, pedido_id: int) -> None:
@@ -7355,6 +7520,7 @@ class MenuPublicoState(rx.State):
                         Producto.company_id == company_id,
                         Producto.categoria_id == cat.id,
                         Producto.disponible.is_(True),
+                        Producto.eliminado.is_(False),
                     )
                     .order_by(Producto.nombre)
                 ).all()

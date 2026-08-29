@@ -268,6 +268,19 @@ def _producto_row(prod: ProductoView) -> rx.Component:
             switch_toggle(prod.disponible, FoodState.toggle_producto_disponible(prod.id)),
             content=rx.cond(prod.disponible, "Deshabilitar", "Activar"),
         ),
+        rx.tooltip(
+            rx.button(
+                rx.icon(tag="trash_2", size=15),
+                on_click=FoodState.solicitar_eliminar_producto(prod.id),
+                background="rgba(239,68,68,0.08)",
+                color="var(--twk-danger-text)",
+                border="1px solid #FECACA",
+                border_radius="6px", cursor="pointer",
+                padding="6px", min_width="0", height="auto",
+                _hover={"opacity": "0.85"},
+            ),
+            content="Eliminar",
+        ),
         width="100%",
         align="center",
         flex_wrap="wrap",
@@ -275,6 +288,71 @@ def _producto_row(prod: ProductoView) -> rx.Component:
         background=DARK_800,
         border_radius="8px",
         border=f"1px solid {DARK_700}",
+        gap="10px",
+    )
+
+
+def _producto_archivado_row(prod: ProductoView) -> rx.Component:
+    """Fila de producto archivado con acción de Restaurar."""
+    return rx.hstack(
+        rx.cond(
+            prod.imagen_url != "",
+            rx.image(
+                src=prod.imagen_url,
+                width="36px", height="36px", object_fit="cover",
+                border_radius="6px", border=f"1px solid {DARK_700}",
+                flex_shrink="0", opacity="0.65",
+            ),
+            rx.box(
+                rx.text(prod.emoji, font_size="16px", line_height="1"),
+                width="36px", height="36px", border_radius="9px",
+                background=DARK_700,
+                display="flex", align_items="center", justify_content="center",
+                flex_shrink="0",
+            ),
+        ),
+        rx.vstack(
+            rx.hstack(
+                rx.text(prod.nombre, font_size="13px", font_weight="600", color="var(--twk-slate-300)"),
+                rx.badge(
+                    "Archivado",
+                    background="rgba(148,163,184,0.14)", color=TEXT_MUTED,
+                    border_radius="5px", font_size="10px", font_weight="700",
+                ),
+                spacing="2", align="center", flex_wrap="wrap",
+            ),
+            rx.hstack(
+                rx.text(prod.precio_texto, font_size="12px", font_weight="700", color=TEXT_MUTED),
+                rx.text("·", color="var(--twk-slate-300)", font_size="10px"),
+                rx.text(prod.categoria_nombre, font_size="11px", color=TEXT_MUTED),
+                spacing="1", align="center",
+            ),
+            spacing="0", align="start", flex="1", min_width="120px",
+        ),
+        rx.tooltip(
+            rx.button(
+                rx.hstack(
+                    rx.icon(tag="rotate_ccw", size=14),
+                    rx.text("Restaurar", font_size="12px", font_weight="700"),
+                    spacing="1", align="center",
+                ),
+                on_click=FoodState.desarchivar_producto(prod.id),
+                background="rgba(34,197,94,0.10)",
+                color=SUCCESS_TEXT,
+                border="1px solid rgba(34,197,94,0.35)",
+                border_radius="6px", cursor="pointer",
+                padding="6px 10px", min_width="0", height="auto",
+                _hover={"opacity": "0.85"},
+            ),
+            content="Devolver a la carta",
+        ),
+        width="100%",
+        align="center",
+        flex_wrap="wrap",
+        padding="10px 14px",
+        background=SURFACE_BASE,
+        border_radius="8px",
+        border=f"1px dashed {DARK_700}",
         gap="10px",
     )
 
@@ -1324,6 +1402,101 @@ def _carta_ayuda() -> rx.Component:
     )
 
 
+def _eliminar_prod_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.box(
+                        rx.icon(tag="triangle_alert", size=20, color=DANGER_TEXT),
+                        background="rgba(239,68,68,0.12)",
+                        border_radius="10px", padding="10px",
+                        display="flex", align_items="center", justify_content="center",
+                    ),
+                    rx.vstack(
+                        rx.dialog.title(
+                            "Eliminar producto",
+                            font_size="16px", font_weight="800", color=TEXT_PRIMARY, margin="0",
+                        ),
+                        rx.text(
+                            FoodState.carta_eliminar_prod_nombre,
+                            font_size="13px", font_weight="600", color=TEXT_MUTED,
+                        ),
+                        spacing="0", align="start",
+                    ),
+                    spacing="3", align="center", width="100%",
+                ),
+                rx.box(height="1px", width="100%", background=DARK_800),
+                # Producto con ventas/uso → se archiva; sin uso → se borra de verdad.
+                rx.cond(
+                    FoodState.carta_eliminar_prod_en_uso,
+                    rx.vstack(
+                        rx.text(
+                            "Este producto tiene historial de ventas (o está en un "
+                            "combo/promoción), así que se archivará en lugar de borrarse.",
+                            font_size="13px", color="var(--twk-slate-300)", line_height="1.5",
+                        ),
+                        rx.text(
+                            "Desaparecerá de la carta y del punto de venta, pero sus "
+                            "ventas anteriores seguirán en los reportes.",
+                            font_size="12px", color=TEXT_MUTED, line_height="1.5",
+                        ),
+                        spacing="2", width="100%", align="start",
+                    ),
+                    rx.text(
+                        "Este producto nunca se ha vendido, así que se eliminará "
+                        "definitivamente de la carta. Esta acción no se puede deshacer.",
+                        font_size="13px", color="var(--twk-slate-300)", line_height="1.5",
+                    ),
+                ),
+                rx.box(height="1px", width="100%", background=DARK_800),
+                rx.hstack(
+                    rx.button(
+                        "Cancelar",
+                        on_click=FoodState.cancelar_eliminar_producto,
+                        background=DARK_800,
+                        color=TEXT_MUTED,
+                        border=f"1px solid {DARK_700}",
+                        border_radius="8px",
+                        font_size="13px",
+                        cursor="pointer",
+                        flex="1",
+                        _hover={"opacity": "0.85"},
+                    ),
+                    rx.button(
+                        rx.cond(
+                            FoodState.carta_eliminar_prod_en_uso,
+                            "Archivar producto",
+                            "Eliminar definitivamente",
+                        ),
+                        on_click=FoodState.confirmar_eliminar_producto,
+                        background=DANGER_SOLID,
+                        color=TEXT_WHITE,
+                        border_radius="8px",
+                        font_size="13px",
+                        font_weight="700",
+                        cursor="pointer",
+                        flex="1",
+                        _hover={"opacity": "0.9"},
+                    ),
+                    spacing="2", width="100%",
+                ),
+                spacing="3",
+                width="100%",
+            ),
+            max_width="440px",
+            width="90vw",
+            background=PAGE_BACKGROUND,
+            border=f"1px solid {DARK_800}",
+            border_radius="16px",
+            padding="24px",
+            box_shadow="0 20px 60px rgba(0,0,0,0.15)",
+        ),
+        open=FoodState.carta_eliminar_prod_modal,
+        on_open_change=FoodState.set_carta_eliminar_prod_modal,
+    )
+
+
 def _carta_content() -> rx.Component:
     return rx.vstack(
         _cat_modal(),
@@ -1331,6 +1504,7 @@ def _carta_content() -> rx.Component:
         _mod_grupo_modal(),
         _mod_asignar_modal(),
         _combo_modal(),
+        _eliminar_prod_modal(),
         _carta_ayuda(),
         # ── Header ────────────────────────────────────────────────────────────
         rx.hstack(
@@ -1423,15 +1597,66 @@ def _carta_content() -> rx.Component:
                 rx.hstack(
                     rx.text("Productos", font_size="15px", font_weight="700", color=TEXT_MUTED),
                     rx.badge(
-                        FoodState.carta_productos_filtrados_count.to_string(),
+                        rx.cond(
+                            FoodState.carta_ver_archivados,
+                            FoodState.productos_archivados.length().to_string(),
+                            FoodState.carta_productos_filtrados_count.to_string(),
+                        ),
                         background=DARK_800, color=TEXT_MUTED,
                         border_radius="12px", font_size="11px", font_weight="700",
                         padding_x="8px",
                     ),
+                    rx.spacer(),
+                    rx.cond(
+                        FoodState.productos_archivados.length() > 0,
+                        rx.button(
+                            rx.hstack(
+                                rx.icon(
+                                    tag=rx.cond(FoodState.carta_ver_archivados, "arrow_left", "archive"),
+                                    size=13,
+                                ),
+                                rx.text(
+                                    rx.cond(
+                                        FoodState.carta_ver_archivados,
+                                        "Ver activos",
+                                        "Archivados (" + FoodState.productos_archivados.length().to_string() + ")",
+                                    ),
+                                    font_size="12px", font_weight="700",
+                                ),
+                                spacing="1", align="center",
+                            ),
+                            on_click=FoodState.toggle_carta_ver_archivados,
+                            background=rx.cond(FoodState.carta_ver_archivados, "rgba(148,163,184,0.18)", "transparent"),
+                            color=TEXT_MUTED,
+                            border=f"1px solid {DARK_700}",
+                            border_radius="8px", cursor="pointer",
+                            padding_x="10px", padding_y="5px",
+                            _hover={"background": "var(--twk-d700)"},
+                        ),
+                        rx.fragment(),
+                    ),
                     spacing="2", align="center", width="100%",
                 ),
-                # buscador
-                rx.hstack(
+                # Vista de archivados (restaurar) o catálogo normal (buscador+lista)
+                rx.cond(
+                    FoodState.carta_ver_archivados,
+                    rx.cond(
+                        FoodState.productos_archivados.length() > 0,
+                        rx.vstack(
+                            rx.foreach(FoodState.productos_archivados, _producto_archivado_row),
+                            spacing="2", width="100%",
+                        ),
+                        rx.box(
+                            rx.text(
+                                "No hay productos archivados.",
+                                font_size="13px", color=TEXT_MUTED, text_align="center",
+                            ),
+                            padding="32px 16px", width="100%",
+                        ),
+                    ),
+                    rx.vstack(
+                        # buscador
+                        rx.hstack(
                     rx.icon(tag="search", size=14, color=TEXT_MUTED, flex_shrink="0"),
                     rx.input(
                         placeholder="Buscar producto o categoría...",
@@ -1545,6 +1770,9 @@ def _carta_content() -> rx.Component:
                         gap="12px",
                     ),
                     rx.fragment(),
+                ),
+                        spacing="3", width="100%",
+                    ),
                 ),
                 spacing="3",
                 flex="1",

@@ -6,7 +6,7 @@ import reflex as rx
 
 from app.components.shared import (
     WARNING_TEXT, SUCCESS_TEXT, DANGER_TEXT,
-    anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder, styled_switch,
+    anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder, preview_ticket_modal, styled_switch,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_700, DARK_800,
@@ -57,7 +57,7 @@ def _metodo_btn_dyn(metodo: MetodoPagoView) -> rx.Component:
     """Botón de método de pago renderizado desde la config (Efectivo, Yape…)."""
     activo = FoodState.caja_cobro_metodo == metodo.codigo
     return rx.box(
-        rx.text(metodo.icono, font_size="18px", line_height="1"),
+        rx.text(metodo.icono, font_size="15px", line_height="1"),
         rx.text(metodo.nombre, font_size="12px", font_weight="700",
                 color=rx.cond(activo, "#FFFFFF", "var(--twk-slate-400)"),
                 text_align="center", line_height="1.1"),
@@ -65,7 +65,7 @@ def _metodo_btn_dyn(metodo: MetodoPagoView) -> rx.Component:
         background=rx.cond(activo, ACCENT, DARK_800),
         border=rx.cond(activo, "2px solid #EA580C", "2px solid var(--twk-d700)"),
         border_radius="10px",
-        padding="12px 4px",
+        padding="9px 4px",
         cursor="pointer",
         display="flex",
         flex_direction="column",
@@ -331,7 +331,7 @@ def _cobro_panel() -> rx.Component:
         ),
         # 2 columnas: recibo (items) | terminal de pago. El terminal define la
         # altura visible; el recibo se acota con max_height y scrollea por dentro
-        # hasta llegar al nivel de "DIVIDIR / PAGO MIXTO".
+        # hasta llegar al nivel de las acciones inferiores del terminal.
         rx.flex(
             # ── Columna izquierda: recibo (solo items + promos + subtotal) ──
             rx.vstack(
@@ -432,7 +432,7 @@ def _cobro_panel() -> rx.Component:
                     # (que se estira a la altura del terminal). Al ser absoluta no
                     # aporta alto, así el recibo NUNCA estira la fila: la lista
                     # scrollea por dentro y el subtotal queda fijo abajo, al nivel
-                    # exacto de "DIVIDIR / PAGO MIXTO" — sin números mágicos.
+                    # de las acciones inferiores del terminal — sin números mágicos.
                     min_width="0", width="100%", min_height="0",
                     display="flex", flex_direction="column",
                     position=rx.breakpoints(initial="static", lg="absolute"),
@@ -609,6 +609,16 @@ def _cobro_panel() -> rx.Component:
                         spacing="2", width="100%",
                     ),
                 ),
+                # Toggle dividir (debajo de las formas de pago)
+                rx.hstack(
+                    styled_switch(
+                        FoodState.caja_cobro_dividido,
+                        FoodState.set_caja_cobro_dividido,
+                    ),
+                    rx.text("DIVIDIR / PAGO MIXTO", font_size="11px", font_weight="700",
+                            color=TEXT_MUTED, letter_spacing="0.05em"),
+                    spacing="2", align="center",
+                ),
                 # Selector de cliente para fiado
                 rx.cond(
                     FoodState.caja_cobro_es_fiado | FoodState.caja_pagos_tiene_fiado,
@@ -727,16 +737,6 @@ def _cobro_panel() -> rx.Component:
                         _hover={"background": DARK_700}, flex="1", padding_y="7px",
                     ),
                     spacing="2", width="100%",
-                ),
-                # Toggle dividir
-                rx.hstack(
-                    styled_switch(
-                        FoodState.caja_cobro_dividido,
-                        FoodState.set_caja_cobro_dividido,
-                    ),
-                    rx.text("DIVIDIR / PAGO MIXTO", font_size="11px", font_weight="700",
-                            color=TEXT_MUTED, letter_spacing="0.05em"),
-                    spacing="2", align="center",
                 ),
                 spacing="3",
                 width=rx.breakpoints(initial="100%", lg="340px"),
@@ -2248,6 +2248,7 @@ def _caja_content() -> rx.Component:
         _historial_modal(),
         _cierre_preview_modal(),
         _ultimos_cobros_modal(),
+        preview_ticket_modal(),
         _reversion_modal(),
         _correccion_modal(),
         _caja_add_modal(),

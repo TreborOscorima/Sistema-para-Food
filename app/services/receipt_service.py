@@ -165,6 +165,8 @@ def build_cashier_ticket_lines(
     recargo: float = 0.0,
     recargo_concepto: str = "",
     metodo_pago: str = "",
+    pagos_desglose: list[tuple[str, float]] | None = None,
+    vuelto: float = 0.0,
     mensaje_footer: str = "",
     mostrar_iva: bool = False,
     nombre_impuesto: str = "IGV",
@@ -172,7 +174,15 @@ def build_cashier_ticket_lines(
     paper_width_mm: int = 80,
     width: int = 0,
 ) -> list[str]:
-    """Líneas de texto del comprobante de pago (reutilizable por HTML y agente)."""
+    """Líneas de texto del comprobante de pago (reutilizable por HTML y agente).
+
+    ``pagos_desglose``: lista de (etiqueta, monto) a mostrar en el bloque de
+    pago —los montos son lo ENTREGADO por método (efectivo bruto, no neto de
+    vuelto)—. Con un solo método y sin vuelto se imprime la línea clásica
+    "Método de pago: X"; con varios (pago mixto) o con vuelto se detalla cada
+    método y el vuelto. Si es None se cae al comportamiento anterior con
+    ``metodo_pago`` (un solo texto).
+    """
     if width == 0:
         width = _chars_for_mm(paper_width_mm)
     now = country_now("PE")
@@ -222,7 +232,19 @@ def build_cashier_ticket_lines(
         tax_label = nombre_impuesto or "IGV"
         lines.append(_row(f"{tax_label} ({pct_label}%):", _money(iva_amount), width))
     lines.append(_row("TOTAL A PAGAR:", _money(total), width))
-    if metodo_pago:
+    if pagos_desglose:
+        lines.append(_line(width))
+        if len(pagos_desglose) == 1 and vuelto <= 0:
+            # Caso más común: un solo método, sin vuelto -> línea clásica.
+            lines.append(_row("Método de pago:", pagos_desglose[0][0], width))
+        else:
+            # Pago mixto o con vuelto: se detalla cada método y el vuelto.
+            lines.append("Pago:")
+            for etiqueta, monto in pagos_desglose:
+                lines.append(_row(f"  {etiqueta}:", _money(monto), width))
+            if vuelto > 0:
+                lines.append(_row("Vuelto:", _money(vuelto), width))
+    elif metodo_pago:
         lines += [
             _line(width),
             _row("Método de pago:", metodo_pago.capitalize(), width),
@@ -252,6 +274,8 @@ def generate_cashier_ticket_html(
     recargo: float = 0.0,
     recargo_concepto: str = "",
     metodo_pago: str = "",
+    pagos_desglose: list[tuple[str, float]] | None = None,
+    vuelto: float = 0.0,
     mensaje_footer: str = "",
     mostrar_iva: bool = False,
     nombre_impuesto: str = "IGV",
@@ -277,6 +301,8 @@ def generate_cashier_ticket_html(
             recargo=recargo,
             recargo_concepto=recargo_concepto,
             metodo_pago=metodo_pago,
+            pagos_desglose=pagos_desglose,
+            vuelto=vuelto,
             mensaje_footer=mensaje_footer,
             mostrar_iva=mostrar_iva,
             nombre_impuesto=nombre_impuesto,

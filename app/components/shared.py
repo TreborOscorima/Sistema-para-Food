@@ -990,6 +990,91 @@ def app_shell(
 
 # ─── Modal de anulación auditada (compartido por Caja y Reportes) ─────────────
 
+def preview_ticket_modal() -> rx.Component:
+    """Previsualización en pantalla del comprobante / pre-cuenta antes de imprimir.
+
+    Compartido por Caja y Mozos. El área del ticket se dibuja como papel (fondo
+    blanco, texto negro monoespaciado) en cualquier tema, para que coincida con
+    lo impreso. El botón Imprimir dispara la impresión real (navegador o agente),
+    así se puede previsualizar aun cuando la empresa imprime por agente local.
+    """
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.hstack(
+                        rx.icon(tag="receipt", size=20, color=ACCENT),
+                        rx.dialog.title(
+                            FoodState.preview_ticket_titulo,
+                            font_size="18px", font_weight="800",
+                            color=TEXT_PRIMARY, margin="0",
+                        ),
+                        spacing="2", align="center",
+                    ),
+                    rx.spacer(),
+                    rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.cerrar_preview_ticket,
+                            _hover={"color": "var(--twk-text-primary)"}),
+                    width="100%", align="center",
+                ),
+                rx.text(
+                    "Vista previa del ticket. Revisá y tocá Imprimir para enviarlo a la impresora.",
+                    font_size="12px", color=TEXT_MUTED,
+                ),
+                rx.box(
+                    rx.text(
+                        FoodState.preview_ticket_text,
+                        white_space="pre",
+                        font_family="'Courier New', ui-monospace, monospace",
+                        font_size="12px",
+                        line_height="1.35",
+                        color="#111111",
+                        margin="0",
+                    ),
+                    background="#ffffff",
+                    padding="14px",
+                    border_radius="8px",
+                    border=f"1px solid {DARK_800}",
+                    max_height="60vh",
+                    overflow="auto",
+                    width="100%",
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Cerrar",
+                        on_click=FoodState.cerrar_preview_ticket,
+                        background=DARK_800, color=TEXT_MUTED,
+                        border=f"1px solid {DARK_700}", border_radius="8px",
+                        font_size="13px", font_weight="600", cursor="pointer",
+                        _hover={"border_color": ACCENT, "color": TEXT_PRIMARY},
+                    ),
+                    rx.button(
+                        rx.hstack(
+                            rx.icon(tag="printer", size=16),
+                            rx.text("Imprimir"),
+                            spacing="2", align="center",
+                        ),
+                        on_click=FoodState.imprimir_preview_ticket,
+                        background=ACCENT, color=TEXT_WHITE,
+                        border_radius="8px", font_size="13px", font_weight="700",
+                        cursor="pointer", _hover={"background": ACCENT_HOVER},
+                    ),
+                    spacing="3", width="100%", justify="end",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="420px",
+            width="92vw",
+            max_height="90vh",
+            overflow_y="auto",
+            background=PAGE_BACKGROUND,
+            border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.preview_ticket_visible,
+        on_open_change=FoodState.set_preview_ticket_visible,
+    )
+
+
 def anulacion_modal() -> rx.Component:
     """Modal de anulación con motivo obligatorio. La anulación nunca borra el
     pedido: queda CANCELADO con motivo, usuario y hora."""

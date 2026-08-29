@@ -7,7 +7,7 @@ import reflex as rx
 from app.components.shared import (
     SUCCESS_DARK,
     WARNING_TEXT, SUCCESS_TEXT,
-    anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder, section_card, surface_card,
+    anulacion_modal, app_shell, cumpleanos_banner, loading_placeholder, preview_ticket_modal, section_card, surface_card,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID,
     DARK_600, DARK_700, DARK_800,
@@ -1705,6 +1705,7 @@ def _mozos_content() -> rx.Component:
         _modal_transfer(),
         _modal_seleccion_mods(),
         anulacion_modal(),
+        preview_ticket_modal(),
         _mozos_ayuda(),
         spacing="4",
         width="100%",
