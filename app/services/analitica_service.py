@@ -33,6 +33,7 @@ def _country_offset(country_code: str) -> tuple[str, int]:
     return f"{sign}{h:02d}:{m:02d}", int(off.total_seconds() // 3600)
 
 from app.models.food import (
+    Categoria,
     DetallePedido,
     EstadoPedido,
     Insumo,
@@ -295,3 +296,63 @@ def matriz_estrella_perro(
             f["categoria"] = "perro"
 
     return sorted(filas, key=lambda f: (-f["unidades"], -f["margen_pct"]))
+
+
+def reporte_productos_stock(
+    session, company_id: int,
+    desde: datetime | None = None, hasta: datetime | None = None,
+) -> list[dict]:
+    """Control de productos de la carta: stock actual + unidades vendidas + ingreso.
+
+    Una fila por producto NO archivado (incluye los que no se vendieron en el
+    período, con unidades=0). Disponible en Standard: es control operativo, sin
+    margen ni costo (eso vive en la matriz avanzada, Profesional).
+
+    - stock: ``Producto.stock_diario`` (None = producto sin control de stock).
+    - unidades / ingreso: agregados de los pedidos COBRADOS del rango.
+    """
+    filters = _cobrado_filters(company_id, desde, hasta)
+    pedido_ids = [r for r in session.exec(select(Pedido.id).where(*filters)).all()]
+
+    ventas_map: dict[int, dict] = {}
+    if pedido_ids:
+        rows = session.exec(
+            select(
+                DetallePedido.producto_id,
+                func.sum(DetallePedido.cantidad).label("unidades"),
+                func.sum(DetallePedido.subtotal).label("ingreso"),
+            )
+            .where(DetallePedido.pedido_id.in_(pedido_ids))
+            .group_by(DetallePedido.producto_id)
+        ).all()
+        for r in rows:
+            ventas_map[r[0]] = {"unidades": int(r[1] or 0), "ingreso": _dec(r[2])}
+
+    cats = {
+        c.id: c.nombre
+        for c in session.exec(
+            select(Categoria).where(Categoria.company_id == company_id)
+        ).all()
+    }
+    productos = session.exec(
+        select(Producto).where(
+            Producto.company_id == company_id,
+            Producto.eliminado == False,  # noqa: E712 — filtro SQL, no identidad Python
+        )
+    ).all()
+
+    filas: list[dict] = []
+    for p in productos:
+        v = ventas_map.get(p.id, {})
+        filas.append({
+            "producto_id": p.id,
+            "nombre": p.nombre,
+            "categoria": cats.get(p.categoria_id, ""),
+            "stock": p.stock_diario,          # None = sin control de stock
+            "unidades": v.get("unidades", 0),
+            "ingreso": v.get("ingreso", Decimal("0.00")),
+        })
+
+    # Más vendidos primero; empate → alfabético.
+    filas.sort(key=lambda f: (-f["unidades"], f["nombre"].lower()))
+    return filas

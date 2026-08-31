@@ -1129,7 +1129,13 @@ def _inventario_content() -> rx.Component:
         _inventario_ayuda(),
         _alerta_bajo_stock(),
         _alerta_vencimientos(),
-        _inventario_tabs(),
+        # Inventario avanzado (Recetas + Producción) es del plan Profesional.
+        # Standard ve solo Insumos: stock, alertas, movimientos y kardex.
+        rx.cond(
+            FoodState.plan_permite_inventario_avanzado,
+            _inventario_tabs(),
+            _insumos_section(),
+        ),
         _mov_insumo_modal(),
         _kardex_modal(),
         spacing="4",

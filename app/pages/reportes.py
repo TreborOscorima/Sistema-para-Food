@@ -30,6 +30,7 @@ from app.states.food_state import (
 )
 from app.states.reportes_state import ReportesState
 from app.components.ayuda import ayuda_modal, ayuda_trigger
+from app.components.upgrade import upgrade_cta
 
 _METODOS_FILTRO = [
     ("", "Todos los métodos"),
@@ -704,6 +705,35 @@ def _excel_btn(on_click) -> rx.Component:
         align_items="center",
         gap="4px",
         height="auto",
+    )
+
+
+def _productos_stock_section() -> rx.Component:
+    """Export de control de productos (stock actual + unidades vendidas).
+
+    Disponible en TODOS los planes (Standard incluido): es control operativo, no
+    análisis financiero. La matriz con margen/costo sigue siendo Profesional.
+    """
+    return rx.box(
+        rx.hstack(
+            rx.icon(tag="package_check", size=16, color=ACCENT),
+            rx.vstack(
+                rx.text("Productos — vendidos y stock", font_size="13px",
+                        font_weight="700", color="var(--twk-slate-300)"),
+                rx.text(
+                    "Baja a Excel el stock actual y las unidades vendidas de cada "
+                    "producto de la carta. Usa los filtros de fecha del Historial "
+                    "(Desde/Hasta) para acotar el período.",
+                    font_size="11px", color=TEXT_MUTED,
+                ),
+                spacing="1", align="start", flex="1", min_width="0",
+            ),
+            rx.spacer(),
+            _excel_btn(ReportesState.exportar_productos_stock_excel),
+            spacing="3", align="center", width="100%",
+        ),
+        background=DARK_800, border=f"1px solid {DARK_700}",
+        border_radius="10px", padding="14px 16px", width="100%",
     )
 
 
@@ -1680,6 +1710,8 @@ def _reportes_content() -> rx.Component:
             background=PAGE_BACKGROUND, border=f"1px solid {DARK_700}",
             border_radius="10px", padding="12px 14px", width="100%",
         ),
+        # ── Control de productos (Standard) — stock + unidades vendidas ──────
+        _productos_stock_section(),
         # ── Secciones avanzadas (requieren plan profesional) ────────────────
         rx.cond(
             FoodState.reportes_avanzados_habilitados,
@@ -1690,21 +1722,12 @@ def _reportes_content() -> rx.Component:
                 _descuentos_anulaciones_section(),
                 _mermas_section(),
             ),
-            rx.box(
-                rx.hstack(
-                    rx.icon(tag="lock", size=16, color=ACCENT),
-                    rx.text(
-                        "P&L, IGV, matriz productos, descuentos/anulaciones y mermas requieren el plan Profesional.",
-                        font_size="13px", font_weight="600", color="var(--twk-slate-300)",
-                    ),
-                    spacing="2", align="center",
+            upgrade_cta(
+                titulo="Reportes avanzados — Plan Profesional",
+                mensaje=(
+                    "P&L, IGV, matriz de productos, descuentos/anulaciones y mermas "
+                    "requieren el plan Profesional."
                 ),
-                rx.text(
-                    "Contacte a TUWAYKI para actualizar su plan y acceder a reportes avanzados.",
-                    font_size="12px", color=TEXT_MUTED, margin_top="4px",
-                ),
-                background="rgba(234,88,12,0.08)", border="1px solid rgba(234,88,12,0.40)",
-                border_radius="10px", padding="14px 16px", width="100%",
             ),
         ),
 

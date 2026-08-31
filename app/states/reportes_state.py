@@ -33,6 +33,7 @@ from app.models.food import (
 from app.services.analitica_service import (
     margen_por_plato,
     matriz_estrella_perro,
+    reporte_productos_stock,
     ventas_por_hora,
     ventas_por_mozo,
 )
@@ -71,6 +72,12 @@ from app.states.food_state import (
     _pedido_sales_label,
     _to_decimal,
     _utcnow,
+)
+
+
+from app.utils.excel_export import (
+    autofit_columnas as _excel_autofit,
+    escribir_encabezado as _excel_titulo,
 )
 
 
@@ -262,6 +269,18 @@ class ReportesState(rx.State):
             except ValueError:
                 pass
         return desde, hasta
+
+    def _rango_export_texto(self) -> str:
+        """Texto legible del rango de fechas aplicado, para el encabezado del Excel."""
+        d = (self.historial_filtro_fecha_desde or "").strip()
+        h = (self.historial_filtro_fecha_hasta or "").strip()
+        if not d and not h:
+            return "Todo el histórico (sin filtro de fecha)"
+        if d and h:
+            return f"{d} a {h}"
+        if d:
+            return f"Desde {d}"
+        return f"Hasta {h}"
 
     # ── on_load ──────────────────────────────────────────────────────────────
 
@@ -843,7 +862,7 @@ class ReportesState(rx.State):
 
     async def exportar_ventas_excel(self):
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
         food = await self._food()
         self.reportes_pais = food._country_code()
@@ -910,6 +929,11 @@ class ReportesState(rx.State):
         if not pedidos:
             return rx.toast.error("No hay ventas para exportar con estos filtros.")
 
+        empresa = getattr(food, "empresa_nombre", "TUWAYKIFOOD") or "TUWAYKIFOOD"
+        generado = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", self.reportes_pais)
+        meta = [("Empresa", empresa), ("Generado", generado),
+                ("Rango de fechas", self._rango_export_texto())]
+
         wb = Workbook()
         ws1 = wb.active
         ws1.title = "Ventas"
@@ -917,13 +941,25 @@ class ReportesState(rx.State):
         # cuadre con el cierre: subtotal de ítems + recargo (envases/delivery)
         # − descuento = venta neta; + propina = total cobrado (≡ Σ pagos). El
         # desglose por método usa los montos netos de vuelto realmente cobrados.
-        ws1.append([
+        cols1 = [
             "Fecha", "Hora", "Pedido #", "Tipo", "Mesa / Cliente",
             "Subtotal ítems", "Recargo", "Concepto recargo", "Descuento",
             "Venta neta", "Propina", "Total cobrado",
             "Efectivo", "Tarjeta", "QR/Yape", "Fiado",
             "Mozo", "Cajero",
-        ])
+        ]
+        hdr1 = _excel_titulo(
+            ws1,
+            "Reporte de ventas — una fila por venta cobrada",
+            "Cada fila es un pedido cobrado con su desglose: subtotal de ítems + "
+            "recargo − descuento = venta neta; + propina = total cobrado "
+            "(= suma de los métodos de pago). El detalle de QUÉ productos se "
+            "vendieron en cada pedido está en la hoja «Detalle de items».",
+            meta, n_cols=len(cols1),
+        )
+        ws1.append(cols1)
+        for c in ws1[hdr1]:
+            c.font = Font(bold=True)
         tot = {k: Decimal("0.00") for k in (
             "subtotal", "recargo", "descuento", "neta", "propina", "cobrado",
             "efectivo", "tarjeta", "qr", "fiado",
@@ -989,29 +1025,44 @@ class ReportesState(rx.State):
         ])
 
         ws2 = wb.create_sheet("Detalle de items")
-        ws2.append(["Fecha", "Pedido #", "Mesa", "Producto", "Cantidad",
-                     "Precio unitario", "Subtotal"])
+        cols2 = ["Fecha", "Hora", "Pedido #", "Tipo", "Mesa / Cliente",
+                 "Producto", "Cantidad", "Precio unitario", "Subtotal",
+                 "Mozo", "Cajero"]
+        hdr2 = _excel_titulo(
+            ws2,
+            "Detalle de ítems vendidos — qué se vendió, cuánto y quién",
+            "Una fila por producto dentro de cada venta cobrada: qué producto, "
+            "cuántas unidades, a qué precio, y el mozo/cajero que atendió. "
+            "Se cruza con la hoja «Ventas» por «Pedido #».",
+            meta, n_cols=len(cols2),
+        )
+        ws2.append(cols2)
+        for c in ws2[hdr2]:
+            c.font = Font(bold=True)
         for p in pedidos:
             fecha = p.cerrado_en
             mesa_label = _pedido_sales_label(p, mesas)
+            tipo = (getattr(p, "tipo_pedido", None) or "").capitalize()
+            mozo = usuarios.get(p.mozo_id)
+            cajero = usuarios.get(p.cajero_id)
             for d in detalles_por_pedido.get(p.id or 0, []):
                 prod = productos_map.get(d.producto_id)
                 ws2.append([
-                    fecha.strftime("%Y-%m-%d") if fecha else "",
+                    format_local_datetime(fecha, "%Y-%m-%d", self.reportes_pais) if fecha else "",
+                    format_local_datetime(fecha, "%H:%M", self.reportes_pais) if fecha else "",
                     p.id,
+                    tipo,
                     mesa_label,
                     prod.nombre if prod else f"Producto {d.producto_id}",
                     d.cantidad,
                     float(_to_decimal(d.precio_unitario)),
                     float(_to_decimal(d.subtotal)),
+                    _actor_name(mozo.nombre) if mozo else "Sin asignar",
+                    _actor_name(cajero.nombre) if cajero else "Sin asignar",
                 ])
 
-        for ws in (ws1, ws2):
-            for i, col in enumerate(ws.columns, start=1):
-                max_len = max(
-                    (len(str(c.value)) if c.value is not None else 0) for c in col
-                )
-                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws1, start_row=hdr1)
+        _excel_autofit(ws2, start_row=hdr2)
 
         buf = io.BytesIO()
         wb.save(buf)
@@ -1154,6 +1205,79 @@ class ReportesState(rx.State):
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"margen_platos_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+        return rx.download(data=buf.getvalue(), filename=filename)
+
+    async def exportar_productos_stock_excel(self):
+        """Excel de control de productos de la carta: stock actual + unidades
+        vendidas + ingreso, por producto. Disponible en Standard.
+
+        Respeta los filtros de fecha del Historial (Desde/Hasta). Sin filtro =
+        todo el histórico. Los montos van como número para poder sumarlos en Excel.
+        """
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+
+        food = await self._food()
+        self.reportes_pais = food._country_code()
+        desde, hasta = self._rango_filtros_historial()
+        if hasta is not None:
+            hasta = hasta + timedelta(seconds=1)
+        with food._tenant_session() as session:
+            filas = reporte_productos_stock(session, food._company_id(), desde, hasta)
+        if not filas:
+            return rx.toast.error("No hay productos para exportar.")
+
+        empresa = getattr(food, "empresa_nombre", "TUWAYKIFOOD") or "TUWAYKIFOOD"
+        generado = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", self.reportes_pais)
+        simbolo = "S/" if self.reportes_pais == "PE" else "$"
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Productos"
+        encabezados = ["Categoría", "Producto", "Stock actual",
+                       "Unidades vendidas", "Ingreso"]
+        hdr = _excel_titulo(
+            ws,
+            "Productos — vendidos y stock",
+            "Una fila por producto de la carta. 'Stock actual' es lo que queda "
+            "(o 'Sin control' si el producto no lleva stock). 'Unidades vendidas' "
+            "e 'Ingreso' son del rango indicado abajo. Ordenado de más a menos vendido.",
+            [("Empresa", empresa), ("Generado", generado),
+             ("Rango de fechas", self._rango_export_texto())],
+            n_cols=len(encabezados),
+        )
+        ws.append(encabezados)
+        for c in ws[hdr]:
+            c.font = Font(bold=True)
+
+        total_unidades = 0
+        total_ingreso = Decimal("0.00")
+        for f in filas:
+            stock = f["stock"]
+            stock_cell = "Sin control" if stock is None else int(stock)
+            unidades = int(f["unidades"] or 0)
+            ingreso = f["ingreso"] or Decimal("0.00")
+            total_unidades += unidades
+            total_ingreso += ingreso
+            ws.append([f["categoria"], f["nombre"], stock_cell,
+                       unidades, float(ingreso)])
+
+        # Fila de totales
+        fila_total = ws.max_row + 1
+        ws.cell(row=fila_total, column=2, value="TOTAL").font = Font(bold=True)
+        ws.cell(row=fila_total, column=4, value=total_unidades).font = Font(bold=True)
+        ws.cell(row=fila_total, column=5, value=float(total_ingreso)).font = Font(bold=True)
+
+        # Formato de moneda en la columna Ingreso (desde la primera fila de datos)
+        for row in ws.iter_rows(min_row=hdr + 1, min_col=5, max_col=5):
+            for cell in row:
+                cell.number_format = f'"{simbolo}" #,##0.00'
+
+        _excel_autofit(ws, start_row=hdr)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        filename = f"productos_vendidos_stock_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
         return rx.download(data=buf.getvalue(), filename=filename)
 
     # ── P&L mensual (ADM-01) ────────────────────────────────────────────────

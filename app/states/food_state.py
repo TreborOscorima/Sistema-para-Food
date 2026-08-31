@@ -114,8 +114,10 @@ from app.services.suscripcion_service import evaluar_bloqueo
 from app.services.plan_service import (
     PAGINAS_PREMIUM,
     MSG_UPGRADE,
+    FEAT_INVENTARIO_AVANZADO,
     plan_permite,
     plan_label,
+    plan_icon,
     check_limite_mesas,
 )
 from app.services import modulos_empresa as _modulos_empresa
@@ -1506,6 +1508,9 @@ class FoodState(
     companies_activas: list[CompanyOptionView] = []
     login_selected_company_id: int = 0
     login_selected_company_slug: str = ""
+    # ¿La empresa elegida tiene la pantalla de cocina (módulo) activa? Se resuelve
+    # al elegir la empresa en el login para no ofrecer el rol "Cocina" si está OFF.
+    login_cocina_habilitada: bool = True
 
     sucursales_empresa: list[SucursalView] = []
     sucursal_admin_form_id: int = 0
@@ -1772,7 +1777,13 @@ class FoodState(
     def usuario_home_route(self) -> str:
         if self.usuario_actual is None:
             return "/login"
-        return _role_home_route(self.usuario_actual.rol)
+        home = _role_home_route(self.usuario_actual.rol)
+        # Si el rol Cocina no tiene pantalla (módulo apagado para la empresa),
+        # su "home" /cocina está bloqueado → evita el loop de redirección
+        # mandándolo a la estación de impresión, a la que el rol sí accede.
+        if home == "/cocina" and not self._modulo_on("cocina"):
+            return "/estacion-impresion"
+        return home
 
     @rx.var
     def puede_ver_mozos(self) -> bool:
@@ -1803,6 +1814,10 @@ class FoodState(
     @rx.var
     def puede_ver_cocina(self) -> bool:
         if self.usuario_actual is None:
+            return False
+        # Módulo "core opcional": si el owner apagó la pantalla de cocina para esta
+        # empresa, se oculta el KDS (las comandas se siguen imprimiendo).
+        if not self._modulo_on("cocina"):
             return False
         return self.usuario_actual.rol in ROLE_ALLOWED_ROUTES["cocina"] or self.usuario_actual.acceso_cocina
 
@@ -2346,6 +2361,7 @@ class FoodState(
         if empresa is not None:
             self.login_selected_company_id = empresa.id
             self.login_selected_company_slug = empresa.slug
+            self.login_cocina_habilitada = self._cocina_habilitada_empresa(empresa.id)
             self.login_step = "pin"
         else:
             self.login_step = "restaurant"
@@ -2353,12 +2369,26 @@ class FoodState(
             self.login_selected_company_slug = ""
         return None
 
+    def _cocina_habilitada_empresa(self, company_id: int) -> bool:
+        """¿La empresa tiene la pantalla de cocina (módulo) activa? (pre-auth)."""
+        if not company_id:
+            return True
+        with tenant_bypass():
+            with get_session() as session:
+                company = session.get(Company, company_id)
+                if company is None:
+                    return True
+                plan = getattr(company, "plan", "trial") or "trial"
+                overrides = _modulos_empresa.cargar_overrides(session, company_id)
+        return _modulos_empresa.modulo_habilitado(overrides, plan, "cocina")
+
     def seleccionar_restaurante(self, company_id: int) -> None:
         empresa = next((c for c in self.companies_activas if c.id == company_id), None)
         if empresa is None:
             return
         self.login_selected_company_id = empresa.id
         self.login_selected_company_slug = empresa.slug
+        self.login_cocina_habilitada = self._cocina_habilitada_empresa(empresa.id)
         self.login_step = "pin"
         self.login_error = ""
 
@@ -2653,7 +2683,7 @@ class FoodState(
         self._set_session_cookie(usuario, company_id, sucursal_id, sucursal_nombre)
         self.cargar_config_impresora()
         self._cargar_plan_empresa()
-        return [rx.toast.success(f"Sesion iniciada como {usuario.nombre}."), rx.redirect(_role_home_route(usuario.rol), replace=True)]
+        return [rx.toast.success(f"Sesion iniciada como {usuario.nombre}."), rx.redirect(self.usuario_home_route, replace=True)]
 
     def _cargar_plan_empresa(self) -> None:
         with tenant_bypass():
@@ -2678,6 +2708,24 @@ class FoodState(
         si no el default del plan."""
         return _modulos_empresa.modulo_habilitado(
             self.empresa_modulos_override, self.empresa_plan, modulo
+        )
+
+    def _estado_produccion_al_enviar(self, requiere_prep: bool) -> str:
+        """Estado de producción con que se snapshotea un ítem al enviar el pedido.
+
+        Con la pantalla de cocina (KDS) APAGADA para la empresa no hay dónde
+        avanzar estados, así que el ítem queda en estado terminal
+        (`entregado_al_cliente`) para no colgarse — la COMANDA igual se imprime,
+        porque el ruteo de impresión mira `requiere_preparacion`, no el estado.
+        Con la pantalla ON, comportamiento de siempre: los de preparación quedan
+        `pendiente` (van al KDS); los "sin preparación" quedan `entregado`.
+        """
+        if not self._modulo_on("cocina"):
+            return EstadoProduccion.ENTREGADO_AL_CLIENTE.value
+        return (
+            EstadoProduccion.PENDIENTE.value
+            if requiere_prep
+            else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
         )
 
     def _cargar_sucursales_empresa(self, company_id: int) -> list[SucursalView]:
@@ -2707,7 +2755,7 @@ class FoodState(
         self._set_session_cookie_from_current()
         self.cargar_config_impresora()
         self._cargar_plan_empresa()
-        return [rx.toast.success(f"Sesion iniciada como {self.usuario_actual.nombre}."), rx.redirect(_role_home_route(self.usuario_actual.rol), replace=True)]
+        return [rx.toast.success(f"Sesion iniciada como {self.usuario_actual.nombre}."), rx.redirect(self.usuario_home_route, replace=True)]
 
     def volver_a_pin_login(self) -> None:
         self.usuario_actual = None
@@ -2900,6 +2948,13 @@ class FoodState(
                 return
             pedido.self_order_aprobado = True
             now = utc_now_naive()
+            # Pantalla de cocina apagada → los ítems aprobados quedan terminales
+            # (la comanda igual se imprime). Con pantalla ON, comportamiento de siempre.
+            _estado_env_self = (
+                EstadoProduccion.PENDIENTE.value
+                if self._modulo_on("cocina")
+                else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
+            )
             existing = session.exec(
                 select(Pedido).where(
                     Pedido.company_id == self._company_id(),
@@ -2918,7 +2973,7 @@ class FoodState(
                     d.pedido_id = existing.id
                     d.impreso_cocina = True
                     d.enviado_cocina_at = now
-                    d.estado_produccion = EstadoProduccion.PENDIENTE.value
+                    d.estado_produccion = _estado_env_self
                     session.add(d)
                 pedido.estado = EstadoPedido.COBRADO.value
                 session.add(pedido)
@@ -2934,7 +2989,7 @@ class FoodState(
                 for d in detalles:
                     d.impreso_cocina = True
                     d.enviado_cocina_at = now
-                    d.estado_produccion = EstadoProduccion.PENDIENTE.value
+                    d.estado_produccion = _estado_env_self
                     session.add(d)
                 _recalculate_order_total(session, pedido)
                 _sync_order_status(session, pedido)
@@ -2962,8 +3017,27 @@ class FoodState(
         return plan_label(self.empresa_plan)
 
     @rx.var
+    def empresa_plan_icon(self) -> str:
+        """Tag de ícono propio del plan (sparkles/crown/…), para el badge."""
+        return plan_icon(self.empresa_plan)
+
+    @rx.var
     def plan_permite_inventario(self) -> bool:
         return self._modulo_on("inventario")
+
+    @rx.var
+    def plan_permite_inventario_avanzado(self) -> bool:
+        # Recetas (descuento automático) + planificador de producción. Solo
+        # Profesional (y trial). Standard tiene el inventario básico.
+        return plan_permite(self.empresa_plan, FEAT_INVENTARIO_AVANZADO)
+
+    @rx.var
+    def plan_permite_reservas(self) -> bool:
+        return self._modulo_on("reservas")
+
+    @rx.var
+    def plan_permite_delivery(self) -> bool:
+        return self._modulo_on("delivery")
 
     @rx.var
     def plan_permite_clientes(self) -> bool:
@@ -4966,11 +5040,9 @@ class FoodState(
                 # los que requieren preparación van al KDS; los "sin preparación"
                 # quedan "entregado" para no colgar el pedido esperando al KDS.
                 # "Enviar y cobrar" NO altera esto: una hamburguesa igual se cocina.
-                d.estado_produccion = (
-                    EstadoProduccion.PENDIENTE.value
-                    if d.requiere_preparacion
-                    else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
-                )
+                # Si la empresa tiene la pantalla de cocina APAGADA, el ítem queda
+                # terminal (la comanda igual se imprime): ver _estado_produccion_al_enviar.
+                d.estado_produccion = self._estado_produccion_al_enviar(d.requiere_preparacion)
                 session.add(d)
             _recalculate_order_total(session, pedido)
             _sync_order_status(session, pedido)
@@ -5490,10 +5562,7 @@ class FoodState(
                 cantidad=1,
                 precio_unitario=precio,
                 subtotal=precio,
-                estado_produccion=(
-                    EstadoProduccion.PENDIENTE.value if req
-                    else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
-                ),
+                estado_produccion=self._estado_produccion_al_enviar(req),
                 impreso_cocina=True,
                 impreso_caja=False,
                 enviado_cocina_at=now,
@@ -7226,7 +7295,7 @@ class FoodState(
                         precio_unitario=precio,
                         subtotal=subtotal,
                         notas=item.nota or None,
-                        estado_produccion=EstadoProduccion.PENDIENTE.value,
+                        estado_produccion=self._estado_produccion_al_enviar(True),
                         impreso_cocina=True,
                         impreso_caja=True,
                         enviado_cocina_at=now,
@@ -7255,11 +7324,8 @@ class FoodState(
                         subtotal=subtotal,
                         notas=item.nota or None,
                         # Sin preparación → no pasa por cocina: queda "entregado".
-                        estado_produccion=(
-                            EstadoProduccion.PENDIENTE.value
-                            if _req_prep
-                            else EstadoProduccion.ENTREGADO_AL_CLIENTE.value
-                        ),
+                        # Pantalla de cocina apagada → terminal (la comanda igual imprime).
+                        estado_produccion=self._estado_produccion_al_enviar(_req_prep),
                         impreso_cocina=True,
                         impreso_caja=True,
                         enviado_cocina_at=now,

@@ -537,6 +537,9 @@ def _modules_payload(session, company) -> dict:
             "label": m["label"],
             "coming_soon": m["coming_soon"],
             "habilitado": estado.get(m["key"], False),
+            # "core": módulo del núcleo incluido en todos los planes pero apagable.
+            "core": bool(m.get("core")),
+            "descripcion": m.get("descripcion", ""),
         }
         for m in _me.MODULOS_TOGGLEABLES
     ]

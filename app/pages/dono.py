@@ -7,7 +7,7 @@ import reflex as rx
 from app.states.food_state import AdminLocalState, FoodState
 from app.states.dono_state import DeliveryPedidoView, DonoOperacionesState, ReservaView
 from app.states.reportes_state import ReportesState
-from app.services.plan_service import MSG_UPGRADE
+from app.components.upgrade import upgrade_cta
 from app.components.shared import _connection_banner_es, color_mode_toggle
 from app.components.modulos import MODULOS as _M
 from app.components.theme import (
@@ -107,7 +107,7 @@ def _dono_topbar(show_hamburger: bool = False) -> rx.Component:
                 padding="3px 8px",
             ),
             rx.badge(
-                rx.text(rx.icon(tag="crown", size=10), " ",
+                rx.text(rx.icon(tag=FoodState.empresa_plan_icon, size=10), " ",
                         FoodState.empresa_plan_label,
                         display="inline-flex", align_items="center", gap="3px"),
                 background=rx.cond(
@@ -249,15 +249,54 @@ def _admin_sidebar() -> rx.Component:
             _admin_group_label("Análisis"),
             _admin_nav_item("resumen", "Resumen", "layout_dashboard", "Vista general del día"),
             _admin_nav_item("ventas", _M["reportes"].label, _M["reportes"].icon, _M["reportes"].desc),
-            _admin_group_label("Catálogo"),
-            _admin_nav_item("inventario", _M["inventario"].label, _M["inventario"].icon, _M["inventario"].desc),
-            _admin_nav_item("promociones", _M["promociones"].label, _M["promociones"].icon, _M["promociones"].desc),
-            _admin_group_label("Clientes"),
-            _admin_nav_item("clientes", _M["clientes"].label, _M["clientes"].icon, _M["clientes"].desc),
-            _admin_nav_item("cuentas", _M["cuentas"].label, _M["cuentas"].icon, _M["cuentas"].desc),
-            _admin_group_label("Canales de venta"),
-            _admin_nav_item("reservas", _M["reservas"].label, _M["reservas"].icon, _M["reservas"].desc),
-            _admin_nav_item("delivery", _M["delivery"].label, _M["delivery"].icon, _M["delivery"].desc),
+            # Catálogo — solo si algún módulo del grupo está activo para el plan.
+            rx.cond(
+                FoodState.plan_permite_inventario | FoodState.plan_permite_promociones,
+                _admin_group_label("Catálogo"),
+                rx.fragment(),
+            ),
+            rx.cond(
+                FoodState.plan_permite_inventario,
+                _admin_nav_item("inventario", _M["inventario"].label, _M["inventario"].icon, _M["inventario"].desc),
+                rx.fragment(),
+            ),
+            rx.cond(
+                FoodState.plan_permite_promociones,
+                _admin_nav_item("promociones", _M["promociones"].label, _M["promociones"].icon, _M["promociones"].desc),
+                rx.fragment(),
+            ),
+            # Clientes — grupo premium; se oculta entero si ningún módulo aplica.
+            rx.cond(
+                FoodState.plan_permite_clientes | FoodState.plan_permite_cuentas,
+                _admin_group_label("Clientes"),
+                rx.fragment(),
+            ),
+            rx.cond(
+                FoodState.plan_permite_clientes,
+                _admin_nav_item("clientes", _M["clientes"].label, _M["clientes"].icon, _M["clientes"].desc),
+                rx.fragment(),
+            ),
+            rx.cond(
+                FoodState.plan_permite_cuentas,
+                _admin_nav_item("cuentas", _M["cuentas"].label, _M["cuentas"].icon, _M["cuentas"].desc),
+                rx.fragment(),
+            ),
+            # Canales de venta — módulos "próximamente"; se muestran al activarlos.
+            rx.cond(
+                FoodState.plan_permite_reservas | FoodState.plan_permite_delivery,
+                _admin_group_label("Canales de venta"),
+                rx.fragment(),
+            ),
+            rx.cond(
+                FoodState.plan_permite_reservas,
+                _admin_nav_item("reservas", _M["reservas"].label, _M["reservas"].icon, _M["reservas"].desc),
+                rx.fragment(),
+            ),
+            rx.cond(
+                FoodState.plan_permite_delivery,
+                _admin_nav_item("delivery", _M["delivery"].label, _M["delivery"].icon, _M["delivery"].desc),
+                rx.fragment(),
+            ),
             _admin_group_label("Sistema"),
             _admin_nav_item("usuarios", _M["usuarios"].label, _M["usuarios"].icon, _M["usuarios"].desc),
             _admin_nav_item("config", _M["config"].label, _M["config"].icon, _M["config"].desc),
@@ -775,8 +814,13 @@ def _section_resumen() -> rx.Component:
                         rx.grid(
                             _quick_link_card(_M["mozos"].label, _M["mozos"].desc,
                                              _M["mozos"].icon, "/mozos", "🧑‍🍳"),
-                            _quick_link_card(_M["cocina"].label, _M["cocina"].desc,
-                                             _M["cocina"].icon, "/cocina", "🍳"),
+                            # El acceso a Cocina se oculta si la empresa tiene la pantalla apagada.
+                            rx.cond(
+                                FoodState.puede_ver_cocina,
+                                _quick_link_card(_M["cocina"].label, _M["cocina"].desc,
+                                                 _M["cocina"].icon, "/cocina", "🍳"),
+                                rx.fragment(),
+                            ),
                             _quick_link_card(_M["caja"].label, _M["caja"].desc,
                                              _M["caja"].icon, "/caja", "🖥️"),
                             _quick_link_card(_M["mostrador"].label, _M["mostrador"].desc,
@@ -1525,23 +1569,17 @@ def _section_reservas() -> rx.Component:
 
 def _upgrade_banner(modulo: str) -> rx.Component:
     return rx.center(
-        rx.vstack(
-            rx.icon(tag="lock", size=48, color=_AMBER),
-            rx.heading(
-                f"{modulo} — Plan Profesional",
-                size="4", color=_TEXT,
+        rx.box(
+            upgrade_cta(
+                titulo=f"{modulo} — Plan Profesional",
+                mensaje=(
+                    f"{modulo} está disponible en el plan Profesional. "
+                    "Mejorá tu plan para activarlo."
+                ),
             ),
-            rx.text(
-                MSG_UPGRADE,
-                color="var(--twk-slate-300)", text_align="center", max_width="400px",
-            ),
-            align="center", spacing="3",
-            padding="48px 24px",
-            border_radius="16px",
-            background=_AMBER_LT,
-            border=f"1px solid {_AMBER_BD}",
+            max_width="560px", width="100%",
         ),
-        width="100%", min_height="300px",
+        width="100%", min_height="300px", padding="24px",
     )
 
 

@@ -88,7 +88,7 @@ def _mesa_card(mesa: MesaView) -> rx.Component:
                 mesa.nombre,
                 font_size=rx.breakpoints(initial="15px", md="16px"),
                 font_weight="800",
-                color=TEXT_PRIMARY,
+                color=rx.cond(selected, TEXT_WHITE, TEXT_PRIMARY),
                 line_height="1",
             ),
             # Reserva indicator
@@ -126,7 +126,7 @@ def _mesa_card(mesa: MesaView) -> rx.Component:
                         mesa.total_abierto_texto,
                         font_size="13px",
                         font_weight="700",
-                        color=rx.cond(selected, WARNING_SOLID, TEXT_MUTED),
+                        color=rx.cond(selected, TEXT_WHITE, TEXT_MUTED),
                     ),
                     rx.text(
                         "⏱ " + mesa.tiempo_abierto_texto,

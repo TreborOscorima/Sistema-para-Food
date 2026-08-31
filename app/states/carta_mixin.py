@@ -1303,6 +1303,88 @@ class CartaMixin(rx.State, mixin=True):
             f"{nombre} restaurado. Está en la carta como “No disponible”; actívalo cuando quieras venderlo."
         )
 
+    def exportar_stock_carta_excel(self):
+        """Excel con una foto del stock ACTUAL de cada producto de la carta.
+
+        Es un snapshot (sin rango de fechas): cuánto queda de cada producto en
+        este momento. Complementa el reporte de Reportes (que además trae las
+        unidades vendidas del período).
+        """
+        import io
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from tuwayki_core.utils.timezone import format_local_datetime
+
+        from app.utils.excel_export import autofit_columnas, escribir_encabezado
+
+        cid = self._company_id()
+        pais = self._country_code()
+        with self._tenant_session() as session:
+            cats = {
+                c.id: c.nombre
+                for c in session.exec(
+                    select(Categoria).where(Categoria.company_id == cid)
+                ).all()
+            }
+            productos = session.exec(
+                select(Producto).where(
+                    Producto.company_id == cid,
+                    Producto.eliminado == False,  # noqa: E712
+                )
+            ).all()
+        if not productos:
+            return rx.toast.error("No hay productos para exportar.")
+
+        filas = [
+            (cats.get(p.categoria_id, ""), p.nombre, p.stock_diario,
+             p.stock_diario_alerta, p.disponible, float(p.precio))
+            for p in productos
+        ]
+        filas.sort(key=lambda r: (r[0].lower(), r[1].lower()))
+
+        empresa = getattr(self, "empresa_nombre", "TUWAYKIFOOD") or "TUWAYKIFOOD"
+        generado = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", pais)
+        simbolo = "S/" if pais == "PE" else "$"
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Stock de productos"
+        encabezados = ["Categoría", "Producto", "Stock actual",
+                       "Alerta bajo stock", "Disponible", "Precio"]
+        hdr = escribir_encabezado(
+            ws,
+            "Stock de productos de la carta — foto del momento",
+            "Cuánto queda de cada producto AHORA. 'Sin control' = el producto no "
+            "lleva stock (venta ilimitada). El stock se carga y rellena en "
+            "Carta → editar producto → 'Stock diario'. Para ver también cuántas "
+            "unidades se vendieron, usá el export de Reportes.",
+            [("Empresa", empresa), ("Generado", generado)],
+            n_cols=len(encabezados),
+        )
+        ws.append(encabezados)
+        for c in ws[hdr]:
+            c.font = Font(bold=True)
+
+        for cat, nombre, stock, alerta, disp, precio in filas:
+            ws.append([
+                cat, nombre,
+                "Sin control" if stock is None else int(stock),
+                int(alerta) if stock is not None else "",
+                "Sí" if disp else "No",
+                precio,
+            ])
+
+        for row in ws.iter_rows(min_row=hdr + 1, min_col=6, max_col=6):
+            for cell in row:
+                cell.number_format = f'"{simbolo}" #,##0.00'
+        autofit_columnas(ws, start_row=hdr)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        filename = f"stock_productos_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+        return rx.download(data=buf.getvalue(), filename=filename)
+
     def _reset_producto_form(self) -> None:
         self.producto_form_id = 0
         self.producto_form_nombre = ""

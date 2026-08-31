@@ -274,9 +274,14 @@ def _login_card() -> rx.Component:
         ),
         rx.grid(
             _rol_card("🧑‍🍳", "Mozo", "Mozo"),
-            _rol_card("🍳", "Cocina", "Cocina"),
+            # El rol Cocina solo se ofrece si la empresa tiene la pantalla de cocina activa.
+            rx.cond(
+                FoodState.login_cocina_habilitada,
+                _rol_card("🍳", "Cocina", "Cocina"),
+                rx.fragment(),
+            ),
             _rol_card("🖥️", "Caja", "Caja"),
-            columns="3",
+            columns=rx.cond(FoodState.login_cocina_habilitada, "3", "2"),
             gap="8px",
             margin_bottom="10px",
         ),

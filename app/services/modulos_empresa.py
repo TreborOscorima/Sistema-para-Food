@@ -26,9 +26,17 @@ from app.services.plan_service import (
 # Catálogo de módulos toggleables por empresa.
 #   key         — identificador estable (se guarda en la tabla).
 #   label       — nombre visible en el panel.
-#   feature     — feature de plan que define el DEFAULT (None si es "próximamente").
+#   feature     — feature de plan que define el DEFAULT (None si es "próximamente"
+#                 o si es un módulo "core opcional").
+#   core        — módulo del núcleo operativo que viene ON en TODOS los planes pero
+#                 el owner puede APAGAR por empresa (ej.: Cocina para un local sin
+#                 pantalla KDS). No depende del plan; el default es habilitado.
+#   descripcion — texto de ayuda para la tarjeta del panel del owner.
 #   coming_soon — el módulo aún no tiene página; se muestra deshabilitado.
 MODULOS_TOGGLEABLES: list[dict] = [
+    {"key": "cocina",             "label": "Cocina (pantalla / KDS)", "feature": None, "core": True, "coming_soon": False,
+     "descripcion": "Pantalla para ver y avanzar el estado de los pedidos en cocina. "
+                    "Al desactivarla, las comandas se siguen imprimiendo pero sin pantalla de seguimiento."},
     {"key": "inventario",         "label": "Inventario",        "feature": FEAT_INVENTARIO,         "coming_soon": False},
     {"key": "promociones",        "label": "Promociones",       "feature": FEAT_PROMOCIONES,        "coming_soon": False},
     {"key": "cuentas",            "label": "Cuentas / Fiado",   "feature": FEAT_CUENTAS_CORRIENTES, "coming_soon": False},
@@ -40,9 +48,12 @@ MODULOS_TOGGLEABLES: list[dict] = [
 
 _FEATURE_POR_MODULO: dict[str, str | None] = {m["key"]: m["feature"] for m in MODULOS_TOGGLEABLES}
 _KEYS_APLICABLES: set[str] = {m["key"] for m in MODULOS_TOGGLEABLES if not m["coming_soon"]}
+# Módulos "core opcional": ON por defecto en todos los planes, apagables por empresa.
+_CORE_MODULOS: set[str] = {m["key"] for m in MODULOS_TOGGLEABLES if m.get("core")}
 
 # Ruta de página -> módulo (para el gate de navegación en food_state).
 PAGINAS_MODULO: dict[str, str] = {
+    "cocina": "cocina",
     "inventario": "inventario",
     "promociones": "promociones",
     "cupones": "promociones",
@@ -61,9 +72,15 @@ _LIMITE_KEYS: set[str] = {l["key"] for l in LIMITES}
 
 
 def modulo_habilitado(overrides: dict[str, bool], plan: str, modulo: str) -> bool:
-    """Resuelve si un módulo está habilitado: override si existe, si no el default del plan."""
+    """Resuelve si un módulo está habilitado.
+
+    Orden: override de la empresa → si es "core opcional", ON por defecto → si no,
+    el default del feature de plan → False ("próximamente"/desconocido).
+    """
     if modulo in overrides:
         return bool(overrides[modulo])
+    if modulo in _CORE_MODULOS:
+        return True  # núcleo operativo: ON salvo que el owner lo apague (override)
     feat = _FEATURE_POR_MODULO.get(modulo)
     if feat is None:
         return False  # "próximamente" / desconocido: apagado hasta que exista

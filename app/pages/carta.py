@@ -1518,6 +1518,22 @@ def _carta_content() -> rx.Component:
             rx.hstack(
                 rx.button(
                     rx.hstack(
+                        rx.icon(tag="download", size=14),
+                        rx.text("Exportar stock", font_size="13px", font_weight="700"),
+                        spacing="1", align="center",
+                    ),
+                    on_click=FoodState.exportar_stock_carta_excel,
+                    background="rgba(34,197,94,0.08)",
+                    color=SUCCESS_TEXT,
+                    border="1px solid rgba(34,197,94,0.35)",
+                    border_radius="8px",
+                    cursor="pointer",
+                    padding_x="14px",
+                    padding_y="8px",
+                    _hover={"background": "rgba(34,197,94,0.14)"},
+                ),
+                rx.button(
+                    rx.hstack(
                         rx.icon(tag="plus", size=14),
                         rx.text("Nueva Categoría", font_size="13px", font_weight="700"),
                         spacing="1", align="center",
