@@ -42,3 +42,38 @@ def autofit_columnas(ws, start_row: int = 1, max_width: int = 48) -> None:
                    if c.value is not None and c.row >= start_row]
         ancho = (max(lengths) + 2) if lengths else 10
         ws.column_dimensions[letter].width = min(ancho, max_width)
+
+
+def formato_moneda(ws, hdr_row: int, cols, simbolo: str = "S/") -> None:
+    """Aplica formato de moneda a las columnas ``cols`` (índices 1-based) desde la
+    primera fila de datos (``hdr_row + 1``) hasta el final, para que los importes
+    se vean como dinero y sean sumables en Excel."""
+    fmt = f'"{simbolo}" #,##0.00'
+    for col in cols:
+        for row in ws.iter_rows(min_row=hdr_row + 1, min_col=col, max_col=col):
+            for cell in row:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = fmt
+
+
+def finalizar_hoja(ws, hdr_row: int, money_cols=None, simbolo: str = "S/",
+                   max_width: int = 48) -> None:
+    """Da el acabado final a una hoja de datos ya escrita, para que cualquier
+    persona (dueño, cajero, contador) la pueda leer y explotar sin retoques:
+
+    - congela la fila de encabezados (``freeze_panes``) para que no se pierda al
+      hacer scroll;
+    - activa el autofiltro sobre la tabla, para ordenar/filtrar por columna;
+    - aplica formato de moneda a ``money_cols`` (índices 1-based);
+    - autoajusta el ancho de las columnas.
+    """
+    from openpyxl.utils import get_column_letter
+
+    if money_cols:
+        formato_moneda(ws, hdr_row, money_cols, simbolo)
+    # Autofiltro + congelado sobre el rango de la tabla (encabezados + datos).
+    if ws.max_row > hdr_row and ws.max_column >= 1:
+        ultima_col = get_column_letter(ws.max_column)
+        ws.auto_filter.ref = f"A{hdr_row}:{ultima_col}{ws.max_row}"
+    ws.freeze_panes = f"A{hdr_row + 1}"
+    autofit_columnas(ws, start_row=hdr_row, max_width=max_width)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import reflex as rx
 
 from app.components.shared import (
-    anulacion_modal, app_shell, loading_placeholder,
+    anulacion_modal, app_shell, loading_placeholder, preview_ticket_modal,
     ACCENT, ACCENT_HOVER,
     DANGER_SOLID, DANGER_TEXT,
     DARK_700, DARK_800,
@@ -31,6 +31,10 @@ from app.states.food_state import (
 from app.states.reportes_state import ReportesState
 from app.components.ayuda import ayuda_modal, ayuda_trigger
 from app.components.upgrade import upgrade_cta
+# Modal de corrección de cobro: se reutiliza el de Caja (misma operación, mismo
+# estado en FoodState). No hay import circular: caja importa reportes_state, no
+# esta página.
+from app.pages.caja import _correccion_modal
 
 _METODOS_FILTRO = [
     ("", "Todos los métodos"),
@@ -287,6 +291,52 @@ def _margen_row(p) -> rx.Component:
     )
 
 
+def _venta_accion_icono(tag: str, tooltip: str, on_click, color: str, hover: str) -> rx.Component:
+    return rx.tooltip(
+        rx.icon(
+            tag=tag, size=15, color=color, cursor="pointer",
+            on_click=on_click.stop_propagation,
+            _hover={"color": hover},
+        ),
+        content=tooltip,
+    )
+
+
+def _venta_acciones(venta: VentaHistorialView) -> rx.Component:
+    """Acciones de la fila, al estilo «Últimos cobros» de Caja: reimprimir el
+    comprobante (abre la vista previa), corregir el cobro (solo ventas del turno
+    abierto, que es donde la corrección aplica) y anular (con permiso; funciona
+    sobre cualquier fecha)."""
+    return rx.hstack(
+        _venta_accion_icono(
+            "printer",
+            rx.cond(venta.comprobante_impreso, "Reimprimir comprobante", "Imprimir comprobante"),
+            FoodState.reimprimir_comprobante(venta.pedido_id),
+            ACCENT, ACCENT_HOVER,
+        ),
+        rx.cond(
+            FoodState.tiene_perm_corregir & venta.es_turno_actual,
+            _venta_accion_icono(
+                "pencil", "Corregir cobro (turno abierto)",
+                FoodState.abrir_correccion_cobro(venta.pedido_id),
+                ACCENT, ACCENT_HOVER,
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            FoodState.tiene_perm_anular,
+            _venta_accion_icono(
+                "trash_2", "Anular venta",
+                FoodState.abrir_anulacion_venta(venta.pedido_id),
+                "var(--twk-slate-300)", "#DC2626",
+            ),
+            rx.fragment(),
+        ),
+        spacing="3", align="center", justify="end",
+        min_width="86px", flex_shrink="0",
+    )
+
+
 def _venta_row(venta: VentaHistorialView) -> rx.Component:
     return rx.hstack(
         rx.text(
@@ -295,6 +345,15 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             color=TEXT_MUTED,
             min_width="36px",
             flex_shrink="0",
+        ),
+        # Fecha · hora del cobro (antes solo estaba en el detalle).
+        rx.vstack(
+            rx.text(venta.hora_texto, font_size="12px", font_weight="600",
+                    color="var(--twk-slate-300)", text_align="center", width="100%"),
+            rx.text(venta.fecha_texto, font_size="10px", color=TEXT_MUTED,
+                    text_align="center", width="100%"),
+            spacing="0", min_width="86px", flex_shrink="0",
+            display=rx.breakpoints(initial="none", sm="flex"),
         ),
         rx.vstack(
             rx.text(venta.mesa_label, font_size="13px", color="var(--twk-slate-300)", width="100%",
@@ -308,7 +367,7 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             ),
             spacing="0", align="start", flex="1", min_width="0",
         ),
-        _metodo_badge(venta.metodo_pago),
+        rx.box(_metodo_badge(venta.metodo_pago), min_width="60px", flex_shrink="0"),
         rx.text(
             venta.mozo_nombre,
             font_size="12px", color=TEXT_MUTED,
@@ -347,20 +406,12 @@ def _venta_row(venta: VentaHistorialView) -> rx.Component:
             min_width="80px",
             flex_shrink="0",
         ),
+        # Acciones: reimprimir / corregir / anular. Las ventas ya anuladas no las
+        # muestran (mantenemos el ancho de columna para no descuadrar la tabla).
         rx.cond(
             venta.anulada,
-            rx.fragment(),
-            rx.tooltip(
-                rx.button(
-                    rx.icon(tag="trash_2", size=15),
-                    on_click=FoodState.abrir_anulacion_venta(venta.pedido_id).stop_propagation,
-                    background="transparent", color="var(--twk-slate-300)",
-                    border="none", padding="2px", cursor="pointer",
-                    _hover={"color": "#DC2626"},
-                    flex_shrink="0",
-                ),
-                content="Anular venta",
-            ),
+            rx.box(min_width="86px", flex_shrink="0"),
+            _venta_acciones(venta),
         ),
         width="100%",
         align="center",
@@ -618,6 +669,11 @@ def _filtros_bar() -> rx.Component:
 def _historial_header() -> rx.Component:
     return rx.hstack(
         rx.text("#", font_size="11px", color=TEXT_MUTED, min_width="36px", flex_shrink="0"),
+        rx.text(
+            "Fecha · hora", font_size="11px", color=TEXT_MUTED,
+            min_width="86px", text_align="center", flex_shrink="0",
+            display=rx.breakpoints(initial="none", sm="block"),
+        ),
         rx.text("Mesa / Pedido", font_size="11px", color=TEXT_MUTED, flex="1"),
         rx.text("Método", font_size="11px", color=TEXT_MUTED, min_width="60px", flex_shrink="0"),
         rx.text(
@@ -632,6 +688,8 @@ def _historial_header() -> rx.Component:
         ),
         rx.text("Total", font_size="11px", color=TEXT_MUTED,
                 min_width="80px", text_align="right", flex_shrink="0"),
+        rx.text("Acciones", font_size="11px", color=TEXT_MUTED,
+                min_width="86px", text_align="right", flex_shrink="0"),
         width="100%",
         padding_x="12px",
         gap="8px",
@@ -1319,6 +1377,10 @@ def _reportes_content() -> rx.Component:
     return rx.vstack(
         _venta_detalle_modal(),
         anulacion_modal(),
+        # Vista previa del comprobante (al reimprimir) y corrección de cobro,
+        # reutilizados de Caja para que las acciones del historial funcionen igual.
+        preview_ticket_modal(),
+        _correccion_modal(),
         _reportes_ayuda(),
         # Header
         rx.hstack(
@@ -1802,6 +1864,7 @@ def _reportes_content() -> rx.Component:
                         position="sticky",
                         top="0",
                         z_index="10",
+                        width="100%",
                         background=PAGE_BACKGROUND,
                         border_bottom=f"1px solid {DARK_700}",
                         padding_y="4px",

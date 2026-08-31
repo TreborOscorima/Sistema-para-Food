@@ -793,6 +793,11 @@ class MargenPlatoView(BaseModel):
     margen_pct_texto: str = ""
     color: str = "#16A34A"
     costo_completo: bool = True
+    # Valores numéricos crudos, para exports sumables/ordenables en Excel.
+    precio: float = 0.0
+    costo: float = 0.0
+    margen: float = 0.0
+    margen_pct: float = 0.0
 
 
 class RecetaItemView(BaseModel):
@@ -1115,6 +1120,14 @@ class VentaHistorialView(BaseModel):
     cajero_nombre: str
     anulada: bool = False
     anulacion_texto: str = ""
+    # WHEN de la venta, para que la lista muestre fecha y hora (antes solo se veía
+    # en el detalle). Se formatean con la zona horaria del país.
+    fecha_texto: str = ""
+    hora_texto: str = ""
+    # Estado del comprobante y del turno, para las acciones de la fila
+    # (reimprimir siempre; corregir solo si la venta es del turno abierto).
+    comprobante_impreso: bool = False
+    es_turno_actual: bool = False
 
 
 class VentaDetalleItemView(BaseModel):
@@ -1186,6 +1199,9 @@ class MatrizProductoView(BaseModel):
     margen_pct_texto: str
     categoria: str
     categoria_emoji: str
+    # Valores numéricos crudos, para exports sumables/ordenables en Excel.
+    ingreso: float = 0.0
+    margen_pct: float = 0.0
 
 
 class MostradorEntregaView(BaseModel):

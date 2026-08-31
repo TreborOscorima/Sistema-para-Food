@@ -1316,7 +1316,7 @@ class CartaMixin(rx.State, mixin=True):
         from openpyxl.styles import Font
         from tuwayki_core.utils.timezone import format_local_datetime
 
-        from app.utils.excel_export import autofit_columnas, escribir_encabezado
+        from app.utils.excel_export import escribir_encabezado, finalizar_hoja
 
         cid = self._company_id()
         pais = self._country_code()
@@ -1375,10 +1375,7 @@ class CartaMixin(rx.State, mixin=True):
                 precio,
             ])
 
-        for row in ws.iter_rows(min_row=hdr + 1, min_col=6, max_col=6):
-            for cell in row:
-                cell.number_format = f'"{simbolo}" #,##0.00'
-        autofit_columnas(ws, start_row=hdr)
+        finalizar_hoja(ws, hdr, money_cols=[6], simbolo=simbolo)
 
         buf = io.BytesIO()
         wb.save(buf)

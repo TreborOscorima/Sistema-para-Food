@@ -23,11 +23,13 @@ from app.models.food import (
     DetallePedido,
     EstadoMesa,
     EstadoPedido,
+    EstadoTurnoCaja,
     Mesa,
     PagoPedido,
     Pedido,
     Producto,
     Reserva,
+    TurnoCaja,
     UsuarioFood,
 )
 from app.services.analitica_service import (
@@ -45,7 +47,7 @@ from app.services.finanzas_service import (
     reporte_reversiones,
     resumen_igv_mensual,
 )
-from app.services.metodos_pago_service import mapa_tipos
+from app.services.metodos_pago_service import mapa_nombres, mapa_tipos
 from app.services.plan_service import plan_permite
 from app.states.caja_turno_mixin import _bucket_tipo
 from tuwayki_core.utils.timezone import (
@@ -76,8 +78,8 @@ from app.states.food_state import (
 
 
 from app.utils.excel_export import (
-    autofit_columnas as _excel_autofit,
     escribir_encabezado as _excel_titulo,
+    finalizar_hoja as _excel_finalizar,
 )
 
 
@@ -269,6 +271,9 @@ class ReportesState(rx.State):
             except ValueError:
                 pass
         return desde, hasta
+
+    def _simbolo_moneda(self) -> str:
+        return "S/" if self.reportes_pais == "PE" else "$"
 
     def _rango_export_texto(self) -> str:
         """Texto legible del rango de fechas aplicado, para el encabezado del Excel."""
@@ -576,6 +581,17 @@ class ReportesState(rx.State):
             pedidos = session.exec(query.offset(offset).limit(self._HISTORIAL_PAGE_SIZE)).all()
             mesas = {m.id: m for m in session.exec(select(Mesa).where(Mesa.company_id == food._company_id())).all()}
             usuarios = {u.id: u for u in session.exec(select(UsuarioFood).where(UsuarioFood.company_id == food._company_id())).all()}
+            # Turnos abiertos de la empresa: una venta es "corregible/anulable en
+            # caja" solo si pertenece a un turno todavía abierto (misma regla que
+            # Caja). Guardamos los ids para marcar cada fila.
+            turnos_abiertos = {
+                t.id for t in session.exec(
+                    select(TurnoCaja).where(
+                        TurnoCaja.company_id == food._company_id(),
+                        TurnoCaja.estado == EstadoTurnoCaja.ABIERTO.value,
+                    )
+                ).all()
+            }
             historial: list[VentaHistorialView] = []
             for p in pedidos:
                 # Venta neta = subtotal + recargo (envases/delivery) − descuento.
@@ -593,6 +609,7 @@ class ReportesState(rx.State):
                     anulacion_texto = (p.motivo_cancelacion or "Sin motivo") + (
                         f" — {quien.nombre}" if quien else ""
                     )
+                metodo_cod = getattr(p, "metodo_pago", None) or "—"
                 historial.append(VentaHistorialView(
                     pedido_id=p.id or 0,
                     mesa_label=_pedido_sales_label(p, mesas),
@@ -602,11 +619,15 @@ class ReportesState(rx.State):
                     propina_texto=_money_text(propina) if propina > 0 else "",
                     total_con_propina=float(total_con_propina),
                     total_con_propina_texto=_money_text(total_con_propina),
-                    metodo_pago=getattr(p, "metodo_pago", None) or "—",
+                    metodo_pago=metodo_cod,
                     mozo_nombre=_actor_name(usuarios[p.mozo_id].nombre if p.mozo_id in usuarios else "Sin asignar"),
                     cajero_nombre=_actor_name(usuarios[p.cajero_id].nombre if p.cajero_id in usuarios else "Sin asignar"),
                     anulada=anulada,
                     anulacion_texto=anulacion_texto,
+                    fecha_texto=format_local_datetime(p.cerrado_en, "%d/%m/%Y", self.reportes_pais) if p.cerrado_en else "",
+                    hora_texto=format_local_datetime(p.cerrado_en, "%H:%M", self.reportes_pais) if p.cerrado_en else "",
+                    comprobante_impreso=getattr(p, "comprobante_impreso_at", None) is not None,
+                    es_turno_actual=bool(p.turno_caja_id and p.turno_caja_id in turnos_abiertos),
                 ))
             self.historial_ventas = historial
 
@@ -795,6 +816,10 @@ class ReportesState(rx.State):
                 margen_pct_texto=f"{pct:.1f}%",
                 color=color,
                 costo_completo=f["costo_completo"],
+                precio=float(f["precio"]),
+                costo=float(f["costo"]),
+                margen=float(f["margen"]),
+                margen_pct=float(pct),
             ))
         self.reporte_margen = vistas_margen
         labels = {"efectivo": "Efectivo", "tarjeta": "Tarjeta", "qr": "QR / Yape", "fiado": "Fiado"}
@@ -921,6 +946,7 @@ class ReportesState(rx.State):
             # Pagos persistidos por pedido, para el desglose por método (montos
             # netos de vuelto). Se clasifican por tipo configurado de la empresa.
             tipos_metodo = mapa_tipos(session, food._company_id())
+            nombres_metodo = mapa_nombres(session, food._company_id())
             pagos_por_pedido: dict[int, list] = {}
             if pedido_ids:
                 detalles = session.exec(
@@ -958,6 +984,7 @@ class ReportesState(rx.State):
             "Subtotal ítems", "Recargo", "Concepto recargo", "Descuento",
             "Venta neta", "Propina", "Total cobrado",
             "Efectivo", "Tarjeta", "QR/Yape", "Fiado",
+            "Métodos de pago (detalle)",
             "Mozo", "Cajero",
         ]
         hdr1 = _excel_titulo(
@@ -965,8 +992,10 @@ class ReportesState(rx.State):
             "Reporte de ventas — una fila por venta cobrada",
             "Cada fila es un pedido cobrado con su desglose: subtotal de ítems + "
             "recargo − descuento = venta neta; + propina = total cobrado "
-            "(= suma de los métodos de pago). El detalle de QUÉ productos se "
-            "vendieron en cada pedido está en la hoja «Detalle de items».",
+            "(= suma de los métodos de pago). «Efectivo/Tarjeta/QR/Fiado» agrupan "
+            "por tipo; «Métodos de pago (detalle)» lista el método exacto y su "
+            "importe (Yape, Plin, etc.). El detalle de QUÉ productos se vendieron "
+            "en cada pedido está en la hoja «Detalle de items».",
             meta, n_cols=len(cols1),
         )
         ws1.append(cols1)
@@ -988,12 +1017,18 @@ class ReportesState(rx.State):
             # las columnas por método, que es lo que cuadra con el cierre.
             buckets = {"efectivo": Decimal("0.00"), "tarjeta": Decimal("0.00"),
                        "qr": Decimal("0.00"), "fiado": Decimal("0.00")}
+            # Detalle exacto por método (Yape, Plin, …) para no perder el "con qué
+            # se pagó" al agrupar por tipo en las columnas de arriba.
+            detalle_metodos: dict[str, Decimal] = {}
             pagos_ped = pagos_por_pedido.get(p.id or 0, [])
             if pagos_ped:
                 for pg in pagos_ped:
                     cod = (pg.metodo or "efectivo").lower()
                     b = _bucket_tipo(tipos_metodo.get(cod, "digital"))
                     buckets[b] += _to_decimal(pg.monto)
+                    nombre_m = nombres_metodo.get(cod, cod.title())
+                    detalle_metodos[nombre_m] = detalle_metodos.get(
+                        nombre_m, Decimal("0.00")) + _to_decimal(pg.monto)
                 total_cobrado = sum(buckets.values(), Decimal("0.00"))
             else:
                 # Pedido legacy sin filas de pago: el cobrado se asume la venta
@@ -1001,6 +1036,13 @@ class ReportesState(rx.State):
                 total_cobrado = venta_neta + propina
                 cod = (getattr(p, "metodo_pago", None) or "efectivo").lower()
                 buckets[_bucket_tipo(tipos_metodo.get(cod, "digital"))] += total_cobrado
+                nombre_m = nombres_metodo.get(cod, cod.title())
+                detalle_metodos[nombre_m] = detalle_metodos.get(
+                    nombre_m, Decimal("0.00")) + total_cobrado
+            metodos_texto = "; ".join(
+                f"{n}: {self._simbolo_moneda()} {float(v):,.2f}"
+                for n, v in detalle_metodos.items()
+            )
             mozo = usuarios.get(p.mozo_id)
             cajero = usuarios.get(p.cajero_id)
             ws1.append([
@@ -1015,6 +1057,7 @@ class ReportesState(rx.State):
                 float(total_cobrado),
                 float(buckets["efectivo"]), float(buckets["tarjeta"]),
                 float(buckets["qr"]), float(buckets["fiado"]),
+                metodos_texto,
                 _actor_name(mozo.nombre) if mozo else "Sin asignar",
                 _actor_name(cajero.nombre) if cajero else "Sin asignar",
             ])
@@ -1028,29 +1071,34 @@ class ReportesState(rx.State):
             tot["tarjeta"] += buckets["tarjeta"]
             tot["qr"] += buckets["qr"]
             tot["fiado"] += buckets["fiado"]
+        fila_tot = ws1.max_row + 1
         ws1.append([
             "", "", "", "", "TOTALES",
             float(tot["subtotal"]), float(tot["recargo"]), "",
             float(tot["descuento"]), float(tot["neta"]), float(tot["propina"]),
             float(tot["cobrado"]), float(tot["efectivo"]), float(tot["tarjeta"]),
-            float(tot["qr"]), float(tot["fiado"]), "", "",
+            float(tot["qr"]), float(tot["fiado"]), "", "", "",
         ])
+        for c in ws1[fila_tot]:
+            c.font = Font(bold=True)
 
         ws2 = wb.create_sheet("Detalle de items")
         cols2 = ["Fecha", "Hora", "Pedido #", "Tipo", "Mesa / Cliente",
                  "Producto", "Cantidad", "Precio unitario", "Subtotal",
-                 "Mozo", "Cajero"]
+                 "Mozo", "Cajero", "Notas"]
         hdr2 = _excel_titulo(
             ws2,
             "Detalle de ítems vendidos — qué se vendió, cuánto y quién",
             "Una fila por producto dentro de cada venta cobrada: qué producto, "
-            "cuántas unidades, a qué precio, y el mozo/cajero que atendió. "
-            "Se cruza con la hoja «Ventas» por «Pedido #».",
+            "cuántas unidades, a qué precio, el mozo/cajero que atendió y las "
+            "notas del ítem. Se cruza con la hoja «Ventas» por «Pedido #».",
             meta, n_cols=len(cols2),
         )
         ws2.append(cols2)
         for c in ws2[hdr2]:
             c.font = Font(bold=True)
+        tot_items_cant = 0
+        tot_items_imp = Decimal("0.00")
         for p in pedidos:
             fecha = p.cerrado_en
             mesa_label = _pedido_sales_label(p, mesas)
@@ -1059,6 +1107,8 @@ class ReportesState(rx.State):
             cajero = usuarios.get(p.cajero_id)
             for d in detalles_por_pedido.get(p.id or 0, []):
                 prod = productos_map.get(d.producto_id)
+                tot_items_cant += int(d.cantidad or 0)
+                tot_items_imp += _to_decimal(d.subtotal)
                 ws2.append([
                     format_local_datetime(fecha, "%Y-%m-%d", self.reportes_pais) if fecha else "",
                     format_local_datetime(fecha, "%H:%M", self.reportes_pais) if fecha else "",
@@ -1071,10 +1121,17 @@ class ReportesState(rx.State):
                     float(_to_decimal(d.subtotal)),
                     _actor_name(mozo.nombre) if mozo else "Sin asignar",
                     _actor_name(cajero.nombre) if cajero else "Sin asignar",
+                    getattr(d, "notas", None) or "",
                 ])
+        fila_tot2 = ws2.max_row + 1
+        ws2.append(["", "", "", "", "", "TOTALES", tot_items_cant, "",
+                    float(tot_items_imp), "", "", ""])
+        for c in ws2[fila_tot2]:
+            c.font = Font(bold=True)
 
-        _excel_autofit(ws1, start_row=hdr1)
-        _excel_autofit(ws2, start_row=hdr2)
+        simbolo = self._simbolo_moneda()
+        _excel_finalizar(ws1, hdr1, money_cols=[6, 7, 9, 10, 11, 12, 13, 14, 15, 16], simbolo=simbolo)
+        _excel_finalizar(ws2, hdr2, money_cols=[8, 9], simbolo=simbolo)
 
         buf = io.BytesIO()
         wb.save(buf)
@@ -1102,7 +1159,7 @@ class ReportesState(rx.State):
             c.font = Font(bold=True)
         for ln in self.pyl_lineas:
             ws.append([ln.concepto, ln.valor_texto, ln.margen_pct_texto or ""])
-        _excel_autofit(ws, start_row=hdr)
+        _excel_finalizar(ws, hdr)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"pyl_{self.pyl_anio}_{self.pyl_mes:02d}.xlsx"
@@ -1129,7 +1186,7 @@ class ReportesState(rx.State):
         ws.append(["Base imponible", self.igv_base_imponible_texto])
         ws.append([f"IGV ({self.igv_porcentaje}%)", self.igv_monto_texto])
         ws.append(["Pedidos", self.igv_pedidos])
-        _excel_autofit(ws, start_row=hdr)
+        _excel_finalizar(ws, hdr)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"igv_{self.igv_anio}_{self.igv_mes:02d}.xlsx"
@@ -1172,8 +1229,8 @@ class ReportesState(rx.State):
             ws2.append([a.pedido_id, a.total_texto, a.motivo,
                         a.cancelado_por, a.cancelado_en_texto, a.cajero_original])
 
-        _excel_autofit(ws1, start_row=h1)
-        _excel_autofit(ws2, start_row=h2)
+        _excel_finalizar(ws1, h1)
+        _excel_finalizar(ws2, h2)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"descuentos_anulaciones_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1214,8 +1271,8 @@ class ReportesState(rx.State):
         for i in self.mermas_por_insumo:
             ws2.append([i.nombre, i.unidad, i.cantidad_texto, i.valor_texto, i.registros])
 
-        _excel_autofit(ws1, start_row=h1)
-        _excel_autofit(ws2, start_row=h2)
+        _excel_finalizar(ws1, h1)
+        _excel_finalizar(ws2, h2)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"mermas_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1236,15 +1293,20 @@ class ReportesState(rx.State):
             ws, "Matriz de productos (estrella / perro)",
             "Cada producto por unidades vendidas e ingreso, con su margen % (precio "
             "vs costo de receta). La 'Categoría' es el cuadrante BCG: estrella, vaca, "
-            "puzzle o perro.",
+            "puzzle o perro. Ingreso y Margen % van como número para poder ordenar "
+            "y sumar.",
             meta, n_cols=len(cols))
         ws.append(cols)
         for c in ws[hdr]:
             c.font = Font(bold=True)
         for p in self.matriz_productos:
-            ws.append([p.nombre, p.unidades, p.ingreso_texto,
-                       p.margen_pct_texto, p.categoria])
-        _excel_autofit(ws, start_row=hdr)
+            ws.append([p.nombre, p.unidades, round(p.ingreso, 2),
+                       round(p.margen_pct, 1), p.categoria.capitalize()])
+        for row in ws.iter_rows(min_row=hdr + 1, min_col=4, max_col=4):
+            for cell in row:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = '0.0"%"'
+        _excel_finalizar(ws, hdr, money_cols=[3], simbolo=self._simbolo_moneda())
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"matriz_productos_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1260,19 +1322,26 @@ class ReportesState(rx.State):
         wb = Workbook()
         ws = wb.active
         ws.title = "Margen por plato"
-        cols = ["Producto", "Precio", "Costo", "Margen", "Margen %"]
+        cols = ["Producto", "Precio", "Costo", "Margen", "Margen %", "Costo completo"]
         hdr = _excel_titulo(
             ws, "Margen por plato",
             "Para cada plato con receta: precio de venta, costo de insumos, margen "
-            "en dinero y en %. Requiere tener cargadas las recetas en Inventario.",
+            "en dinero y en %. 'Costo completo' = No cuando falta cargar algún "
+            "insumo de la receta (el margen mostrado es parcial). Requiere tener "
+            "cargadas las recetas en Inventario.",
             meta, n_cols=len(cols))
         ws.append(cols)
         for c in ws[hdr]:
             c.font = Font(bold=True)
         for m in self.reporte_margen:
-            ws.append([m.nombre, m.precio_texto, m.costo_texto,
-                       m.margen_texto, m.margen_pct_texto])
-        _excel_autofit(ws, start_row=hdr)
+            ws.append([m.nombre, round(m.precio, 2), round(m.costo, 2),
+                       round(m.margen, 2), round(m.margen_pct, 1),
+                       "Sí" if m.costo_completo else "No"])
+        for row in ws.iter_rows(min_row=hdr + 1, min_col=5, max_col=5):
+            for cell in row:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = '0.0"%"'
+        _excel_finalizar(ws, hdr, money_cols=[2, 3, 4], simbolo=self._simbolo_moneda())
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"margen_platos_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1339,12 +1408,7 @@ class ReportesState(rx.State):
         ws.cell(row=fila_total, column=4, value=total_unidades).font = Font(bold=True)
         ws.cell(row=fila_total, column=5, value=float(total_ingreso)).font = Font(bold=True)
 
-        # Formato de moneda en la columna Ingreso (desde la primera fila de datos)
-        for row in ws.iter_rows(min_row=hdr + 1, min_col=5, max_col=5):
-            for cell in row:
-                cell.number_format = f'"{simbolo}" #,##0.00'
-
-        _excel_autofit(ws, start_row=hdr)
+        _excel_finalizar(ws, hdr, money_cols=[5], simbolo=simbolo)
 
         buf = io.BytesIO()
         wb.save(buf)
@@ -1492,6 +1556,8 @@ class ReportesState(rx.State):
                 margen_pct_texto=f"{f['margen_pct']:.1f}%",
                 categoria=cat,
                 categoria_emoji=_CAT_EMOJI.get(cat, ""),
+                ingreso=float(f["ingreso"]),
+                margen_pct=float(f["margen_pct"]),
             ))
         self.matriz_productos = vistas
         self.matriz_estrellas = counts["estrella"]
