@@ -37,13 +37,24 @@ MODULOS_TOGGLEABLES: list[dict] = [
     {"key": "cocina",             "label": "Cocina (pantalla / KDS)", "feature": None, "core": True, "coming_soon": False,
      "descripcion": "Pantalla para ver y avanzar el estado de los pedidos en cocina. "
                     "Al desactivarla, las comandas se siguen imprimiendo pero sin pantalla de seguimiento."},
-    {"key": "inventario",         "label": "Inventario",        "feature": FEAT_INVENTARIO,         "coming_soon": False},
-    {"key": "promociones",        "label": "Promociones",       "feature": FEAT_PROMOCIONES,        "coming_soon": False},
-    {"key": "cuentas",            "label": "Cuentas / Fiado",   "feature": FEAT_CUENTAS_CORRIENTES, "coming_soon": False},
-    {"key": "clientes",           "label": "Clientes",          "feature": FEAT_CLIENTES,           "coming_soon": False},
-    {"key": "reportes_avanzados", "label": "Reportes avanzados", "feature": FEAT_REPORTES_AVANZADOS, "coming_soon": False},
-    {"key": "reservas",           "label": "Reservas",          "feature": None,                    "coming_soon": True},
-    {"key": "delivery",           "label": "Delivery",          "feature": None,                    "coming_soon": True},
+    {"key": "inventario",         "label": "Inventario",        "feature": FEAT_INVENTARIO,         "coming_soon": False,
+     "descripcion": "Control de stock de insumos: existencias, alertas de bajo stock, "
+                    "movimientos y kardex. En plan Profesional suma recetas (descuento "
+                    "automático) y planificador de producción."},
+    {"key": "promociones",        "label": "Promociones",       "feature": FEAT_PROMOCIONES,        "coming_soon": False,
+     "descripcion": "Descuentos, promociones y cupones que se aplican al momento de cobrar."},
+    {"key": "cuentas",            "label": "Cuentas / Fiado",   "feature": FEAT_CUENTAS_CORRIENTES, "coming_soon": False,
+     "descripcion": "Ventas al crédito (fiado): cuentas corrientes de clientes con "
+                    "seguimiento de saldos, pagos y vencimientos."},
+    {"key": "clientes",           "label": "Clientes",          "feature": FEAT_CLIENTES,           "coming_soon": False,
+     "descripcion": "Base de clientes con historial de consumo, fidelización y alertas."},
+    {"key": "reportes_avanzados", "label": "Reportes avanzados", "feature": FEAT_REPORTES_AVANZADOS, "coming_soon": False,
+     "descripcion": "Reportes financieros avanzados: P&L, IGV, matriz de productos, "
+                    "márgenes, descuentos/anulaciones y mermas, con export a Excel."},
+    {"key": "reservas",           "label": "Reservas",          "feature": None,                    "coming_soon": True,
+     "descripcion": "Reserva de mesas por fecha y horario. En desarrollo."},
+    {"key": "delivery",           "label": "Delivery",          "feature": None,                    "coming_soon": True,
+     "descripcion": "Pedidos a domicilio con seguimiento de entregas. En desarrollo."},
 ]
 
 _FEATURE_POR_MODULO: dict[str, str | None] = {m["key"]: m["feature"] for m in MODULOS_TOGGLEABLES}
