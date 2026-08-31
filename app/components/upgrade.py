@@ -16,6 +16,8 @@ from urllib.parse import quote
 
 import reflex as rx
 
+from tuwayki_core.constants import WHATSAPP_NUMBER
+
 from app.components.theme import (
     ACCENT,
     ACCENT_HOVER,
@@ -32,24 +34,17 @@ from app.components.theme import (
     WARNING_TEXT,
 )
 
-# ─── Contacto de Ventas (EDITAR con los datos reales de TUWAYKI) ──────────────
-# WhatsApp en formato internacional sin "+" ni espacios (ej. "51987654321").
-# Si queda vacío, el botón cae a un correo (mailto) con el dominio de TUWAYKI.
-TUWAYKI_VENTAS_WHATSAPP = ""
-TUWAYKI_VENTAS_EMAIL = "ventas@tuwayki.app"
-
-
+# ─── Contacto de Ventas ───────────────────────────────────────────────────────
+# El número de WhatsApp comercial es el MISMO de toda la suite: vive en
+# tuwayki_core.constants (WHATSAPP_NUMBER), igual que en Sistema de Ventas. Así
+# se cambia en un solo lugar para todos los productos.
 def _contacto_href(plan: str | None = None) -> str:
-    """Link de contacto de Ventas. Si hay WhatsApp usa wa.me; si no, mailto."""
+    """Link de WhatsApp de Ventas con el mensaje pre-cargado."""
     if plan:
         msg = f"Hola TUWAYKI, quiero mejorar mi plan de TUWAYKIFOOD al plan {plan}."
-        asunto = f"Mejorar plan TUWAYKIFOOD — {plan}"
     else:
         msg = "Hola TUWAYKI, quiero más información sobre los planes de TUWAYKIFOOD."
-        asunto = "Consulta de planes TUWAYKIFOOD"
-    if TUWAYKI_VENTAS_WHATSAPP:
-        return f"https://wa.me/{TUWAYKI_VENTAS_WHATSAPP}?text={quote(msg)}"
-    return f"mailto:{TUWAYKI_VENTAS_EMAIL}?subject={quote(asunto)}&body={quote(msg)}"
+    return f"https://wa.me/{WHATSAPP_NUMBER}?text={quote(msg)}"
 
 
 # ─── Estado del modal ────────────────────────────────────────────────────────

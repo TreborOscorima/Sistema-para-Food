@@ -282,6 +282,18 @@ class ReportesState(rx.State):
             return f"Desde {d}"
         return f"Hasta {h}"
 
+    async def _excel_meta(self, extra: list[tuple[str, str]] | None = None):
+        """Metadatos comunes del encabezado de los Excel: Empresa + Generado, más
+        las líneas ``extra`` (período/rango) que aporte cada reporte."""
+        food = await self._food()
+        self.reportes_pais = food._country_code()
+        empresa = getattr(food, "empresa_nombre", "TUWAYKIFOOD") or "TUWAYKIFOOD"
+        generado = format_local_datetime(_utcnow(), "%d/%m/%Y %H:%M", self.reportes_pais)
+        meta = [("Empresa", empresa), ("Generado", generado)]
+        if extra:
+            meta.extend(extra)
+        return meta
+
     # ── on_load ──────────────────────────────────────────────────────────────
 
     async def on_load_reportes(self):
@@ -1073,17 +1085,24 @@ class ReportesState(rx.State):
         if not self.pyl_lineas:
             return rx.toast.error("Sin datos de P&L para exportar.")
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
+        meta = await self._excel_meta([("Período", f"{self.pyl_mes:02d}/{self.pyl_anio}")])
         wb = Workbook()
         ws = wb.active
         ws.title = "P&L"
-        ws.append(["Concepto", "Valor", "Margen %"])
+        cols = ["Concepto", "Valor", "Margen %"]
+        hdr = _excel_titulo(
+            ws, "Estado de resultados (P&L) mensual",
+            "Ingresos, costos y utilidad del mes indicado. 'Margen %' es sobre las "
+            "ventas. Los valores salen ya formateados como texto.",
+            meta, n_cols=len(cols))
+        ws.append(cols)
+        for c in ws[hdr]:
+            c.font = Font(bold=True)
         for ln in self.pyl_lineas:
             ws.append([ln.concepto, ln.valor_texto, ln.margen_pct_texto or ""])
-        for i, col in enumerate(ws.columns, start=1):
-            max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-            ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws, start_row=hdr)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"pyl_{self.pyl_anio}_{self.pyl_mes:02d}.xlsx"
@@ -1091,19 +1110,26 @@ class ReportesState(rx.State):
 
     async def exportar_igv_excel(self):
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
+        meta = await self._excel_meta([("Período", f"{self.igv_mes:02d}/{self.igv_anio}")])
         wb = Workbook()
         ws = wb.active
         ws.title = "IGV"
-        ws.append(["Concepto", "Valor"])
+        cols = ["Concepto", "Valor"]
+        hdr = _excel_titulo(
+            ws, "Resumen de IGV mensual",
+            "Ventas netas, base imponible e IGV del mes, para la declaración de "
+            "impuestos.",
+            meta, n_cols=len(cols))
+        ws.append(cols)
+        for c in ws[hdr]:
+            c.font = Font(bold=True)
         ws.append(["Ventas netas", self.igv_ventas_netas_texto])
         ws.append(["Base imponible", self.igv_base_imponible_texto])
         ws.append([f"IGV ({self.igv_porcentaje}%)", self.igv_monto_texto])
         ws.append(["Pedidos", self.igv_pedidos])
-        for i, col in enumerate(ws.columns, start=1):
-            max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-            ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws, start_row=hdr)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"igv_{self.igv_anio}_{self.igv_mes:02d}.xlsx"
@@ -1113,26 +1139,41 @@ class ReportesState(rx.State):
         if not self.descuentos_rank and not self.anulaciones_lista:
             return rx.toast.error("Sin descuentos ni anulaciones para exportar.")
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
+        meta = await self._excel_meta([("Rango de fechas", self._rango_export_texto())])
         wb = Workbook()
         ws1 = wb.active
         ws1.title = "Descuentos"
-        ws1.append(["Cajero", "Pedidos", "Total descuento", "Total ventas", "% Descuento"])
+        cols1 = ["Cajero", "Pedidos", "Total descuento", "Total ventas", "% Descuento"]
+        h1 = _excel_titulo(
+            ws1, "Descuentos por cajero",
+            "Cuánto descontó cada cajero en el rango: cantidad de pedidos, monto "
+            "descontado y su peso sobre las ventas.",
+            meta, n_cols=len(cols1))
+        ws1.append(cols1)
+        for c in ws1[h1]:
+            c.font = Font(bold=True)
         for d in self.descuentos_rank:
             ws1.append([d.cajero, d.pedidos, d.total_descuento_texto,
                         d.total_ventas_texto, d.pct_descuento_texto])
 
         ws2 = wb.create_sheet("Anulaciones")
-        ws2.append(["Pedido #", "Total", "Motivo", "Anulado por", "Fecha", "Cajero original"])
+        cols2 = ["Pedido #", "Total", "Motivo", "Anulado por", "Fecha", "Cajero original"]
+        h2 = _excel_titulo(
+            ws2, "Anulaciones de pedidos",
+            "Cada pedido anulado en el rango, con su motivo, quién lo anuló y el "
+            "cajero que lo había cobrado.",
+            meta, n_cols=len(cols2))
+        ws2.append(cols2)
+        for c in ws2[h2]:
+            c.font = Font(bold=True)
         for a in self.anulaciones_lista:
             ws2.append([a.pedido_id, a.total_texto, a.motivo,
                         a.cancelado_por, a.cancelado_en_texto, a.cajero_original])
 
-        for ws in (ws1, ws2):
-            for i, col in enumerate(ws.columns, start=1):
-                max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws1, start_row=h1)
+        _excel_autofit(ws2, start_row=h2)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"descuentos_anulaciones_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1142,24 +1183,39 @@ class ReportesState(rx.State):
         if not self.mermas_por_categoria and not self.mermas_por_insumo:
             return rx.toast.error("Sin mermas para exportar.")
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
+        meta = await self._excel_meta([("Rango de fechas", self._rango_export_texto())])
         wb = Workbook()
         ws1 = wb.active
         ws1.title = "Mermas por categoría"
-        ws1.append(["Categoría", "Registros", "Valor"])
+        cols1 = ["Categoría", "Registros", "Valor"]
+        h1 = _excel_titulo(
+            ws1, "Mermas por categoría",
+            "Pérdidas de insumos (mermas) agrupadas por categoría en el rango: "
+            "cantidad de registros y valor perdido.",
+            meta, n_cols=len(cols1))
+        ws1.append(cols1)
+        for c in ws1[h1]:
+            c.font = Font(bold=True)
         for c in self.mermas_por_categoria:
             ws1.append([c.categoria, c.registros, c.valor_texto])
 
         ws2 = wb.create_sheet("Mermas por insumo")
-        ws2.append(["Insumo", "Unidad", "Cantidad", "Valor", "Registros"])
+        cols2 = ["Insumo", "Unidad", "Cantidad", "Valor", "Registros"]
+        h2 = _excel_titulo(
+            ws2, "Mermas por insumo",
+            "El detalle de cada insumo mermado en el rango: cuánto se perdió, su "
+            "valor y cuántas veces se registró.",
+            meta, n_cols=len(cols2))
+        ws2.append(cols2)
+        for c in ws2[h2]:
+            c.font = Font(bold=True)
         for i in self.mermas_por_insumo:
             ws2.append([i.nombre, i.unidad, i.cantidad_texto, i.valor_texto, i.registros])
 
-        for ws in (ws1, ws2):
-            for i, col in enumerate(ws.columns, start=1):
-                max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-                ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws1, start_row=h1)
+        _excel_autofit(ws2, start_row=h2)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"mermas_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1169,18 +1225,26 @@ class ReportesState(rx.State):
         if not self.matriz_productos:
             return rx.toast.error("Sin datos de matriz para exportar.")
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
+        meta = await self._excel_meta([("Rango de fechas", self._rango_export_texto())])
         wb = Workbook()
         ws = wb.active
         ws.title = "Matriz productos"
-        ws.append(["Producto", "Unidades", "Ingreso", "Margen %", "Categoría"])
+        cols = ["Producto", "Unidades", "Ingreso", "Margen %", "Categoría"]
+        hdr = _excel_titulo(
+            ws, "Matriz de productos (estrella / perro)",
+            "Cada producto por unidades vendidas e ingreso, con su margen % (precio "
+            "vs costo de receta). La 'Categoría' es el cuadrante BCG: estrella, vaca, "
+            "puzzle o perro.",
+            meta, n_cols=len(cols))
+        ws.append(cols)
+        for c in ws[hdr]:
+            c.font = Font(bold=True)
         for p in self.matriz_productos:
             ws.append([p.nombre, p.unidades, p.ingreso_texto,
                        p.margen_pct_texto, p.categoria])
-        for i, col in enumerate(ws.columns, start=1):
-            max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-            ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws, start_row=hdr)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"matriz_productos_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -1190,18 +1254,25 @@ class ReportesState(rx.State):
         if not self.reporte_margen:
             return rx.toast.error("Sin datos de margen para exportar.")
         from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Font
 
+        meta = await self._excel_meta()
         wb = Workbook()
         ws = wb.active
         ws.title = "Margen por plato"
-        ws.append(["Producto", "Precio", "Costo", "Margen", "Margen %"])
+        cols = ["Producto", "Precio", "Costo", "Margen", "Margen %"]
+        hdr = _excel_titulo(
+            ws, "Margen por plato",
+            "Para cada plato con receta: precio de venta, costo de insumos, margen "
+            "en dinero y en %. Requiere tener cargadas las recetas en Inventario.",
+            meta, n_cols=len(cols))
+        ws.append(cols)
+        for c in ws[hdr]:
+            c.font = Font(bold=True)
         for m in self.reporte_margen:
             ws.append([m.nombre, m.precio_texto, m.costo_texto,
                        m.margen_texto, m.margen_pct_texto])
-        for i, col in enumerate(ws.columns, start=1):
-            max_len = max((len(str(c.value)) if c.value else 0) for c in col)
-            ws.column_dimensions[get_column_letter(i)].width = min(max_len + 2, 40)
+        _excel_autofit(ws, start_row=hdr)
         buf = io.BytesIO()
         wb.save(buf)
         filename = f"margen_platos_{_utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
