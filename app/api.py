@@ -539,6 +539,9 @@ def _modules_payload(session, company) -> dict:
             "habilitado": estado.get(m["key"], False),
             # "core": módulo del núcleo incluido en todos los planes pero apagable.
             "core": bool(m.get("core")),
+            # "incluido_en_plan": si el plan contratado ya lo trae por defecto
+            # (núcleo o feature del plan), ignorando overrides. Los que no → "Extra".
+            "incluido_en_plan": _me.modulo_habilitado({}, plan, m["key"]),
             "descripcion": m.get("descripcion", ""),
         }
         for m in _me.MODULOS_TOGGLEABLES
