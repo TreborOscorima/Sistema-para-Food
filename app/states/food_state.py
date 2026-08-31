@@ -1509,6 +1509,10 @@ class FoodState(
     usuario_actual: UsuarioSesion | None = None
     ultima_actividad: str = ""
     empresa_plan: str = "trial"
+    # Nombre de la empresa (tenant) activa. Lo puebla _cargar_plan_empresa junto
+    # con el plan; lo consume, entre otros, el encabezado de los Excel de
+    # Reportes (evita el viejo fallback hardcodeado "TUWAYKIFOOD" para todas).
+    empresa_nombre: str = ""
     # Override por empresa de módulos habilitados (Fase 3 Owner Panel).
     # {modulo: habilitado}; vacío = usar el default del plan.
     empresa_modulos_override: dict[str, bool] = {}
@@ -2707,6 +2711,7 @@ class FoodState(
                 company = session.get(Company, self._company_id())
                 if company:
                     self.empresa_plan = getattr(company, "plan", "trial") or "trial"
+                    self.empresa_nombre = getattr(company, "name", "") or ""
                     # Límites efectivos (override de la empresa o default del plan).
                     # 0 = ilimitado (None).
                     self.empresa_max_usuarios = (
