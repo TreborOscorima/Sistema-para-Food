@@ -1,0 +1,105 @@
+# =============================================================================
+# Diagnóstico de un turno de caja en producción — SSH read-only
+#
+# Manual (workflow_dispatch). NO deploya: no hace git reset, ni build, ni
+# restart. Copia scripts/diagnostico_caja.py al contenedor corriendo y lo
+# ejecuta (solo SELECTs) para reconciliar el arqueo de un turno contra las
+# filas crudas + volcar la auditoría de la ventana del turno. El resultado
+# queda en el log de este workflow.
+#
+# Reusa los mismos secrets que deploy-prod.yml (DEPLOY_SSH_*).
+#
+# NOTA: el output incluye datos de ventas del turno (montos, métodos). Es tu
+# propia data de negocio y el repo es privado, pero si lo preferís podés borrar
+# la corrida desde Actions cuando termines de leerla.
+# =============================================================================
+name: diagnostico-caja
+
+on:
+  workflow_dispatch:
+    inputs:
+      turno:
+        description: "ID del turno (el '#46' que muestra el cierre). Recomendado."
+        type: string
+        default: ""
+      company:
+        description: "Empresa (id o parte del nombre). Solo si buscás por fecha."
+        type: string
+        default: ""
+      fecha:
+        description: "Fecha local YYYY-MM-DD (alternativa a turno, con empresa)."
+        type: string
+        default: ""
+      pais:
+        description: "Código de país para el corte de día local"
+        type: string
+        default: "PE"
+
+concurrency:
+  group: food-diagnostico-caja
+  cancel-in-progress: false
+
+jobs:
+  diagnostico:
+    name: Reconciliar turno en EC2 (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout (para obtener el script)
+        uses: actions/checkout@v4
+
+      - name: Copiar script al EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          source: scripts/diagnostico_caja.py
+          target: /tmp/food-diag
+          overwrite: true
+
+      - name: Ejecutar diagnóstico por SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DIAG_TURNO: ${{ inputs.turno }}
+          DIAG_COMPANY: ${{ inputs.company }}
+          DIAG_FECHA: ${{ inputs.fecha }}
+          DIAG_PAIS: ${{ inputs.pais }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          command_timeout: 5m
+          envs: DIAG_TURNO,DIAG_COMPANY,DIAG_FECHA,DIAG_PAIS
+          script: |
+            set -euo pipefail
+
+            SCRIPT="/tmp/food-diag/scripts/diagnostico_caja.py"
+            if [ ! -f "$SCRIPT" ]; then
+              echo "ERROR: no llegó el script a $SCRIPT"; ls -la /tmp/food-diag || true; exit 1
+            fi
+
+            # Detectar el contenedor de la app (por nombre, fallback por imagen)
+            CID="$(docker ps --filter 'name=tuwayki_food' --format '{{.Names}}' | head -1 || true)"
+            if [ -z "$CID" ]; then
+              CID="$(docker ps --filter 'ancestor=tuwayki_food:latest' --format '{{.Names}}' | head -1 || true)"
+            fi
+            if [ -z "$CID" ]; then
+              echo "ERROR: no encuentro el contenedor de FOOD corriendo"; docker ps; exit 1
+            fi
+            echo "=== Contenedor: $CID ==="
+
+            docker cp "$SCRIPT" "$CID":/tmp/diagnostico_caja.py
+            docker exec \
+              -e DIAG_TURNO="${DIAG_TURNO:-}" \
+              -e DIAG_COMPANY="${DIAG_COMPANY:-}" \
+              -e DIAG_FECHA="${DIAG_FECHA:-}" \
+              -e DIAG_PAIS="${DIAG_PAIS:-PE}" \
+              "$CID" python /tmp/diagnostico_caja.py
+
+            # Limpieza (best-effort)
+            docker exec "$CID" rm -f /tmp/diagnostico_caja.py || true
+            rm -rf /tmp/food-diag || true
