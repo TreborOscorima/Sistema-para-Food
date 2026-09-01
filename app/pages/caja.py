@@ -18,6 +18,7 @@ from app.components.shared import (
 from app.states.caja_turno_mixin import (
     CierrePreviewMovRow,
     CierrePreviewPedidoRow,
+    CierreProductoRow,
     DenominacionRow,
     MetodoPagoView,
     MovimientoCajaView,
@@ -115,13 +116,17 @@ def _caja_item_row(item: CajaItemView, idx: int) -> rx.Component:
             rx.text(item.subtotal_texto, font_size="13px", font_weight="700",
                     color=rx.cond(asignado & FoodState.caja_split_por_items, "var(--twk-slate-400)", "var(--twk-text-primary)"),
                     text_align="right"),
-            # Quitar ítem (solo cobro de mesa, fuera del modo dividido).
+            # Quitar ítem de la cuenta (mesa o pedido para llevar), fuera del
+            # modo dividido.
             rx.cond(
-                (FoodState.caja_cobro_mesa_id > 0) & ~FoodState.caja_split_por_items,
-                rx.icon(
-                    tag="x", size=15, color=TEXT_MUTED, cursor="pointer",
-                    on_click=FoodState.caja_solicitar_quitar(item.detalle_id).stop_propagation,
-                    _hover={"color": "#EF4444"},
+                FoodState.caja_cobro_activo & ~FoodState.caja_split_por_items,
+                rx.tooltip(
+                    rx.icon(
+                        tag="x", size=15, color=TEXT_MUTED, cursor="pointer",
+                        on_click=FoodState.caja_solicitar_quitar(item.detalle_id).stop_propagation,
+                        _hover={"color": "#EF4444"},
+                    ),
+                    content="Quitar producto de la cuenta",
                 ),
                 rx.fragment(),
             ),
@@ -356,9 +361,9 @@ def _cobro_panel() -> rx.Component:
                             padding_y="20px", width="100%",
                         ),
                     ),
-                    # Agregar productos a la cuenta (solo cobro de mesa).
+                    # Agregar productos a la cuenta (mesa o pedido para llevar).
                     rx.cond(
-                        FoodState.caja_cobro_mesa_id > 0,
+                        FoodState.caja_cobro_activo,
                         rx.button(
                             rx.hstack(
                                 rx.icon(tag="plus", size=14),
@@ -789,26 +794,8 @@ def _para_llevar_card(pedido: MostradorPendienteView) -> rx.Component:
             cursor="pointer",
             padding="14px 16px",
         ),
-        rx.hstack(
-            rx.spacer(),
-            rx.button(
-                "✏️ Editar",
-                on_click=FoodState.editar_pedido_mostrador(pedido.pedido_id),
-                size="1",
-                variant="outline",
-                color=ACCENT,
-                border="1px solid #EA580C",
-                border_radius="6px",
-                font_size="11px",
-                font_weight="600",
-                padding_x="8px",
-                padding_y="2px",
-                cursor="pointer",
-                _hover={"background": "rgba(234,88,12,0.08)"},
-            ),
-            padding_x="16px",
-            padding_bottom="8px",
-        ),
+        # Seleccioná el pedido para agregar o quitar productos en el panel central
+        # (igual que una mesa). El "Editar" se quitó: ya no hace falta.
         background=rx.cond(seleccionado, "rgba(234,88,12,0.08)", "var(--twk-d800)"),
         border_left=rx.cond(seleccionado, "3px solid #EA580C", "3px solid transparent"),
         border_bottom=f"1px solid {DARK_700}",
@@ -1086,6 +1073,25 @@ def _turno_abierto_bar() -> rx.Component:
                     font_size="12px", color=TEXT_MUTED,
                 ),
                 spacing="0", align="start",
+            ),
+            rx.tooltip(
+                rx.box(
+                    rx.hstack(
+                        rx.icon(tag="wallet", size=16, color="#16A34A"),
+                        rx.vstack(
+                            rx.text("EN CAJA AHORA", font_size="9px", font_weight="700",
+                                    color=TEXT_MUTED, letter_spacing="0.06em"),
+                            rx.text(FoodState.turno_efectivo_caja_texto, font_size="16px",
+                                    font_weight="900", color="#16A34A", line_height="1.1"),
+                            spacing="0", align="start",
+                        ),
+                        spacing="2", align="center",
+                    ),
+                    background="rgba(34,197,94,0.08)",
+                    border="1px solid rgba(34,197,94,0.25)",
+                    border_radius="10px", padding="6px 12px", margin_left="14px",
+                ),
+                content="Efectivo que debería haber en el cajón ahora: fondo + ventas en efectivo + ingresos − egresos.",
             ),
             rx.spacer(),
             rx.hstack(
@@ -1378,12 +1384,24 @@ def _resumen_cierre_row(row: ResumenCierreRow) -> rx.Component:
 
 
 def _cierre_seccion(titulo: str, filas) -> rx.Component:
-    """Bloque titulado del resumen de cierre (Ventas / Cobrado / Arqueo)."""
+    """Bloque titulado del resumen de cierre (Caja / Otros cobros / Ventas)."""
     return rx.vstack(
         rx.text(titulo, font_size="10px", font_weight="700", color=TEXT_MUTED,
                 text_transform="uppercase", letter_spacing="0.06em"),
         rx.foreach(filas, _resumen_cierre_row),
         spacing="1", width="100%", align="stretch",
+    )
+
+
+def _cierre_producto_row(row: CierreProductoRow) -> rx.Component:
+    """Fila del resumen por producto en el modal de cierre (nombre + unidades)."""
+    return rx.hstack(
+        rx.text(row.nombre, font_size="12px", color=TEXT_MUTED,
+                white_space="nowrap", overflow="hidden", text_overflow="ellipsis"),
+        rx.spacer(),
+        rx.text(row.cantidad_texto, font_size="12px", font_weight="700", color=TEXT_PRIMARY),
+        width="100%", align="center", gap="8px",
+        padding="6px 10px", border_bottom=f"1px solid {DARK_800}",
     )
 
 
@@ -1402,12 +1420,23 @@ def _cierre_modal() -> rx.Component:
                             rx.foreach(FoodState.turno_cierre_resumen, _resumen_cierre_row),
                             rx.box(border_top="2px solid var(--twk-d700)", width="100%", padding_top="4px"),
                             rx.hstack(
-                                rx.text("Efectivo esperado en caja", font_size="14px",
+                                rx.text("Total ingreso", font_size="14px",
                                         font_weight="800", color=TEXT_PRIMARY),
                                 rx.spacer(),
                                 rx.text(FoodState.turno_cierre_esperado_texto, font_size="16px",
                                         font_weight="900", color=ACCENT),
                                 width="100%", align="center",
+                            ),
+                            rx.cond(
+                                FoodState.turno_cierre_otros.length() > 0,
+                                rx.vstack(
+                                    rx.text("Ingresos por método", font_size="10px", font_weight="700",
+                                            color=TEXT_MUTED, text_transform="uppercase",
+                                            letter_spacing="0.06em", margin_top="6px"),
+                                    rx.foreach(FoodState.turno_cierre_otros, _resumen_cierre_row),
+                                    spacing="1", width="100%", align="stretch",
+                                ),
+                                rx.fragment(),
                             ),
                             spacing="2", width="100%",
                         ),
@@ -1641,30 +1670,29 @@ def _cierre_preview_modal() -> rx.Component:
                             on_click=FoodState.set_cierre_preview_visible(False)),
                     width="100%", align="center",
                 ),
-                # Resumen de caja en 3 bloques claros
+                # Resumen de caja (efectivo, lo que se cuadra) + Ingresos por método.
                 rx.box(
                     rx.vstack(
-                        _cierre_seccion("Ventas del turno", FoodState.cierre_preview_ventas),
-                        rx.divider(),
-                        _cierre_seccion("Cobrado por método", FoodState.cierre_preview_cobros),
-                        rx.divider(),
-                        _cierre_seccion("Arqueo de caja · efectivo", FoodState.cierre_preview_arqueo),
-                        rx.hstack(
-                            rx.text("Descuadre", font_size="12px", color=TEXT_MUTED),
-                            rx.spacer(),
-                            rx.text(FoodState.cierre_preview_descuadre_texto, font_size="12px", font_weight="800", color="var(--twk-slate-300)"),
-                            width="100%",
+                        _cierre_seccion("Resumen de caja", FoodState.cierre_preview_arqueo),
+                        rx.cond(
+                            FoodState.cierre_preview_cobros.length() > 0,
+                            rx.fragment(
+                                rx.divider(),
+                                _cierre_seccion("Ingresos por método", FoodState.cierre_preview_cobros),
+                            ),
+                            rx.fragment(),
                         ),
                         rx.text(
-                            "Solo el efectivo entra al cajón. Yape, tarjeta y transferencias "
-                            "suman a ventas pero no al efectivo esperado.",
+                            "Solo el efectivo se cuadra contra el cajón. \"Ingresos por "
+                            "método\" es el desglose de todas las ventas; Yape y tarjeta "
+                            "no entran al cajón.",
                             font_size="11px", color=TEXT_MUTED, line_height="1.4",
                         ),
                         rx.cond(
                             ~FoodState.cierre_preview_recon_cuadra,
                             rx.hstack(
                                 rx.icon(tag="triangle_alert", size=13, color="#F59E0B"),
-                                rx.text("Reconciliación:", font_size="12px", color=TEXT_MUTED),
+                                rx.text("Revisar cobros:", font_size="12px", color=TEXT_MUTED),
                                 rx.spacer(),
                                 rx.text(
                                     FoodState.cierre_preview_recon_texto,
@@ -1679,13 +1707,13 @@ def _cierre_preview_modal() -> rx.Component:
                     padding="12px 14px", width="100%",
                     border=f"1px solid {DARK_800}", border_radius="10px",
                 ),
-                # Detalle de pedidos
-                rx.text("Detalle de ventas", font_size="12px", font_weight="800", color=TEXT_PRIMARY),
+                # Productos vendidos (resumen por producto)
+                rx.text("Productos vendidos", font_size="12px", font_weight="800", color=TEXT_PRIMARY),
                 rx.box(
                     rx.cond(
-                        FoodState.cierre_preview_pedidos.length() > 0,
+                        FoodState.cierre_preview_productos.length() > 0,
                         rx.vstack(
-                            rx.foreach(FoodState.cierre_preview_pedidos, _cierre_preview_pedido_row),
+                            rx.foreach(FoodState.cierre_preview_productos, _cierre_producto_row),
                             spacing="0", width="100%",
                         ),
                         rx.center(rx.text("Sin ventas en el turno.", font_size="12px", color=TEXT_MUTED), padding_y="14px", width="100%"),

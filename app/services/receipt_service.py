@@ -427,6 +427,7 @@ def build_cash_close_ticket_lines(
     width: int = 0,
     detalle_pedidos: list[dict] | None = None,
     detalle_movimientos: list[dict] | None = None,
+    detalle_productos: list[dict] | None = None,
     recon_ventas_texto: str = "",
 ) -> list[str]:
     """Ticket de cierre de turno de caja (arqueo) para impresora térmica."""
@@ -445,10 +446,23 @@ def build_cash_close_ticket_lines(
     ]
     for etiqueta, monto in resumen_rows:
         lines.append(_row(etiqueta, monto, width))
-    lines.append(_line(width))
-    lines.append(_row("DESCUADRE", descuadre_texto, width))
+    # La diferencia (descuadre) ya va dentro del bloque "Caja"; solo se imprime
+    # aparte si el llamador lo pide explícitamente (compat).
+    if descuadre_texto:
+        lines.append(_line(width))
+        lines.append(_row("DESCUADRE", descuadre_texto, width))
     if recon_ventas_texto:
         lines.append(_row("Recon. ventas", recon_ventas_texto, width))
+
+    # Resumen por producto (qué se vendió y cuántas unidades) — reemplaza al
+    # detalle largo por pedido, que hacía un rollo ilegible.
+    if detalle_productos:
+        lines.append("")
+        lines.append(_center("PRODUCTOS VENDIDOS", width))
+        lines.append(_line(width))
+        for p in detalle_productos:
+            lines.append(_row(str(p.get("nombre", "")), f"x{p.get('cantidad', 0)}", width))
+        lines.append(_line(width))
 
     if detalle_pedidos:
         lines.append("")

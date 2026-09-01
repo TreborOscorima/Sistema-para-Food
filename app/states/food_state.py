@@ -3771,6 +3771,7 @@ class FoodState(
             return
         self.cargar_mesas()
         self.cargar_pedidos_mostrador_pendientes()
+        self._refresh_efectivo_caja()
         if self.mesa_seleccionada_id:
             self._cargar_historial_mesa(self.mesa_seleccionada_id)
 
@@ -5546,6 +5547,11 @@ class FoodState(
                     notas=d.notas or "",
                     enviado=d.impreso_cocina,
                 ))
+            # El total del pedido de mostrador ("Para llevar") vive en un override
+            # congelado al abrir el cobro; al agregar/quitar ítems hay que
+            # refrescarlo con el nuevo total recalculado del pedido.
+            if self.caja_cobro_pedido_id > 0:
+                self.caja_cobro_total_override = float(_to_decimal(pedido.total))
         self.caja_cobro_items = items_ui
 
     def caja_abrir_add(self):
@@ -6872,6 +6878,8 @@ class FoodState(
         self.quitar_cupon_caja()
         self.cancelar_cobro()
         self.cargar_mesas()
+        # Actualiza el "En caja ahora" del header con esta venta (barato).
+        self._refresh_efectivo_caja()
         if es_mostrador:
             self.cargar_pedidos_mostrador_pendientes()
         total_final = max(total_base - descuento + propina + recargo, Decimal("0.00"))
@@ -7076,57 +7084,6 @@ class FoodState(
         self.caja_promo_aplicada_nombre = ""
         self.caja_promo_aplicada_texto = ""
         self.caja_cobro_items = items_ui
-
-    def editar_pedido_mostrador(self, pedido_id: int):
-        """Carga un pedido de mostrador pendiente en el carrito y lo anula para re-edición."""
-        carrito: list[CarritoItem] = []
-        cliente = ""
-        try:
-            with self._tenant_session() as session:
-                pedido = session.get(Pedido, pedido_id)
-                if pedido is None or pedido.company_id != self._company_id():
-                    return rx.toast.error("El pedido no existe.")
-                if pedido.pagado:
-                    return rx.toast.error("Este pedido ya fue cobrado, no se puede editar.")
-                if pedido.estado == EstadoPedido.CANCELADO.value:
-                    return rx.toast.error("Este pedido ya fue anulado.")
-                detalles = session.exec(
-                    select(DetallePedido).where(DetallePedido.pedido_id == pedido_id)
-                ).all()
-                productos = {
-                    p.id: p
-                    for p in session.exec(
-                        select(Producto).where(Producto.company_id == self._company_id())
-                    ).all()
-                }
-                for d in detalles:
-                    prod = productos.get(d.producto_id)
-                    if prod is None:
-                        continue
-                    precio = float(_to_decimal(d.precio_unitario))
-                    subtotal = float(_to_decimal(d.subtotal))
-                    carrito.append(CarritoItem(
-                        producto_id=d.producto_id,
-                        nombre=prod.nombre,
-                        cantidad=d.cantidad,
-                        precio_unitario=precio,
-                        subtotal=subtotal,
-                        subtotal_texto=_money_text(_to_decimal(d.subtotal)),
-                        nota=d.notas or "",
-                    ))
-                cliente = pedido.nombre_cliente or ""
-                usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
-                _reponer_stock_diario(session, pedido.id or 0, pedido.company_id)
-                anular_pedido_abierto(session, pedido, usuario_id, "Re-edición desde Caja")
-                session.commit()
-        except ValueError as exc:
-            return rx.toast.error(str(exc))
-        self.mostrador_carrito = carrito
-        self.mostrador_cliente_nombre = cliente
-        self.cancelar_cobro()
-        self.cargar_menu()
-        self.cargar_pedidos_mostrador_pendientes()
-        return [rx.toast.success(f"Pedido #{pedido_id} cargado en Mostrador para edición."), rx.redirect("/mostrador")]
 
     # ─── Mostrador ────────────────────────────────────────────────────────────
 

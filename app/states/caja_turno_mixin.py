@@ -302,6 +302,10 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         # SIN propina. La propina no es venta: pasa por caja pero es del mozo.
         "ventas_netas": Decimal("0.00"),
     }
+    # Desglose de recargos por concepto (Delivery/Envase/Servicio…). Informativo:
+    # ya están incluidos en ventas_netas y en lo cobrado; sirven para la línea
+    # "Delivery" del cierre simplificado.
+    recargos_acc: dict[str, Decimal] = {}
     # Desglose fino por código de método (Yape, Plin, …) para el detalle del cierre.
     por_metodo: dict[str, Decimal] = {}
     pedidos_con_pagos: set[int] = set()
@@ -313,12 +317,18 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         monto = _dec(pago.monto)
         resumen[_bucket(metodo)] += monto
         por_metodo[metodo] = por_metodo.get(metodo, Decimal("0.00")) + monto
+    para_llevar_acc = Decimal("0.00")
     for pedido in pedidos:
         propina = _dec(pedido.propina)
         resumen["propinas"] += propina
-        resumen["ventas_netas"] += (
-            _dec(pedido.total) + _dec(pedido.recargo) - _dec(pedido.descuento)
-        )
+        neto_pedido = _dec(pedido.total) + _dec(pedido.recargo) - _dec(pedido.descuento)
+        resumen["ventas_netas"] += neto_pedido
+        if not pedido.mesa_id:  # sin mesa = para llevar / mostrador
+            para_llevar_acc += neto_pedido
+        rec = _dec(pedido.recargo)
+        if rec > 0:
+            concepto = (pedido.recargo_concepto or "Recargo").strip() or "Recargo"
+            recargos_acc[concepto] = recargos_acc.get(concepto, Decimal("0.00")) + rec
         if (pedido.id or 0) in pedidos_con_pagos:
             continue
         neto = _dec(pedido.total) - _dec(pedido.descuento)
@@ -348,6 +358,8 @@ def calcular_resumen_turno(session, turno: TurnoCaja) -> dict[str, Decimal]:
         _dec(turno.monto_inicial) + resumen["efectivo"] + ingresos - egresos
     )
     resumen["por_metodo"] = por_metodo  # type: ignore[assignment]
+    resumen["recargos"] = recargos_acc  # type: ignore[assignment]
+    resumen["total_para_llevar"] = para_llevar_acc
     return resumen
 
 
@@ -408,6 +420,53 @@ def _cierre_ventas_rows(data: dict) -> list[tuple[str, str, bool]]:
     if data["hay_fiado"]:
         rows.append(("Fiado (pendiente de cobro)", data["total_fiado"], False))
     return rows
+
+
+def _bloques_cierre(
+    data: dict, *, incluir_arqueo_final: bool = True
+) -> list[tuple[str, list[tuple[str, str, bool]]]]:
+    """Cierre SIMPLE, con la misma estructura del cierre del Sistema de Ventas
+    (Resumen de caja + Ingresos por método), adaptada al restobar sumándole el
+    arqueo físico del cajón. Fuente única del modal "Detalle del cierre", el
+    ticket térmico y el PDF.
+
+    Dos bloques:
+      1) "Resumen de caja" — SOLO efectivo, lo único que se cuadra contra el
+         cajón: Caja inicial + Agregado a caja + Pago en efectivo (− retiros) =
+         Total ingreso, contra el Total contado en caja y su diferencia.
+      2) "Ingresos por método" — desglose de TODAS las ventas por método de pago
+         (Efectivo, Yape, Tarjeta…) con su Total ventas. Informativo, igual que
+         en el Sistema de Ventas; no se mezcla con el arqueo del cajón.
+
+    Cada bloque es ``(titulo, filas)`` con filas ``(etiqueta, monto, enfasis)``.
+    ``incluir_arqueo_final=False`` omite Total contado/Diferencia (para el modal
+    de conteo en vivo, donde esos valores todavía no existen).
+    """
+    caja: list[tuple[str, str, bool]] = [
+        ("Caja inicial", data["fondo_inicial"], False),
+        ("Agregado a caja", data["total_ingresos"], False),
+        ("Pago en efectivo", data["total_efectivo"], False),
+    ]
+    if data["hay_egresos"]:
+        caja.append(("− Retiro de caja", f"- {data['total_egresos']}", False))
+    caja.append(("Total ingreso", data["esperado"], True))
+    if incluir_arqueo_final:
+        caja.append(("Total contado en caja", data["contado"], True))
+        caja.append(("Diferencia", data["descuadre_texto"], True))
+
+    # Ingresos por método: TODAS las ventas del turno, por método de pago (como
+    # el Sistema de Ventas). Incluye el efectivo; es informativo, no se cuadra.
+    metodos: list[tuple[str, str, bool]] = [
+        (m["nombre"], m["monto_texto"], False)
+        for m in data["cobrado_por_metodo"]
+    ]
+    if metodos:
+        metodos.append(("Total ventas", data["total_ventas_metodos"], True))
+
+    return [
+        ("Resumen de caja", caja),
+        ("Ingresos por método", metodos),
+    ]
 
 
 # ─── Views para la UI ────────────────────────────────────────────────────────
@@ -476,6 +535,13 @@ class CierrePreviewMovRow(BaseModel):
     monto_texto: str
 
 
+class CierreProductoRow(BaseModel):
+    """Fila del resumen por producto del cierre (nombre + unidades vendidas)."""
+
+    nombre: str
+    cantidad_texto: str
+
+
 # ─── Mixin de estado ─────────────────────────────────────────────────────────
 
 class CajaTurnoMixin(rx.State, mixin=True):
@@ -505,6 +571,10 @@ class CajaTurnoMixin(rx.State, mixin=True):
     turno_movimientos: list[MovimientoCajaView] = []
     turno_ingresos_texto: str = "S/ 0.00"
     turno_egresos_texto: str = "S/ 0.00"
+    # Efectivo que debería haber en el cajón AHORA (fondo + ventas en efectivo
+    # + ingresos − egresos). Es el mismo "Total ingreso" del cierre, en vivo,
+    # para que el cajero pueda arquear en cualquier momento del turno.
+    turno_efectivo_caja_texto: str = "S/ 0.00"
     # Corrección auditada de un movimiento existente
     turno_mov_editando_id: int = 0        # 0 = alta nueva; >0 = corrigiendo ese id
     turno_mov_confirm_delete_id: int = 0  # id con confirmación de borrado pendiente
@@ -512,6 +582,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
     # Cierre con arqueo
     turno_cierre_visible: bool = False
     turno_cierre_resumen: list[ResumenCierreRow] = []
+    turno_cierre_otros: list[ResumenCierreRow] = []
     turno_cierre_esperado: float = 0.0
     turno_cierre_esperado_texto: str = "S/ 0.00"
     turno_cierre_conteo: dict[str, str] = {}
@@ -531,6 +602,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
     cierre_preview_cobros: list[ResumenCierreRow] = []
     cierre_preview_arqueo: list[ResumenCierreRow] = []
     cierre_preview_pedidos: list[CierrePreviewPedidoRow] = []
+    cierre_preview_productos: list[CierreProductoRow] = []
     cierre_preview_movimientos: list[CierrePreviewMovRow] = []
     cierre_preview_descuadre_texto: str = ""
     cierre_preview_recon_texto: str = ""
@@ -616,6 +688,7 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 self.turno_movimientos = []
                 self.turno_ingresos_texto = _money(0)
                 self.turno_egresos_texto = _money(0)
+                self.turno_efectivo_caja_texto = _money(0)
             else:
                 self.turno_activo_id = turno.id or 0
                 self.turno_fondo_texto = _money(turno.monto_inicial)
@@ -627,8 +700,24 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 )
                 self.turno_abierto_por_nombre = usuario.nombre if usuario else "—"
                 self._cargar_movimientos_turno(session, turno)
+                # Efectivo esperado en el cajón AHORA (mismo cálculo que el cierre).
+                resumen = calcular_resumen_turno(session, turno)
+                self.turno_efectivo_caja_texto = _money(resumen["esperado_efectivo"])
             self._cargar_metodos_pago(session)
             self._cargar_historial_turnos(session)
+
+    def _refresh_efectivo_caja(self) -> None:
+        """Recalcula solo el 'En caja ahora' (barato, para el poll de caja).
+        Así el chip queda vivo ante cualquier evento que mueva efectivo
+        (cobro, ingreso/egreso, anulación, corrección) sin recargar todo."""
+        if self.turno_activo_id == 0:
+            return
+        with self._tenant_session() as session:
+            turno = session.get(TurnoCaja, self.turno_activo_id)
+            if turno is None or turno.estado != EstadoTurnoCaja.ABIERTO.value:
+                return
+            resumen = calcular_resumen_turno(session, turno)
+            self.turno_efectivo_caja_texto = _money(resumen["esperado_efectivo"])
 
     def _cargar_metodos_pago(self, session) -> None:
         """Carga los métodos de pago activos para los botones de cobro."""
@@ -933,34 +1022,34 @@ class CajaTurnoMixin(rx.State, mixin=True):
             nombres = mapa_nombres(session, turno.company_id)
             tipos = mapa_tipos(session, turno.company_id)
             por_metodo = resumen.get("por_metodo", {})  # type: ignore[assignment]
-            # Info de ventas primero (lo que facturó el local).
+            # Lista principal de la CAJA de efectivo (la que se cuadra). El
+            # "Total ingreso" (esperado) y el conteo van aparte en el modal.
             filas = [
-                ResumenCierreRow(etiqueta="Ventas (netas)", monto_texto=_money(resumen["ventas_netas"])),
-                ResumenCierreRow(etiqueta="Propinas del turno", monto_texto=_money(resumen["propinas"])),
+                ResumenCierreRow(etiqueta="Caja inicial", monto_texto=_money(turno.monto_inicial)),
+                ResumenCierreRow(etiqueta="Agregado a caja", monto_texto=_money(resumen["ingresos"])),
+                ResumenCierreRow(etiqueta="Pago en efectivo", monto_texto=_money(resumen["efectivo"])),
             ]
-            # Cobros NO-efectivo (Yape, tarjeta, …): entran a ventas pero NO al cajón.
+            if resumen["egresos"]:
+                filas.append(ResumenCierreRow(
+                    etiqueta="− Retiro de caja", monto_texto="- " + _money(resumen["egresos"])))
+            self.turno_cierre_resumen = filas
+            # Ingresos por método: TODAS las ventas del turno (Efectivo, Yape,
+            # Tarjeta…), como en el Sistema de Ventas. Informativo: no entra al
+            # arqueo del cajón, por eso va en su propio bloque.
+            otros = []
+            total_metodos = Decimal("0.00")
             for cod in [m.codigo for m in obtener_metodos(session, turno.company_id)]:
                 monto = por_metodo.get(cod)
                 bucket = _bucket_tipo(tipos.get(cod, TipoMetodoPago.DIGITAL.value))
-                if monto and bucket not in ("efectivo", "fiado"):
-                    filas.append(ResumenCierreRow(
-                        etiqueta=f"Cobrado en {nombres.get(cod, cod.capitalize())}",
+                if monto and bucket != "fiado":
+                    otros.append(ResumenCierreRow(
+                        etiqueta=nombres.get(cod, cod.capitalize()),
                         monto_texto=_money(monto)))
-            if resumen["fiado"]:
-                filas.append(ResumenCierreRow(
-                    etiqueta="Fiado (no entra a caja)", monto_texto=_money(resumen["fiado"])))
-            # Armado del efectivo del cajón, con signos, justo antes del footer.
-            filas.append(ResumenCierreRow(
-                etiqueta="Fondo inicial", monto_texto=_money(turno.monto_inicial)))
-            filas.append(ResumenCierreRow(
-                etiqueta="+ Cobrado en efectivo", monto_texto=_money(resumen["efectivo"])))
-            if resumen["ingresos"]:
-                filas.append(ResumenCierreRow(
-                    etiqueta="+ Otros ingresos", monto_texto=_money(resumen["ingresos"])))
-            if resumen["egresos"]:
-                filas.append(ResumenCierreRow(
-                    etiqueta="− Egresos / gastos", monto_texto="- " + _money(resumen["egresos"])))
-            self.turno_cierre_resumen = filas
+                    total_metodos += monto
+            if otros:
+                otros.append(ResumenCierreRow(
+                    etiqueta="Total ventas", monto_texto=_money(total_metodos), enfasis=True))
+            self.turno_cierre_otros = otros
             self.turno_cierre_esperado = float(resumen["esperado_efectivo"])
             self.turno_cierre_esperado_texto = _money(resumen["esperado_efectivo"])
         self.turno_cierre_conteo = {}
@@ -1034,10 +1123,11 @@ class CajaTurnoMixin(rx.State, mixin=True):
                     abierto_en_texto=data["abierto_en"],
                     cerrado_en_texto=data["cerrado_en"],
                     resumen_rows=self._cierre_resumen_rows(data),
-                    descuadre_texto=data["descuadre_texto"],
+                    descuadre_texto="",  # la Diferencia ya va en el bloque Caja
                     notas=data["notas"],
                     paper_width_mm=self._ticket_paper_width_mm(),
                     detalle_movimientos=data["movimientos"],
+                    detalle_productos=data["productos"],
                 )
                 ticket_html = render_ticket_html(
                     "Cierre de Caja", _cierre_lines, self._ticket_paper_width_mm()
@@ -1123,8 +1213,15 @@ class CajaTurnoMixin(rx.State, mixin=True):
         # (Envase/Delivery/Servicio…) − descuentos = venta neta. Para que la hoja
         # muestre de qué se compone el total.
         subtotal_productos = Decimal("0.00")
+        # Ventas de pedidos "para llevar" (sin mesa: mostrador/takeaway/delivery).
+        # Informativo para la línea "Delivery" del cierre — es el monto completo
+        # de esos pedidos, no un recargo.
+        total_para_llevar = Decimal("0.00")
         recargos_acc: dict[str, Decimal] = {}
         total_descuentos = Decimal("0.00")
+        # Resumen por producto del turno (qué se vendió y cuántas unidades), para
+        # imprimirlo junto al cierre en vez del detalle largo por pedido.
+        productos_acc: dict[str, int] = {}
         for ped in pedidos:
             items = session.exec(
                 select(DetallePedido).where(DetallePedido.pedido_id == ped.id)
@@ -1132,6 +1229,10 @@ class CajaTurnoMixin(rx.State, mixin=True):
             items_texto = ", ".join(
                 f"{productos.get(d.producto_id, '?')} (x{d.cantidad})" for d in items if d.cantidad > 0
             )
+            for d in items:
+                if d.cantidad > 0:
+                    nombre = productos.get(d.producto_id, "?")
+                    productos_acc[nombre] = productos_acc.get(nombre, 0) + int(d.cantidad)
             pags = pagos_por_pedido.get(ped.id or 0, [])
             if pags:
                 metodo = ", ".join(
@@ -1145,6 +1246,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
             # Total a cobrar = venta neta + propina; y lo realmente cobrado.
             ventas_esperadas += neto + _dec(ped.propina)
             ventas_netas += neto
+            if not ped.mesa_id:  # sin mesa = para llevar / mostrador
+                total_para_llevar += neto
             subtotal_productos += _dec(ped.total)
             if recargo > 0:
                 concepto = (ped.recargo_concepto or "Recargo").strip() or "Recargo"
@@ -1215,20 +1318,30 @@ class CajaTurnoMixin(rx.State, mixin=True):
         vistos: set[str] = set()
         for cod in [m.codigo for m in obtener_metodos(session, turno.company_id)]:
             monto = cobrado_por_metodo.get(cod)
-            es_fiado = _bucket_tipo(tipos.get(cod, TipoMetodoPago.DIGITAL.value)) == "fiado"
-            if monto and not es_fiado:
+            bucket = _bucket_tipo(tipos.get(cod, TipoMetodoPago.DIGITAL.value))
+            if monto and bucket != "fiado":
                 cobrado_metodo_rows.append(
-                    {"nombre": nombres.get(cod, cod.capitalize()), "monto_texto": _money(monto)}
+                    {"nombre": nombres.get(cod, cod.capitalize()),
+                     "monto_texto": _money(monto), "bucket": bucket}
                 )
             vistos.add(cod)
         for cod, monto in cobrado_por_metodo.items():
             if cod in vistos or not monto:
                 continue
-            if _bucket_tipo(tipos.get(cod, TipoMetodoPago.DIGITAL.value)) == "fiado":
+            bucket = _bucket_tipo(tipos.get(cod, TipoMetodoPago.DIGITAL.value))
+            if bucket == "fiado":
                 continue
             cobrado_metodo_rows.append(
-                {"nombre": nombres.get(cod, cod.capitalize()), "monto_texto": _money(monto)}
+                {"nombre": nombres.get(cod, cod.capitalize()),
+                 "monto_texto": _money(monto), "bucket": bucket}
             )
+        # Total de "Ingresos por método" = suma de lo cobrado por todos los métodos
+        # (sin fiado). Coincide con la suma de las filas del bloque.
+        total_ventas_metodos = sum(
+            (monto for cod, monto in cobrado_por_metodo.items()
+             if _bucket_tipo(tipos.get(cod, TipoMetodoPago.DIGITAL.value)) != "fiado"),
+            Decimal("0.00"),
+        )
         return {
             "empresa": self.config_nombre_local or "TUWAYKIFOOD",
             "turno_id": turno.id,
@@ -1242,7 +1355,10 @@ class CajaTurnoMixin(rx.State, mixin=True):
             "total_qr": _money(turno.total_qr),
             "total_fiado": _money(turno.total_fiado),
             "total_propinas": _money(turno.total_propinas),
+            "hay_propinas": _dec(turno.total_propinas) > 0,
             "total_ingresos": _money(turno.total_ingresos),
+            "total_para_llevar": _money(total_para_llevar),
+            "total_para_llevar_val": float(total_para_llevar),
             "total_egresos": _money(turno.total_egresos),
             "esperado": _money(turno.esperado_efectivo),
             "contado": _money(turno.contado_efectivo),
@@ -1251,6 +1367,13 @@ class CajaTurnoMixin(rx.State, mixin=True):
             "recon_ventas_cuadra": recon_ventas == 0,
             "notas": turno.notas_cierre or "",
             "pedidos": detalle_pedidos,
+            # Resumen por producto (nombre + unidades), ordenado por más vendido.
+            "productos": [
+                {"nombre": n, "cantidad": c}
+                for n, c in sorted(
+                    productos_acc.items(), key=lambda kv: (-kv[1], kv[0])
+                )
+            ],
             "movimientos": movs,
             # Ventas (netas) = ingreso real del local, SIN propina. Coincide con
             # el "Ventas" del reporte del día.
@@ -1262,6 +1385,8 @@ class CajaTurnoMixin(rx.State, mixin=True):
             "total_ventas_neto": _money(ventas_netas),
             # Cobrado detallado por método real (Efectivo, Yape, Plin, …).
             "cobrado_por_metodo": cobrado_metodo_rows,
+            # Total del bloque "Ingresos por método" (Σ métodos, sin fiado).
+            "total_ventas_metodos": _money(total_ventas_metodos),
             # Flags para no ensuciar el resumen con líneas en cero.
             "hay_fiado": _dec(turno.total_fiado) > 0,
             "hay_ingresos": _dec(turno.total_ingresos) > 0,
@@ -1279,25 +1404,17 @@ class CajaTurnoMixin(rx.State, mixin=True):
 
     @staticmethod
     def _cierre_resumen_rows(data: dict) -> list[tuple[str, str]]:
-        """Filas del resumen para el ticket, en 3 bloques: ventas, cobros por
-        método real y arqueo de efectivo. Compartido por el ticket de cierre y
-        la reimpresión para que siempre digan lo mismo."""
-        rows: list[tuple[str, str]] = [
-            (etiqueta, monto) for etiqueta, monto, _enf in _cierre_ventas_rows(data)
-        ]
-        rows.append(("-- Cobrado por metodo --", ""))
-        for m in data["cobrado_por_metodo"]:
-            rows.append((f"  {m['nombre']}", m["monto_texto"]))
-        rows.append(("Total cobrado", data["total_cobrado"]))
-        rows.append(("-- Arqueo de efectivo --", ""))
-        rows.append(("Fondo inicial", data["fondo_inicial"]))
-        rows.append(("+ Cobrado en efectivo", data["total_efectivo"]))
-        if data["hay_ingresos"]:
-            rows.append(("+ Ingresos de caja", data["total_ingresos"]))
-        if data["hay_egresos"]:
-            rows.append(("- Egresos de caja", data["total_egresos"]))
-        rows.append(("= Esperado en caja", data["esperado"]))
-        rows.append(("Contado en caja", data["contado"]))
+        """Filas del resumen para el ticket, en los 2 bloques (Resumen de caja /
+        Ingresos por método). Fuente única con el modal y el PDF vía
+        ``_bloques_cierre`` para que las tres superficies digan lo mismo."""
+        rows: list[tuple[str, str]] = []
+        for titulo, filas in _bloques_cierre(data):
+            if not filas:
+                continue
+            if titulo:
+                rows.append((f"-- {titulo} --", ""))
+            for etiqueta, monto, _enf in filas:
+                rows.append((etiqueta, monto))
         return rows
 
     def descargar_pdf_cierre(self):
@@ -1365,48 +1482,22 @@ class CajaTurnoMixin(rx.State, mixin=True):
             styles["PDFSub"],
         ))
 
-        # Bloque 1 — Ventas del turno (facturado por el local), desglosado en
-        # subtotal de productos + extras por concepto − descuentos = venta neta.
-        elems.append(Paragraph("Ventas del turno", styles["Section"]))
-        ventas_data = [["Concepto", "Monto"]]
-        for etiqueta, monto, _enf in _cierre_ventas_rows(data):
-            ventas_data.append([etiqueta, monto])
-        t = Table(ventas_data, colWidths=[10 * cm, 7 * cm])
-        t.setStyle(hdr_style)
-        elems.append(t)
-        elems.append(Spacer(1, 4 * mm))
-
-        # Bloque 2 — Cobrado por método real (Efectivo, Yape, Plin, …).
-        elems.append(Paragraph("Cobrado por método", styles["Section"]))
-        met_data = [["Método", "Monto"]]
-        for m in data["cobrado_por_metodo"]:
-            met_data.append([m["nombre"], m["monto_texto"]])
-        met_data.append(["Total cobrado", data["total_cobrado"]])
-        t2 = Table(met_data, colWidths=[10 * cm, 7 * cm])
-        t2.setStyle(hdr_style)
-        elems.append(t2)
-        elems.append(Spacer(1, 4 * mm))
-
-        # Bloque 3 — Arqueo de caja: solo el efectivo entra al cajón.
-        elems.append(Paragraph("Arqueo de caja (efectivo)", styles["Section"]))
-        arqueo_data = [
-            ["Concepto", "Monto"],
-            ["Fondo inicial", data["fondo_inicial"]],
-            ["+ Cobrado en efectivo", data["total_efectivo"]],
-        ]
-        if data["hay_ingresos"]:
-            arqueo_data.append(["+ Ingresos de caja", data["total_ingresos"]])
-        if data["hay_egresos"]:
-            arqueo_data.append(["- Egresos de caja", f"- {data['total_egresos']}"])
-        arqueo_data.append(["= Esperado en caja", data["esperado"]])
-        arqueo_data.append(["Contado en caja", data["contado"]])
-        arqueo_data.append(["Descuadre", data["descuadre_texto"]])
-        t3 = Table(arqueo_data, colWidths=[10 * cm, 7 * cm])
-        t3.setStyle(hdr_style)
-        elems.append(t3)
+        # Los 2 bloques (Resumen de caja / Ingresos por método), misma fuente que
+        # el modal y el ticket (que digan lo mismo).
+        for titulo, filas in _bloques_cierre(data):
+            if not filas:
+                continue
+            elems.append(Paragraph(titulo or "Resumen de caja", styles["Section"]))
+            tabla = [["Concepto", "Monto"]] + [[et, mo] for et, mo, _en in filas]
+            tb = Table(tabla, colWidths=[10 * cm, 7 * cm])
+            tb.setStyle(hdr_style)
+            elems.append(tb)
+            elems.append(Spacer(1, 4 * mm))
         elems.append(Paragraph(
-            "El esperado en caja solo cuenta el efectivo (fondo + cobros en efectivo "
-            "+ ingresos − egresos). Yape, tarjeta y transferencias no entran al cajón.",
+            "Solo el efectivo se cuadra contra el cajón: caja inicial + agregado a "
+            "caja + pago en efectivo − retiros = total ingreso, contra el total "
+            "contado. \"Ingresos por método\" es el desglose de todas las ventas; "
+            "Yape y tarjeta no entran al cajón.",
             styles["PDFSub"],
         ))
         if not data["recon_ventas_cuadra"]:
@@ -1416,32 +1507,15 @@ class CajaTurnoMixin(rx.State, mixin=True):
             ))
         elems.append(Spacer(1, 4 * mm))
 
-        # Detalle de pedidos
-        if data["pedidos"]:
-            elems.append(Paragraph(f"Detalle de Ingresos ({len(data['pedidos'])} pedidos)", styles["Section"]))
-            ped_data = [["Hora", "Mesa", "Método", "Detalle", "Monto"]]
-            for p in data["pedidos"]:
-                # El detalle incluye los conceptos que ajustan la cuenta para
-                # que el PDF cuadre exactamente con el reporte.
-                extras = []
-                if p.get("recargo", 0) > 0:
-                    extras.append(f"+ {p.get('recargo_concepto') or 'Recargo'}: {_money(p['recargo'])}")
-                if p.get("descuento", 0) > 0:
-                    extras.append(f"- Descuento: {_money(p['descuento'])}")
-                if p.get("propina", 0) > 0:
-                    extras.append(f"Propina: {_money(p['propina'])}")
-                detalle_txt = p["items"][:120]
-                if extras:
-                    detalle_txt = (detalle_txt + " · " + " · ".join(extras)).strip(" ·")
-                items_p = Paragraph(detalle_txt, styles["Normal"])
-                ped_data.append([
-                    p["hora"], p["mesa"], p["metodo"],
-                    items_p, _money(p["neto"]),
-                ])
-            col_w = [2.2 * cm, 2 * cm, 3 * cm, 7 * cm, 2.8 * cm]
-            t3 = Table(ped_data, colWidths=col_w, repeatRows=1)
-            t3.setStyle(hdr_style)
-            elems.append(t3)
+        # Productos vendidos (resumen por producto, reemplaza el detalle por pedido)
+        if data["productos"]:
+            elems.append(Paragraph("Productos vendidos", styles["Section"]))
+            prod_data = [["Producto", "Unidades"]]
+            for p in data["productos"]:
+                prod_data.append([Paragraph(str(p["nombre"]), styles["Normal"]), f"x{p['cantidad']}"])
+            tp = Table(prod_data, colWidths=[13 * cm, 4 * cm], repeatRows=1)
+            tp.setStyle(hdr_style)
+            elems.append(tp)
             elems.append(Spacer(1, 4 * mm))
 
         # Movimientos de caja
@@ -1482,10 +1556,11 @@ class CajaTurnoMixin(rx.State, mixin=True):
                 abierto_en_texto=data["abierto_en"],
                 cerrado_en_texto=data["cerrado_en"],
                 resumen_rows=self._cierre_resumen_rows(data),
-                descuadre_texto=data["descuadre_texto"],
+                descuadre_texto="",  # la Diferencia ya va en el bloque Caja
                 notas=data["notas"],
                 paper_width_mm=self._ticket_paper_width_mm(),
                 detalle_movimientos=data["movimientos"],
+                detalle_productos=data["productos"],
                 recon_ventas_texto=(
                     "" if data.get("recon_ventas_cuadra", True)
                     else data.get("recon_ventas_texto", "")
@@ -1526,53 +1601,26 @@ class CajaTurnoMixin(rx.State, mixin=True):
         self.cierre_preview_titulo = (
             f"Turno #{data['turno_id']} · {data['abierto_en']} → {data['cerrado_en']}"
         )
-        # Bloque 1 — Ventas del turno (lo que facturó el local; sin efectivo aún).
-        # Desglosado: subtotal productos + extras por concepto = venta neta.
-        self.cierre_preview_ventas = [
-            ResumenCierreRow(etiqueta=et, monto_texto=mo, enfasis=en)
-            for et, mo, en in _cierre_ventas_rows(data)
+        # Los 2 bloques (Resumen de caja / Ingresos por método), misma fuente que
+        # el ticket y el PDF. Se reusan las vars existentes:
+        #   arqueo ← Resumen de caja (efectivo) · cobros ← Ingresos por método.
+        bloques = _bloques_cierre(data)
+
+        def _rows(idx: int) -> list[ResumenCierreRow]:
+            return [
+                ResumenCierreRow(etiqueta=et, monto_texto=mo, enfasis=en)
+                for et, mo, en in bloques[idx][1]
+            ]
+
+        self.cierre_preview_arqueo = _rows(0)   # Resumen de caja (efectivo, lo que cuadra)
+        self.cierre_preview_cobros = _rows(1)   # Ingresos por método (todas las ventas)
+        self.cierre_preview_ventas = []         # (bloque de ventas eliminado por simplicidad)
+        # Detalle largo por pedido → reemplazado por resumen por producto.
+        self.cierre_preview_pedidos = []
+        self.cierre_preview_productos = [
+            CierreProductoRow(nombre=p["nombre"], cantidad_texto=f"x{p['cantidad']}")
+            for p in data["productos"]
         ]
-        # Bloque 2 — Cobrado por método real (Efectivo, Yape, Plin, …) + total.
-        cobros = [
-            ResumenCierreRow(etiqueta=m["nombre"], monto_texto=m["monto_texto"])
-            for m in data["cobrado_por_metodo"]
-        ]
-        cobros.append(ResumenCierreRow(
-            etiqueta="Total cobrado", monto_texto=data["total_cobrado"], enfasis=True))
-        self.cierre_preview_cobros = cobros
-        # Bloque 3 — Arqueo de caja: SOLO efectivo entra al cajón.
-        arqueo = [
-            ResumenCierreRow(etiqueta="Fondo inicial", monto_texto=data["fondo_inicial"]),
-            ResumenCierreRow(etiqueta="+ Cobrado en efectivo", monto_texto=data["total_efectivo"]),
-        ]
-        if data["hay_ingresos"]:
-            arqueo.append(ResumenCierreRow(
-                etiqueta="+ Ingresos de caja", monto_texto=data["total_ingresos"]))
-        if data["hay_egresos"]:
-            arqueo.append(ResumenCierreRow(
-                etiqueta="− Egresos de caja", monto_texto=f"- {data['total_egresos']}"))
-        arqueo.append(ResumenCierreRow(
-            etiqueta="= Esperado en caja", monto_texto=data["esperado"], enfasis=True))
-        arqueo.append(ResumenCierreRow(etiqueta="Contado en caja", monto_texto=data["contado"]))
-        self.cierre_preview_arqueo = arqueo
-        pedidos_rows: list[CierrePreviewPedidoRow] = []
-        for p in data["pedidos"]:
-            extras = []
-            if p.get("recargo", 0) > 0:
-                extras.append(f"+ {p.get('recargo_concepto') or 'Recargo'}: {_money(p['recargo'])}")
-            if p.get("descuento", 0) > 0:
-                extras.append(f"- Descuento: {_money(p['descuento'])}")
-            if p.get("propina", 0) > 0:
-                extras.append(f"Propina: {_money(p['propina'])}")
-            pedidos_rows.append(CierrePreviewPedidoRow(
-                hora=p.get("hora", ""),
-                mesa=p.get("mesa", ""),
-                metodo=p.get("metodo", ""),
-                items_texto=p.get("items", ""),
-                extras=" · ".join(extras),
-                neto_texto=_money(p["neto"]),
-            ))
-        self.cierre_preview_pedidos = pedidos_rows
         self.cierre_preview_movimientos = [
             CierrePreviewMovRow(
                 hora=m.get("hora", ""),
