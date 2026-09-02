@@ -1670,6 +1670,8 @@ class FoodState(
     caja_quitar_item_nombre: str = ""
     caja_quitar_motivo: str = ""
     caja_quitar_error: str = ""
+    # Transferir un pedido "Para llevar" a una mesa libre (el cliente se sentó)
+    caja_transferir_modal: bool = False
 
     # Caja — cobro dividido / pago mixto
     caja_cobro_dividido: bool = False
@@ -1974,6 +1976,11 @@ class FoodState(
     @rx.var
     def mesas_por_cobrar(self) -> list[MesaView]:
         return [m for m in self.mesas if m.estado != EstadoMesa.LIBRE.value and m.total_abierto > 0]
+
+    @rx.var
+    def caja_mesas_libres(self) -> list[MesaView]:
+        """Mesas libres, para transferir un pedido 'Para llevar' a una de ellas."""
+        return [m for m in self.mesas if m.estado == EstadoMesa.LIBRE.value]
 
     @rx.var
     def tickets_nuevos(self) -> list[CocinaTicketView]:
@@ -5682,11 +5689,33 @@ class FoodState(
                 )
             session.delete(d)
             _recalculate_order_total(session, pedido)
-            _sync_order_status(session, pedido)
+            restantes = session.exec(
+                select(DetallePedido).where(DetallePedido.pedido_id == pedido.id)
+            ).all()
+            pedido_vaciado = not restantes
+            if pedido_vaciado:
+                # Se quitó el último ítem: el pedido queda sin nada que cobrar.
+                # Se anula (y libera la mesa si la tenía) para que no quede una
+                # cuenta fantasma en S/ 0.00 en la lista de por cobrar.
+                usuario_id = (self.usuario_actual.id or None) if self.usuario_actual else None
+                anular_pedido_abierto(
+                    session, pedido, usuario_id,
+                    motivo or "Pedido quedó sin ítems (vaciado en Caja)",
+                )
+            else:
+                _sync_order_status(session, pedido)
             session.commit()
         self.caja_quitar_modal = False
         self.caja_quitar_detalle_id = 0
         self.caja_quitar_motivo = ""
+        if pedido_vaciado:
+            # El pedido ya no existe como cuenta: cerrar el panel de cobro y
+            # refrescar las listas para que desaparezca de "por cobrar".
+            self.cancelar_cobro()
+            self.cargar_pedidos_mostrador_pendientes()
+            self.cargar_mesas()
+            self.cargar_cocina()
+            return rx.toast.success(f"{nombre} quitado. El pedido quedó sin ítems y se anuló.")
         self._caja_recargar_items()
         self.cargar_mesas()
         self.cargar_cocina()
@@ -6160,20 +6189,30 @@ class FoodState(
         self.anulacion_modal_visible = True
 
     def abrir_anulacion_pedido_abierto(self, mesa_id: int) -> None:
-        """Anular el pedido abierto de una mesa (desde Caja) — libera la mesa."""
+        """Anular el pedido abierto en cobro (una mesa o un "Para llevar") desde
+        Caja — anula TODO el pedido y libera la mesa si la tenía."""
         if self.usuario_actual is None or (
             self.usuario_actual.rol != RolUsuario.ADMIN.value
             and not self.usuario_actual.perm_anular
         ):
             return rx.toast.error("No tienes permiso para anular pedidos. Solicítalo al administrador.")
         with self._tenant_session() as session:
-            pedido = _get_open_order(session, mesa_id, self._company_id())
-            if pedido is None:
-                return rx.toast.error("No hay pedido abierto para esa mesa.")
-            mesa = session.get(Mesa, mesa_id)
-            referencia = (mesa.nombre or f"Mesa {mesa.numero}") if mesa else f"Mesa {mesa_id}"
-            self.anulacion_pedido_id = pedido.id or 0
-            self.anulacion_referencia = f"{referencia} — pedido #{pedido.id}"
+            if mesa_id == 0 and self.caja_cobro_pedido_id > 0:
+                # Pedido de mostrador ("Para llevar") en cobro.
+                pedido = session.get(Pedido, self.caja_cobro_pedido_id)
+                if pedido is None or pedido.pagado or pedido.estado == EstadoPedido.CANCELADO.value:
+                    return rx.toast.error("El pedido para llevar ya no está disponible.")
+                cliente = _actor_name(pedido.nombre_cliente) or "Sin nombre"
+                self.anulacion_pedido_id = pedido.id or 0
+                self.anulacion_referencia = f"Para llevar — {cliente} (#{pedido.id})"
+            else:
+                pedido = _get_open_order(session, mesa_id, self._company_id())
+                if pedido is None:
+                    return rx.toast.error("No hay pedido abierto para esa mesa.")
+                mesa = session.get(Mesa, mesa_id)
+                referencia = (mesa.nombre or f"Mesa {mesa.numero}") if mesa else f"Mesa {mesa_id}"
+                self.anulacion_pedido_id = pedido.id or 0
+                self.anulacion_referencia = f"{referencia} — pedido #{pedido.id}"
         self.anulacion_es_venta = False
         self.anulacion_motivo = ""
         self.anulacion_error = ""
@@ -6221,9 +6260,10 @@ class FoodState(
         es_venta = self.anulacion_es_venta
         self.cancelar_anulacion()
         self.cargar_menu()
-        if self.caja_cobro_mesa_id:
+        if self.caja_cobro_mesa_id or self.caja_cobro_pedido_id:
             self.cancelar_cobro()
         self.cargar_mesas()
+        self.cargar_pedidos_mostrador_pendientes()
         self.cargar_cocina()
         fiado_txt = (
             f" Fiado revertido: {_money_text(fiado_revertido)}."
@@ -6973,23 +7013,31 @@ class FoodState(
         return self.abrir_cobro_mesa(mesa_id or self.mesa_seleccionada_id)
 
     def imprimir_precuenta(self, mesa_id: int = 0):
-        objetivo = mesa_id or self.caja_cobro_mesa_id or self.mesa_seleccionada_id
-        if objetivo <= 0:
-            return rx.toast.error("Selecciona una mesa para imprimir la pre-cuenta.")
         ticket_lines: list[TicketLine] = []
         mesa_label = ""
         pedido_id = 0
         attended_by = ""
         total = 0.0
         descuento = 0.0
+        # Puede ser una mesa o el pedido de mostrador ("Para llevar") en cobro.
+        es_mostrador = mesa_id == 0 and self.caja_cobro_pedido_id > 0
         with self._tenant_session() as session:
-            mesa = session.get(Mesa, objetivo)
-            if mesa is None or mesa.company_id != self._company_id():
-                return rx.toast.error("Mesa no encontrada.")
-            mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
-            pedido = _get_open_order(session, objetivo, self._company_id())
-            if pedido is None:
-                return rx.toast.error(f"{mesa_label} no tiene pedido abierto.")
+            if es_mostrador:
+                pedido = session.get(Pedido, self.caja_cobro_pedido_id)
+                if pedido is None or pedido.company_id != self._company_id() or pedido.pagado:
+                    return rx.toast.error("El pedido para llevar ya no está disponible.")
+                mesa_label = f"Para llevar — {_actor_name(pedido.nombre_cliente) or 'Sin nombre'}"
+            else:
+                objetivo = mesa_id or self.caja_cobro_mesa_id or self.mesa_seleccionada_id
+                if objetivo <= 0:
+                    return rx.toast.error("Selecciona una mesa para imprimir la pre-cuenta.")
+                mesa = session.get(Mesa, objetivo)
+                if mesa is None or mesa.company_id != self._company_id():
+                    return rx.toast.error("Mesa no encontrada.")
+                mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
+                pedido = _get_open_order(session, objetivo, self._company_id())
+                if pedido is None:
+                    return rx.toast.error(f"{mesa_label} no tiene pedido abierto.")
             pedido_id = pedido.id or 0
             attended_by = ""
             if pedido.mozo_id:
@@ -7084,6 +7132,62 @@ class FoodState(
         self.caja_promo_aplicada_nombre = ""
         self.caja_promo_aplicada_texto = ""
         self.caja_cobro_items = items_ui
+
+    # ── Transferir un "Para llevar" a una mesa libre ─────────────────────────
+
+    def abrir_transferir_mesa(self) -> None:
+        """Abre el selector de mesa libre para el pedido de mostrador en cobro."""
+        if self.caja_cobro_pedido_id <= 0:
+            return rx.toast.error("Selecciona un pedido para llevar primero.")
+        self.cargar_mesas()
+        self.caja_transferir_modal = True
+
+    def set_caja_transferir_modal(self, v: bool) -> None:
+        self.caja_transferir_modal = v
+
+    def caja_transferir_pedido_a_mesa(self, mesa_id: int):
+        """Pasa el pedido de mostrador ("Para llevar") en cobro a una mesa libre.
+        El cliente decidió sentarse: la cuenta se mueve de Para llevar a la mesa,
+        conservando sus ítems."""
+        pedido_id = self.caja_cobro_pedido_id
+        if pedido_id <= 0:
+            return rx.toast.error("No hay un pedido para llevar seleccionado.")
+        mesa_label = ""
+        with self._tenant_session() as session:
+            pedido = session.get(Pedido, pedido_id)
+            if (pedido is None or pedido.company_id != self._company_id()
+                    or pedido.pagado or pedido.estado == EstadoPedido.CANCELADO.value):
+                return rx.toast.error("El pedido ya no está disponible.")
+            mesa = session.get(Mesa, mesa_id)
+            if mesa is None or mesa.company_id != self._company_id():
+                return rx.toast.error("Mesa no encontrada.")
+            mesa_label = mesa.nombre or f"Mesa {mesa.numero}"
+            if (mesa.estado != EstadoMesa.LIBRE.value
+                    or _get_open_order(session, mesa_id, self._company_id()) is not None):
+                return rx.toast.error(f"{mesa_label} ya tiene una cuenta abierta.")
+            pedido.mesa_id = mesa_id
+            pedido.tipo_pedido = TipoPedido.MESA.value
+            pedido.updated_at = _utcnow()
+            session.add(pedido)
+            mesa.estado = EstadoMesa.OCUPADA.value
+            mesa.updated_at = _utcnow()
+            session.add(mesa)
+            registrar_auditoria(
+                session, self._company_id(), "transferir_a_mesa",
+                usuario_id=(self.usuario_actual.id or None) if self.usuario_actual else None,
+                usuario_nombre=(self.usuario_actual.nombre if self.usuario_actual else ""),
+                entidad="pedido", entidad_id=pedido.id,
+                detalle={"mesa_id": mesa_id, "mesa": mesa_label},
+            )
+            session.commit()
+        self.caja_transferir_modal = False
+        self.cancelar_cobro()
+        self.cargar_mesas()
+        self.cargar_pedidos_mostrador_pendientes()
+        self.cargar_cocina()
+        return rx.toast.success(
+            f"Pedido pasado a {mesa_label}. Ahora está en Mesas por cobrar."
+        )
 
     # ─── Mostrador ────────────────────────────────────────────────────────────
 
@@ -7365,6 +7469,10 @@ class FoodState(
                 detalles = session.exec(
                     select(DetallePedido).where(DetallePedido.pedido_id == pedido.id).order_by(DetallePedido.id)
                 ).all()
+                # Defensivo: un pedido sin ítems (vaciado) no es una cuenta por
+                # cobrar; no lo mostramos aunque haya quedado abierto en la BD.
+                if not detalles:
+                    continue
                 resumen = " · ".join(
                     f"{d.cantidad}x {productos[d.producto_id].nombre if d.producto_id in productos else f'Producto {d.producto_id}'}"
                     for d in detalles

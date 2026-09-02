@@ -705,10 +705,24 @@ def _cobro_panel() -> rx.Component:
                     padding="14px 12px", cursor="pointer", width="100%",
                     _hover={"background": ACCENT_HOVER},
                 ),
+                # Pasar a mesa (solo pedidos "Para llevar": el cliente se sentó).
+                rx.cond(
+                    FoodState.caja_cobro_pedido_id > 0,
+                    rx.button(
+                        rx.hstack(rx.icon(tag="armchair", size=14), rx.text("Pasar a una mesa"),
+                                  spacing="2", align="center"),
+                        on_click=FoodState.abrir_transferir_mesa,
+                        background="transparent", color=ACCENT,
+                        border=f"1px dashed {ACCENT}", border_radius="8px",
+                        font_size="12px", font_weight="700", cursor="pointer", width="100%",
+                        padding_y="8px", _hover={"background": "rgba(234,88,12,0.08)"},
+                    ),
+                    rx.fragment(),
+                ),
                 # Acciones secundarias
                 rx.hstack(
                     rx.cond(
-                        FoodState.caja_cobro_pedido_id == 0,
+                        FoodState.caja_cobro_activo,
                         rx.button(
                             rx.hstack(rx.icon(tag="printer", size=12), rx.text("Pre-cuenta"),
                                       spacing="1", align="center"),
@@ -721,7 +735,7 @@ def _cobro_panel() -> rx.Component:
                         rx.fragment(),
                     ),
                     rx.cond(
-                        FoodState.caja_cobro_pedido_id == 0,
+                        FoodState.caja_cobro_activo,
                         rx.button(
                             rx.hstack(rx.icon(tag="ban", size=12), rx.text("Anular"),
                                       spacing="1", align="center"),
@@ -2124,6 +2138,68 @@ def _caja_add_producto_row(p: ProductoView) -> rx.Component:
     )
 
 
+def _mesa_libre_boton(mesa: MesaView) -> rx.Component:
+    return rx.button(
+        rx.hstack(
+            rx.icon(tag="armchair", size=16, color=ACCENT),
+            rx.vstack(
+                rx.text(mesa.nombre, font_size="14px", font_weight="700", color=TEXT_PRIMARY),
+                rx.text("Capacidad " + mesa.capacidad.to_string(),
+                        font_size="11px", color=TEXT_MUTED),
+                spacing="0", align="start",
+            ),
+            spacing="2", align="center", width="100%",
+        ),
+        on_click=FoodState.caja_transferir_pedido_a_mesa(mesa.id),
+        background=SURFACE_BASE, border=f"1px solid {DARK_700}", border_radius="10px",
+        padding="10px 12px", cursor="pointer", width="100%", justify_content="start",
+        height="auto",
+        _hover={"border_color": ACCENT, "background": "rgba(234,88,12,0.06)"},
+    )
+
+
+def _caja_transferir_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.vstack(
+                rx.hstack(
+                    rx.dialog.title("Pasar a una mesa", font_size="17px", font_weight="800",
+                            color=TEXT_PRIMARY, margin="0"),
+                    rx.spacer(),
+                    rx.icon(tag="x", size=18, color=TEXT_MUTED, cursor="pointer",
+                            on_click=FoodState.set_caja_transferir_modal(False)),
+                    width="100%", align="center",
+                ),
+                rx.text(
+                    "El cliente se sentó: elegí una mesa libre y la cuenta se mueve "
+                    "de Para llevar a esa mesa, con sus productos.",
+                    font_size="12px", color=TEXT_MUTED,
+                ),
+                rx.box(
+                    rx.cond(
+                        FoodState.caja_mesas_libres.length() > 0,
+                        rx.vstack(
+                            rx.foreach(FoodState.caja_mesas_libres, _mesa_libre_boton),
+                            spacing="2", width="100%",
+                        ),
+                        rx.center(
+                            rx.text("No hay mesas libres en este momento.",
+                                    font_size="13px", color=TEXT_MUTED),
+                            padding_y="24px", width="100%",
+                        ),
+                    ),
+                    width="100%", max_height="46vh", overflow_y="auto",
+                ),
+                spacing="3", width="100%",
+            ),
+            max_width="420px", width="92vw", max_height="90vh", overflow_y="auto",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.caja_transferir_modal,
+        on_open_change=FoodState.set_caja_transferir_modal,
+    )
+
+
 def _caja_add_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
@@ -2281,6 +2357,7 @@ def _caja_content() -> rx.Component:
         _correccion_modal(),
         _caja_add_modal(),
         _caja_quitar_modal(),
+        _caja_transferir_modal(),
         anulacion_modal(),
         _caja_ayuda(),
         spacing="4", width="100%",
