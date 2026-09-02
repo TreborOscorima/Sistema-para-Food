@@ -52,3 +52,8 @@ backups/*.sql.gz
 # Imagenes de prueba sueltas
 test_burger.jpg
 test_*.jpg
+
+# Higgsfield CLI skills (herramienta local de generacion img/video, no del POS)
+.agents/
+.claude/skills/
+skills-lock.json
