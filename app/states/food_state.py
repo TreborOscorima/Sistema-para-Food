@@ -2159,6 +2159,29 @@ class FoodState(
         return _money_text(self.caja_cobro_vuelto)
 
     @rx.var
+    def caja_cobro_falta(self) -> float:
+        """Cuánto le falta al efectivo recibido para cubrir el total (0 si cubre)."""
+        try:
+            recibido = float(self.caja_cobro_efectivo_recibido.replace(",", ".").strip())
+        except (ValueError, AttributeError):
+            return 0.0
+        falta = round(self.caja_cobro_total_final - recibido, 2)
+        return falta if falta > 0 else 0.0
+
+    @rx.var
+    def caja_cobro_falta_texto(self) -> str:
+        return _money_text(self.caja_cobro_falta)
+
+    @rx.var
+    def caja_cobro_efectivo_insuficiente(self) -> bool:
+        """El cajero digitó un efectivo recibido que no cubre el total."""
+        return (
+            self.caja_cobro_efectivo_recibido.strip() != ""
+            and self.caja_cobro_total_final > 0
+            and self.caja_cobro_falta > 0
+        )
+
+    @rx.var
     def caja_cobro_es_efectivo(self) -> bool:
         return self.caja_cobro_metodo == "efectivo"
 

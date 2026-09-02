@@ -665,14 +665,28 @@ def _cobro_panel() -> rx.Component:
                         ),
                         rx.cond(
                             FoodState.caja_cobro_efectivo_recibido != "",
-                            rx.hstack(
-                                rx.text("Vuelto", font_size="10px", color="#16A34A", font_weight="500"),
-                                rx.spacer(),
-                                rx.text(FoodState.caja_cobro_vuelto_texto, font_size="14px",
-                                        font_weight="700", color="#16A34A"),
-                                width="100%", align="center", padding="5px 10px",
-                                background="rgba(34,197,94,0.08)",
-                                border="0.5px solid rgba(34,197,94,0.3)", border_radius="7px",
+                            rx.cond(
+                                FoodState.caja_cobro_efectivo_insuficiente,
+                                # Falta plata: el efectivo recibido no cubre el total
+                                rx.hstack(
+                                    rx.text("Falta", font_size="10px", color="var(--twk-danger-text)", font_weight="600"),
+                                    rx.spacer(),
+                                    rx.text(FoodState.caja_cobro_falta_texto, font_size="14px",
+                                            font_weight="700", color="var(--twk-danger-text)"),
+                                    width="100%", align="center", padding="5px 10px",
+                                    background="rgba(239,68,68,0.08)",
+                                    border="0.5px solid rgba(239,68,68,0.3)", border_radius="7px",
+                                ),
+                                # Cubre el total: mostrar el vuelto
+                                rx.hstack(
+                                    rx.text("Vuelto", font_size="10px", color="#16A34A", font_weight="500"),
+                                    rx.spacer(),
+                                    rx.text(FoodState.caja_cobro_vuelto_texto, font_size="14px",
+                                            font_weight="700", color="#16A34A"),
+                                    width="100%", align="center", padding="5px 10px",
+                                    background="rgba(34,197,94,0.08)",
+                                    border="0.5px solid rgba(34,197,94,0.3)", border_radius="7px",
+                                ),
                             ),
                             rx.fragment(),
                         ),
@@ -693,17 +707,21 @@ def _cobro_panel() -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
-                # Botón confirmar
+                # Botón confirmar (deshabilitado si el efectivo no cubre el total)
                 rx.button(
                     "Confirmar cobro",
                     on_click=FoodState.confirmar_cobro,
                     is_loading=FoodState.caja_cobrando,
+                    disabled=FoodState.caja_cobro_efectivo_insuficiente,
                     font_size="15px", font_weight="700",
                     text_transform="uppercase", letter_spacing="0.05em",
-                    background=ACCENT, color=TEXT_WHITE,
+                    background=rx.cond(FoodState.caja_cobro_efectivo_insuficiente, "var(--twk-slate-300)", ACCENT),
+                    color=TEXT_WHITE,
                     border_radius="10px", border="none",
-                    padding="14px 12px", cursor="pointer", width="100%",
-                    _hover={"background": ACCENT_HOVER},
+                    padding="14px 12px",
+                    cursor=rx.cond(FoodState.caja_cobro_efectivo_insuficiente, "not-allowed", "pointer"),
+                    width="100%",
+                    _hover=rx.cond(FoodState.caja_cobro_efectivo_insuficiente, {}, {"background": ACCENT_HOVER}),
                 ),
                 # Pasar a mesa (solo pedidos "Para llevar": el cliente se sentó).
                 rx.cond(
