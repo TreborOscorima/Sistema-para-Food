@@ -6782,6 +6782,24 @@ class FoodState(
                     propina = Decimal("0.00")
                 total_final = max(total_base - descuento + propina + recargo, Decimal("0.00"))
                 pagos_lista = [(metodo, total_final)] if total_final > 0 else []
+                # Cobro en EFECTIVO: si el cajero ingresó el "efectivo recibido",
+                # debe cubrir el total. No se puede cobrar de menos (el cliente
+                # tiene que pagar la cuenta completa). Si lo deja vacío, se asume
+                # pago exacto. Si paga de más, se procede y se calcula el vuelto.
+                _, _efectivos_chk = _validos_y_efectivos_pago(session, self._company_id())
+                if metodo in _efectivos_chk and total_final > 0:
+                    _recibido_str = (self.caja_cobro_efectivo_recibido or "").replace(",", ".").strip()
+                    if _recibido_str:
+                        try:
+                            _recibido = Decimal(str(round(float(_recibido_str), 2)))
+                        except (ValueError, InvalidOperation):
+                            _recibido = Decimal("0.00")
+                        if _recibido < total_final:
+                            self.caja_cobro_error = (
+                                f"El efectivo recibido ({_money_text(_recibido)}) no cubre el "
+                                f"total ({_money_text(total_final)}). Cobra el monto completo."
+                            )
+                            return
             resultado_pagos = None
             if pagos_lista:
                 _validos, _efectivos = _validos_y_efectivos_pago(

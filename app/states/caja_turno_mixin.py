@@ -708,14 +708,17 @@ class CajaTurnoMixin(rx.State, mixin=True):
 
     def _refresh_efectivo_caja(self) -> None:
         """Recalcula solo el 'En caja ahora' (barato, para el poll de caja).
-        Así el chip queda vivo ante cualquier evento que mueva efectivo
-        (cobro, ingreso/egreso, anulación, corrección) sin recargar todo."""
-        if self.turno_activo_id == 0:
-            return
+        Resuelve el turno abierto EN VIVO (no depende de turno_activo_id) para
+        que el chip quede vivo ante cualquier evento que mueva efectivo (cobro,
+        ingreso/egreso, anulación, corrección) — incluso si las ventas se cobran
+        en otro equipo o el turno se abrió después de cargar esta página."""
         with self._tenant_session() as session:
-            turno = session.get(TurnoCaja, self.turno_activo_id)
-            if turno is None or turno.estado != EstadoTurnoCaja.ABIERTO.value:
+            turno = get_turno_abierto(session, self._company_id(), self._sucursal_id())
+            if turno is None:
                 return
+            # Sincronizar el id por si el turno se abrió/cambió en otro equipo.
+            if (turno.id or 0) != self.turno_activo_id:
+                self.turno_activo_id = turno.id or 0
             resumen = calcular_resumen_turno(session, turno)
             self.turno_efectivo_caja_texto = _money(resumen["esperado_efectivo"])
 
