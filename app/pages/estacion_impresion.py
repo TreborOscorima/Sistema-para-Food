@@ -76,7 +76,12 @@ def _instruccion(paso: str, texto) -> rx.Component:
     )
 
 
-def _estacion_content() -> rx.Component:
+def _estacion_content(embedded: bool = False) -> rx.Component:
+    """Contenido de la estación de impresión.
+
+    ``embedded=True`` lo renderiza dentro del Panel Administrativo (sin el
+    enlace "Volver a Caja", que solo tiene sentido en la ruta kiosco dedicada).
+    """
     return rx.center(
         rx.vstack(
             # Encabezado
@@ -232,7 +237,7 @@ def _estacion_content() -> rx.Component:
                 padding="18px",
                 width="100%",
             ),
-            rx.link(
+            rx.fragment() if embedded else rx.link(
                 rx.hstack(
                     rx.icon(tag="arrow_left", size=14),
                     rx.text("Volver a Caja", font_size="13px"),

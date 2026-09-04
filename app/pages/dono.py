@@ -64,6 +64,12 @@ class AdminPanelState(rx.State):
             from app.states.usuarios_state import UsuariosAdminState
             usuarios_state = await self.get_state(UsuariosAdminState)
             await usuarios_state.cargar_usuarios_admin()
+        elif s == "impresion":
+            # Solo carga la config para poblar la vista (nombre local, ancho de
+            # papel). NO arranca el polling ni el auto-print: la impresión sigue
+            # a cargo únicamente de la ruta kiosco /estacion-impresion, para no
+            # crear un segundo punto de impresión (evita comandas duplicadas).
+            food_state.cargar_config_impresora()
 
     def toggle_sidebar(self) -> None:
         self.sidebar_open = not self.sidebar_open
@@ -299,6 +305,7 @@ def _admin_sidebar() -> rx.Component:
             ),
             _admin_group_label("Sistema"),
             _admin_nav_item("usuarios", _M["usuarios"].label, _M["usuarios"].icon, _M["usuarios"].desc),
+            _admin_nav_item("impresion", _M["impresion"].label, _M["impresion"].icon, _M["impresion"].desc),
             _admin_nav_item("config", _M["config"].label, _M["config"].icon, _M["config"].desc),
             spacing="1", width="100%", align="start",
         ),
@@ -1593,6 +1600,7 @@ def _content_area() -> rx.Component:
     from app.pages.inventario import _inventario_content
     from app.pages.configuracion import _configuracion_content
     from app.pages.usuarios import _usuarios_content
+    from app.pages.estacion_impresion import _estacion_content
 
     return rx.cond(
         AdminPanelState.seccion == "resumen",
@@ -1637,7 +1645,11 @@ def _content_area() -> rx.Component:
                                     rx.cond(
                                         AdminPanelState.seccion == "usuarios",
                                         _usuarios_content(),
-                                        _configuracion_content(),
+                                        rx.cond(
+                                            AdminPanelState.seccion == "impresion",
+                                            _estacion_content(embedded=True),
+                                            _configuracion_content(),
+                                        ),
                                     ),
                                 ),
                             ),

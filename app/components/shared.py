@@ -502,7 +502,6 @@ def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
     grupo_servicio = (
         FoodState.puede_ver_mozos | FoodState.puede_ver_caja
         | FoodState.puede_ver_mostrador | FoodState.puede_ver_cocina
-        | FoodState.puede_ver_estacion_impresion
     )
     grupo_gestion = (
         FoodState.puede_ver_reportes | FoodState.puede_ver_usuarios
@@ -522,10 +521,6 @@ def _nav_stack(active: str, mobile: bool = False) -> rx.Component:
                 rx.fragment()),
         rx.cond(FoodState.puede_ver_cocina,
                 nav_item(_M["cocina"].label, "/cocina", _M["cocina"].icon, active == "cocina"),
-                rx.fragment()),
-        rx.cond(FoodState.puede_ver_estacion_impresion,
-                nav_item(_M["impresion"].label, "/estacion-impresion", _M["impresion"].icon,
-                         active == "estacion_impresion"),
                 rx.fragment()),
         # ── Catálogo ──
         rx.cond(FoodState.puede_ver_carta, _nav_group_label("Catálogo", mobile), rx.fragment()),
