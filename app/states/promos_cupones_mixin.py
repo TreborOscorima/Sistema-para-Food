@@ -365,7 +365,9 @@ class PromosCuponesMixin(rx.State, mixin=True):
             self.promo_form_id = p.id or 0
             self.promo_form_nombre = p.nombre
             self.promo_form_tipo = p.tipo
-            self.promo_form_valor = str(Decimal(str(p.valor)).normalize())
+            # format(..., "f") fuerza punto fijo: sin esto, Decimal("20").normalize()
+            # es Decimal("2E+1") y str() mostraba "2E+1" en el campo Valor.
+            self.promo_form_valor = format(Decimal(str(p.valor)).normalize(), "f")
             self.promo_form_descripcion = p.descripcion or ""
             self.promo_form_hora_inicio = p.hora_inicio or ""
             self.promo_form_hora_fin = p.hora_fin or ""

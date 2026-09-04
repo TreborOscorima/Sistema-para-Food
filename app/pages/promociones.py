@@ -47,16 +47,24 @@ def _promociones_ayuda() -> rx.Component:
 
 
 def _tipo_label(tipo: str) -> rx.Component:
+    # Los valores del enum TipoPromocion son minúsculas ("porcentaje", "monto_fijo",
+    # "happy_hour", "dosxuno"). Comparar en MAYÚSCULAS hacía que NADA matcheara y
+    # todas las promos cayeran al else → badge "HH" en todas.
     return rx.cond(
-        tipo == "PORCENTAJE",
+        tipo == "porcentaje",
         rx.badge("%", background="rgba(124,58,237,0.12)", color=PURPLE_LIGHT,
                  border_radius="5px", font_size="10px", padding="2px 6px"),
         rx.cond(
-            tipo == "MONTO_FIJO",
+            tipo == "monto_fijo",
             rx.badge("S/", background="rgba(34,197,94,0.12)", color=SUCCESS_TEXT,
                      border_radius="5px", font_size="10px", padding="2px 6px"),
-            rx.badge("HH", background="#FEF9C3", color="#713F12",
-                     border_radius="5px", font_size="10px", padding="2px 6px"),
+            rx.cond(
+                tipo == "dosxuno",
+                rx.badge("2×1", background="rgba(234,88,12,0.12)", color=ACCENT,
+                         border_radius="5px", font_size="10px", padding="2px 6px"),
+                rx.badge("HH", background="#FEF9C3", color="#713F12",
+                         border_radius="5px", font_size="10px", padding="2px 6px"),
+            ),
         ),
     )
 
@@ -104,7 +112,10 @@ def _promo_card(p: PromocionView) -> rx.Component:
             ),
             rx.hstack(
                 rx.tooltip(
-                    rx.link(
+                    # rx.box (no rx.link): rx.link renderiza <a href="#">, y el
+                    # clic dispara además una navegación de ancla que hace SALTAR
+                    # la página (el "#" en la URL) — se sentía como que se trababa.
+                    rx.box(
                         rx.icon(tag="pencil", size=15),
                         on_click=FoodState.editar_promocion(p.id),
                         color=TEXT_MUTED,
@@ -116,7 +127,7 @@ def _promo_card(p: PromocionView) -> rx.Component:
                     content="Editar promoción",
                 ),
                 rx.tooltip(
-                    rx.link(
+                    rx.box(
                         rx.cond(
                             p.activa,
                             rx.icon(tag="pause", size=15),
