@@ -7136,6 +7136,7 @@ class FoodState(
         items_ui: list[CajaItemView] = []
         total_override = 0.0
         cliente_nombre = ""
+        promo_ganadora = None
         with self._tenant_session() as session:
             pedido = session.get(Pedido, pedido_id)
             if pedido is None or pedido.company_id != self._company_id():
@@ -7160,6 +7161,31 @@ class FoodState(
                     subtotal_float=float(_to_decimal(d.subtotal)),
                     notas=d.notas or "",
                 ))
+            # Aplicación automática de la mejor promo vigente — MISMO motor que las
+            # mesas (abrir_cobro_mesa): respeta el alcance producto/categoría y
+            # maneja 2×1, en vez de la sugerencia cruda que descontaba sobre el
+            # total ignorando el alcance.
+            items_promo = [
+                ItemCobro(
+                    producto_id=d.producto_id,
+                    categoria_id=(
+                        productos[d.producto_id].categoria_id
+                        if d.producto_id in productos else 0
+                    ),
+                    cantidad=d.cantidad,
+                    precio_unitario=_to_decimal(d.precio_unitario),
+                )
+                for d in detalles
+            ]
+            promos_activas = session.exec(
+                select(Promocion).where(
+                    Promocion.company_id == self._company_id(),
+                    Promocion.activa.is_(True),
+                )
+            ).all()
+            promo_ganadora = mejor_promo(
+                promos_activas, items_promo, ahora_local_pe(), solo_auto=True
+            )
             total_override = float(_to_decimal(pedido.total))
             cliente_nombre = _actor_name(pedido.nombre_cliente) or "Sin nombre"
         self.caja_cobro_pedido_id = pedido_id
@@ -7169,15 +7195,21 @@ class FoodState(
         self.caja_cobro_metodo = "efectivo"
         self.caja_cobro_propina = ""
         self.caja_cobro_propina_pct = 0
-        self.caja_cobro_descuento = ""
         self.caja_cobro_descuento_es_pct = False
         self.caja_cobro_recargo = ""
         self.caja_cobro_recargo_concepto = "Delivery"
         self.caja_cobro_efectivo_recibido = ""
         self.caja_cobro_error = ""
-        self.caja_promo_aplicada_nombre = ""
-        self.caja_promo_aplicada_texto = ""
         self.caja_cobro_items = items_ui
+        if promo_ganadora is not None:
+            promo, descuento = promo_ganadora
+            self.caja_cobro_descuento = f"{descuento:.2f}"
+            self.caja_promo_aplicada_nombre = promo.nombre
+            self.caja_promo_aplicada_texto = f"-{_money_text(descuento)}"
+        else:
+            self.caja_cobro_descuento = ""
+            self.caja_promo_aplicada_nombre = ""
+            self.caja_promo_aplicada_texto = ""
 
     # ── Transferir un "Para llevar" a una mesa libre ─────────────────────────
 
