@@ -390,6 +390,30 @@ def _promo_modal_content() -> rx.Component:
     )
 
 
+def _promo_modal() -> rx.Component:
+    """Modal de promoción — dialog CONTROLADO (sin trigger implícito).
+
+    Se abre siempre por estado (``abrir_nueva_promo`` / ``editar_promocion``),
+    nunca por un botón-hijo del ``dialog.root``. Mezclar un trigger implícito
+    con aperturas programáticas desincronizaba el estado interno de Radix y
+    dejaba el ``pointer-events:none`` en el body → la página quedaba trabada al
+    intentar editar de nuevo. Mismo patrón que los modales de Inventario.
+    """
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.dialog.title("Promoción", visibility="hidden", height="0", margin="0", padding="0"),
+            _promo_modal_content(),
+            max_width="620px",
+            width="92vw",
+            max_height="90vh",
+            overflow_y="auto",
+            background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
+        ),
+        open=FoodState.promo_form_visible,
+        on_open_change=FoodState.set_promo_form_visible,
+    )
+
+
 def _promo_nueva_placeholder() -> rx.Component:
     return rx.box(
         rx.text("🏷️", font_size="36px", line_height="1"),
@@ -444,29 +468,16 @@ def _promociones_content() -> rx.Component:
             # Botón contextual cambia según el tab activo
             rx.cond(
                 AdminPanelState.promo_tab == "automaticas",
-                rx.dialog.root(
-                    rx.button(
-                        rx.hstack(
-                            rx.icon(tag="plus", size=13),
-                            rx.text("Nueva promo", font_size="13px", font_weight="700"),
-                            spacing="1", align="center",
-                        ),
-                        on_click=FoodState.abrir_nueva_promo,
-                        background=ACCENT, color=TEXT_WHITE, border_radius="9px",
-                        padding_x="16px", padding_y="9px", cursor="pointer",
-                        _hover={"background": ACCENT_HOVER},
+                rx.button(
+                    rx.hstack(
+                        rx.icon(tag="plus", size=13),
+                        rx.text("Nueva promo", font_size="13px", font_weight="700"),
+                        spacing="1", align="center",
                     ),
-                    rx.dialog.content(
-                        rx.dialog.title("Promoción", visibility="hidden", height="0", margin="0", padding="0"),
-                        _promo_modal_content(),
-                        max_width="620px",
-                        width="92vw",
-                        max_height="90vh",
-                        overflow_y="auto",
-                        background=PAGE_BACKGROUND, border=f"1px solid {DARK_800}",
-                    ),
-                    open=FoodState.promo_form_visible,
-                    on_open_change=FoodState.set_promo_form_visible,
+                    on_click=FoodState.abrir_nueva_promo,
+                    background=ACCENT, color=TEXT_WHITE, border_radius="9px",
+                    padding_x="16px", padding_y="9px", cursor="pointer",
+                    _hover={"background": ACCENT_HOVER},
                 ),
                 rx.button(
                     rx.hstack(
@@ -482,6 +493,9 @@ def _promociones_content() -> rx.Component:
             ),
             width="100%", align="center",
         ),
+        # Modal controlado por estado (abre desde "Nueva promo", el placeholder
+        # o el botón Editar de cada tarjeta).
+        _promo_modal(),
         # ── Selector de tab ──────────────────────────────────────────────
         rx.box(
             rx.hstack(

@@ -2608,6 +2608,11 @@ class FoodState(
         self.cargar_metodos_pago_admin()
         self.cargar_inventario()
         self.cargar_clientes()
+        # El panel embebe _promociones_content(): su formulario ofrece elegir
+        # producto/categoría como alcance del descuento, y esas listas salen de
+        # cargar_menu(). Sin esto, los selectores de Producto/Categoría quedaban
+        # VACÍOS en el panel (no se podía elegir alcance).
+        self.cargar_menu()
         self.cargar_promociones()
         self.cargar_cupones()
         self.cargar_cuentas()
