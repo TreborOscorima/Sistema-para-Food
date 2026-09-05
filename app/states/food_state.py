@@ -4985,6 +4985,10 @@ class FoodState(
         self.nota_input_temporal = str(value)[:120]
 
     def guardar_nota_carrito_item(self, producto_id: int) -> None:
+        # Idempotencia: on_blur y el botón ✓ disparan ambos; el segundo disparo
+        # (con activo ya en 0) debe ser no-op para no borrar la nota guardada.
+        if self.nota_producto_activo_id != producto_id:
+            return
         if self.mesa_seleccionada_id == 0:
             self.nota_producto_activo_id = 0
             return
@@ -5069,6 +5073,10 @@ class FoodState(
     def _enviar_pedido(self, directo_caja: bool = False) -> None:
         if self.mesa_seleccionada_id == 0:
             return rx.toast.error("Selecciona una mesa antes de enviar el pedido.")
+        # Red de seguridad: volcar una nota escrita pero no confirmada con el ✓
+        # (se guarda directo en el DetallePedido) antes de mandar a cocina.
+        if self.nota_producto_activo_id:
+            self.guardar_nota_carrito_item(self.nota_producto_activo_id)
         pedido_id = 0
         with self._tenant_session() as session:
             mesa = session.get(Mesa, self.mesa_seleccionada_id)
@@ -7371,10 +7379,17 @@ class FoodState(
         self.nota_input_temporal = item.nota if item else ""
 
     def guardar_nota_item_mostrador(self, producto_id: int) -> None:
+        # Idempotencia: el input dispara esto por on_blur Y por el botón ✓; el
+        # primero cierra la edición (activo=0) y el segundo debe ser no-op para
+        # no re-escribir (ni borrar) la nota recién guardada.
+        if self.nota_producto_activo_id != producto_id:
+            return
         nota = self.nota_input_temporal.strip()
         carrito = list(self.mostrador_carrito)
         for i, item in enumerate(carrito):
             if item.producto_id == producto_id:
+                # Copiar TODOS los campos: reconstruir el ítem perdía es_combo y
+                # los modificadores, rompiendo combos al ponerles nota.
                 carrito[i] = CarritoItem(
                     producto_id=item.producto_id,
                     nombre=item.nombre,
@@ -7383,6 +7398,10 @@ class FoodState(
                     subtotal=item.subtotal,
                     subtotal_texto=item.subtotal_texto,
                     nota=nota,
+                    modificadores_texto=item.modificadores_texto,
+                    modificadores_json=item.modificadores_json,
+                    combo_items_json=item.combo_items_json,
+                    es_combo=item.es_combo,
                 )
                 break
         self.mostrador_carrito = carrito
@@ -7400,6 +7419,10 @@ class FoodState(
             return rx.toast.error("Agrega productos antes de enviar a cocina.")
         if self.usuario_actual is None:
             return rx.toast.error("Inicia sesión para registrar el pedido.")
+        # Red de seguridad: volcar una nota escrita pero no confirmada con el ✓
+        # antes de crear el pedido, para que salga en la comanda/comprobante.
+        if self.nota_producto_activo_id:
+            self.guardar_nota_item_mostrador(self.nota_producto_activo_id)
         self.mostrador_enviando = True
         pedido_id = 0
         cliente_nombre = _actor_name(self.mostrador_cliente_nombre) or "Sin nombre"

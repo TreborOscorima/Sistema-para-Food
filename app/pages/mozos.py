@@ -638,6 +638,7 @@ def _modal_carrito_item(item: CarritoItem) -> rx.Component:
                 rx.input(
                     value=FoodState.nota_input_temporal,
                     on_change=FoodState.set_nota_input_temporal,
+                    on_blur=FoodState.guardar_nota_carrito_item(item.producto_id),
                     placeholder="Ej: sin azúcar, extra picante...",
                     background=PAGE_BACKGROUND, border=f"1px solid {DARK_600}",
                     color=TEXT_PRIMARY, border_radius="6px",
